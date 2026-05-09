@@ -1,0 +1,107 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# YouTube Channel Registry
+# Used by youtube_collector.py when running in channel discovery mode
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# days_back:          How many days back to look for new videos (global default)
+# max_per_duration:   Max videos to fetch per duration bucket per channel
+#
+# Per channel:
+#   channel_id:         YouTube channel ID (UCxxxxxxxx)
+#   name:               Human-readable name (used in filenames and documents)
+#   search_query:       Optional keyword filter within the channel.
+#                       Leave null for dedicated AI channels where all content is relevant.
+#                       Use a filter for general tech channels that post non-AI content too.
+#   max_per_duration:   Override the global default for this specific channel
+#   enabled:            Set false to skip without deleting
+
+youtube:
+  days_back: 7
+  max_per_duration: 3
+
+  channels:
+
+    # ── Core AI Labs ────────────────────────────────────────────────────────
+    - name: Anthropic
+      channel_id: UCrDwWp7EBBv4NwvScIpBDOA
+      search_query: null          # all content is AI-relevant
+      enabled: true
+
+    - name: OpenAI
+      channel_id: UCXZCJLpYjx0bBFo8ct3jxkQ
+      search_query: null
+      enabled: true
+
+    - name: Google DeepMind
+      channel_id: UCP7jMXSY2xbc3KCAE0MHQ-A
+      search_query: null
+      enabled: true
+
+    - name: Meta AI
+      channel_id: UCfTCjs-mn33x0os_Q35B6cg
+      search_query: null
+      enabled: true
+
+    # ── Research & Education ────────────────────────────────────────────────
+    - name: Lex Fridman
+      channel_id: UCSHZKyawb77ixDdsGog4iWA
+      search_query: "AI OR machine learning OR LLM OR OpenAI OR Anthropic OR robotics"
+      max_per_duration: 1         # long-form only, 1 is enough
+      enabled: true
+
+    - name: Yannic Kilcher
+      channel_id: UCZHmQk67mSJgfCCTn7xBfew
+      search_query: null
+      enabled: true
+
+    - name: Andrej Karpathy
+      channel_id: UCXUPKJO5MZQMU11T0fiEQ
+      search_query: null
+      enabled: true
+
+    - name: Stanford Online
+      channel_id: UCBa5G_ESCn8Yd4vw5U-gIcg
+      search_query: "AI OR machine learning OR deep learning OR LLM"
+      enabled: false              # enable when needed
+
+    # ── Developer & Industry ────────────────────────────────────────────────
+    - name: Hugging Face
+      channel_id: UCHlNU7kIZhRgSbhHvFoy72w
+      search_query: null
+      enabled: true
+
+    - name: Microsoft Developer
+      channel_id: UCsMica-v34Irf9KVTioWcRg
+      search_query: "AI OR Copilot OR Azure AI OR Phi"
+      enabled: true
+
+    - name: Google Cloud Tech
+      channel_id: UCJS9pqu9BzkAMNTmzNMNhvg
+      search_query: "AI OR Vertex AI OR Gemini OR machine learning"
+      enabled: true
+
+    - name: AWS
+      channel_id: UCd6MoB9NC6uYN2grvUNT-Zg
+      search_query: "AI OR machine learning OR Bedrock OR SageMaker"
+      enabled: false              # enable after verifying channel ID
+
+    - name: NVIDIA Developer
+      channel_id: UCBHcMozDTTnegwC-Hx_F37Q
+      search_query: null
+      enabled: false
+
+    # ── AI Podcasts & Interviews ────────────────────────────────────────────
+    - name: Dwarkesh Podcast
+      channel_id: UCqr-7GDVTsdNBCeufvERYuw
+      search_query: null
+      enabled: true
+
+    - name: Y Combinator
+      channel_id: UCcefcZRL2oaA_uBNeo5UOWg
+      search_query: "AI OR startup OR LLM OR agent"
+      enabled: true
+
+    - name: a16z
+      channel_id: UC9cn0TuPq4dnbTY-CBsm8sg
+      search_query: "AI OR machine learning OR LLM OR startup"
+      enabled: true

@@ -1,0 +1,12 @@
+# ── Core ──
+python-dotenv
+pyyaml
+requests
+
+# ── LLM (existing) ──
+langchain-openai
+langchain-google-genai
+openai
+
+# ── Data handling ──
+# (stdlib: json, xml, hashlib, urllib — no extra deps)
