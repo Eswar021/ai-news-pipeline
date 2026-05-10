@@ -1,0 +1,3034 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-10T17:50:27.593837+00:00",
+  "story_cluster_count": 47,
+  "story_clusters": [
+    {
+      "story_id": "story_20260508_running_codex_safely_at_openai_c6feed",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Running Codex safely at OpenAI",
+        "story_slug": "running-codex-safely-at-openai",
+        "story_type": "model_release",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T00:00:00Z",
+        "last_seen_at": "2026-05-08T12:30:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260508_openai_news_a134b7a7",
+          "doc_20260507_openai_news_52a7be66"
+        ],
+        "primary_document_id": "doc_20260508_openai_news_a134b7a7",
+        "member_count": 2,
+        "source_span_ids": [
+          "span_doc_20260508_openai_news_a134b7a7_0000",
+          "span_doc_20260508_openai_news_a134b7a7_0001",
+          "span_doc_20260508_openai_news_a134b7a7_0002",
+          "span_doc_20260508_openai_news_a134b7a7_0003",
+          "span_doc_20260508_openai_news_a134b7a7_0004",
+          "span_doc_20260508_openai_news_a134b7a7_0005",
+          "span_doc_20260507_openai_news_52a7be66_0000",
+          "span_doc_20260507_openai_news_52a7be66_0001",
+          "span_doc_20260507_openai_news_52a7be66_0002",
+          "span_doc_20260507_openai_news_52a7be66_0003",
+          "span_doc_20260507_openai_news_52a7be66_0004",
+          "span_doc_20260507_openai_news_52a7be66_0005"
+        ]
+      },
+      "entities": {
+        "companies": [
+          "OpenAI"
+        ],
+        "models": [
+          "Codex"
+        ],
+        "products": [
+          "ChatGPT"
+        ],
+        "people": [],
+        "topics": [
+          "AI Coding Tools",
+          "AI Business & Enterprise"
+        ]
+      },
+      "primary_entities": [
+        "Codex",
+        "OpenAI",
+        "ChatGPT"
+      ],
+      "event_type": "model_release",
+      "is_multi_source": true,
+      "source_mix": {
+        "official_source_count": 2,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 12
+      },
+      "ranking": {
+        "total_story_score": 60,
+        "ranking_bucket": "medium_priority",
+        "rank": 1,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.711,
+      "cluster_quality": "high"
+    },
+    {
+      "story_id": "story_20260507_scaling_trusted_access_for_cyber_with_gp_66c1b4",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Scaling Trusted Access for Cyber with GPT-5.5 and GPT-5.5-Cyber",
+        "story_slug": "scaling-trusted-access-for-cyber-with-gpt-5-5-and",
+        "story_type": "model_release",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T13:00:00Z",
+        "last_seen_at": "2026-05-07T13:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_openai_news_7538e84c"
+        ],
+        "primary_document_id": "doc_20260507_openai_news_7538e84c",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_openai_news_7538e84c_0000",
+          "span_doc_20260507_openai_news_7538e84c_0001",
+          "span_doc_20260507_openai_news_7538e84c_0002",
+          "span_doc_20260507_openai_news_7538e84c_0003",
+          "span_doc_20260507_openai_news_7538e84c_0004",
+          "span_doc_20260507_openai_news_7538e84c_0005",
+          "span_doc_20260507_openai_news_7538e84c_0006",
+          "span_doc_20260507_openai_news_7538e84c_0007",
+          "span_doc_20260507_openai_news_7538e84c_0008",
+          "span_doc_20260507_openai_news_7538e84c_0009",
+          "span_doc_20260507_openai_news_7538e84c_0010",
+          "span_doc_20260507_openai_news_7538e84c_0011",
+          "span_doc_20260507_openai_news_7538e84c_0012",
+          "span_doc_20260507_openai_news_7538e84c_0013"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [
+          "GPT-5.5"
+        ],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [
+        "GPT-5.5"
+      ],
+      "event_type": "model_release",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 1,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 14
+      },
+      "ranking": {
+        "total_story_score": 58,
+        "ranking_bucket": "medium_priority",
+        "rank": 2,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.8,
+      "cluster_quality": "high"
+    },
+    {
+      "story_id": "story_20260507_parloa_builds_service_agents_customers_w_9297ee",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Parloa builds service agents customers want to talk to",
+        "story_slug": "parloa-builds-service-agents-customers-want-to-tal",
+        "story_type": "product_launch",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T11:00:00Z",
+        "last_seen_at": "2026-05-07T11:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_openai_news_d0c8693f"
+        ],
+        "primary_document_id": "doc_20260507_openai_news_d0c8693f",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_openai_news_d0c8693f_0000",
+          "span_doc_20260507_openai_news_d0c8693f_0001",
+          "span_doc_20260507_openai_news_d0c8693f_0002",
+          "span_doc_20260507_openai_news_d0c8693f_0003",
+          "span_doc_20260507_openai_news_d0c8693f_0004",
+          "span_doc_20260507_openai_news_d0c8693f_0005",
+          "span_doc_20260507_openai_news_d0c8693f_0006"
+        ]
+      },
+      "entities": {
+        "companies": [
+          "OpenAI"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Business & Enterprise",
+          "Voice & Audio AI"
+        ]
+      },
+      "primary_entities": [
+        "OpenAI"
+      ],
+      "event_type": "product_launch",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 1,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 7
+      },
+      "ranking": {
+        "total_story_score": 58,
+        "ranking_bucket": "medium_priority",
+        "rank": 3,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.8,
+      "cluster_quality": "high"
+    },
+    {
+      "story_id": "story_20260507_advancing_voice_intelligence_with_new_mo_080714",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Advancing voice intelligence with new models in the API",
+        "story_slug": "advancing-voice-intelligence-with-new-models-in-th",
+        "story_type": "product_launch",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T10:00:00Z",
+        "last_seen_at": "2026-05-07T10:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_openai_news_dddfe044"
+        ],
+        "primary_document_id": "doc_20260507_openai_news_dddfe044",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_openai_news_dddfe044_0000",
+          "span_doc_20260507_openai_news_dddfe044_0001",
+          "span_doc_20260507_openai_news_dddfe044_0002",
+          "span_doc_20260507_openai_news_dddfe044_0003",
+          "span_doc_20260507_openai_news_dddfe044_0004"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "Voice & Audio AI",
+          "LLM Research",
+          "AI Reasoning"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "product_launch",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 1,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 5
+      },
+      "ranking": {
+        "total_story_score": 55,
+        "ranking_bucket": "medium_priority",
+        "rank": 7,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.75,
+      "cluster_quality": "high"
+    },
+    {
+      "story_id": "story_20260507_testing_ads_in_chatgpt_df6d26",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Testing ads in ChatGPT",
+        "story_slug": "testing-ads-in-chatgpt",
+        "story_type": "pricing_or_plan_change",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T00:00:00Z",
+        "last_seen_at": "2026-05-07T00:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_openai_news_4e730871"
+        ],
+        "primary_document_id": "doc_20260507_openai_news_4e730871",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_openai_news_4e730871_0000",
+          "span_doc_20260507_openai_news_4e730871_0001",
+          "span_doc_20260507_openai_news_4e730871_0002",
+          "span_doc_20260507_openai_news_4e730871_0003",
+          "span_doc_20260507_openai_news_4e730871_0004"
+        ]
+      },
+      "entities": {
+        "companies": [
+          "OpenAI"
+        ],
+        "models": [],
+        "products": [
+          "ChatGPT"
+        ],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [
+        "OpenAI",
+        "ChatGPT"
+      ],
+      "event_type": "pricing_or_plan_change",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 1,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 5
+      },
+      "ranking": {
+        "total_story_score": 53,
+        "ranking_bucket": "medium_priority",
+        "rank": 10,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.8,
+      "cluster_quality": "high"
+    },
+    {
+      "story_id": "story_20260507_introducing_trusted_contact_in_chatgpt_8647d2",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Introducing Trusted Contact in ChatGPT",
+        "story_slug": "introducing-trusted-contact-in-chatgpt",
+        "story_type": "model_release",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T00:00:00Z",
+        "last_seen_at": "2026-05-07T00:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_openai_news_4603e77f"
+        ],
+        "primary_document_id": "doc_20260507_openai_news_4603e77f",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_openai_news_4603e77f_0000",
+          "span_doc_20260507_openai_news_4603e77f_0001",
+          "span_doc_20260507_openai_news_4603e77f_0002",
+          "span_doc_20260507_openai_news_4603e77f_0003",
+          "span_doc_20260507_openai_news_4603e77f_0004",
+          "span_doc_20260507_openai_news_4603e77f_0005"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [
+          "ChatGPT"
+        ],
+        "people": [],
+        "topics": [
+          "AI Safety"
+        ]
+      },
+      "primary_entities": [
+        "ChatGPT"
+      ],
+      "event_type": "model_release",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 1,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 6
+      },
+      "ranking": {
+        "total_story_score": 55,
+        "ranking_bucket": "medium_priority",
+        "rank": 8,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.8,
+      "cluster_quality": "high"
+    },
+    {
+      "story_id": "story_20260506_how_chatgpt_learns_about_the_world_while_92cc95",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "How ChatGPT learns about the world while protecting privacy",
+        "story_slug": "how-chatgpt-learns-about-the-world-while-protectin",
+        "story_type": "product_launch",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-06T08:00:00Z",
+        "last_seen_at": "2026-05-06T08:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260506_openai_news_221d3dff"
+        ],
+        "primary_document_id": "doc_20260506_openai_news_221d3dff",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260506_openai_news_221d3dff_0000",
+          "span_doc_20260506_openai_news_221d3dff_0001",
+          "span_doc_20260506_openai_news_221d3dff_0002",
+          "span_doc_20260506_openai_news_221d3dff_0003",
+          "span_doc_20260506_openai_news_221d3dff_0004",
+          "span_doc_20260506_openai_news_221d3dff_0005",
+          "span_doc_20260506_openai_news_221d3dff_0006",
+          "span_doc_20260506_openai_news_221d3dff_0007",
+          "span_doc_20260506_openai_news_221d3dff_0008",
+          "span_doc_20260506_openai_news_221d3dff_0009"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [
+          "ChatGPT"
+        ],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [
+        "ChatGPT"
+      ],
+      "event_type": "product_launch",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 1,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 10
+      },
+      "ranking": {
+        "total_story_score": 58,
+        "ranking_bucket": "medium_priority",
+        "rank": 4,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.8,
+      "cluster_quality": "high"
+    },
+    {
+      "story_id": "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Uber uses OpenAI to help people earn smarter and book faster",
+        "story_slug": "uber-uses-openai-to-help-people-earn-smarter-and-b",
+        "story_type": "product_launch",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-06T00:00:00Z",
+        "last_seen_at": "2026-05-06T00:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260506_openai_news_9294e76b"
+        ],
+        "primary_document_id": "doc_20260506_openai_news_9294e76b",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260506_openai_news_9294e76b_0000",
+          "span_doc_20260506_openai_news_9294e76b_0001",
+          "span_doc_20260506_openai_news_9294e76b_0002",
+          "span_doc_20260506_openai_news_9294e76b_0003",
+          "span_doc_20260506_openai_news_9294e76b_0004",
+          "span_doc_20260506_openai_news_9294e76b_0005",
+          "span_doc_20260506_openai_news_9294e76b_0006",
+          "span_doc_20260506_openai_news_9294e76b_0007"
+        ]
+      },
+      "entities": {
+        "companies": [
+          "OpenAI"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Business & Enterprise",
+          "Voice & Audio AI"
+        ]
+      },
+      "primary_entities": [
+        "OpenAI"
+      ],
+      "event_type": "product_launch",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 1,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 8
+      },
+      "ranking": {
+        "total_story_score": 58,
+        "ranking_bucket": "medium_priority",
+        "rank": 5,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.8,
+      "cluster_quality": "high"
+    },
+    {
+      "story_id": "story_20260506_how_frontier_firms_are_pulling_ahead_cb7402",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "How frontier firms are pulling ahead",
+        "story_slug": "how-frontier-firms-are-pulling-ahead",
+        "story_type": "product_launch",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-06T00:00:00Z",
+        "last_seen_at": "2026-05-06T00:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260506_openai_news_b0c1169e"
+        ],
+        "primary_document_id": "doc_20260506_openai_news_b0c1169e",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260506_openai_news_b0c1169e_0000",
+          "span_doc_20260506_openai_news_b0c1169e_0001",
+          "span_doc_20260506_openai_news_b0c1169e_0002",
+          "span_doc_20260506_openai_news_b0c1169e_0003",
+          "span_doc_20260506_openai_news_b0c1169e_0004",
+          "span_doc_20260506_openai_news_b0c1169e_0005"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "product_launch",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 1,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 6
+      },
+      "ranking": {
+        "total_story_score": 55,
+        "ranking_bucket": "medium_priority",
+        "rank": 9,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.75,
+      "cluster_quality": "high"
+    },
+    {
+      "story_id": "story_20260416_introducing_claude_opus_4_7_e482f8",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Introducing Claude Opus 4.7",
+        "story_slug": "introducing-claude-opus-4-7",
+        "story_type": "model_release",
+        "story_status": "active_news",
+        "first_seen_at": "2026-04-16T00:00:00Z",
+        "last_seen_at": "2026-04-17T00:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260416_anthropic_news_fa407c64",
+          "doc_20260417_anthropic_news_3a70ab1d"
+        ],
+        "primary_document_id": "doc_20260416_anthropic_news_fa407c64",
+        "member_count": 2,
+        "source_span_ids": [
+          "span_doc_20260416_anthropic_news_fa407c64_0000",
+          "span_doc_20260416_anthropic_news_fa407c64_0001",
+          "span_doc_20260416_anthropic_news_fa407c64_0002",
+          "span_doc_20260416_anthropic_news_fa407c64_0003",
+          "span_doc_20260416_anthropic_news_fa407c64_0004",
+          "span_doc_20260416_anthropic_news_fa407c64_0005",
+          "span_doc_20260416_anthropic_news_fa407c64_0006",
+          "span_doc_20260416_anthropic_news_fa407c64_0007",
+          "span_doc_20260416_anthropic_news_fa407c64_0008",
+          "span_doc_20260416_anthropic_news_fa407c64_0009",
+          "span_doc_20260416_anthropic_news_fa407c64_0010",
+          "span_doc_20260416_anthropic_news_fa407c64_0011",
+          "span_doc_20260416_anthropic_news_fa407c64_0012",
+          "span_doc_20260416_anthropic_news_fa407c64_0013",
+          "span_doc_20260417_anthropic_news_3a70ab1d_0000",
+          "span_doc_20260417_anthropic_news_3a70ab1d_0001",
+          "span_doc_20260417_anthropic_news_3a70ab1d_0002",
+          "span_doc_20260417_anthropic_news_3a70ab1d_0003",
+          "span_doc_20260417_anthropic_news_3a70ab1d_0004"
+        ]
+      },
+      "entities": {
+        "companies": [
+          "Anthropic"
+        ],
+        "models": [
+          "Claude Opus 4.7"
+        ],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Business & Enterprise"
+        ]
+      },
+      "primary_entities": [
+        "Claude Opus 4.7",
+        "Anthropic"
+      ],
+      "event_type": "model_release",
+      "is_multi_source": true,
+      "source_mix": {
+        "official_source_count": 2,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 19
+      },
+      "ranking": {
+        "total_story_score": 56,
+        "ranking_bucket": "medium_priority",
+        "rank": 6,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.62,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260204_claude_is_a_space_to_think_107504",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Claude is a space to think",
+        "story_slug": "claude-is-a-space-to-think",
+        "story_type": "product_launch",
+        "story_status": "active_news",
+        "first_seen_at": "2026-02-04T00:00:00Z",
+        "last_seen_at": "2026-02-04T00:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260204_anthropic_news_79e65e96"
+        ],
+        "primary_document_id": "doc_20260204_anthropic_news_79e65e96",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260204_anthropic_news_79e65e96_0000",
+          "span_doc_20260204_anthropic_news_79e65e96_0001",
+          "span_doc_20260204_anthropic_news_79e65e96_0002",
+          "span_doc_20260204_anthropic_news_79e65e96_0003",
+          "span_doc_20260204_anthropic_news_79e65e96_0004",
+          "span_doc_20260204_anthropic_news_79e65e96_0005"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "product_launch",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 1,
+        "research_source_count": 0,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": true,
+        "has_research_source": false,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 6
+      },
+      "ranking": {
+        "total_story_score": 52,
+        "ranking_bucket": "medium_priority",
+        "rank": 11,
+        "recommended_for_layer_4": true
+      },
+      "cluster_confidence_score": 0.75,
+      "cluster_quality": "high"
+    },
+    {
+      "story_id": "story_20260507_actcam_zero_shot_joint_camera_and_3d_mo_b8baba",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "ActCam: Zero-Shot Joint Camera and 3D Motion Control for Video Generation",
+        "story_slug": "actcam-zero-shot-joint-camera-and-3d-motion-contr",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:59:58Z",
+        "last_seen_at": "2026-05-07T17:59:58Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_ai_8bdef084"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_ai_8bdef084",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_ai_8bdef084_0000",
+          "span_doc_20260507_arxiv_cs_ai_8bdef084_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "Multimodal AI"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 12,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_unipool_a_globally_shared_expert_pool_f_a91c8b",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "UniPool: A Globally Shared Expert Pool for Mixture-of-Experts",
+        "story_slug": "unipool-a-globally-shared-expert-pool-for-mixture",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:59:44Z",
+        "last_seen_at": "2026-05-07T17:59:44Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_ai_40159c5c"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_ai_40159c5c",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_ai_40159c5c_0000",
+          "span_doc_20260507_arxiv_cs_ai_40159c5c_0001",
+          "span_doc_20260507_arxiv_cs_ai_40159c5c_0002"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 3
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 13,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_bami_training_free_bias_mitigation_in_g_7647a4",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "BAMI: Training-Free Bias Mitigation in GUI Grounding",
+        "story_slug": "bami-training-free-bias-mitigation-in-gui-groundi",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:59:31Z",
+        "last_seen_at": "2026-05-07T17:59:31Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_ai_9a8200cb"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_ai_9a8200cb",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_ai_9a8200cb_0000",
+          "span_doc_20260507_arxiv_cs_ai_9a8200cb_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 14,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_verifier_backed_hard_problem_generation_9d818b",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Verifier-Backed Hard Problem Generation for Mathematical Reasoning",
+        "story_slug": "verifier-backed-hard-problem-generation-for-mathem",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:58:32Z",
+        "last_seen_at": "2026-05-07T17:58:32Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_ai_5174263c"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_ai_5174263c",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_ai_5174263c_0000",
+          "span_doc_20260507_arxiv_cs_ai_5174263c_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "AI Reasoning"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 15,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_optimizer_model_consistency_full_finetu_872e89",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Optimizer-Model Consistency: Full Finetuning with the Same Optimizer as Pretraining Forgets Less",
+        "story_slug": "optimizer-model-consistency-full-finetuning-with",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:57:02Z",
+        "last_seen_at": "2026-05-07T17:57:02Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_ai_bfae206d"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_ai_bfae206d",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_ai_bfae206d_0000",
+          "span_doc_20260507_arxiv_cs_ai_bfae206d_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 16,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_when_no_benchmark_exists_validating_com_dfacbe",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "When No Benchmark Exists: Validating Comparative LLM Safety Scoring Without Ground-Truth Labels",
+        "story_slug": "when-no-benchmark-exists-validating-comparative-l",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:56:41Z",
+        "last_seen_at": "2026-05-07T17:56:41Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_ai_28138c9d"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_ai_28138c9d",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_ai_28138c9d_0000",
+          "span_doc_20260507_arxiv_cs_ai_28138c9d_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "AI Safety"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 17,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_ai_co_mathematician_accelerating_mathem_4a02bd",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "AI Co-Mathematician: Accelerating Mathematicians with Agentic AI",
+        "story_slug": "ai-co-mathematician-accelerating-mathematicians-w",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:56:32Z",
+        "last_seen_at": "2026-05-07T17:56:32Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_ai_825f5aac"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_ai_825f5aac",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_ai_825f5aac_0000",
+          "span_doc_20260507_arxiv_cs_ai_825f5aac_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Agents"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 18,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_superintelligent_retrieval_agent_the_ne_fe1a42",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Superintelligent Retrieval Agent: The Next Frontier of Information Retrieval",
+        "story_slug": "superintelligent-retrieval-agent-the-next-frontie",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:54:29Z",
+        "last_seen_at": "2026-05-07T17:54:29Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_ai_c1562e0d"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_ai_c1562e0d",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_ai_c1562e0d_0000",
+          "span_doc_20260507_arxiv_cs_ai_c1562e0d_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "RAG & Retrieval"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 19,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_are_we_making_progress_in_multimodal_dom_27a5de",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Are We Making Progress in Multimodal Domain Generalization? A Comprehensive Benchmark Study",
+        "story_slug": "are-we-making-progress-in-multimodal-domain-genera",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:51:16Z",
+        "last_seen_at": "2026-05-07T17:51:16Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_ai_a3ae117d"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_ai_a3ae117d",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_ai_a3ae117d_0000",
+          "span_doc_20260507_arxiv_cs_ai_a3ae117d_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "Multimodal AI"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 20,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_strata_incentivizing_agentic_reinforcem_143fe7",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "StraTA: Incentivizing Agentic Reinforcement Learning with Strategic Trajectory Abstraction",
+        "story_slug": "strata-incentivizing-agentic-reinforcement-learni",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:51:16Z",
+        "last_seen_at": "2026-05-07T17:51:16Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_ai_45110fb1"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_ai_45110fb1",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_ai_45110fb1_0000",
+          "span_doc_20260507_arxiv_cs_ai_45110fb1_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 21,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_why_global_llm_leaderboards_are_misleadi_902819",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Why Global LLM Leaderboards Are Misleading: Small Portfolios for Heterogeneous Supervised ML",
+        "story_slug": "why-global-llm-leaderboards-are-misleading-small",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:57:58Z",
+        "last_seen_at": "2026-05-07T17:57:58Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_lg_d38f16c6"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_lg_d38f16c6",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_lg_d38f16c6_0000",
+          "span_doc_20260507_arxiv_cs_lg_d38f16c6_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 22,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_inductive_venn_abers_and_related_regress_32795f",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Inductive Venn-Abers and related regressors",
+        "story_slug": "inductive-venn-abers-and-related-regressors",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:52:08Z",
+        "last_seen_at": "2026-05-07T17:52:08Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_lg_a623f9fc"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_lg_a623f9fc",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_lg_a623f9fc_0000"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 35,
+        "ranking_bucket": "low_priority",
+        "rank": 29,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_edge_specific_signal_propagation_on_matu_cf9291",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Edge-specific signal propagation on mature chromophore-region 3D mechanism graphs for fluorescent protein quantum-yield prediction",
+        "story_slug": "edge-specific-signal-propagation-on-mature-chromop",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:51:41Z",
+        "last_seen_at": "2026-05-07T17:51:41Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_lg_3c8b6bf0"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_lg_3c8b6bf0",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_lg_3c8b6bf0_0000",
+          "span_doc_20260507_arxiv_cs_lg_3c8b6bf0_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 23,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_emo_pretraining_mixture_of_experts_for_9e57db",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "EMO: Pretraining Mixture of Experts for Emergent Modularity",
+        "story_slug": "emo-pretraining-mixture-of-experts-for-emergent-m",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:59:20Z",
+        "last_seen_at": "2026-05-07T17:59:20Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cl_685a737e"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cl_685a737e",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cl_685a737e_0000",
+          "span_doc_20260507_arxiv_cs_cl_685a737e_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "AI Hardware & Infrastructure"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 24,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_beyond_negative_rollouts_positive_only_654cca",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Beyond Negative Rollouts: Positive-Only Policy Optimization with Implicit Negative Gradients",
+        "story_slug": "beyond-negative-rollouts-positive-only-policy-opt",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:55:21Z",
+        "last_seen_at": "2026-05-07T17:55:21Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cl_347e90e3"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cl_347e90e3",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cl_347e90e3_0000",
+          "span_doc_20260507_arxiv_cs_cl_347e90e3_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Regulation & Policy",
+          "LLM Research",
+          "AI Reasoning"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 25,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_recursive_agent_optimization_39cc68",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Recursive Agent Optimization",
+        "story_slug": "recursive-agent-optimization",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:49:09Z",
+        "last_seen_at": "2026-05-07T17:49:09Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cl_16aa8622"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cl_16aa8622",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cl_16aa8622_0000"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Hardware & Infrastructure"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 33,
+        "ranking_bucket": "low_priority",
+        "rank": 38,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_can_rl_teach_long_horizon_reasoning_to_l_9fa661",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Can RL Teach Long-Horizon Reasoning to LLMs? Expressiveness Is Key",
+        "story_slug": "can-rl-teach-long-horizon-reasoning-to-llms-expre",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:48:42Z",
+        "last_seen_at": "2026-05-07T17:48:42Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cl_d032c80a"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cl_d032c80a",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cl_d032c80a_0000",
+          "span_doc_20260507_arxiv_cs_cl_d032c80a_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "AI Reasoning"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 35,
+        "ranking_bucket": "low_priority",
+        "rank": 30,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_cited_but_not_verified_parsing_and_eval_ac4a0b",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Cited but Not Verified: Parsing and Evaluating Source Attribution in LLM Deep Research Agents",
+        "story_slug": "cited-but-not-verified-parsing-and-evaluating-sou",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:46:45Z",
+        "last_seen_at": "2026-05-07T17:46:45Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cl_93d80afe"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cl_93d80afe",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cl_93d80afe_0000",
+          "span_doc_20260507_arxiv_cs_cl_93d80afe_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "RAG & Retrieval"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 35,
+        "ranking_bucket": "low_priority",
+        "rank": 31,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_parser_agreement_and_disagreement_in_l2_485924",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Parser agreement and disagreement in L2 Korean UD: Implications for human-in-the-loop annotation",
+        "story_slug": "parser-agreement-and-disagreement-in-l2-korean-ud",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:39:04Z",
+        "last_seen_at": "2026-05-07T17:39:04Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cl_1fa2af83"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cl_1fa2af83",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cl_1fa2af83_0000"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 33,
+        "ranking_bucket": "low_priority",
+        "rank": 39,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_maspo_joint_prompt_optimization_for_llm_9d1b23",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "MASPO: Joint Prompt Optimization for LLM-based Multi-Agent Systems",
+        "story_slug": "maspo-joint-prompt-optimization-for-llm-based-mul",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:35:26Z",
+        "last_seen_at": "2026-05-07T17:35:26Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cl_51b33491"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cl_51b33491",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cl_51b33491_0000",
+          "span_doc_20260507_arxiv_cs_cl_51b33491_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Agents",
+          "LLM Research"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 35,
+        "ranking_bucket": "low_priority",
+        "rank": 32,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_relit_live_relight_video_by_jointly_lea_a705fd",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Relit-LiVE: Relight Video by Jointly Learning Environment Video",
+        "story_slug": "relit-live-relight-video-by-jointly-learning-envi",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:58:15Z",
+        "last_seen_at": "2026-05-07T17:58:15Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cv_0195fa18"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cv_0195fa18",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cv_0195fa18_0000",
+          "span_doc_20260507_arxiv_cs_cv_0195fa18_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 26,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_glazybench_a_benchmark_for_ceramic_glaz_db7262",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "GlazyBench: A Benchmark for Ceramic Glaze Property Prediction and Image Generation",
+        "story_slug": "glazybench-a-benchmark-for-ceramic-glaze-property",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:51:13Z",
+        "last_seen_at": "2026-05-07T17:51:13Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cv_b3fb97e7"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cv_b3fb97e7",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cv_b3fb97e7_0000",
+          "span_doc_20260507_arxiv_cs_cv_b3fb97e7_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "Multimodal AI"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 37,
+        "ranking_bucket": "low_priority",
+        "rank": 27,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_dpm_dynamic_masked_metric_learning_fo_c412f5",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "DPM++: Dynamic Masked Metric Learning for Occluded Person Re-identification",
+        "story_slug": "dpm-dynamic-masked-metric-learning-for-occluded",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:47:23Z",
+        "last_seen_at": "2026-05-07T17:47:23Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cv_70525301"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cv_70525301",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cv_70525301_0000",
+          "span_doc_20260507_arxiv_cs_cv_70525301_0001",
+          "span_doc_20260507_arxiv_cs_cv_70525301_0002"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 3
+      },
+      "ranking": {
+        "total_story_score": 35,
+        "ranking_bucket": "low_priority",
+        "rank": 33,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_softsae_dynamic_top_k_selection_for_ada_fdbf01",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "SoftSAE: Dynamic Top-K Selection for Adaptive Sparse Autoencoders",
+        "story_slug": "softsae-dynamic-top-k-selection-for-adaptive-spar",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:28:40Z",
+        "last_seen_at": "2026-05-07T17:28:40Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cv_2bf7a439"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cv_2bf7a439",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cv_2bf7a439_0000",
+          "span_doc_20260507_arxiv_cs_cv_2bf7a439_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 35,
+        "ranking_bucket": "low_priority",
+        "rank": 34,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_dinorankclip_dinov3_distillation_and_in_eb21d3",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "DINORANKCLIP: DINOv3 Distillation and Injection for Vision-Language Pretraining with High-Order Ranking Consistency",
+        "story_slug": "dinorankclip-dinov3-distillation-and-injection-fo",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:19:52Z",
+        "last_seen_at": "2026-05-07T17:19:52Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cv_f89eb47a"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cv_f89eb47a",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cv_f89eb47a_0000",
+          "span_doc_20260507_arxiv_cs_cv_f89eb47a_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 35,
+        "ranking_bucket": "low_priority",
+        "rank": 35,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_solving_minimal_problems_without_matrix_fabbcb",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Solving Minimal Problems Without Matrix Inversion Using FFT-Based Interpolation",
+        "story_slug": "solving-minimal-problems-without-matrix-inversion",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T17:03:56Z",
+        "last_seen_at": "2026-05-07T17:03:56Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cv_9054e1b9"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cv_9054e1b9",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cv_9054e1b9_0000",
+          "span_doc_20260507_arxiv_cs_cv_9054e1b9_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 35,
+        "ranking_bucket": "low_priority",
+        "rank": 36,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260507_continuous_latent_diffusion_language_mod_4a2fcc",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Continuous Latent Diffusion Language Model",
+        "story_slug": "continuous-latent-diffusion-language-model",
+        "story_type": "research_paper",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-07T16:44:56Z",
+        "last_seen_at": "2026-05-07T16:44:56Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260507_arxiv_cs_cv_ee406e43"
+        ],
+        "primary_document_id": "doc_20260507_arxiv_cs_cv_ee406e43",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260507_arxiv_cs_cv_ee406e43_0000",
+          "span_doc_20260507_arxiv_cs_cv_ee406e43_0001"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "research_paper",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 1,
+        "independent_news_count": 0,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": true,
+        "has_independent_confirmation": false,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 2
+      },
+      "ranking": {
+        "total_story_score": 35,
+        "ranking_bucket": "low_priority",
+        "rank": 37,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.67,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260509_google_stock_could_rally_as_the_company_b5ea1a",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Google Stock Could Rally as the Company Builds OpenClaw Competitor Remy. How to Play GOOGL Here.",
+        "story_slug": "google-stock-could-rally-as-the-company-builds-ope",
+        "story_type": "tutorial_or_demo",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-09T13:00:02Z",
+        "last_seen_at": "2026-05-09T13:00:02Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260509_newsapi_ai_ea0eb76e"
+        ],
+        "primary_document_id": "doc_20260509_newsapi_ai_ea0eb76e",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260509_newsapi_ai_ea0eb76e_0000"
+        ]
+      },
+      "entities": {
+        "companies": [
+          "Google"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [
+        "Google"
+      ],
+      "event_type": "tutorial_or_demo",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 0,
+        "independent_news_count": 1,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": false,
+        "has_independent_confirmation": true,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 27,
+        "ranking_bucket": "low_priority",
+        "rank": 42,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.6,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260509_qualcomm_s_ceo_is_working_with_pretty_m_bf11ee",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Qualcomm’s CEO is working with ‘pretty much all’ major AI players on top-secret devices—and powering OpenAI’s first push into hardware",
+        "story_slug": "qualcomm-s-ceo-is-working-with-pretty-much-all-m",
+        "story_type": "unknown",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-09T10:26:00Z",
+        "last_seen_at": "2026-05-09T10:26:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260509_newsapi_ai_a5f64cd6"
+        ],
+        "primary_document_id": "doc_20260509_newsapi_ai_a5f64cd6",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260509_newsapi_ai_a5f64cd6_0000"
+        ]
+      },
+      "entities": {
+        "companies": [
+          "OpenAI",
+          "Qualcomm"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [
+        "OpenAI",
+        "Qualcomm"
+      ],
+      "event_type": "unknown",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 0,
+        "independent_news_count": 1,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": false,
+        "has_independent_confirmation": true,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 24,
+        "ranking_bucket": "low_priority",
+        "rank": 43,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.6,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260509_openai_unveils_gpt_5_class_voice_models_c344e3",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "OpenAI unveils GPT-5-class voice models for real-time orchestration",
+        "story_slug": "openai-unveils-gpt-5-class-voice-models-for-real-t",
+        "story_type": "model_release",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-09T06:38:34Z",
+        "last_seen_at": "2026-05-09T06:38:34Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260509_newsapi_ai_d5508a7a"
+        ],
+        "primary_document_id": "doc_20260509_newsapi_ai_d5508a7a",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260509_newsapi_ai_d5508a7a_0000"
+        ]
+      },
+      "entities": {
+        "companies": [
+          "OpenAI"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "Voice & Audio AI",
+          "LLM Research",
+          "AI Reasoning"
+        ]
+      },
+      "primary_entities": [
+        "OpenAI"
+      ],
+      "event_type": "model_release",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 0,
+        "independent_news_count": 1,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": false,
+        "has_independent_confirmation": true,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 36,
+        "ranking_bucket": "low_priority",
+        "rank": 28,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.6,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260509_lebanese_report_accuses_israel_of_ecocid_509b67",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Lebanese Report Accuses Israel of Ecocide in Southern Lebanon, Citing Systematic Environmental Destruction",
+        "story_slug": "lebanese-report-accuses-israel-of-ecocide-in-south",
+        "story_type": "unknown",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-09T06:00:00Z",
+        "last_seen_at": "2026-05-09T06:00:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260509_newsapi_ai_145f8979"
+        ],
+        "primary_document_id": "doc_20260509_newsapi_ai_145f8979",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260509_newsapi_ai_145f8979_0000"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "unknown",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 0,
+        "independent_news_count": 1,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": false,
+        "has_independent_confirmation": true,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 21,
+        "ranking_bucket": "low_priority",
+        "rank": 45,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.55,
+      "cluster_quality": "low"
+    },
+    {
+      "story_id": "story_20260509_air_arr_and_ai_inside_ringcentral_s_tr_151e2a",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "AIR, ARR and AI: Inside RingCentral’s transformation into an AI-first engagement platform",
+        "story_slug": "air-arr-and-ai-inside-ringcentral-s-transformati",
+        "story_type": "unknown",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-09T03:54:15Z",
+        "last_seen_at": "2026-05-09T03:54:15Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260509_newsapi_ai_8d4ffc3a"
+        ],
+        "primary_document_id": "doc_20260509_newsapi_ai_8d4ffc3a",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260509_newsapi_ai_8d4ffc3a_0000"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "unknown",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 0,
+        "independent_news_count": 1,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": false,
+        "has_independent_confirmation": true,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 21,
+        "ranking_bucket": "low_priority",
+        "rank": 46,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.55,
+      "cluster_quality": "low"
+    },
+    {
+      "story_id": "story_20260509_how_to_create_an_ai_transformation_roadm_8b3075",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "How to Create an AI Transformation Roadmap for Marketing",
+        "story_slug": "how-to-create-an-ai-transformation-roadmap-for-mar",
+        "story_type": "tutorial_or_demo",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-09T00:45:52Z",
+        "last_seen_at": "2026-05-09T00:45:52Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260509_newsapi_ai_e76ba3ef"
+        ],
+        "primary_document_id": "doc_20260509_newsapi_ai_e76ba3ef",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260509_newsapi_ai_e76ba3ef_0000"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Regulation & Policy"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "tutorial_or_demo",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 0,
+        "independent_news_count": 1,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": false,
+        "has_independent_confirmation": true,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 24,
+        "ranking_bucket": "low_priority",
+        "rank": 44,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.55,
+      "cluster_quality": "low"
+    },
+    {
+      "story_id": "story_20260509_agentic_ai_navigating_the_evolving_fron_8006a2",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Agentic AI: Navigating The Evolving Frontier",
+        "story_slug": "agentic-ai-navigating-the-evolving-frontier",
+        "story_type": "unknown",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-09T00:08:59Z",
+        "last_seen_at": "2026-05-09T00:08:59Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260509_newsapi_ai_a4686e74"
+        ],
+        "primary_document_id": "doc_20260509_newsapi_ai_a4686e74",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260509_newsapi_ai_a4686e74_0000"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Agents"
+        ]
+      },
+      "primary_entities": [],
+      "event_type": "unknown",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 0,
+        "independent_news_count": 1,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": false,
+        "has_independent_confirmation": true,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 21,
+        "ranking_bucket": "low_priority",
+        "rank": 47,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.55,
+      "cluster_quality": "low"
+    },
+    {
+      "story_id": "story_20260508_qualcomm_bets_on_custom_ai_chips_target_72cae3",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Qualcomm bets on custom AI chips, targets Nvidia-led data centre market",
+        "story_slug": "qualcomm-bets-on-custom-ai-chips-targets-nvidia-l",
+        "story_type": "infrastructure_or_chip_news",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-08T23:30:00Z",
+        "last_seen_at": "2026-05-08T23:30:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260508_newsapi_ai_83b7c7e3"
+        ],
+        "primary_document_id": "doc_20260508_newsapi_ai_83b7c7e3",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260508_newsapi_ai_83b7c7e3_0000"
+        ]
+      },
+      "entities": {
+        "companies": [
+          "NVIDIA",
+          "Qualcomm"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Hardware & Infrastructure"
+        ]
+      },
+      "primary_entities": [
+        "NVIDIA",
+        "Qualcomm"
+      ],
+      "event_type": "infrastructure_or_chip_news",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 0,
+        "independent_news_count": 1,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": false,
+        "has_independent_confirmation": true,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 31,
+        "ranking_bucket": "low_priority",
+        "rank": 41,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.6,
+      "cluster_quality": "medium"
+    },
+    {
+      "story_id": "story_20260508_con_edison_announces_2_billion_at_the_m_9452b2",
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_identity": {
+        "canonical_story_title": "Con Edison Announces $2 Billion At-The-Market (ATM) Equity Offering Program",
+        "story_slug": "con-edison-announces-2-billion-at-the-market-atm",
+        "story_type": "funding_or_acquisition",
+        "story_status": "active_news",
+        "first_seen_at": "2026-05-08T20:30:00Z",
+        "last_seen_at": "2026-05-08T20:30:00Z"
+      },
+      "cluster_members": {
+        "canonical_document_ids": [
+          "doc_20260508_newsapi_ai_e5951e1f"
+        ],
+        "primary_document_id": "doc_20260508_newsapi_ai_e5951e1f",
+        "member_count": 1,
+        "source_span_ids": [
+          "span_doc_20260508_newsapi_ai_e5951e1f_0000"
+        ]
+      },
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "primary_entities": [],
+      "event_type": "funding_or_acquisition",
+      "is_multi_source": false,
+      "source_mix": {
+        "official_source_count": 0,
+        "research_source_count": 0,
+        "independent_news_count": 1,
+        "github_source_count": 0,
+        "video_transcript_count": 0,
+        "community_signal_count": 0,
+        "other_count": 0
+      },
+      "source_strength": {
+        "has_primary_source": false,
+        "has_research_source": false,
+        "has_independent_confirmation": true,
+        "has_technical_artifact": false,
+        "has_community_interest": false,
+        "has_only_community_signal": false,
+        "multi_tier_coverage": false,
+        "total_source_spans": 1
+      },
+      "ranking": {
+        "total_story_score": 33,
+        "ranking_bucket": "low_priority",
+        "rank": 40,
+        "recommended_for_layer_4": false
+      },
+      "cluster_confidence_score": 0.55,
+      "cluster_quality": "low"
+    }
+  ]
+}

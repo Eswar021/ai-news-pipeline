@@ -1,0 +1,32 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "layer": "layer_3_story_processing",
+  "created_at": "2026-05-10T17:50:27.609358+00:00",
+  "inputs": {
+    "canonical_documents": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_2/canonical_documents.jsonl",
+    "source_spans": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_2/source_spans.jsonl",
+    "layer2_manifest": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_2/layer2_manifest.json"
+  },
+  "outputs": {
+    "story_clusters": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_3/story_clusters.json",
+    "ranked_stories": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_3/ranked_stories.json",
+    "cluster_membership": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_3/cluster_membership.jsonl",
+    "duplicate_groups": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_3/duplicate_groups.jsonl",
+    "story_entity_topic_map": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_3/story_entity_topic_map.json",
+    "story_timeline": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_3/story_timeline.json",
+    "story_rank_report": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_3/story_rank_report.json"
+  },
+  "counts": {
+    "canonical_documents_received": 77,
+    "story_clusters_created": 47,
+    "multi_source_clusters": 2,
+    "ranked_stories": 47,
+    "duplicate_groups": 11,
+    "stories_for_layer_4": 11
+  },
+  "handoff": {
+    "ready_for_layer_4": true,
+    "available_for_layer_5_precheck": true,
+    "next_layer": "layer_4_evidence_intelligence"
+  }
+}

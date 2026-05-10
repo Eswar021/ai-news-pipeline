@@ -1,0 +1,226 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-10T19:22:12.404347+00:00",
+  "video_opportunity_scores": [
+    {
+      "story_id": "story_20260508_running_codex_safely_at_openai_c6feed",
+      "video_opportunity_score": 88,
+      "score_components": {
+        "audience_fit": 97,
+        "viewer_value": 72,
+        "developer_impact": 95,
+        "novelty": 90,
+        "market_gap": 82,
+        "evidence_safety": 100,
+        "visual_potential": 75
+      },
+      "market_gap": {
+        "market_saturation": "high",
+        "gap_angle": "Evidence-based, practical take on a heavily-covered topic.",
+        "gap_strength_score": 82,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    },
+    {
+      "story_id": "story_20260507_scaling_trusted_access_for_cyber_with_gp_66c1b4",
+      "video_opportunity_score": 84,
+      "score_components": {
+        "audience_fit": 82,
+        "viewer_value": 72,
+        "developer_impact": 85,
+        "novelty": 90,
+        "market_gap": 82,
+        "evidence_safety": 100,
+        "visual_potential": 75
+      },
+      "market_gap": {
+        "market_saturation": "high",
+        "gap_angle": "Evidence-based, practical take on a heavily-covered topic.",
+        "gap_strength_score": 82,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    },
+    {
+      "story_id": "story_20260507_parloa_builds_service_agents_customers_w_9297ee",
+      "video_opportunity_score": 84,
+      "score_components": {
+        "audience_fit": 91,
+        "viewer_value": 72,
+        "developer_impact": 75,
+        "novelty": 90,
+        "market_gap": 80,
+        "evidence_safety": 100,
+        "visual_potential": 80
+      },
+      "market_gap": {
+        "market_saturation": "medium",
+        "gap_angle": "Moderate coverage; channel evidence-first angle differentiates.",
+        "gap_strength_score": 80,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    },
+    {
+      "story_id": "story_20260506_how_chatgpt_learns_about_the_world_while_92cc95",
+      "video_opportunity_score": 82,
+      "score_components": {
+        "audience_fit": 78,
+        "viewer_value": 78,
+        "developer_impact": 75,
+        "novelty": 90,
+        "market_gap": 80,
+        "evidence_safety": 100,
+        "visual_potential": 80
+      },
+      "market_gap": {
+        "market_saturation": "medium",
+        "gap_angle": "Moderate coverage; channel evidence-first angle differentiates.",
+        "gap_strength_score": 80,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    },
+    {
+      "story_id": "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace",
+      "video_opportunity_score": 84,
+      "score_components": {
+        "audience_fit": 91,
+        "viewer_value": 72,
+        "developer_impact": 75,
+        "novelty": 90,
+        "market_gap": 80,
+        "evidence_safety": 100,
+        "visual_potential": 80
+      },
+      "market_gap": {
+        "market_saturation": "medium",
+        "gap_angle": "Moderate coverage; channel evidence-first angle differentiates.",
+        "gap_strength_score": 80,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    },
+    {
+      "story_id": "story_20260416_introducing_claude_opus_4_7_e482f8",
+      "video_opportunity_score": 87,
+      "score_components": {
+        "audience_fit": 94,
+        "viewer_value": 78,
+        "developer_impact": 85,
+        "novelty": 90,
+        "market_gap": 82,
+        "evidence_safety": 100,
+        "visual_potential": 75
+      },
+      "market_gap": {
+        "market_saturation": "high",
+        "gap_angle": "Evidence-based, practical take on a heavily-covered topic.",
+        "gap_strength_score": 82,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    },
+    {
+      "story_id": "story_20260507_advancing_voice_intelligence_with_new_mo_080714",
+      "video_opportunity_score": 83,
+      "score_components": {
+        "audience_fit": 79,
+        "viewer_value": 78,
+        "developer_impact": 75,
+        "novelty": 90,
+        "market_gap": 80,
+        "evidence_safety": 100,
+        "visual_potential": 80
+      },
+      "market_gap": {
+        "market_saturation": "medium",
+        "gap_angle": "Moderate coverage; channel evidence-first angle differentiates.",
+        "gap_strength_score": 80,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    },
+    {
+      "story_id": "story_20260507_introducing_trusted_contact_in_chatgpt_8647d2",
+      "video_opportunity_score": 85,
+      "score_components": {
+        "audience_fit": 84,
+        "viewer_value": 75,
+        "developer_impact": 85,
+        "novelty": 90,
+        "market_gap": 82,
+        "evidence_safety": 100,
+        "visual_potential": 75
+      },
+      "market_gap": {
+        "market_saturation": "high",
+        "gap_angle": "Evidence-based, practical take on a heavily-covered topic.",
+        "gap_strength_score": 82,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    },
+    {
+      "story_id": "story_20260506_how_frontier_firms_are_pulling_ahead_cb7402",
+      "video_opportunity_score": 82,
+      "score_components": {
+        "audience_fit": 78,
+        "viewer_value": 75,
+        "developer_impact": 75,
+        "novelty": 90,
+        "market_gap": 80,
+        "evidence_safety": 100,
+        "visual_potential": 80
+      },
+      "market_gap": {
+        "market_saturation": "medium",
+        "gap_angle": "Moderate coverage; channel evidence-first angle differentiates.",
+        "gap_strength_score": 80,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    },
+    {
+      "story_id": "story_20260507_testing_ads_in_chatgpt_df6d26",
+      "video_opportunity_score": 83,
+      "score_components": {
+        "audience_fit": 85,
+        "viewer_value": 72,
+        "developer_impact": 82,
+        "novelty": 90,
+        "market_gap": 75,
+        "evidence_safety": 100,
+        "visual_potential": 70
+      },
+      "market_gap": {
+        "market_saturation": "medium",
+        "gap_angle": "Moderate coverage; channel evidence-first angle differentiates.",
+        "gap_strength_score": 75,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    },
+    {
+      "story_id": "story_20260204_claude_is_a_space_to_think_107504",
+      "video_opportunity_score": 81,
+      "score_components": {
+        "audience_fit": 78,
+        "viewer_value": 72,
+        "developer_impact": 75,
+        "novelty": 90,
+        "market_gap": 80,
+        "evidence_safety": 100,
+        "visual_potential": 80
+      },
+      "market_gap": {
+        "market_saturation": "medium",
+        "gap_angle": "Moderate coverage; channel evidence-first angle differentiates.",
+        "gap_strength_score": 80,
+        "differentiation_strategy": "evidence-first, practical, low-hype"
+      },
+      "overall_recommendation": "strong_video_candidate"
+    }
+  ]
+}

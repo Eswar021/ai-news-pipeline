@@ -1,0 +1,87 @@
+# Format Config — defines the video formats this channel supports.
+# Read by Layer 0 (format_strategy_resolver.py + run_mode_resolver.py).
+# All downstream layers receive format requirements via run_manifest.json.
+
+formats:
+  roundup:
+    enabled: true
+    description: "Multi-story AI news update. Top 5-8 stories from the collection window."
+    target_duration_minutes: 8
+    min_stories: 5
+    max_stories: 8
+    min_verified_claims_per_story: 2
+    evidence_requirement: medium
+    pacing: fast
+    cadence: "48h"
+    structure:
+      - intro
+      - story_segments
+      - final_takeaway
+
+  deep_dive:
+    enabled: true
+    description: "Single-story deep analysis. One story with strong evidence and depth."
+    target_duration_minutes: 10
+    min_stories: 1
+    max_stories: 1
+    min_verified_claims: 8
+    require_primary_source: true
+    evidence_requirement: high
+    pacing: medium
+    cadence: "weekly"
+    structure:
+      - hook
+      - what_happened
+      - why_it_matters
+      - background
+      - implications
+      - limitations
+      - takeaway
+
+  evergreen:
+    enabled: false
+    description: "Timeless educational explainer. Topic-based, not news-dependent."
+    target_duration_minutes: 12
+    evidence_requirement: high
+    pacing: medium
+    cadence: "biweekly"
+    structure:
+      - problem
+      - concept_explanation
+      - timeline
+      - examples
+      - practical_takeaway
+
+  comparison:
+    enabled: false
+    description: "Side-by-side product or model comparison with evidence matrix."
+    target_duration_minutes: 10
+    min_comparison_subjects: 2
+    evidence_requirement: high
+    pacing: medium
+    cadence: "on-demand"
+    structure:
+      - intro
+      - subject_profiles
+      - comparison_matrix
+      - verdict
+      - practical_recommendation
+
+  follow_up:
+    enabled: false
+    description: "Update to a previously published video. Requires prior video in memory."
+    target_duration_minutes: 8
+    require_prior_video_in_memory: true
+    evidence_requirement: medium_high
+    pacing: medium
+    cadence: "on-demand"
+    structure:
+      - recap
+      - what_changed
+      - new_evidence
+      - updated_takeaway
+
+format_routing_rules:
+  deep_dive_threshold: 80       # minimum story score for deep dive eligibility
+  roundup_threshold: 50         # minimum story score for roundup inclusion
+  evidence_density_minimum: 60  # minimum evidence density score for any format

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent.parent.parent))
 from config.paths import RAW_BLOGS, ensure_output_dirs
-from pipelines.layer_1_extraction.company_blogs.blog_utils import fetch_rss, strip_html, make_document
+from pipelines.layer_1_extraction.company_blogs.blog_utils import fetch_rss, strip_html, make_document, fetch_article_text
 
 
 OPENAI_RSS_URL = "https://openai.com/blog/rss.xml"
@@ -32,13 +32,20 @@ NS = {
 }
 
 
-def fetch_posts(max_results=10):
+def fetch_posts(max_results=10, fetch_full=True):
     """
     Fetch recent posts from OpenAI's RSS feed.
-    
+
+    Args:
+        max_results: Max posts to return.
+        fetch_full:  If True (default), fetch each article's full page when RSS
+                     provides only a short description. OpenAI's RSS does not include
+                     content:encoded, so fetch_full=True is required for real content.
+
     Returns:
         List of post dicts in our standard document format.
     """
+    import time
     xml_data = fetch_rss(OPENAI_RSS_URL)
     root = ET.fromstring(xml_data)
     channel = root.find("channel")
@@ -46,13 +53,15 @@ def fetch_posts(max_results=10):
 
     posts = []
     for item in items[:max_results]:
-        post = parse_item(item)
+        post = parse_item(item, fetch_full=fetch_full)
         posts.append(post)
+        if fetch_full:
+            time.sleep(0.5)  # polite delay between article fetches
 
     return posts
 
 
-def parse_item(item):
+def parse_item(item, fetch_full=True):
     """Parse a single RSS <item> into our standard document format."""
 
     title       = (item.findtext("title") or "").strip()
@@ -61,12 +70,19 @@ def parse_item(item):
     description = (item.findtext("description") or "").strip()
     author      = (item.findtext("dc:creator", namespaces=NS) or COMPANY).strip()
 
-    # content:encoded has the full HTML article; prefer it over description
+    # Try content:encoded first (full HTML body, if provided by the feed)
     full_html = item.findtext("content:encoded", namespaces=NS) or ""
     if full_html:
         raw_text = strip_html(full_html)
     else:
         raw_text = strip_html(description) if description else ""
+
+    # OpenAI RSS only provides short descriptions (~150 chars). Fetch the article page
+    # to get the actual content when we have the URL and the text is too short.
+    if fetch_full and url and len(raw_text) < 500:
+        article_text = fetch_article_text(url)
+        if len(article_text) > len(raw_text):
+            raw_text = article_text
 
     return make_document(
         source_id=SOURCE_ID,

@@ -1,0 +1,64 @@
+# Channel Thesis — defines the identity and editorial rules of this YouTube channel.
+# Read by Layer 0 (channel_thesis_loader.py) at the start of every run.
+# All downstream layers receive this via run_manifest.json — do NOT read this file directly.
+
+channel:
+  channel_id: ai_news_channel_v1
+  channel_name: "AI Signal Brief"
+  version: "1.0"
+  content_promise: >
+    Explain the most important AI news with evidence, context,
+    practical impact, and low hype.
+
+audience:
+  primary: technical_but_accessible
+  secondary:
+    - software_developers
+    - AI_power_users
+    - tech_professionals
+    - startup_founders
+
+tone:
+  style: clear_analytical
+  energy: medium_high
+  attitude: skeptical_but_constructive
+  avoid:
+    - panic
+    - fake certainty
+    - unsupported hype
+    - vague superlatives
+    - clickbait panic
+
+content_boundaries:
+  include:
+    - AI model releases
+    - AI agents
+    - AI coding tools
+    - AI research
+    - open-source AI
+    - AI infrastructure
+    - AI regulation
+    - AI business impact
+    - AI safety
+  exclude:
+    - pure crypto unless AI-related
+    - random AI tools with no traction
+    - rumors without source support
+    - celebrity AI gossip
+    - political opinion without AI angle
+    - consumer gadgets with no AI component
+
+style_rules:
+  - explain why it matters to the viewer
+  - separate verified facts from interpretation
+  - do not overhype model releases
+  - always mention uncertainty when it exists
+  - use "the company says" for company-only claims
+  - use "not yet independently verified" when proof is weak
+
+preferred_angles:
+  - what actually changed (not just what was announced)
+  - who is concretely affected and how
+  - what is practically useful right now
+  - what is still unclear or unverified
+  - what other coverage is missing or wrong

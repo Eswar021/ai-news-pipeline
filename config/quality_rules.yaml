@@ -1,0 +1,27 @@
+# Quality Rules — governs evidence requirements and verification thresholds.
+# Enforced by Layer 0 policy, Layer 4 verification, Layer 5 safety gate, Layer 9 firewall.
+
+evidence_rules:
+  require_source_span_for_every_claim: true
+  community_signals_cannot_be_primary_truth: true
+  min_trust_tier_for_primary_claim: 2         # tier 1 or 1.5 preferred; tier 2 minimum
+  min_trust_tier_for_factual_stat: 1.5        # statistics need research or official source
+  max_community_claim_ratio: 0.0              # community sources never make factual claims
+
+language_rules:
+  uncertain_claims_require_hedging: true      # may / could / suggests — never will / is
+  quotes_must_be_attributed: true
+  company_only_claims_require_qualifier: true # "the company says" / "according to X"
+
+verification_rules:
+  block_scripts_with_unsupported_facts: true
+  block_rejected_claim_leakage: true
+  require_sentence_source_map: true
+  require_sentence_claim_map: true
+  title_must_be_evidence_safe: true
+  thumbnail_text_must_be_accurate: true
+
+memory_rules:
+  only_approved_scripts_update_memory: true
+  rejected_claims_never_enter_knowledge_base: true
+  caution_markers_preserved_in_ledger: true

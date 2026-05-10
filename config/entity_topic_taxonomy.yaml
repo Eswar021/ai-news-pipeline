@@ -1,0 +1,242 @@
+entities:
+  companies:
+    - name: OpenAI
+      aliases: [openai]
+    - name: Anthropic
+      aliases: [anthropic]
+    - name: Google DeepMind
+      aliases: [google deepmind, deepmind]
+    - name: Google
+      aliases: [google, alphabet]
+    - name: Meta
+      aliases: [meta, facebook, meta ai]
+    - name: Microsoft
+      aliases: [microsoft, msft]
+    - name: NVIDIA
+      aliases: [nvidia, nvda]
+    - name: Qualcomm
+      aliases: [qualcomm]
+    - name: Apple
+      aliases: [apple]
+    - name: Amazon
+      aliases: [amazon, aws, amazon web services]
+    - name: Mistral
+      aliases: [mistral, mistral ai]
+    - name: Hugging Face
+      aliases: [hugging face, huggingface]
+    - name: Alibaba
+      aliases: [alibaba, qwen, alibabacloud]
+    - name: Cloudflare
+      aliases: [cloudflare]
+    - name: xAI
+      aliases: [xai, grok]
+
+  models:
+    - name: GPT-5.5
+      aliases: [gpt-5.5, gpt5.5, gpt 5.5]
+    - name: GPT-4o
+      aliases: [gpt-4o, gpt4o, gpt 4o]
+    - name: GPT-4
+      aliases: [gpt-4, gpt4]
+    - name: o3
+      aliases: [o3 model, openai o3]
+    - name: Claude Opus 4.7
+      aliases: [claude opus 4.7, claude opus 4, opus 4.7]
+    - name: Claude Sonnet
+      aliases: [claude sonnet, sonnet]
+    - name: Claude 3
+      aliases: [claude 3, claude-3]
+    - name: Gemini
+      aliases: [gemini, gemini pro, gemini flash, gemini ultra]
+    - name: Llama
+      aliases: [llama, llama 3, llama4, meta llama]
+    - name: Qwen
+      aliases: [qwen, qwen2, qwen3]
+    - name: Grok
+      aliases: [grok, grok-2]
+    - name: Codex
+      aliases: [codex]
+    - name: Mixtral
+      aliases: [mixtral]
+
+  products:
+    - name: ChatGPT
+      aliases: [chatgpt, chat gpt]
+    - name: Claude Code
+      aliases: [claude code]
+    - name: Copilot
+      aliases: [copilot, github copilot, microsoft copilot]
+    - name: Cursor
+      aliases: [cursor]
+    - name: Perplexity
+      aliases: [perplexity]
+    - name: MCP
+      aliases: [mcp, model context protocol]
+    - name: WebRTC
+      aliases: [webrtc]
+    - name: Gemini API
+      aliases: [gemini api]
+    - name: OpenAI API
+      aliases: [openai api]
+
+  people:
+    - name: Sam Altman
+      aliases: [sam altman, altman]
+    - name: Dario Amodei
+      aliases: [dario amodei, amodei]
+    - name: Sundar Pichai
+      aliases: [sundar pichai, pichai]
+    - name: Jensen Huang
+      aliases: [jensen huang, huang]
+    - name: Satya Nadella
+      aliases: [satya nadella, nadella]
+    - name: Yann LeCun
+      aliases: [yann lecun, lecun]
+    - name: Geoffrey Hinton
+      aliases: [geoffrey hinton, hinton]
+
+topics:
+  ai_agents:
+    label: AI Agents
+    keywords:
+      - ai agent
+      - agentic ai
+      - agentic workflow
+      - autonomous agent
+      - tool use
+      - multi-agent
+      - agent framework
+      - agent orchestration
+      - coding agent
+
+  ai_coding_tools:
+    label: AI Coding Tools
+    keywords:
+      - coding assistant
+      - code generation
+      - developer workflow
+      - code completion
+      - programming assistant
+      - ide
+      - software development
+
+  llm_research:
+    label: LLM Research
+    keywords:
+      - large language model
+      - llm
+      - language model
+      - benchmark
+      - arxiv
+      - reasoning
+      - fine-tuning
+      - finetuning
+      - pretraining
+      - rlhf
+      - reinforcement learning from human feedback
+      - mixture of experts
+      - moe
+      - attention mechanism
+      - transformer
+
+  multimodal:
+    label: Multimodal AI
+    keywords:
+      - multimodal
+      - vision language
+      - image generation
+      - video generation
+      - text to image
+      - text to video
+      - audio model
+
+  ai_safety:
+    label: AI Safety
+    keywords:
+      - ai safety
+      - alignment
+      - safety
+      - hallucination
+      - guardrail
+      - red team
+      - jailbreak
+      - adversarial
+
+  ai_regulation:
+    label: AI Regulation & Policy
+    keywords:
+      - regulation
+      - ai act
+      - policy
+      - governance
+      - compliance
+      - ban
+      - law
+      - eu ai
+
+  open_source_ai:
+    label: Open Source AI
+    keywords:
+      - open source
+      - open-source
+      - open weights
+      - open model
+      - hugging face
+      - github
+
+  ai_hardware:
+    label: AI Hardware & Infrastructure
+    keywords:
+      - gpu
+      - chip
+      - semiconductor
+      - inference
+      - training hardware
+      - data center
+      - nvidia
+      - tpu
+
+  ai_business:
+    label: AI Business & Enterprise
+    keywords:
+      - enterprise
+      - startup
+      - funding
+      - investment
+      - acquisition
+      - revenue
+      - partnership
+      - customer
+      - saas
+
+  voice_audio:
+    label: Voice & Audio AI
+    keywords:
+      - voice
+      - speech
+      - audio
+      - tts
+      - text-to-speech
+      - voice model
+      - real-time voice
+
+  rag_retrieval:
+    label: RAG & Retrieval
+    keywords:
+      - rag
+      - retrieval augmented
+      - retrieval-augmented
+      - vector database
+      - embedding
+      - semantic search
+      - file search
+
+  reasoning:
+    label: AI Reasoning
+    keywords:
+      - reasoning
+      - chain of thought
+      - step by step
+      - math reasoning
+      - problem solving
+      - logical reasoning

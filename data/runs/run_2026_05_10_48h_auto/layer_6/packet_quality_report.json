@@ -1,0 +1,22 @@
+{
+  "packet_quality_score": 92,
+  "ready_for_layer_7": true,
+  "format_fit_status": "good",
+  "risk_level": "low",
+  "evidence_coverage_score": 100,
+  "section_coverage_score": 100,
+  "source_diversity_score": 50,
+  "format_fit_score": 100,
+  "risk_control_score": 100,
+  "warnings": [],
+  "dimension_breakdown": {
+    "evidence_coverage": 100,
+    "section_coverage": 100,
+    "source_diversity": 50,
+    "format_fit": 100,
+    "risk_control": 100
+  },
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-10T19:46:28.828457+00:00",
+  "packet_id": "packet_20260510_h_auto"
+}

@@ -1,0 +1,68 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "layer": "layer_1",
+  "built_at": "2026-05-10T13:38:32.119124+00:00",
+  "status": "complete",
+  "totals": {
+    "total_raw_documents": 93,
+    "source_groups_collected": 4,
+    "sources_collected": 9,
+    "failed_source_events": 0,
+    "warning_events": 1
+  },
+  "by_source_group": {
+    "ai_company_blogs": {
+      "doc_count": 13,
+      "sources": [
+        "anthropic_news",
+        "openai_news"
+      ],
+      "content_availability": {
+        "full": 13
+      }
+    },
+    "research_papers": {
+      "doc_count": 40,
+      "sources": [
+        "arxiv_cs_lg",
+        "arxiv_cs_cv",
+        "arxiv_cs_ai",
+        "arxiv_cs_cl"
+      ],
+      "content_availability": {
+        "abstract_only": 40
+      }
+    },
+    "tech_news_apis": {
+      "doc_count": 20,
+      "sources": [
+        "newsapi_ai",
+        "newsdata_ai"
+      ],
+      "content_availability": {
+        "partial": 20
+      }
+    },
+    "community_signals": {
+      "doc_count": 20,
+      "sources": [
+        "hackernews_ai"
+      ],
+      "content_availability": {
+        "title_only": 16,
+        "full": 4
+      }
+    }
+  },
+  "failed_sources": [],
+  "output_paths": {
+    "raw_documents": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_1/raw_documents.jsonl",
+    "failed_sources": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_1/failed_sources.jsonl",
+    "extraction_manifest": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_1/extraction_manifest.json"
+  },
+  "layer_2_handoff": {
+    "ready": true,
+    "input_file": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_1/raw_documents.jsonl",
+    "doc_count": 93
+  }
+}

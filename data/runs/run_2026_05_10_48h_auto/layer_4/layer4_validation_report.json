@@ -1,0 +1,64 @@
+{
+  "passed": true,
+  "status": "passed",
+  "checks": [
+    {
+      "check": "atomic_claims_exists",
+      "passed": true,
+      "detail": "217 atomic claims"
+    },
+    {
+      "check": "story_fact_sheets_exists",
+      "passed": true,
+      "detail": "11 fact sheets"
+    },
+    {
+      "check": "all_claims_have_id_and_story",
+      "passed": true,
+      "detail": "0 claims missing claim_id or story_id"
+    },
+    {
+      "check": "all_claims_have_source_span",
+      "passed": true,
+      "detail": "0 claims missing source_span_ids"
+    },
+    {
+      "check": "all_verified_claims_have_status",
+      "passed": true,
+      "detail": "0 verified claims missing verification_status"
+    },
+    {
+      "check": "all_safe_facts_have_spans",
+      "passed": true,
+      "detail": "0 safe facts missing source_span_ids"
+    },
+    {
+      "check": "no_community_claims_as_verified_facts",
+      "passed": true,
+      "detail": "0 community claims incorrectly marked usable"
+    },
+    {
+      "check": "evidence_density_report_exists",
+      "passed": true,
+      "detail": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/evidence_density_report.json"
+    },
+    {
+      "check": "has_roundup_ready_stories",
+      "passed": true,
+      "detail": "11 roundup-ready stories"
+    }
+  ],
+  "warnings": [],
+  "failure_reason": null,
+  "ready_for_layer_5": true,
+  "evidence_available_for_layer_6": true,
+  "counts": {
+    "atomic_claims": 217,
+    "verified_claims": 210,
+    "fact_sheets": 11,
+    "roundup_ready": 11,
+    "deep_dive_ready": 11
+  },
+  "run_id": "run_2026_05_10_48h_auto",
+  "checked_at": "2026-05-10T18:48:40.962615+00:00"
+}

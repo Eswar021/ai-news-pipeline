@@ -1,0 +1,41 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "layer": "layer_4_evidence_intelligence",
+  "created_at": "2026-05-10T18:48:40.953578+00:00",
+  "inputs": {
+    "story_clusters": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_3/story_clusters.json",
+    "ranked_stories": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_3/ranked_stories.json",
+    "source_spans": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_2/source_spans.jsonl",
+    "canonical_documents": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_2/canonical_documents.jsonl",
+    "layer3_manifest": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_3/layer3_manifest.json"
+  },
+  "outputs": {
+    "atomic_claims": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/atomic_claims.jsonl",
+    "verified_claims": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/verified_claims.jsonl",
+    "rejected_claims": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/rejected_claims.jsonl",
+    "claim_evidence_map": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/claim_evidence_map.jsonl",
+    "claim_dedup_groups": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/claim_dedup_groups.jsonl",
+    "contradictions": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/contradictions.json",
+    "uncertainty_report": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/uncertainty_report.json",
+    "evidence_density_report": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/evidence_density_report.json",
+    "evidence_gaps": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/evidence_gaps.json",
+    "story_fact_sheets": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_4/story_fact_sheets.json"
+  },
+  "counts": {
+    "stories_analyzed": 11,
+    "atomic_claims_extracted": 217,
+    "verified_claims": 210,
+    "rejected_claims": 7,
+    "uncertain_claims": 0,
+    "contradictions": 0,
+    "evidence_gaps": 12,
+    "dedup_groups": 2
+  },
+  "handoff": {
+    "ready_for_layer_5": true,
+    "evidence_available_for_layer_6": true,
+    "deep_dive_ready_stories": 11,
+    "roundup_ready_stories": 11,
+    "next_layer": "layer_5_editorial_intelligence"
+  }
+}

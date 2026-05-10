@@ -1,0 +1,59 @@
+{
+  "passed": true,
+  "status": "passed",
+  "checks": [
+    {
+      "check": "canonical_documents_exists",
+      "passed": true,
+      "detail": "93 canonical documents"
+    },
+    {
+      "check": "source_spans_exists",
+      "passed": true,
+      "detail": "218 source spans"
+    },
+    {
+      "check": "canonical_docs_have_required_fields",
+      "passed": true,
+      "detail": "0 docs missing canonical_document_id or raw_document_id"
+    },
+    {
+      "check": "all_docs_have_trust_tier",
+      "passed": true,
+      "detail": "0 docs missing trust_tier"
+    },
+    {
+      "check": "all_spans_have_text_and_doc_ref",
+      "passed": true,
+      "detail": "0 spans missing text or canonical_document_id"
+    },
+    {
+      "check": "no_orphan_spans",
+      "passed": true,
+      "detail": "0 spans reference unknown canonical_document_id"
+    },
+    {
+      "check": "provenance_map_exists",
+      "passed": true,
+      "detail": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_2/provenance_map.jsonl"
+    },
+    {
+      "check": "has_claim_extractable_docs",
+      "passed": true,
+      "detail": "53 docs usable for claim extraction"
+    }
+  ],
+  "warnings": [
+    "24 partial docs (news API snippets \u2014 expected)",
+    "16 title_only docs (community signals \u2014 expected)"
+  ],
+  "failure_reason": null,
+  "ready_for_layer_3": true,
+  "ready_for_layer_4": true,
+  "counts": {
+    "canonical_documents": 93,
+    "source_spans": 218
+  },
+  "run_id": "run_2026_05_10_48h_auto",
+  "checked_at": "2026-05-10T14:54:35.815834+00:00"
+}

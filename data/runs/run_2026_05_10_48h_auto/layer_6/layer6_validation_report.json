@@ -1,0 +1,16 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "passed": true,
+  "status": "passed",
+  "failure_reason": null,
+  "errors": [],
+  "warnings": [
+    "Low source diversity: all sources from same trust tier. Layer 7 should note this limitation when framing evidence strength."
+  ],
+  "ready_for_layer_7": true,
+  "checks_run": 8,
+  "checks_passed": 8,
+  "packet_quality_score": 92,
+  "selected_format": "roundup",
+  "source_count": 8
+}

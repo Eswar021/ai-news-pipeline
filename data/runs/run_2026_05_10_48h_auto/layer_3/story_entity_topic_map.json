@@ -1,0 +1,754 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-10T17:50:27.603412+00:00",
+  "story_entity_topic_map": [
+    {
+      "story_id": "story_20260508_running_codex_safely_at_openai_c6feed",
+      "entities": {
+        "companies": [
+          "OpenAI"
+        ],
+        "models": [
+          "Codex"
+        ],
+        "products": [
+          "ChatGPT"
+        ],
+        "people": [],
+        "topics": [
+          "AI Coding Tools",
+          "AI Business & Enterprise"
+        ]
+      },
+      "topics": [
+        "AI Coding Tools",
+        "AI Business & Enterprise"
+      ],
+      "event_type": "model_release"
+    },
+    {
+      "story_id": "story_20260507_scaling_trusted_access_for_cyber_with_gp_66c1b4",
+      "entities": {
+        "companies": [],
+        "models": [
+          "GPT-5.5"
+        ],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "model_release"
+    },
+    {
+      "story_id": "story_20260507_parloa_builds_service_agents_customers_w_9297ee",
+      "entities": {
+        "companies": [
+          "OpenAI"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Business & Enterprise",
+          "Voice & Audio AI"
+        ]
+      },
+      "topics": [
+        "AI Business & Enterprise",
+        "Voice & Audio AI"
+      ],
+      "event_type": "product_launch"
+    },
+    {
+      "story_id": "story_20260507_advancing_voice_intelligence_with_new_mo_080714",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "Voice & Audio AI",
+          "LLM Research",
+          "AI Reasoning"
+        ]
+      },
+      "topics": [
+        "Voice & Audio AI",
+        "LLM Research",
+        "AI Reasoning"
+      ],
+      "event_type": "product_launch"
+    },
+    {
+      "story_id": "story_20260507_testing_ads_in_chatgpt_df6d26",
+      "entities": {
+        "companies": [
+          "OpenAI"
+        ],
+        "models": [],
+        "products": [
+          "ChatGPT"
+        ],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "pricing_or_plan_change"
+    },
+    {
+      "story_id": "story_20260507_introducing_trusted_contact_in_chatgpt_8647d2",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [
+          "ChatGPT"
+        ],
+        "people": [],
+        "topics": [
+          "AI Safety"
+        ]
+      },
+      "topics": [
+        "AI Safety"
+      ],
+      "event_type": "model_release"
+    },
+    {
+      "story_id": "story_20260506_how_chatgpt_learns_about_the_world_while_92cc95",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [
+          "ChatGPT"
+        ],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "product_launch"
+    },
+    {
+      "story_id": "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace",
+      "entities": {
+        "companies": [
+          "OpenAI"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Business & Enterprise",
+          "Voice & Audio AI"
+        ]
+      },
+      "topics": [
+        "AI Business & Enterprise",
+        "Voice & Audio AI"
+      ],
+      "event_type": "product_launch"
+    },
+    {
+      "story_id": "story_20260506_how_frontier_firms_are_pulling_ahead_cb7402",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "product_launch"
+    },
+    {
+      "story_id": "story_20260416_introducing_claude_opus_4_7_e482f8",
+      "entities": {
+        "companies": [
+          "Anthropic"
+        ],
+        "models": [
+          "Claude Opus 4.7"
+        ],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Business & Enterprise"
+        ]
+      },
+      "topics": [
+        "AI Business & Enterprise"
+      ],
+      "event_type": "model_release"
+    },
+    {
+      "story_id": "story_20260204_claude_is_a_space_to_think_107504",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "product_launch"
+    },
+    {
+      "story_id": "story_20260507_actcam_zero_shot_joint_camera_and_3d_mo_b8baba",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "Multimodal AI"
+        ]
+      },
+      "topics": [
+        "Multimodal AI"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_unipool_a_globally_shared_expert_pool_f_a91c8b",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "topics": [
+        "LLM Research"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_bami_training_free_bias_mitigation_in_g_7647a4",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "topics": [
+        "LLM Research"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_verifier_backed_hard_problem_generation_9d818b",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "AI Reasoning"
+        ]
+      },
+      "topics": [
+        "LLM Research",
+        "AI Reasoning"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_optimizer_model_consistency_full_finetu_872e89",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "topics": [
+        "LLM Research"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_when_no_benchmark_exists_validating_com_dfacbe",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "AI Safety"
+        ]
+      },
+      "topics": [
+        "LLM Research",
+        "AI Safety"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_ai_co_mathematician_accelerating_mathem_4a02bd",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Agents"
+        ]
+      },
+      "topics": [
+        "AI Agents"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_superintelligent_retrieval_agent_the_ne_fe1a42",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "RAG & Retrieval"
+        ]
+      },
+      "topics": [
+        "RAG & Retrieval"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_are_we_making_progress_in_multimodal_dom_27a5de",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "Multimodal AI"
+        ]
+      },
+      "topics": [
+        "LLM Research",
+        "Multimodal AI"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_strata_incentivizing_agentic_reinforcem_143fe7",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_why_global_llm_leaderboards_are_misleadi_902819",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "topics": [
+        "LLM Research"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_inductive_venn_abers_and_related_regress_32795f",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_edge_specific_signal_propagation_on_matu_cf9291",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_emo_pretraining_mixture_of_experts_for_9e57db",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "AI Hardware & Infrastructure"
+        ]
+      },
+      "topics": [
+        "LLM Research",
+        "AI Hardware & Infrastructure"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_beyond_negative_rollouts_positive_only_654cca",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Regulation & Policy",
+          "LLM Research",
+          "AI Reasoning"
+        ]
+      },
+      "topics": [
+        "AI Regulation & Policy",
+        "LLM Research",
+        "AI Reasoning"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_recursive_agent_optimization_39cc68",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Hardware & Infrastructure"
+        ]
+      },
+      "topics": [
+        "AI Hardware & Infrastructure"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_can_rl_teach_long_horizon_reasoning_to_l_9fa661",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "AI Reasoning"
+        ]
+      },
+      "topics": [
+        "LLM Research",
+        "AI Reasoning"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_cited_but_not_verified_parsing_and_eval_ac4a0b",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "RAG & Retrieval"
+        ]
+      },
+      "topics": [
+        "LLM Research",
+        "RAG & Retrieval"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_parser_agreement_and_disagreement_in_l2_485924",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_maspo_joint_prompt_optimization_for_llm_9d1b23",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Agents",
+          "LLM Research"
+        ]
+      },
+      "topics": [
+        "AI Agents",
+        "LLM Research"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_relit_live_relight_video_by_jointly_lea_a705fd",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_glazybench_a_benchmark_for_ceramic_glaz_db7262",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research",
+          "Multimodal AI"
+        ]
+      },
+      "topics": [
+        "LLM Research",
+        "Multimodal AI"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_dpm_dynamic_masked_metric_learning_fo_c412f5",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_softsae_dynamic_top_k_selection_for_ada_fdbf01",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_dinorankclip_dinov3_distillation_and_in_eb21d3",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "topics": [
+        "LLM Research"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_solving_minimal_problems_without_matrix_fabbcb",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260507_continuous_latent_diffusion_language_mod_4a2fcc",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "LLM Research"
+        ]
+      },
+      "topics": [
+        "LLM Research"
+      ],
+      "event_type": "research_paper"
+    },
+    {
+      "story_id": "story_20260509_google_stock_could_rally_as_the_company_b5ea1a",
+      "entities": {
+        "companies": [
+          "Google"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "tutorial_or_demo"
+    },
+    {
+      "story_id": "story_20260509_qualcomm_s_ceo_is_working_with_pretty_m_bf11ee",
+      "entities": {
+        "companies": [
+          "OpenAI",
+          "Qualcomm"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "unknown"
+    },
+    {
+      "story_id": "story_20260509_openai_unveils_gpt_5_class_voice_models_c344e3",
+      "entities": {
+        "companies": [
+          "OpenAI"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "Voice & Audio AI",
+          "LLM Research",
+          "AI Reasoning"
+        ]
+      },
+      "topics": [
+        "Voice & Audio AI",
+        "LLM Research",
+        "AI Reasoning"
+      ],
+      "event_type": "model_release"
+    },
+    {
+      "story_id": "story_20260509_lebanese_report_accuses_israel_of_ecocid_509b67",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "unknown"
+    },
+    {
+      "story_id": "story_20260509_air_arr_and_ai_inside_ringcentral_s_tr_151e2a",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "unknown"
+    },
+    {
+      "story_id": "story_20260509_how_to_create_an_ai_transformation_roadm_8b3075",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Regulation & Policy"
+        ]
+      },
+      "topics": [
+        "AI Regulation & Policy"
+      ],
+      "event_type": "tutorial_or_demo"
+    },
+    {
+      "story_id": "story_20260509_agentic_ai_navigating_the_evolving_fron_8006a2",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Agents"
+        ]
+      },
+      "topics": [
+        "AI Agents"
+      ],
+      "event_type": "unknown"
+    },
+    {
+      "story_id": "story_20260508_qualcomm_bets_on_custom_ai_chips_target_72cae3",
+      "entities": {
+        "companies": [
+          "NVIDIA",
+          "Qualcomm"
+        ],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": [
+          "AI Hardware & Infrastructure"
+        ]
+      },
+      "topics": [
+        "AI Hardware & Infrastructure"
+      ],
+      "event_type": "infrastructure_or_chip_news"
+    },
+    {
+      "story_id": "story_20260508_con_edison_announces_2_billion_at_the_m_9452b2",
+      "entities": {
+        "companies": [],
+        "models": [],
+        "products": [],
+        "people": [],
+        "topics": []
+      },
+      "topics": [],
+      "event_type": "funding_or_acquisition"
+    }
+  ]
+}

@@ -69,6 +69,37 @@ def strip_html(html_string):
     return parser.get_text()
 
 
+def fetch_article_text(url: str, timeout: int = 20) -> str:
+    """
+    Fetch a blog article URL and extract the main article body text.
+
+    Strategy: <article> tag → <main> tag → full-page strip fallback.
+    The <article> tag is the most reliable for modern blog platforms (OpenAI, Anthropic)
+    because it contains only the content body, not nav/footer/sidebar.
+
+    Returns clean plain text (no HTML).
+    """
+    import re
+    html = fetch_html(url, timeout=timeout)
+
+    # <article> is the most reliable semantic container for blog content
+    m = re.search(r"<article[^>]*>(.*?)</article>", html, re.DOTALL | re.IGNORECASE)
+    if m:
+        text = strip_html(m.group(1))
+        if len(text) > 200:
+            return text
+
+    # <main> is the next best — skips repeated nav/header/footer
+    m = re.search(r"<main[^>]*>(.*?)</main>", html, re.DOTALL | re.IGNORECASE)
+    if m:
+        text = strip_html(m.group(1))
+        if len(text) > 200:
+            return text
+
+    # Fallback: strip the whole page (includes nav noise, but better than nothing)
+    return strip_html(html)
+
+
 def make_document(source_id, company, title, url, published_at, raw_text, author="", extra=None):
     """
     Build a standard document dict for a blog post.

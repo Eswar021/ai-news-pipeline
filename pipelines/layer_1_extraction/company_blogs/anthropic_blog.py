@@ -23,7 +23,7 @@ from html.parser import HTMLParser
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent.parent.parent))
 from config.paths import RAW_BLOGS, ensure_output_dirs
-from pipelines.layer_1_extraction.company_blogs.blog_utils import fetch_html, strip_html, make_document
+from pipelines.layer_1_extraction.company_blogs.blog_utils import fetch_html, strip_html, make_document, fetch_article_text
 
 
 ANTHROPIC_NEWS_URL = "https://www.anthropic.com/news"
@@ -121,11 +121,13 @@ class AnthropicNewsParser(HTMLParser):
 def fetch_post_text(relative_url):
     """
     Fetch the full text of an Anthropic article page.
-    Returns clean plain text stripped of HTML.
+    Uses <article> tag extraction to get only the article body,
+    not the navigation / footer that surrounds it.
+    Returns (clean_text, full_url).
     """
     full_url = f"{ANTHROPIC_BASE_URL}{relative_url}"
-    html = fetch_html(full_url)
-    return strip_html(html), full_url
+    text = fetch_article_text(full_url)
+    return text, full_url
 
 
 def fetch_posts(max_results=10, include_full_text=True):
@@ -150,8 +152,7 @@ def fetch_posts(max_results=10, include_full_text=True):
         raw_text = ""
 
         if include_full_text:
-            article_html = fetch_html(full_url)
-            raw_text = strip_html(article_html)
+            raw_text = fetch_article_text(full_url)
 
         doc = make_document(
             source_id=SOURCE_ID,

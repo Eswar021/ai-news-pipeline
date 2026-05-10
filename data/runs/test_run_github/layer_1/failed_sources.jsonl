@@ -1,0 +1,1 @@
+{"run_id": "test_run_github", "source_id": "github_trending_ai", "collector_name": "github_open_source_collector", "event_type": "success_note", "severity": "info", "retryable": false, "message": "Fetched 3 repos for 'LLM agent'", "occurred_at": "2026-05-10T05:19:31.173049+00:00", "doc_count": 3, "query": "LLM agent"}

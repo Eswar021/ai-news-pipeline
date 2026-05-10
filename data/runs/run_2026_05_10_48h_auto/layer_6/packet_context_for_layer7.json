@@ -1,0 +1,402 @@
+{
+  "packet_type": "roundup",
+  "selected_format": "roundup",
+  "selected_video_id": "video_brief_20260510_ro_001",
+  "editorial": {
+    "episode_theme": "This week\u2019s AI updates push autonomous coding and trust governance forward while expanding product launches, pricing experiments, and tooling across models, services, and APIs.",
+    "viewer_promise": "After watching, you\u2019ll know what each update enables in practice\u2014what autonomous coding agents can do in real projects, how Trusted Contact and Cybersecurity governance affect risk and deployment, what new voice-models in the API enable for real-time apps, and how to evaluate adoption with concrete checklists for governance, privacy, and integration.",
+    "tone_guidance": "fast, clear, analytical, evidence-first",
+    "opening_hook": "Autonomous coding agents are being deployed with governance in place even as ChatGPT pilots ads in multiple regions."
+  },
+  "sections": [
+    {
+      "section_key": "segment_1",
+      "story_id": "story_20260508_running_codex_safely_at_openai_c6feed",
+      "segment_role": "lead_story",
+      "target_seconds": 90,
+      "goal": "Cover: Running Codex safely at OpenAI",
+      "required_claims": [
+        {
+          "claim_id": "claim_c6feed_0001",
+          "claim_text": "AI systems increasingly act on behalf of users as they become more capable.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260508_openai_news_a134b7a7_0000"
+        },
+        {
+          "claim_id": "claim_c6feed_0002",
+          "claim_text": "Coding agents can autonomously review repositories.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260508_openai_news_a134b7a7_0000"
+        },
+        {
+          "claim_id": "claim_c6feed_0003",
+          "claim_text": "Coding agents can autonomously run commands.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260508_openai_news_a134b7a7_0000"
+        }
+      ],
+      "optional_claim_ids": [
+        "claim_c6feed_0004",
+        "claim_c6feed_0005",
+        "claim_c6feed_0006",
+        "claim_c6feed_0007",
+        "claim_c6feed_0008",
+        "claim_c6feed_0009",
+        "claim_c6feed_0010",
+        "claim_c6feed_0011",
+        "claim_c6feed_0012",
+        "claim_c6feed_0013",
+        "claim_c6feed_0014",
+        "claim_c6feed_0015",
+        "claim_c6feed_0016",
+        "claim_c6feed_0017",
+        "claim_c6feed_0018",
+        "claim_c6feed_0019",
+        "claim_c6feed_0020"
+      ],
+      "cautious_claim_ids": [],
+      "language_guidance": []
+    },
+    {
+      "section_key": "segment_2",
+      "story_id": "story_20260416_introducing_claude_opus_4_7_e482f8",
+      "segment_role": "major_update",
+      "target_seconds": 70,
+      "goal": "Cover: Introducing Claude Opus 4.7",
+      "required_claims": [
+        {
+          "claim_id": "claim_e482f8_0001",
+          "claim_text": "Opus 4.7 is a notable improvement on Opus 4.6 in advanced software engineering, with particular gains on the most difficult tasks.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260416_anthropic_news_fa407c64_0000"
+        },
+        {
+          "claim_id": "claim_e482f8_0002",
+          "claim_text": "Users report being able to hand off their hardest coding work\u2014the kind that previously needed close supervision\u2014to Opus 4.7 with confidence.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260416_anthropic_news_fa407c64_0000"
+        },
+        {
+          "claim_id": "claim_e482f8_0003",
+          "claim_text": "Opus 4.7 handles complex, long-running tasks with rigor and consistency.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260416_anthropic_news_fa407c64_0000"
+        }
+      ],
+      "optional_claim_ids": [
+        "claim_e482f8_0004",
+        "claim_e482f8_0005",
+        "claim_e482f8_0006",
+        "claim_e482f8_0007",
+        "claim_e482f8_0008",
+        "claim_e482f8_0009",
+        "claim_e482f8_0010",
+        "claim_e482f8_0011",
+        "claim_e482f8_0012",
+        "claim_e482f8_0013",
+        "claim_e482f8_0014",
+        "claim_e482f8_0015",
+        "claim_e482f8_0016",
+        "claim_e482f8_0017",
+        "claim_e482f8_0019",
+        "claim_e482f8_0020"
+      ],
+      "cautious_claim_ids": [],
+      "language_guidance": []
+    },
+    {
+      "section_key": "segment_3",
+      "story_id": "story_20260507_scaling_trusted_access_for_cyber_with_gp_66c1b4",
+      "segment_role": "major_update",
+      "target_seconds": 65,
+      "goal": "Cover: Scaling Trusted Access for Cyber with GPT-5.5 and GPT-5.5-Cyber",
+      "required_claims": [
+        {
+          "claim_id": "claim_66c1b4_0001",
+          "claim_text": "May 7, 2026",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_7538e84c_0000"
+        },
+        {
+          "claim_id": "claim_66c1b4_0002",
+          "claim_text": "The action plan Cybersecurity in the Intelligence Age was released last week.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_7538e84c_0000"
+        },
+        {
+          "claim_id": "claim_66c1b4_0003",
+          "claim_text": "Cybersecurity in the Intelligence Age lays out our vision for democratizing AI-powered defense.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_7538e84c_0000"
+        }
+      ],
+      "optional_claim_ids": [
+        "claim_66c1b4_0004",
+        "claim_66c1b4_0005",
+        "claim_66c1b4_0006",
+        "claim_66c1b4_0007",
+        "claim_66c1b4_0009",
+        "claim_66c1b4_0010",
+        "claim_66c1b4_0011",
+        "claim_66c1b4_0012",
+        "claim_66c1b4_0013",
+        "claim_66c1b4_0014",
+        "claim_66c1b4_0015",
+        "claim_66c1b4_0016",
+        "claim_66c1b4_0017",
+        "claim_66c1b4_0018",
+        "claim_66c1b4_0019",
+        "claim_66c1b4_0020"
+      ],
+      "cautious_claim_ids": [],
+      "language_guidance": []
+    },
+    {
+      "section_key": "segment_4",
+      "story_id": "story_20260507_advancing_voice_intelligence_with_new_mo_080714",
+      "segment_role": "short_update",
+      "target_seconds": 70,
+      "goal": "Cover: Advancing voice intelligence with new models in the API",
+      "required_claims": [
+        {
+          "claim_id": "claim_080714_0001",
+          "claim_text": "We\u2019re introducing three audio models in the API that unlock a new class of voice apps for developers.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_dddfe044_0000"
+        },
+        {
+          "claim_id": "claim_080714_0002",
+          "claim_text": "voice experiences that feel more natural",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_dddfe044_0000"
+        },
+        {
+          "claim_id": "claim_080714_0003",
+          "claim_text": "respond more intelligently",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_dddfe044_0000"
+        }
+      ],
+      "optional_claim_ids": [
+        "claim_080714_0004",
+        "claim_080714_0005",
+        "claim_080714_0006",
+        "claim_080714_0007",
+        "claim_080714_0008",
+        "claim_080714_0009",
+        "claim_080714_0010",
+        "claim_080714_0011",
+        "claim_080714_0012",
+        "claim_080714_0013",
+        "claim_080714_0014",
+        "claim_080714_0016",
+        "claim_080714_0017",
+        "claim_080714_0018",
+        "claim_080714_0019",
+        "claim_080714_0020"
+      ],
+      "cautious_claim_ids": [],
+      "language_guidance": []
+    },
+    {
+      "section_key": "segment_5",
+      "story_id": "story_20260507_parloa_builds_service_agents_customers_w_9297ee",
+      "segment_role": "short_update",
+      "target_seconds": 60,
+      "goal": "Cover: Parloa builds service agents customers want to talk to",
+      "required_claims": [
+        {
+          "claim_id": "claim_9297ee_0001",
+          "claim_text": "The source is dated May 7, 2026.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_d0c8693f_0000"
+        },
+        {
+          "claim_id": "claim_9297ee_0002",
+          "claim_text": "Parloa uses OpenAI models to simulate, evaluate, and run voice-driven customer service systems for the enterprise.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_d0c8693f_0000"
+        },
+        {
+          "claim_id": "claim_9297ee_0003",
+          "claim_text": "Parloa is a startup.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_d0c8693f_0000"
+        }
+      ],
+      "optional_claim_ids": [
+        "claim_9297ee_0004",
+        "claim_9297ee_0005",
+        "claim_9297ee_0006",
+        "claim_9297ee_0007",
+        "claim_9297ee_0008",
+        "claim_9297ee_0009",
+        "claim_9297ee_0010",
+        "claim_9297ee_0011",
+        "claim_9297ee_0012",
+        "claim_9297ee_0013",
+        "claim_9297ee_0014",
+        "claim_9297ee_0015",
+        "claim_9297ee_0016",
+        "claim_9297ee_0017",
+        "claim_9297ee_0018",
+        "claim_9297ee_0019",
+        "claim_9297ee_0020"
+      ],
+      "cautious_claim_ids": [],
+      "language_guidance": []
+    },
+    {
+      "section_key": "segment_6",
+      "story_id": "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace",
+      "segment_role": "short_update",
+      "target_seconds": 60,
+      "goal": "Cover: Uber uses OpenAI to help people earn smarter and book faster",
+      "required_claims": [
+        {
+          "claim_id": "claim_865ace_0001",
+          "claim_text": "May 6, 2026 Uber uses OpenAI to help people earn smarter and book faster.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260506_openai_news_9294e76b_0000"
+        },
+        {
+          "claim_id": "claim_865ace_0002",
+          "claim_text": "Uber uses OpenAI to power AI assistants.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260506_openai_news_9294e76b_0000"
+        },
+        {
+          "claim_id": "claim_865ace_0003",
+          "claim_text": "Uber uses OpenAI to power voice features.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260506_openai_news_9294e76b_0000"
+        }
+      ],
+      "optional_claim_ids": [
+        "claim_865ace_0004",
+        "claim_865ace_0005",
+        "claim_865ace_0006",
+        "claim_865ace_0007",
+        "claim_865ace_0008",
+        "claim_865ace_0009",
+        "claim_865ace_0010",
+        "claim_865ace_0011",
+        "claim_865ace_0012",
+        "claim_865ace_0013",
+        "claim_865ace_0014",
+        "claim_865ace_0015",
+        "claim_865ace_0016",
+        "claim_865ace_0017",
+        "claim_865ace_0018",
+        "claim_865ace_0019",
+        "claim_865ace_0020"
+      ],
+      "cautious_claim_ids": [],
+      "language_guidance": []
+    },
+    {
+      "section_key": "segment_7",
+      "story_id": "story_20260507_introducing_trusted_contact_in_chatgpt_8647d2",
+      "segment_role": "brief_mention",
+      "target_seconds": 45,
+      "goal": "Cover: Introducing Trusted Contact in ChatGPT",
+      "required_claims": [
+        {
+          "claim_id": "claim_8647d2_0001",
+          "claim_text": "People use ChatGPT to learn, explore ideas, solve problems, and reflect on personal questions.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_4603e77f_0000"
+        },
+        {
+          "claim_id": "claim_8647d2_0002",
+          "claim_text": "Sometimes those conversations can involve moments when someone may be struggling or looking for support.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_4603e77f_0000"
+        },
+        {
+          "claim_id": "claim_8647d2_0003",
+          "claim_text": "Our goal is to design systems that respond thoughtfully to sensitive conversations and encourage people to connect with real-world help when needed.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_4603e77f_0000"
+        }
+      ],
+      "optional_claim_ids": [
+        "claim_8647d2_0004",
+        "claim_8647d2_0005",
+        "claim_8647d2_0006",
+        "claim_8647d2_0007",
+        "claim_8647d2_0008",
+        "claim_8647d2_0009",
+        "claim_8647d2_0010",
+        "claim_8647d2_0011",
+        "claim_8647d2_0012",
+        "claim_8647d2_0013",
+        "claim_8647d2_0014",
+        "claim_8647d2_0015",
+        "claim_8647d2_0016",
+        "claim_8647d2_0017",
+        "claim_8647d2_0018",
+        "claim_8647d2_0019",
+        "claim_8647d2_0020"
+      ],
+      "cautious_claim_ids": [],
+      "language_guidance": []
+    },
+    {
+      "section_key": "segment_8",
+      "story_id": "story_20260507_testing_ads_in_chatgpt_df6d26",
+      "segment_role": "brief_mention",
+      "target_seconds": 30,
+      "goal": "Cover: Testing ads in ChatGPT",
+      "required_claims": [
+        {
+          "claim_id": "claim_df6d26_0001",
+          "claim_text": "Plan to expand the ads pilot in ChatGPT in the United Kingdom, Mexico, Brazil, Japan, and South Korea in the coming weeks.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_4e730871_0000"
+        },
+        {
+          "claim_id": "claim_df6d26_0002",
+          "claim_text": "These pilots will help understand what works well in different regions and enable continuing improvement of the experience as we expand.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_4e730871_0000"
+        },
+        {
+          "claim_id": "claim_df6d26_0003",
+          "claim_text": "Businesses can visit openai.com/advertisers/ for updates.",
+          "confidence": "high",
+          "source_ref": "span_doc_20260507_openai_news_4e730871_0000"
+        }
+      ],
+      "optional_claim_ids": [
+        "claim_df6d26_0004",
+        "claim_df6d26_0006",
+        "claim_df6d26_0007",
+        "claim_df6d26_0008",
+        "claim_df6d26_0010",
+        "claim_df6d26_0011",
+        "claim_df6d26_0013",
+        "claim_df6d26_0014",
+        "claim_df6d26_0015",
+        "claim_df6d26_0016",
+        "claim_df6d26_0017",
+        "claim_df6d26_0018",
+        "claim_df6d26_0019",
+        "claim_df6d26_0020"
+      ],
+      "cautious_claim_ids": [],
+      "language_guidance": []
+    }
+  ],
+  "warnings": [
+    "Do NOT use: claim_080714_0015, claim_66c1b4_0008, claim_df6d26_0005, claim_df6d26_0009, claim_df6d26_0012 (and more)."
+  ],
+  "lookup_paths": {
+    "full_research_packet": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_6/research_packet.json",
+    "source_pack": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_6/source_pack.json",
+    "claim_section_map": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_6/claim_section_map.json",
+    "evidence_boundary": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_6/evidence_boundary_report.json"
+  },
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-10T19:46:28.828457+00:00"
+}

@@ -1,0 +1,68 @@
+# Audience Profiles — used by Layer 0 (audience_profile_resolver.py).
+# The active profile is resolved from channel_thesis.yaml → audience.primary.
+# All downstream layers receive the resolved profile via run_manifest.json.
+
+active_profile: technical_but_accessible
+
+profiles:
+  technical_but_accessible:
+    name: "AI Developers and Tech Professionals"
+    description: "Software engineers, ML engineers, and tech-savvy professionals following AI news."
+    explanation_depth: medium
+    jargon_allowed: limited
+    preferred_examples:
+      - developer workflow
+      - productivity
+      - real-world usage
+      - API and tool changes
+      - benchmark results and what they mean
+    avoid:
+      - unexplained technical acronyms
+      - overly academic explanation
+      - pure hype with no substance
+      - basic AI explainers they already know
+    script_guidance:
+      define_terms: true
+      use_analogies: true
+      include_business_impact: true
+      include_code_level_detail: false
+
+  developer_deep:
+    name: "Deep Technical Developers"
+    description: "ML engineers, researchers, and developers who want full technical depth."
+    explanation_depth: high
+    jargon_allowed: moderate
+    preferred_examples:
+      - APIs
+      - code editors
+      - infrastructure
+      - benchmarks
+      - model architectures
+    avoid:
+      - oversimplification
+      - omitting technical details
+    script_guidance:
+      define_terms: false
+      use_analogies: false
+      include_business_impact: true
+      include_code_level_detail: true
+
+  general_tech_audience:
+    name: "General Tech Audience"
+    description: "Tech-curious viewers who follow AI news but are not practitioners."
+    explanation_depth: simple
+    jargon_allowed: none
+    preferred_examples:
+      - daily life
+      - apps
+      - workplace impact
+      - major company announcements
+    avoid:
+      - unexplained technical terms
+      - detailed benchmarks
+      - architecture-level detail
+    script_guidance:
+      define_terms: true
+      use_analogies: true
+      include_business_impact: true
+      include_code_level_detail: false

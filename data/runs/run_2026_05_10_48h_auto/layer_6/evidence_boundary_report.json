@@ -1,0 +1,14 @@
+{
+  "evidence_boundary_status": "passed",
+  "passed": true,
+  "safe_claims_used": 154,
+  "cautious_claims_used": 0,
+  "do_not_use_claims_used": 0,
+  "contradictions_preserved": true,
+  "evidence_gaps_preserved": true,
+  "errors": [],
+  "warnings": [],
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-10T19:46:28.828457+00:00",
+  "packet_id": "packet_20260510_h_auto"
+}

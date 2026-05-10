@@ -1,0 +1,138 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-10T19:22:12.404347+00:00",
+  "viewer_value": [
+    {
+      "story_id": "story_20260508_running_codex_safely_at_openai_c6feed",
+      "primary_viewer_question": "What safety controls, governance, and guardrails enabled autonomous coding agents to operate safely (review repos, run commands, interact with dev tools) at OpenAI, and how can I apply these patterns in my own pipeline?",
+      "viewer_promise": "After watching, you will know what autonomous coding agents are capable of (reviewing repositories, running commands, interacting with development tools), the safety and governance measures OpenAI uses, the technical context for how these agents operate within codebases, and a practical checklist to assess risk, adoption, and implementation in your own workflows.",
+      "value_types": [
+        "understand_what_happened",
+        "understand_why_it_matters",
+        "learn_technical_context",
+        "decide_whether_to_use_tool"
+      ],
+      "viewer_value_score": 72
+    },
+    {
+      "story_id": "story_20260507_scaling_trusted_access_for_cyber_with_gp_66c1b4",
+      "primary_viewer_question": "What does 'trusted access' mean for GPT-5.5 and GPT-5.5-Cyber in defense-focused workloads, and how should a development team assess and adopt these models securely?",
+      "viewer_promise": "By the end, you'll understand the practical meaning of trusted access for these models, the implications of the Cybersecurity in the Intelligence Age plan, and you\u2019ll have a concrete evaluation and pilot checklist to test GPT\u20115.5 and GPT\u20115.5\u2011Cyber in secure workloads (governance, risk, and integration).",
+      "value_types": [
+        "understand_what_happened",
+        "learn_technical_context",
+        "understand_why_it_matters",
+        "assess_business_impact"
+      ],
+      "viewer_value_score": 72
+    },
+    {
+      "story_id": "story_20260507_parloa_builds_service_agents_customers_w_9297ee",
+      "primary_viewer_question": "How does Parloa's OpenAI-powered workflow for simulating, evaluating, and running voice-driven enterprise support work, and what does that mean for deciding whether to adopt similar tools in a real project?",
+      "viewer_promise": "After watching, you'll understand the basic components of Parloa's approach (simulation, evaluation, and runtime using OpenAI models), the architectural implications for enterprise contact centers, and a practical evaluation checklist you can apply when considering adopting an OpenAI-powered voice agent.",
+      "value_types": [
+        "understand_what_happened",
+        "understand_why_it_matters",
+        "learn_technical_context",
+        "assess_business_impact"
+      ],
+      "viewer_value_score": 72
+    },
+    {
+      "story_id": "story_20260506_how_chatgpt_learns_about_the_world_while_92cc95",
+      "primary_viewer_question": "How does ChatGPT learn about the world while safeguarding private data, and what training privacy protections and user controls should I rely on when building with it?",
+      "viewer_promise": "You will understand the core approach to privacy-preserving model training, the technologies claimed to suppress private information, and the available user controls and policies you can depend on when handling user data in your own apps.",
+      "value_types": [
+        "understand_what_happened",
+        "understand_why_it_matters",
+        "learn_technical_context",
+        "track_industry_shift"
+      ],
+      "viewer_value_score": 78
+    },
+    {
+      "story_id": "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace",
+      "primary_viewer_question": "What is the architecture and data flow behind Uber's OpenAI-powered AI assistants and voice features, and what are the implications for latency, privacy, and integration with existing systems?",
+      "viewer_promise": "After watching, you'll be able to describe the high-level components likely involved (UI integration, prompts, OpenAI API usage, voice processing), explain potential latency and data privacy considerations, and outline a practical checklist to evaluate or replicate a similar OpenAI-based assistive feature in your own app.",
+      "value_types": [
+        "understand_what_happened",
+        "learn_technical_context",
+        "assess_business_impact",
+        "decide_whether_to_use_tool"
+      ],
+      "viewer_value_score": 72
+    },
+    {
+      "story_id": "story_20260416_introducing_claude_opus_4_7_e482f8",
+      "primary_viewer_question": "Can Claude Opus 4.7 reliably handle my team's most complex coding tasks without constant supervision, and what guarantees exist around long-running task stability and self-verification?",
+      "viewer_promise": "By the end, you'll know which coding tasks Opus 4.7 can autonomously complete, how its self-verification workflow operates, and a concrete checklist to decide whether to adopt it for production work.",
+      "value_types": [
+        "understand_what_happened",
+        "learn_technical_context",
+        "decide_whether_to_use_tool",
+        "assess_business_impact"
+      ],
+      "viewer_value_score": 78
+    },
+    {
+      "story_id": "story_20260507_advancing_voice_intelligence_with_new_mo_080714",
+      "primary_viewer_question": "What practical capabilities do the three new API audio models provide, and how should I architect integration with GPT-Realtime-2 to enable real-time reasoning and actions in a voice app?",
+      "viewer_promise": "After watching, you'll be able to enumerate each model's capabilities (natural-sounding voice, smarter responses, real-time actions) and compare them to existing options, and you'll have a concrete integration plan for a voice app using GPT-Realtime-2, including recommended prompts, data flow for real-time reasoning, latency considerations, and a testing plan.",
+      "value_types": [
+        "understand_what_happened",
+        "learn_technical_context",
+        "decide_whether_to_use_tool",
+        "track_industry_shift"
+      ],
+      "viewer_value_score": 78
+    },
+    {
+      "story_id": "story_20260507_introducing_trusted_contact_in_chatgpt_8647d2",
+      "primary_viewer_question": "What does Trusted Contact actually do in ChatGPT, how is consent obtained, and what data might be shared with the nominated person?",
+      "viewer_promise": "By watching, you will know exactly how Trusted Contact works in practice: who can be nominated, what triggers a notification to the trusted contact, what data is transmitted or accessible, and how this feature interacts with user privacy and safety. You\u2019ll also get guidance on evaluating whether to enable it in your product design, and what to consider for implementation and risk mitigation.",
+      "value_types": [
+        "understand_what_happened",
+        "understand_why_it_matters",
+        "learn_technical_context",
+        "track_industry_shift"
+      ],
+      "viewer_value_score": 75
+    },
+    {
+      "story_id": "story_20260506_how_frontier_firms_are_pulling_ahead_cb7402",
+      "primary_viewer_question": "What concrete factors differentiate frontier firms' AI usage from typical firms, and how can my team measure and replicate that depth without chasing hype?",
+      "viewer_promise": "By watching, you will be able to (1) define the 'depth' of AI usage (advanced tools and richer workflows) and why it matters for performance; (2) assess whether your organization should invest in deeper AI toolkits; (3) outline concrete steps to measure current AI depth and a practical plan to increase it in your workflows.",
+      "value_types": [
+        "understand_what_happened",
+        "understand_why_it_matters",
+        "learn_technical_context",
+        "track_industry_shift"
+      ],
+      "viewer_value_score": 75
+    },
+    {
+      "story_id": "story_20260507_testing_ads_in_chatgpt_df6d26",
+      "primary_viewer_question": "How will OpenAI implement the expanded ads pilot across the UK, Mexico, Brazil, Japan, and South Korea, and what will that mean for user experience, consent controls, and developer usage or pricing in the near term?",
+      "viewer_promise": "You will know exactly which regions are included in the pilot, the pilot\u2019s stated goals (expand access while preserving usefulness, consumer trust, and user control), that there is no expected impact on consumer trust metrics, and where to find official updates for advertisers; you\u2019ll also understand the practical implications for developers in terms of what to expect in usage or pricing considerations in the near term.",
+      "value_types": [
+        "understand_what_happened",
+        "understand_why_it_matters",
+        "learn_technical_context",
+        "assess_business_impact"
+      ],
+      "viewer_value_score": 72
+    },
+    {
+      "story_id": "story_20260204_claude_is_a_space_to_think_107504",
+      "primary_viewer_question": "What practical implications does Claude's 'space to think' launch have for integrating AI models into ad-tech workflows, and should you consider piloting it in your own campaigns?",
+      "viewer_promise": "After watching, you'll be able to explain the business and technical implications of Claude's launch for advertising workflows and generate a concrete pilot plan with success metrics to evaluate adopting similar AI tools in your campaigns.",
+      "value_types": [
+        "understand_what_happened",
+        "understand_why_it_matters",
+        "assess_business_impact",
+        "decide_whether_to_use_tool"
+      ],
+      "viewer_value_score": 72
+    }
+  ]
+}

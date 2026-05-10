@@ -1,0 +1,1 @@
+{"run_id": "test_run_blogs", "source_id": "openai_news", "collector_name": "official_company_blog_collector", "event_type": "success_note", "severity": "info", "retryable": false, "message": "Fetched 3 posts from OpenAI News", "occurred_at": "2026-05-10T05:19:08.265639+00:00", "doc_count": 3}

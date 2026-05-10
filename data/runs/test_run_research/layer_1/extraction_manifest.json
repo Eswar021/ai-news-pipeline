@@ -1,0 +1,35 @@
+{
+  "run_id": "test_run_research",
+  "layer": "layer_1",
+  "built_at": "2026-05-10T05:19:45.075050+00:00",
+  "status": "complete",
+  "totals": {
+    "total_raw_documents": 3,
+    "source_groups_collected": 1,
+    "sources_collected": 1,
+    "failed_source_events": 0,
+    "warning_events": 0
+  },
+  "by_source_group": {
+    "research_papers": {
+      "doc_count": 3,
+      "sources": [
+        "arxiv_cs_ai"
+      ],
+      "content_availability": {
+        "abstract_only": 3
+      }
+    }
+  },
+  "failed_sources": [],
+  "output_paths": {
+    "raw_documents": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/test_run_research/layer_1/raw_documents.jsonl",
+    "failed_sources": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/test_run_research/layer_1/failed_sources.jsonl",
+    "extraction_manifest": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/test_run_research/layer_1/extraction_manifest.json"
+  },
+  "layer_2_handoff": {
+    "ready": true,
+    "input_file": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/test_run_research/layer_1/raw_documents.jsonl",
+    "doc_count": 3
+  }
+}
