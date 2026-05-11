@@ -124,7 +124,8 @@
       "Bash(python3 pipelines/layer_10_memory_learning/memory_snapshot_builder.py)",
       "Bash(python3 pipelines/layer_10_memory_learning/layer10_writer.py)",
       "Bash(python3 pipelines/layer_10_memory_learning/layer10_validation_gate.py)",
-      "Bash(python3 pipelines/layer_10_memory_learning/run_layer_10.py --run-id run_2026_05_10_48h_auto)"
+      "Bash(python3 pipelines/layer_10_memory_learning/run_layer_10.py --run-id run_2026_05_10_48h_auto)",
+      "Bash(python pipeline.py --help)"
     ],
     "additionalDirectories": [
       "/Users/manikantamb/.claude/projects/-Users-manikantamb--MyFiles-Work_-MyWork_Local-AI_Content_Creation/memory"
