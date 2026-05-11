@@ -1,0 +1,15 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "passed": true,
+  "status": "passed",
+  "failure_reason": null,
+  "errors": [],
+  "warnings": [],
+  "ready_for_layer_9": true,
+  "checks_run": 7,
+  "checks_passed": 7,
+  "word_count": 827,
+  "claim_usage_rate": 0.221,
+  "source_count": 8,
+  "cautious_passed": true
+}

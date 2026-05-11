@@ -1,0 +1,61 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "layer": "layer_9_verification_firewall",
+  "generated_at": "2026-05-11T01:10:05.288123+00:00",
+  "summary": {
+    "final_status": "approved_with_warnings",
+    "overall_risk_level": "medium",
+    "risk_score": 9,
+    "sentence_count": 48,
+    "sentences_needing_support": 38,
+    "covered_sentences": 35,
+    "analysis_only_sentences": 3,
+    "uncovered_sentences": 0,
+    "critical_issue_count": 0,
+    "high_issue_count": 0,
+    "medium_issue_count": 3,
+    "overclaim_count": 0,
+    "leaks_found": 0
+  },
+  "checks": {
+    "script_structure": "passed",
+    "sentence_coverage": "passed",
+    "claim_traceability": "passed",
+    "sentence_support": "failed",
+    "overclaim_detector": "passed",
+    "cautious_language": "passed",
+    "rejected_claim_leakage": "passed",
+    "metadata_safety": "passed",
+    "source_attribution": "passed"
+  },
+  "decision": {
+    "ready_for_human_review": true,
+    "ready_for_layer_10": true,
+    "ready_for_publish": false,
+    "revision_required": false,
+    "reason": "approved_with_warnings — see priority_fixes for details."
+  },
+  "priority_fixes": [
+    {
+      "source": "sentence_support",
+      "severity": "medium",
+      "message": "overclaim: The plan suggests that these advancements could significantl",
+      "recommended_fix": "The plan suggests that these advancements could empower developers and security teams by providing cybersecurity capabilities.",
+      "sentence_id": "sent_0020"
+    },
+    {
+      "source": "sentence_support",
+      "severity": "medium",
+      "message": "unsupported: This approach may enhance customer interactions by providing",
+      "recommended_fix": "This approach may provide more efficient service agents.",
+      "sentence_id": "sent_0027"
+    },
+    {
+      "source": "sentence_support",
+      "severity": "medium",
+      "message": "unsupported: On-screen, we see 'WHAT'S STILL UNPROVEN', reminding us that",
+      "recommended_fix": "Remove the specific reference to 'WHAT'S STILL UNPROVEN' or provide supporting evidence.",
+      "sentence_id": "sent_0043"
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-10T23:47:30.886425+00:00",
+  "visual_count": 11,
+  "visual_plan": [
+    {
+      "visual_id": "vis_01",
+      "section_id": "sec_00",
+      "section_key": "intro_hook",
+      "visual_type": "title_card",
+      "visual_goal": "Display episode title and theme on screen.",
+      "on_screen_text": "THIS WEEK IN AI",
+      "claim_ids": [],
+      "source_ref_url": null,
+      "notes": "Keep minimal \u2014 theme text + channel brand."
+    },
+    {
+      "visual_id": "vis_02",
+      "section_id": "sec_01",
+      "section_key": "story_1",
+      "visual_type": "quote_card",
+      "visual_goal": "Show the key claim text as an on-screen callout.",
+      "on_screen_text": "AI systems increasingly act on behalf of users as they become more capable.",
+      "claim_ids": [
+        "claim_c6feed_0001"
+      ],
+      "source_ref_url": null,
+      "notes": "Display only \u2014 do not read the full text verbatim."
+    },
+    {
+      "visual_id": "vis_03",
+      "section_id": "sec_01",
+      "section_key": "story_1",
+      "visual_type": "simple_diagram",
+      "visual_goal": "Illustrate the workflow or system change described in this story.",
+      "diagram_idea": "Before/after: old workflow \u2192 AI-augmented workflow.",
+      "claim_ids": [],
+      "source_ref_url": null,
+      "notes": "Keep simple \u2014 2-3 boxes maximum."
+    },
+    {
+      "visual_id": "vis_04",
+      "section_id": "sec_02",
+      "section_key": "story_2",
+      "visual_type": "quote_card",
+      "visual_goal": "Show the key claim text as an on-screen callout.",
+      "on_screen_text": "Opus 4.7 is a notable improvement on Opus 4.6 in advanced software engineering, ",
+      "claim_ids": [
+        "claim_e482f8_0001"
+      ],
+      "source_ref_url": null,
+      "notes": "Display only \u2014 do not read the full text verbatim."
+    },
+    {
+      "visual_id": "vis_05",
+      "section_id": "sec_03",
+      "section_key": "story_3",
+      "visual_type": "quote_card",
+      "visual_goal": "Show the key claim text as an on-screen callout.",
+      "on_screen_text": "May 7, 2026",
+      "claim_ids": [
+        "claim_66c1b4_0001"
+      ],
+      "source_ref_url": null,
+      "notes": "Display only \u2014 do not read the full text verbatim."
+    },
+    {
+      "visual_id": "vis_06",
+      "section_id": "sec_04",
+      "section_key": "story_4",
+      "visual_type": "quote_card",
+      "visual_goal": "Show the key claim text as an on-screen callout.",
+      "on_screen_text": "We\u2019re introducing three audio models in the API that unlock a new class of voice",
+      "claim_ids": [
+        "claim_080714_0001"
+      ],
+      "source_ref_url": null,
+      "notes": "Display only \u2014 do not read the full text verbatim."
+    },
+    {
+      "visual_id": "vis_07",
+      "section_id": "sec_05",
+      "section_key": "story_5",
+      "visual_type": "quote_card",
+      "visual_goal": "Show the key claim text as an on-screen callout.",
+      "on_screen_text": "The source is dated May 7, 2026.",
+      "claim_ids": [
+        "claim_9297ee_0001"
+      ],
+      "source_ref_url": null,
+      "notes": "Display only \u2014 do not read the full text verbatim."
+    },
+    {
+      "visual_id": "vis_08",
+      "section_id": "sec_06",
+      "section_key": "story_6",
+      "visual_type": "quote_card",
+      "visual_goal": "Show the key claim text as an on-screen callout.",
+      "on_screen_text": "May 6, 2026 Uber uses OpenAI to help people earn smarter and book faster.",
+      "claim_ids": [
+        "claim_865ace_0001"
+      ],
+      "source_ref_url": null,
+      "notes": "Display only \u2014 do not read the full text verbatim."
+    },
+    {
+      "visual_id": "vis_09",
+      "section_id": "sec_07",
+      "section_key": "story_7",
+      "visual_type": "quote_card",
+      "visual_goal": "Show the key claim text as an on-screen callout.",
+      "on_screen_text": "People use ChatGPT to learn, explore ideas, solve problems, and reflect on perso",
+      "claim_ids": [
+        "claim_8647d2_0001"
+      ],
+      "source_ref_url": null,
+      "notes": "Display only \u2014 do not read the full text verbatim."
+    },
+    {
+      "visual_id": "vis_10",
+      "section_id": "sec_08",
+      "section_key": "story_8",
+      "visual_type": "quote_card",
+      "visual_goal": "Show the key claim text as an on-screen callout.",
+      "on_screen_text": "Plan to expand the ads pilot in ChatGPT in the United Kingdom, Mexico, Brazil, J",
+      "claim_ids": [
+        "claim_df6d26_0001"
+      ],
+      "source_ref_url": null,
+      "notes": "Display only \u2014 do not read the full text verbatim."
+    },
+    {
+      "visual_id": "vis_11",
+      "section_id": "sec_09",
+      "section_key": "final_takeaway",
+      "visual_type": "caution_card",
+      "visual_goal": "Visually signal what is still uncertain or early-stage.",
+      "on_screen_text": "WHAT'S STILL UNPROVEN",
+      "claim_ids": [],
+      "source_ref_url": null,
+      "notes": "Use this to transition from summary to limitations acknowledgement."
+    }
+  ]
+}

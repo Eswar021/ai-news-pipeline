@@ -1,0 +1,95 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-11T01:10:05.288123+00:00",
+  "passed": true,
+  "status": "passed",
+  "errors": [],
+  "warnings": [],
+  "title_checks": [
+    {
+      "title": "AI Domination This Week",
+      "status": "blocked_by_layer7",
+      "risk": "critical",
+      "reason": "Overclaims dominance or inevitability; not supported by evidence."
+    },
+    {
+      "title": "Guaranteed ROI with AI Tools",
+      "status": "blocked_by_layer7",
+      "risk": "critical",
+      "reason": "Promises ROI; not guaranteed or supported by the episode's evidence."
+    },
+    {
+      "title": "Weekly AI Roundup: Codex Safety, Claude Opus 4.7, GPT-5.5 & Cyber Updates",
+      "status": "safe",
+      "risk": "low",
+      "reason": ""
+    },
+    {
+      "title": "What Changed This Week: Autonomous Coding, Trusted Access, and New APIs",
+      "status": "safe",
+      "risk": "low",
+      "reason": ""
+    },
+    {
+      "title": "Practical Impact: How This Week's AI Updates Change Your Projects",
+      "status": "safe",
+      "risk": "low",
+      "reason": ""
+    },
+    {
+      "title": "Hype vs Reality: Are Autonomous Coding Agents Ready for Production?",
+      "status": "safe",
+      "risk": "medium",
+      "reason": ""
+    },
+    {
+      "title": "Trend Shift: From Voice Models to Cybersecurity Governance in AI Deployments",
+      "status": "safe",
+      "risk": "low",
+      "reason": ""
+    },
+    {
+      "title": "Speed Summary: Eight AI Updates in One Week for Developers",
+      "status": "safe",
+      "risk": "low",
+      "reason": ""
+    },
+    {
+      "title": "Weekly Roundup: Parloa Agents, Uber & OpenAI Collaboration, Trusted Contact",
+      "status": "safe",
+      "risk": "low",
+      "reason": ""
+    }
+  ],
+  "thumbnail_checks": [
+    {
+      "text": "AUTONOMOUS CODING",
+      "status": "safe",
+      "risk": "low"
+    },
+    {
+      "text": "TRUSTED ACCESS",
+      "status": "safe",
+      "risk": "low"
+    },
+    {
+      "text": "NEW AI APIS",
+      "status": "safe",
+      "risk": "low"
+    },
+    {
+      "text": "VOICE MODELS API",
+      "status": "safe",
+      "risk": "low"
+    },
+    {
+      "text": "PARLOA AGENTS",
+      "status": "safe",
+      "risk": "low"
+    }
+  ],
+  "description_status": "safe",
+  "tags_status": "safe",
+  "source_count": 8,
+  "chapter_count": 11
+}

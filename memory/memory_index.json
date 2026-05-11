@@ -1,1 +1,319 @@
-{}
+{
+  "created_at": "2026-05-11T11:07:42.319654+00:00",
+  "by_video_id": {
+    "video_candidate_run_2026_05_10_48h_auto": {
+      "run_id": "run_2026_05_10_48h_auto",
+      "story_ids": [
+        "story_20260508_running_codex_safely_at_openai_c6feed",
+        "story_20260416_introducing_claude_opus_4_7_e482f8",
+        "story_20260507_scaling_trusted_access_for_cyber_with_gp_66c1b4",
+        "story_20260507_advancing_voice_intelligence_with_new_mo_080714",
+        "story_20260507_parloa_builds_service_agents_customers_w_9297ee",
+        "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace",
+        "story_20260507_introducing_trusted_contact_in_chatgpt_8647d2",
+        "story_20260507_testing_ads_in_chatgpt_df6d26"
+      ],
+      "claim_ids": [
+        "claim_080714_0001",
+        "claim_080714_0002",
+        "claim_080714_0003",
+        "claim_66c1b4_0001",
+        "claim_66c1b4_0002",
+        "claim_66c1b4_0003",
+        "claim_66c1b4_0006",
+        "claim_66c1b4_0007",
+        "claim_66c1b4_0009",
+        "claim_8647d2_0001",
+        "claim_8647d2_0002",
+        "claim_8647d2_0003",
+        "claim_8647d2_0004",
+        "claim_8647d2_0005",
+        "claim_865ace_0001",
+        "claim_865ace_0002",
+        "claim_865ace_0003",
+        "claim_865ace_0006",
+        "claim_9297ee_0001",
+        "claim_9297ee_0002",
+        "claim_9297ee_0003",
+        "claim_c6feed_0001",
+        "claim_c6feed_0002",
+        "claim_c6feed_0003",
+        "claim_c6feed_0006",
+        "claim_c6feed_0007",
+        "claim_c6feed_0008",
+        "claim_df6d26_0001",
+        "claim_df6d26_0002",
+        "claim_df6d26_0003",
+        "claim_e482f8_0001",
+        "claim_e482f8_0002",
+        "claim_e482f8_0003",
+        "claim_e482f8_0004"
+      ],
+      "created_at": "2026-05-11T11:07:42.317437+00:00"
+    }
+  },
+  "by_story_id": {
+    "story_20260508_running_codex_safely_at_openai_c6feed": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "followup_ids": [
+        "followup_c6feed_missing_independent__h_auto"
+      ],
+      "gap_ids": [
+        "gap_c6feed_00_h_auto"
+      ]
+    },
+    "story_20260416_introducing_claude_opus_4_7_e482f8": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "followup_ids": [
+        "followup_e482f8_missing_independent__h_auto",
+        "followup_e482f8_benchmark_without_re_h_auto"
+      ],
+      "gap_ids": [
+        "gap_e482f8_05_h_auto",
+        "gap_e482f8_06_h_auto"
+      ]
+    },
+    "story_20260507_scaling_trusted_access_for_cyber_with_gp_66c1b4": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "followup_ids": [
+        "followup_66c1b4_missing_independent__h_auto"
+      ],
+      "gap_ids": [
+        "gap_66c1b4_01_h_auto"
+      ]
+    },
+    "story_20260507_advancing_voice_intelligence_with_new_mo_080714": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "followup_ids": [
+        "followup_080714_missing_independent__h_auto"
+      ],
+      "gap_ids": [
+        "gap_080714_07_h_auto"
+      ]
+    },
+    "story_20260507_parloa_builds_service_agents_customers_w_9297ee": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "followup_ids": [
+        "followup_9297ee_missing_independent__h_auto"
+      ],
+      "gap_ids": [
+        "gap_9297ee_02_h_auto"
+      ]
+    },
+    "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "followup_ids": [
+        "followup_865ace_missing_independent__h_auto"
+      ],
+      "gap_ids": [
+        "gap_865ace_04_h_auto"
+      ]
+    },
+    "story_20260507_introducing_trusted_contact_in_chatgpt_8647d2": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "followup_ids": [
+        "followup_8647d2_missing_independent__h_auto"
+      ],
+      "gap_ids": [
+        "gap_8647d2_08_h_auto"
+      ]
+    },
+    "story_20260507_testing_ads_in_chatgpt_df6d26": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "followup_ids": [
+        "followup_df6d26_missing_independent__h_auto"
+      ],
+      "gap_ids": [
+        "gap_df6d26_10_h_auto"
+      ]
+    },
+    "story_20260506_how_chatgpt_learns_about_the_world_while_92cc95": {
+      "video_ids": [],
+      "followup_ids": [],
+      "gap_ids": [
+        "gap_92cc95_03_h_auto"
+      ]
+    },
+    "story_20260506_how_frontier_firms_are_pulling_ahead_cb7402": {
+      "video_ids": [],
+      "followup_ids": [],
+      "gap_ids": [
+        "gap_cb7402_09_h_auto"
+      ]
+    },
+    "story_20260204_claude_is_a_space_to_think_107504": {
+      "video_ids": [],
+      "followup_ids": [],
+      "gap_ids": [
+        "gap_107504_11_h_auto"
+      ]
+    }
+  },
+  "by_entity": {
+    "Anthropic": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260416_introducing_claude_opus_4_7_e482f8"
+      ]
+    },
+    "OpenAI": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260508_running_codex_safely_at_openai_c6feed",
+        "story_20260507_parloa_builds_service_agents_customers_w_9297ee",
+        "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace",
+        "story_20260507_testing_ads_in_chatgpt_df6d26"
+      ]
+    },
+    "Claude Opus 4.7": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260416_introducing_claude_opus_4_7_e482f8"
+      ]
+    },
+    "Codex": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260508_running_codex_safely_at_openai_c6feed"
+      ]
+    },
+    "GPT-5.5": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260507_scaling_trusted_access_for_cyber_with_gp_66c1b4"
+      ]
+    },
+    "ChatGPT": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260508_running_codex_safely_at_openai_c6feed",
+        "story_20260507_introducing_trusted_contact_in_chatgpt_8647d2",
+        "story_20260507_testing_ads_in_chatgpt_df6d26"
+      ]
+    }
+  },
+  "by_topic": {
+    "AI Business & Enterprise": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260508_running_codex_safely_at_openai_c6feed",
+        "story_20260416_introducing_claude_opus_4_7_e482f8",
+        "story_20260507_parloa_builds_service_agents_customers_w_9297ee",
+        "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace"
+      ]
+    },
+    "AI Coding Tools": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260508_running_codex_safely_at_openai_c6feed"
+      ]
+    },
+    "AI Reasoning": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260507_advancing_voice_intelligence_with_new_mo_080714"
+      ]
+    },
+    "AI Safety": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260507_introducing_trusted_contact_in_chatgpt_8647d2"
+      ]
+    },
+    "LLM Research": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260507_advancing_voice_intelligence_with_new_mo_080714"
+      ]
+    },
+    "Voice & Audio AI": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "story_ids": [
+        "story_20260507_advancing_voice_intelligence_with_new_mo_080714",
+        "story_20260507_parloa_builds_service_agents_customers_w_9297ee",
+        "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace"
+      ]
+    }
+  },
+  "by_source": {
+    "openai.com": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "claim_ids": [
+        "claim_080714_0001",
+        "claim_66c1b4_0001",
+        "claim_8647d2_0001",
+        "claim_865ace_0001",
+        "claim_9297ee_0001",
+        "claim_c6feed_0001",
+        "claim_df6d26_0001"
+      ]
+    },
+    "anthropic.com": {
+      "video_ids": [
+        "video_candidate_run_2026_05_10_48h_auto"
+      ],
+      "claim_ids": [
+        "claim_e482f8_0001"
+      ]
+    }
+  },
+  "run_index": {
+    "run_2026_05_10_48h_auto": {
+      "video_id": "video_candidate_run_2026_05_10_48h_auto",
+      "story_count": 8,
+      "claim_count": 34,
+      "format": "roundup",
+      "created_at": "2026-05-11T11:07:42.317437+00:00"
+    }
+  },
+  "stats": {
+    "total_videos": 1,
+    "total_stories": 11,
+    "total_entities": 6,
+    "total_topics": 6,
+    "total_sources": 2,
+    "total_runs": 1
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "layer": "layer_10_memory_learning",
+  "version": "1.0",
+  "started_at": "2026-05-11T11:07:42.312518+00:00",
+  "completed_at": "2026-05-11T11:07:42.321860+00:00",
+  "inputs": {
+    "layer9_manifest": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_9/layer9_manifest.json",
+    "final_publish_package": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_9/final_publish_package.json",
+    "verified_script": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_9/verified_script.md",
+    "verification_report": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_9/verification_report.json"
+  },
+  "outputs": {
+    "video_memory": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/video_memory.jsonl",
+    "story_coverage_memory": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/story_coverage_memory.jsonl",
+    "claim_ledger": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/claim_ledger.jsonl",
+    "entity_topic_memory": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/entity_topic_memory.jsonl",
+    "source_memory": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/source_memory.jsonl",
+    "editorial_pattern_memory": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/editorial_pattern_memory.jsonl",
+    "followups": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/followups.jsonl",
+    "evidence_gap_watchlist": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/evidence_gap_watchlist.jsonl",
+    "rejected_claim_patterns": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/rejected_claim_patterns.jsonl",
+    "learning_signals": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/learning_signals.jsonl",
+    "memory_index": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/memory_index.json",
+    "memory_snapshot": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/memory_snapshot.json"
+  },
+  "memory_update_summary": {
+    "video_memory_records": 1,
+    "story_coverage_records": 8,
+    "claim_ledger_records": 34,
+    "entity_topic_records": 12,
+    "source_memory_records": 8,
+    "editorial_pattern_records": 1,
+    "followup_records": 9,
+    "evidence_gap_watchlist_records": 12,
+    "rejected_claim_pattern_records": 7,
+    "learning_signal_records": 16
+  },
+  "this_run_summary": {
+    "video_memory": {
+      "status": "written",
+      "video_id": "video_candidate_run_2026_05_10_48h_auto",
+      "path": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/video_memory.jsonl"
+    },
+    "story_coverage": {
+      "status": "written",
+      "written": 8,
+      "skipped": 0,
+      "story_ids_written": [
+        "story_20260508_running_codex_safely_at_openai_c6feed",
+        "story_20260416_introducing_claude_opus_4_7_e482f8",
+        "story_20260507_scaling_trusted_access_for_cyber_with_gp_66c1b4",
+        "story_20260507_advancing_voice_intelligence_with_new_mo_080714",
+        "story_20260507_parloa_builds_service_agents_customers_w_9297ee",
+        "story_20260506_uber_uses_openai_to_help_people_earn_sma_865ace",
+        "story_20260507_introducing_trusted_contact_in_chatgpt_8647d2",
+        "story_20260507_testing_ads_in_chatgpt_df6d26"
+      ]
+    },
+    "claim_ledger": {
+      "status": "written",
+      "written": 34,
+      "skipped": 0,
+      "missing_in_map": 0,
+      "missing_ids": []
+    },
+    "entity_topic": {
+      "status": "written",
+      "written": 12,
+      "skipped": 0,
+      "entities_written": [
+        "Anthropic",
+        "OpenAI",
+        "Claude Opus 4.7",
+        "Codex",
+        "GPT-5.5",
+        "ChatGPT"
+      ],
+      "topics_written": [
+        "AI Business & Enterprise",
+        "AI Coding Tools",
+        "AI Reasoning",
+        "AI Safety",
+        "LLM Research",
+        "Voice & Audio AI"
+      ]
+    },
+    "source_memory": {
+      "status": "written",
+      "written": 8,
+      "skipped": 0
+    },
+    "editorial_pattern": {
+      "status": "written",
+      "video_id": "video_candidate_run_2026_05_10_48h_auto"
+    },
+    "followups": {
+      "status": "written",
+      "written": 9,
+      "skipped": 3,
+      "followup_ids": [
+        "followup_c6feed_missing_independent__h_auto",
+        "followup_66c1b4_missing_independent__h_auto",
+        "followup_9297ee_missing_independent__h_auto",
+        "followup_865ace_missing_independent__h_auto",
+        "followup_e482f8_missing_independent__h_auto",
+        "followup_e482f8_benchmark_without_re_h_auto",
+        "followup_080714_missing_independent__h_auto",
+        "followup_8647d2_missing_independent__h_auto",
+        "followup_df6d26_missing_independent__h_auto"
+      ]
+    },
+    "evidence_gaps": {
+      "status": "written",
+      "written": 12,
+      "skipped": 0
+    },
+    "risk_patterns": {
+      "status": "written",
+      "written": 7
+    },
+    "learning_signals": {
+      "status": "written",
+      "signals_written": 16
+    },
+    "memory_index": {
+      "status": "built",
+      "path": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/memory_index.json",
+      "stats": {
+        "total_videos": 1,
+        "total_stories": 11,
+        "total_entities": 6,
+        "total_topics": 6,
+        "total_sources": 2,
+        "total_runs": 1
+      }
+    },
+    "memory_snapshot": {
+      "status": "built",
+      "path": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/memory_snapshot.json"
+    }
+  },
+  "status": {
+    "memory_update_status": "completed",
+    "ready_for_future_runs": true
+  },
+  "handoff": {
+    "ready_for_future_runs": true,
+    "memory_snapshot_path": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/memory_snapshot.json",
+    "memory_index_path": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/memory/memory_index.json"
+  }
+}

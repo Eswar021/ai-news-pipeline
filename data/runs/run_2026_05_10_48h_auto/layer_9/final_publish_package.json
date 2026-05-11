@@ -1,0 +1,35 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-11T01:10:05.288123+00:00",
+  "approval": {
+    "status": "approved_with_warnings",
+    "ready_for_human_review": true,
+    "ready_for_publish": false,
+    "reason": "Final publishing is a manual decision."
+  },
+  "assets": {
+    "verified_script": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_9/verified_script.md",
+    "youtube_metadata": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_9/verified_youtube_metadata.json",
+    "verification_report": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_9/verification_report.json",
+    "correction_patch": "/Users/manikantamb/_MyFiles/Work_/MyWork_Local/AI_Content_Creation/data/runs/run_2026_05_10_48h_auto/layer_9/correction_patch.json"
+  },
+  "summary": {
+    "selected_format": "roundup",
+    "estimated_duration_s": 382,
+    "risk_level": "medium",
+    "risk_score": 9,
+    "patches_applied": 2,
+    "remaining_warnings": 1
+  },
+  "memory_handoff": {
+    "ready_for_layer_10": true,
+    "memory_update_allowed": true,
+    "memory_update_scope": [
+      "published_video_candidate",
+      "used_claims",
+      "source_usage",
+      "title_options",
+      "topic_coverage"
+    ]
+  }
+}

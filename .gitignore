@@ -48,6 +48,7 @@ output/llm_logs/
 *.sw?
 .DS_Store
 Thumbs.db
+.claude/
 
 # ── Jupyter Notebooks ─────────────────────────────────────────────────────────
 .ipynb_checkpoints/

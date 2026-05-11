@@ -1,0 +1,16 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "passed": true,
+  "status": "passed",
+  "failure_reason": null,
+  "errors": [],
+  "warnings": [],
+  "ready_for_future_runs": true,
+  "memory_stats": {
+    "video_records": 1,
+    "claim_records": 34,
+    "signal_records": 16,
+    "followup_records": 9,
+    "gap_records": 12
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-11T01:10:05.288123+00:00",
+  "status": "passed",
+  "contradictions_checked": 0,
+  "evidence_gaps_checked": 12,
+  "blocking_gaps": 0,
+  "non_blocking_gaps": 12,
+  "unhandled_contradictions": [],
+  "contradiction_notes": [],
+  "gap_warnings": [],
+  "is_informational": true,
+  "blocks_layer_9": false
+}

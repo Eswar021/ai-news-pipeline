@@ -1,0 +1,68 @@
+# Weekly AI Roundup: Codex Safety, Claude Opus 4.7, GPT-5.5 & Cyber Updates
+*Format: roundup*
+
+## Intro Hook
+
+This week in AI, we’re diving into updates that could reshape how we interact with technology. From advancements in autonomous coding agents to new safety measures in AI models, there's a lot to unpack. We’ll explore how the latest API voice models and service agents enhance user experience, and what the Uber and OpenAI collaboration may mean for the future of transport. Plus, we’ll touch on cybersecurity governance and its implications for deployment risk. Stay tuned for practical insights that you can apply immediately.
+
+---
+
+## Story 1
+
+AI systems increasingly act on behalf of users as they become more capable. This is particularly relevant with OpenAI's Codex, which now allows coding agents to autonomously review repositories and run commands. This shift means that tasks that previously required direct human execution may now be handled by these agents, streamlining workflows and potentially increasing efficiency. Developers and tech professionals should pay attention to this change, as it suggests a significant evolution in how software development can be approached. With Codex, these capabilities have been designed alongside necessary controls for safe deployment. Security teams need to govern how these agents operate, including what they can access and when human approval is required. This governance is crucial to keep the agent inside clear technical boundaries, ensuring that the integration of AI into development processes is both effective and secure. As these tools become more capable, understanding their implications will be essential for anyone in the tech field.
+
+---
+
+## Story 2
+
+Anthropic has introduced Claude Opus 4.7, which is a notable improvement on Opus 4.6 in advanced software engineering, particularly excelling in the most difficult tasks. Users report being able to hand off their hardest coding work to Opus 4.7 with confidence, a significant shift from previous versions. This model handles complex, long-running tasks with rigor and consistency, suggesting a new level of reliability for developers. Additionally, Opus 4.7 pays precise attention to instructions, which may further enhance its effectiveness in professional settings. Overall, this update appears to mark a meaningful advancement in AI-assisted coding capabilities.
+
+---
+
+## Story 3
+
+On May 7, 2026, OpenAI introduced GPT-5.5 along with GPT-5.5-Cyber, aimed at enhancing cybersecurity measures. This launch follows the release of the action plan titled 'Cybersecurity in the Intelligence Age,' which outlines a vision for democratizing AI-powered defense. The plan suggests that these advancements could empower developers and security teams by providing cybersecurity capabilities. Additionally, GPT-5.5-Cyber is currently in limited preview for defenders tasked with securing critical infrastructure, indicating a focused approach to addressing urgent cybersecurity needs. This initiative appears to be informed by extensive discussions with leaders in cybersecurity and national security across various sectors.
+
+---
+
+## Story 4
+
+OpenAI is introducing three audio models in the API that unlock a new class of voice apps for developers. These models are designed to create voice experiences that feel more natural and may allow systems to respond more intelligently. This advancement suggests a significant step forward in how voice interactions could evolve.
+
+---
+
+## Story 5
+
+Parloa is a startup that uses OpenAI models to simulate, evaluate, and run voice-driven customer service systems for the enterprise. This approach may provide more efficient service agents. The source is dated May 7, 2026.
+
+---
+
+## Story 6
+
+On May 6, 2026, Uber announced that it uses OpenAI to help people earn smarter and book faster. This collaboration powers AI assistants and voice features, which may help drivers optimize their earnings and enable riders to book their rides more efficiently. Overall, this partnership appears to be simplifying earning opportunities for drivers and reducing friction for riders.
+
+---
+
+## Story 7
+
+OpenAI has introduced a feature called Trusted Contact in ChatGPT. This optional safety feature allows users to nominate someone they trust, which may help connect them to support during sensitive conversations. People use ChatGPT to learn, explore ideas, solve problems, and reflect on personal questions. Sometimes those conversations can involve moments when someone may be struggling or looking for support. The goal is to respond thoughtfully and encourage connections with real-world help when needed.
+
+---
+
+## Story 8
+
+OpenAI plans to expand the ads pilot in ChatGPT to the United Kingdom, Mexico, Brazil, Japan, and South Korea in the coming weeks. These pilots may help understand what works well in different regions and enable ongoing improvements to the user experience as they expand. Businesses can visit openai.com/advertisers for updates.
+
+---
+
+## Final Takeaway
+
+As we wrap up this week’s stories, a common thread emerges: the rapid evolution of AI technologies is reshaping various sectors, but it also highlights significant uncertainties. For instance, while advancements in AI may enhance productivity, they also raise questions about ethical implications and job displacement. It’s crucial to approach these developments with a cautious mindset. On-screen, we see 'WHAT'S STILL UNPROVEN', reminding us that not all AI capabilities are fully realized yet. The key takeaway here is to stay informed and adaptable as these technologies continue to unfold.
+
+---
+
+## Cta
+
+What do you think is the most exciting AI development this week? Share your thoughts in the comments. If you enjoyed this update, consider subscribing for more AI insights every week.
+
+---

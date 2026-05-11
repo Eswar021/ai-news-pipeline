@@ -1,0 +1,14 @@
+{
+  "run_id": "run_2026_05_10_48h_auto",
+  "generated_at": "2026-05-11T01:10:05.288123+00:00",
+  "passed": true,
+  "status": "passed",
+  "errors": [],
+  "warnings": [],
+  "sources_used_in_script": 8,
+  "sources_in_list": 8,
+  "missing_from_list": 0,
+  "extra_in_list": 0,
+  "missing_source_urls": [],
+  "description_has_sources": true
+}
