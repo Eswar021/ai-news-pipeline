@@ -1,0 +1,126 @@
+# ChatGPT Handoff Prompts
+# ─────────────────────────────────────────────────────────────────────────────
+# These are the instructions embedded in every generated chatgpt_handoff.md.
+# Edit this file to change what ChatGPT is asked to do — no code changes needed.
+#
+# To generate a handoff document:
+#   python chatgpt_export.py --run-id run_2026_05_10_48h_auto
+#   python chatgpt_export.py --run-id run_2026_05_10_48h_auto --level after_layer_4
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Channel identity ──────────────────────────────────────────────────────────
+channel:
+  name: "AI Weekly"
+  audience: "Tech professionals who follow AI closely — assume they know what LLMs, fine-tuning, and inference mean"
+  tone: "Informative, confident, no hype. Treat the audience as smart people."
+  language_rules:
+    - "No filler phrases: 'in today's fast-moving world', 'AI is changing everything'"
+    - "No hollow openers: 'Welcome back', 'Hey guys', 'In this video'"
+    - "Use plain numbers: 'GPT-4 runs at 50 tokens/sec' not 'blazing fast'"
+    - "Cite the source when stating a specific fact"
+
+# ── Script format requirements ────────────────────────────────────────────────
+script_requirements:
+  target_duration_minutes: [8, 12]
+  target_word_count: [1200, 1800]
+  hook_duration_seconds: 30
+  stories_per_video: [5, 8]
+  section_markers: ["[HOOK]", "[STORY: <title>]", "[TRANSITION]", "[CLOSE]"]
+  close_must_include:
+    - "One forward-looking observation (what to watch next)"
+    - "Subscribe CTA (natural, not desperate)"
+  b_roll_notes: true   # include [B-ROLL: suggestion] lines in the script
+
+# ── Handoff levels ────────────────────────────────────────────────────────────
+# Each level represents where the pipeline stopped before handing off to ChatGPT.
+# "after_layer_4" is the recommended default — facts are verified, angle is open.
+
+handoff_levels:
+
+  after_layer_3:
+    label: "Story Collection Handoff (L0–L3)"
+    recommended: false
+    api_cost_saved: 0
+    role: |
+      You are writing a YouTube script for an AI tech channel.
+
+      I ran an automated pipeline that collected and ranked the top AI news stories from
+      the last 48 hours across official company blogs, research preprints, and tech news APIs.
+      The stories below have been deduplicated, clustered by topic, and scored for newsworthiness.
+
+      IMPORTANT: These stories have NOT been individually fact-verified at the claim level.
+      Each story includes a source URL — rely on those for facts. If something sounds uncertain,
+      flag it in the script with cautious language.
+    chatgpt_job: |
+      1. Review the ranked story list below.
+      2. Select the best 5-8 stories for a YouTube roundup video.
+      3. Decide story order (most compelling angle first, not just highest rank).
+      4. Write the full script — hook, story segments, transitions, close.
+    chatgpt_must:
+      - "Select stories — not every ranked story needs to be included"
+      - "Follow the channel tone and language rules above"
+      - "Use cautious language for anything not directly confirmed by a source URL"
+      - "Respect the avoid list (do not repeat recent angles or covered stories)"
+    chatgpt_must_not:
+      - "Invent statistics, quotes, or details not in the provided sources"
+      - "Use hollow openers or filler phrases (see language rules)"
+      - "Cover stories or angles on the avoid list"
+
+  after_layer_4:
+    label: "Verified Facts Handoff (L0–L4) — Recommended"
+    recommended: true
+    api_cost_saved: 34   # L5–L9 API calls not spent
+    role: |
+      You are writing a YouTube script for an AI tech channel.
+
+      I ran an automated pipeline that: (1) collected top AI stories from the last 48 hours,
+      (2) extracted every verifiable claim from each story, (3) checked each claim against
+      its source, and (4) organized all verified facts into fact sheets — one per story.
+
+      The hard research is done. Your job is to turn these facts into a compelling script.
+      Use ONLY the facts provided below. Do not add details from your own knowledge —
+      this keeps the script grounded in what actually happened this week, not what you
+      remember from training data.
+    chatgpt_job: |
+      1. Read all story fact sheets below.
+      2. Select the best 5-8 for the video (use importance scores as a guide).
+      3. Decide story order — lead with the one most likely to hook the viewer.
+      4. Write the full script: hook, story segments, transitions, close.
+      5. For any claim in the "evidence gaps" section, either skip it or flag it explicitly
+         in the script with language like "reportedly" or "according to [source] only."
+    chatgpt_must:
+      - "Use ONLY the verified facts from the fact sheets"
+      - "Order stories by what's most compelling, not just by importance score"
+      - "Flag uncertain claims using the evidence_gaps list provided"
+      - "Use cautious language for any claim marked requires_cautious_language"
+      - "Respect the avoid list (angles and story IDs)"
+    chatgpt_must_not:
+      - "Add facts from your training data — only use what's in the fact sheets"
+      - "Present gaps or uncertain claims as confirmed facts"
+      - "Repeat stories or angles from the avoid list"
+
+  after_layer_6:
+    label: "Research Packet Handoff (L0–L6)"
+    recommended: false
+    api_cost_saved: 22   # L7–L9 API calls not spent
+    role: |
+      You are writing a YouTube script for an AI tech channel.
+
+      I ran an automated pipeline that collected, verified, and organized facts, then made
+      editorial decisions: which stories to cover, what format to use, and who the target
+      viewer is. The research packet below contains everything — verified facts, the selected
+      format, and the audience brief.
+
+      Follow the editorial brief exactly. Do not change the format or story selection.
+    chatgpt_job: |
+      1. Read the research packet brief (format, audience, selected stories).
+      2. Write the full script exactly to that brief.
+      3. Use ONLY the verified facts from the fact sheets.
+      4. Flag uncertain claims as directed by the evidence gaps section.
+    chatgpt_must:
+      - "Follow the format and story selection in the editorial brief"
+      - "Use ONLY verified facts — no additions from training data"
+      - "Flag evidence gaps with cautious language"
+    chatgpt_must_not:
+      - "Change the format, story selection, or editorial angle"
+      - "Add unsourced facts"

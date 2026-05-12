@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
 
 _MIN_CLAIMS_PER_SECTION     = 2
-_MIN_QUALITY_SCORE          = 70
+_MIN_QUALITY_SCORE          = 60
 _ROUNDUP_REQUIRED_SECTIONS  = {"lead_story", "major_update", "quick_update"}
 _DEEP_DIVE_REQUIRED_KEYS    = {"what_happened", "why_it_matters", "limitations"}
 

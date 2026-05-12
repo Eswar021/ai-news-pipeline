@@ -18,7 +18,7 @@ def make_llm(
     if provider == "openai":
         return ChatOpenAI(
             model=model or os.getenv("OPENAI_MODEL", "gpt-5-nano"),
-            api_key=os.getenv("OPENAI_API_KEY_S_M_R"),  # type: ignore
+            api_key=os.getenv("OPENAI_API_KEY_A_C_C"),  # type: ignore
             temperature=temperature,
         )
 

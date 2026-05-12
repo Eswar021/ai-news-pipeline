@@ -125,7 +125,15 @@
       "Bash(python3 pipelines/layer_10_memory_learning/layer10_writer.py)",
       "Bash(python3 pipelines/layer_10_memory_learning/layer10_validation_gate.py)",
       "Bash(python3 pipelines/layer_10_memory_learning/run_layer_10.py --run-id run_2026_05_10_48h_auto)",
-      "Bash(python pipeline.py --help)"
+      "Bash(python pipeline.py --help)",
+      "Bash(python chatgpt_export.py --run-id run_2026_05_10_48h_auto --level after_layer_4)",
+      "Bash(python chatgpt_export.py --run-id run_2026_05_10_48h_auto --level after_layer_3)",
+      "Bash(python chatgpt_export.py)",
+      "Bash(python3 chatgpt_export.py --run-id run_2026_05_10_48h_auto --level after_layer_4)",
+      "Bash(python3 chatgpt_export.py --run-id run_2026_05_11_48h_auto)",
+      "Bash(python3 chatgpt_export.py --run-id run_2026_05_10_48h_auto)",
+      "Bash(python3 pipeline.py --run-id run_2026_05_11_48h_auto --layers 6,7,8,9,10)",
+      "Bash(python pipeline.py --run-id run_2026_05_11_48h_auto --layers 10)"
     ],
     "additionalDirectories": [
       "/Users/manikantamb/.claude/projects/-Users-manikantamb--MyFiles-Work_-MyWork_Local-AI_Content_Creation/memory"

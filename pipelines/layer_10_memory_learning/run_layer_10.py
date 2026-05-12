@@ -88,7 +88,7 @@ def run_layer_10(run_id: str) -> dict:
     elig = gate(ctx)
     print(f"  Status: {elig['status']}  "
           f"Durable memory: {elig['durable_memory_allowed']}  "
-          f"L9 approval: {elig['l9_approval_status']}")
+          f"L9 approval: {elig.get('l9_approval_status', elig.get('reason', 'n/a'))}")
 
     # ── Step 3: Extract memory context ────────────────────────────────────────
     print("[Layer 10] Step 3 — Extracting memory context...")
@@ -114,25 +114,25 @@ def run_layer_10(run_id: str) -> dict:
     print("[Layer 10] Step 5 — Writing story coverage memory...")
     r = write_stories(mc, ctx, elig, MEMORY_DIR)
     write_results["story_coverage"] = r
-    print(f"  Written: {r['written']}  Skipped: {r['skipped']}")
+    print(f"  Written: {r.get('written', 0)}  Skipped: {r.get('skipped', 0)}  ({r['status']})")
 
     # ── Step 6: Claim ledger ──────────────────────────────────────────────────
     print("[Layer 10] Step 6 — Writing claim ledger...")
     r = write_claims(mc, ctx, elig, MEMORY_DIR)
     write_results["claim_ledger"] = r
-    print(f"  Written: {r['written']}  Skipped: {r['skipped']}  Missing: {r['missing_in_map']}")
+    print(f"  Written: {r.get('written', 0)}  Skipped: {r.get('skipped', 0)}  Missing: {r.get('missing_in_map', 0)}  ({r['status']})")
 
     # ── Step 7: Entity + topic memory ─────────────────────────────────────────
     print("[Layer 10] Step 7 — Writing entity/topic memory...")
     r = write_entities(mc, ctx, elig, MEMORY_DIR)
     write_results["entity_topic"] = r
-    print(f"  Written: {r['written']}  Skipped: {r['skipped']}")
+    print(f"  Written: {r.get('written', 0)}  Skipped: {r.get('skipped', 0)}  ({r['status']})")
 
     # ── Step 8: Source memory ─────────────────────────────────────────────────
     print("[Layer 10] Step 8 — Writing source memory...")
     r = write_sources(mc, ctx, elig, MEMORY_DIR)
     write_results["source_memory"] = r
-    print(f"  Written: {r['written']}  Skipped: {r['skipped']}")
+    print(f"  Written: {r.get('written', 0)}  Skipped: {r.get('skipped', 0)}  ({r['status']})")
 
     # ── Step 9: Editorial pattern ─────────────────────────────────────────────
     print("[Layer 10] Step 9 — Writing editorial pattern memory...")
@@ -144,25 +144,25 @@ def run_layer_10(run_id: str) -> dict:
     print("[Layer 10] Step 10 — Writing follow-up opportunities...")
     r = write_followups(mc, ctx, elig, MEMORY_DIR)
     write_results["followups"] = r
-    print(f"  Written: {r['written']}  Skipped: {r['skipped']}")
+    print(f"  Written: {r.get('written', 0)}  Skipped: {r.get('skipped', 0)}  ({r['status']})")
 
     # ── Step 11: Evidence gap watchlist ───────────────────────────────────────
     print("[Layer 10] Step 11 — Writing evidence gap watchlist...")
     r = write_gaps(mc, ctx, MEMORY_DIR)
     write_results["evidence_gaps"] = r
-    print(f"  Written: {r['written']}  Skipped: {r['skipped']}")
+    print(f"  Written: {r.get('written', 0)}  Skipped: {r.get('skipped', 0)}  ({r['status']})")
 
     # ── Step 12: Rejected claim patterns ─────────────────────────────────────
     print("[Layer 10] Step 12 — Writing rejected claim patterns...")
     r = write_risk_patterns(mc, ctx, elig, MEMORY_DIR)
     write_results["risk_patterns"] = r
-    print(f"  Written: {r['written']}")
+    print(f"  Written: {r.get('written', 0)}  ({r['status']})")
 
     # ── Step 13: Learning signals ─────────────────────────────────────────────
     print("[Layer 10] Step 13 — Building learning signals...")
     r = build_signals(mc, ctx, MEMORY_DIR)
     write_results["learning_signals"] = r
-    print(f"  Signals: {r['signals_written']}")
+    print(f"  Signals: {r.get('signals_written', 0)}")
 
     # ── Step 14: Memory index ─────────────────────────────────────────────────
     print("[Layer 10] Step 14 — Building memory index...")
@@ -195,12 +195,12 @@ def run_layer_10(run_id: str) -> dict:
     print(f"Layer 10 {'PASSED' if val_report['passed'] else 'FAILED'}")
     print(f"  Eligibility     : {elig['status']}")
     print(f"  Video recorded  : {write_results['video_memory']['status']}")
-    print(f"  Stories written : {write_results['story_coverage']['written']}")
-    print(f"  Claims written  : {write_results['claim_ledger']['written']}")
-    print(f"  Entities/topics : {write_results['entity_topic']['written']}")
-    print(f"  Follow-ups      : {write_results['followups']['written']}")
-    print(f"  Risk patterns   : {write_results['risk_patterns']['written']}")
-    print(f"  Signals built   : {write_results['learning_signals']['signals_written']}")
+    print(f"  Stories written : {write_results['story_coverage'].get('written', 0)}")
+    print(f"  Claims written  : {write_results['claim_ledger'].get('written', 0)}")
+    print(f"  Entities/topics : {write_results['entity_topic'].get('written', 0)}")
+    print(f"  Follow-ups      : {write_results['followups'].get('written', 0)}")
+    print(f"  Risk patterns   : {write_results['risk_patterns'].get('written', 0)}")
+    print(f"  Signals built   : {write_results['learning_signals'].get('signals_written', 0)}")
     print(f"  Ready           : {val_report['ready_for_future_runs']}")
     print(f"  Elapsed         : {elapsed:.1f}s")
     if val_report["warnings"]:

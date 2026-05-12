@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-05-11T11:07:42.319654+00:00",
+  "created_at": "2026-05-11T17:12:57.051066+00:00",
   "by_video_id": {
     "video_candidate_run_2026_05_10_48h_auto": {
       "run_id": "run_2026_05_10_48h_auto",
@@ -74,7 +74,9 @@
       ],
       "gap_ids": [
         "gap_e482f8_05_h_auto",
-        "gap_e482f8_06_h_auto"
+        "gap_e482f8_06_h_auto",
+        "gap_e482f8_00_h_auto",
+        "gap_e482f8_01_h_auto"
       ]
     },
     "story_20260507_scaling_trusted_access_for_cyber_with_gp_66c1b4": {
@@ -161,7 +163,8 @@
       "video_ids": [],
       "followup_ids": [],
       "gap_ids": [
-        "gap_107504_11_h_auto"
+        "gap_107504_11_h_auto",
+        "gap_107504_02_h_auto"
       ]
     }
   },

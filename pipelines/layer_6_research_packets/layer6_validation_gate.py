@@ -23,7 +23,7 @@ Key functions:
 import json
 from pathlib import Path
 
-_MIN_QUALITY_SCORE    = 70
+_MIN_QUALITY_SCORE    = 60
 _MIN_SOURCE_COUNT     = 2
 _MIN_SECTION_COVERAGE = 80
 

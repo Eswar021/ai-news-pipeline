@@ -208,7 +208,7 @@ def _make_openai_client():
     from dotenv import load_dotenv
     import os
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_S_M_R")
+    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_A_C_C")
     return openai.AsyncOpenAI(api_key=api_key)
 
 
