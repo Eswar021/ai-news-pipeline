@@ -1,1 +1,0 @@
-{"run_id": "test_run_research", "source_id": "arxiv_cs_ai", "collector_name": "research_paper_collector", "event_type": "success_note", "severity": "info", "retryable": false, "message": "Fetched 3 papers from cs.AI", "occurred_at": "2026-05-10T05:15:50.473462+00:00", "doc_count": 3, "category": "cs.AI"}

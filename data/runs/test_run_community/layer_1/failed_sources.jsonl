@@ -1,1 +1,0 @@
-{"run_id": "test_run_community", "source_id": "hackernews_ai", "collector_name": "community_signal_collector", "event_type": "success_note", "severity": "info", "retryable": false, "message": "Collected 5 HN top stories", "occurred_at": "2026-05-10T05:16:16.056239+00:00", "doc_count": 5, "story_type": "top"}
