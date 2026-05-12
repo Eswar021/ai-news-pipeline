@@ -17,6 +17,8 @@ import json
 import hashlib
 import argparse
 from datetime import datetime, timezone, timedelta
+from config.time_utils import now_project
+from config.time_utils import now_project_iso
 from urllib.request import urlopen, Request
 from urllib.parse import urlencode
 
@@ -74,7 +76,7 @@ def fetch_trending_repos(query="artificial intelligence", max_results=10, days_b
     Returns:
         List of repo dicts in our standard document format.
     """
-    since_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    since_date = (now_project() - timedelta(days=days_back)).strftime("%Y-%m-%d")
     search_q = f"{query} pushed:>{since_date}"
 
     params = {
@@ -150,7 +152,7 @@ def parse_repo(raw, query_used, include_readme=True):
         "signal_type": "open_source_project",
         "query_used": query_used,
         "content_hash": content_hash,
-        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collected_at": now_project_iso(),
     }
 
 
@@ -158,7 +160,7 @@ def save_results(repos, query):
     """Save collected repos to output/layer_1_raw/github/ as JSON."""
     ensure_output_dirs()
 
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = now_project().strftime("%Y-%m-%d")
     query_slug = query.replace(" ", "_")[:30].lower()
     filename = f"{date_str}_{query_slug}.json"
     filepath = RAW_GITHUB / filename

@@ -4,7 +4,8 @@ Layer 10 — Module 14: Memory Index Builder
 Reads all JSONL memory files and builds a searchable index at memory/memory_index.json.
 
 Index structure:
-  by_video_id:  { video_id → { story_ids, claim_ids, run_id } }
+  by_video_id:  { video_id → { story_ids, claim_ids, run_id, status, published_at } }
+  by_published_video_id: { published_video_id → { video_id, run_id } }
   by_story_id:  { story_id → { video_ids, followup_ids, gap_ids } }
   by_entity:    { entity → { video_ids, story_ids } }
   by_topic:     { topic → { video_ids, story_ids } }
@@ -15,6 +16,7 @@ Index structure:
 import json
 from collections import defaultdict
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -30,7 +32,7 @@ def _load_jsonl(path: Path) -> list:
 
 
 def build(memory_dir: Path) -> dict:
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_project_iso()
 
     video_records        = _load_jsonl(memory_dir / "video_memory.jsonl")
     story_records        = _load_jsonl(memory_dir / "story_coverage_memory.jsonl")
@@ -41,6 +43,7 @@ def build(memory_dir: Path) -> dict:
     gap_records          = _load_jsonl(memory_dir / "evidence_gap_watchlist.jsonl")
 
     by_video_id: dict[str, dict] = {}
+    by_published_video_id: dict[str, dict] = {}
     by_story_id: dict[str, dict] = defaultdict(lambda: {"video_ids": [], "followup_ids": [], "gap_ids": []})
     by_entity:   dict[str, dict] = defaultdict(lambda: {"video_ids": [], "story_ids": []})
     by_topic:    dict[str, dict] = defaultdict(lambda: {"video_ids": [], "story_ids": []})
@@ -54,13 +57,26 @@ def build(memory_dir: Path) -> dict:
             "run_id":      v.get("run_id", ""),
             "story_ids":   v.get("coverage", {}).get("story_ids", []),
             "claim_ids":   v.get("coverage", {}).get("used_claim_ids", []),
+            "status":      v.get("status", ""),
+            "published_at": v.get("timestamps", {}).get("published_at", ""),
+            "published_video_id": v.get("publishing", {}).get("youtube_video_id", ""),
             "created_at":  v.get("timestamps", {}).get("created_at", ""),
         }
+        published_video_id = v.get("publishing", {}).get("youtube_video_id", "")
+        if published_video_id:
+            by_published_video_id[published_video_id] = {
+                "video_id": vid,
+                "run_id": v.get("run_id", ""),
+                "published_at": v.get("timestamps", {}).get("published_at", ""),
+            }
         run_index[v.get("run_id", "")] = {
             "video_id":    vid,
             "story_count": len(v.get("coverage", {}).get("story_ids", [])),
             "claim_count": len(v.get("coverage", {}).get("used_claim_ids", [])),
             "format":      v.get("selected_format", ""),
+            "status":      v.get("status", ""),
+            "published_video_id": published_video_id,
+            "published_at": v.get("timestamps", {}).get("published_at", ""),
             "created_at":  v.get("timestamps", {}).get("created_at", ""),
         }
 
@@ -116,6 +132,7 @@ def build(memory_dir: Path) -> dict:
     index = {
         "created_at":  now,
         "by_video_id": by_video_id,
+        "by_published_video_id": by_published_video_id,
         "by_story_id": dict(by_story_id),
         "by_entity":   dict(by_entity),
         "by_topic":    dict(by_topic),
@@ -123,6 +140,7 @@ def build(memory_dir: Path) -> dict:
         "run_index":   run_index,
         "stats": {
             "total_videos":   len(by_video_id),
+            "total_published_videos": len(by_published_video_id),
             "total_stories":  len(by_story_id),
             "total_entities": len(by_entity),
             "total_topics":   len(by_topic),

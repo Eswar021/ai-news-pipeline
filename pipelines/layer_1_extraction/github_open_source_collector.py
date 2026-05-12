@@ -15,6 +15,7 @@ import sys
 import hashlib
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -24,6 +25,7 @@ from pipelines.layer_1_extraction.github_collector import fetch_trending_repos
 from pipelines.layer_1_extraction.raw_document_writer import write_raw_documents, read_raw_documents
 from pipelines.layer_1_extraction.raw_payload_writer import save_payload
 from pipelines.layer_1_extraction.extraction_audit_logger import log_event
+from pipelines.layer_1_extraction.window_filter import filter_raw_documents_by_window
 
 
 _COLLECTOR_NAME = "github_open_source_collector"
@@ -71,7 +73,7 @@ def _to_raw_document(repo: dict, run_id: str) -> dict:
         "collection": {
             "collector_name": _COLLECTOR_NAME,
             "collection_method": "github_api",
-            "collected_at": datetime.now(timezone.utc).isoformat(),
+            "collected_at": now_project_iso(),
             "extraction_status": "success",
         },
     }
@@ -85,6 +87,8 @@ def collect(
     include_readme: bool = True,
     output_path: Path = None,
     layer1_dir: Path = None,
+    start_at: str = None,
+    end_at: str = None,
 ) -> list:
     """
     Fetch trending AI GitHub repos for each query and return RawExtractedDocuments.
@@ -137,16 +141,43 @@ def collect(
             seen_urls.add(r.get("url"))
 
         docs = [_to_raw_document(r, run_id) for r in new_repos]
-        write_raw_documents(docs, output_path)
+        docs, filter_stats = filter_raw_documents_by_window(
+            docs, start_at=start_at, end_at=end_at
+        )
 
         import json
         save_payload(run_id, f"batch_github_{query[:20].replace(' ', '_')}", _SOURCE_GROUP,
                      "github_trending_ai", "json", json.dumps(new_repos, ensure_ascii=False), layer1_dir)
 
+        if filter_stats["outside_window_count"] > 0:
+            log_event(
+                run_id, "github_trending_ai", _COLLECTOR_NAME,
+                "success_note", "info",
+                f"Dropped {filter_stats['outside_window_count']} GitHub repo(s) outside the manifest window for '{query}'.",
+                extra=filter_stats,
+            )
+        if filter_stats["undated_or_unparseable_count"] > 0:
+            log_event(
+                run_id, "github_trending_ai", _COLLECTOR_NAME,
+                "date_missing", "warning",
+                f"Kept {filter_stats['undated_or_unparseable_count']} GitHub repo(s) with missing or unparseable publish dates for '{query}'.",
+                extra=filter_stats,
+            )
+        if not docs:
+            log_event(
+                run_id, "github_trending_ai", _COLLECTOR_NAME,
+                "empty_result", "warning",
+                f"All fetched GitHub repos were outside the manifest window for '{query}'.",
+                extra=filter_stats,
+            )
+            continue
+
+        write_raw_documents(docs, output_path)
+
         log_event(run_id, "github_trending_ai", _COLLECTOR_NAME,
                   "success_note", "info",
                   f"Fetched {len(docs)} repos for '{query}'",
-                  extra={"doc_count": len(docs), "query": query})
+                  extra={"doc_count": len(docs), "query": query, **filter_stats})
 
         all_docs.extend(docs)
 

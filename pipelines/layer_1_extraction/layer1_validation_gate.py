@@ -20,6 +20,7 @@ import sys
 import json
 from pathlib import Path
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
@@ -124,7 +125,7 @@ def _report(checks: list, failure_reason, stats: dict) -> dict:
         "checks": checks,
         "failure_reason": failure_reason,
         "stats": stats,
-        "validated_at": datetime.now(timezone.utc).isoformat(),
+        "validated_at": now_project_iso(),
     }
 
 

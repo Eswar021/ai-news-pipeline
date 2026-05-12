@@ -43,6 +43,7 @@ The remaining work clusters into these feature areas:
 9. Strategy-driven ChatGPT handoff system
 10. Output contract and run completeness enforcement
 11. Story intelligence and recurrence upgrades
+12. Manifest authority and config ownership cleanup
 
 ## Priority Summary
 
@@ -54,6 +55,7 @@ The remaining work clusters into these feature areas:
 - Repetition and similarity safety
 - Unified async LLM runtime, provider abstraction, and observability
 - Output contract and run completeness enforcement
+- Active pipeline timestamp standardization to the configured project timezone
 
 ### Build next
 
@@ -107,14 +109,19 @@ Implemented:
 
 - Layer 0 computes collection and memory windows
 - Layer 0 writes source scope and memory policy to the manifest
-- Layer 1 reads enabled source groups and query themes
+- Layer 0 now snapshots runtime timezone settings into `resolved_config.runtime`
+- Layer 1 now reads enabled source groups and query themes from the correct `collection_strategy` manifest fields
+- Layer 1 now applies manifest-driven collection windows to the raw document corpus
+- collectors that support it already can also receive fetch-side `days_back` narrowing from the manifest window
+- `extraction_manifest.json` now records the applied collection policy for the run
+- YouTube is now part of the main Layer 1 orchestration path through the manifest-backed YouTube snapshot and the YouTube transcript wrapper
 
 Missing or incomplete:
 
-- Layer 1 does not fully enforce manifest time windows
+- some source groups still rely on post-fetch window filtering because their current wrappers do not expose clean server-side date constraints
 - collector dispatch still relies on fixed-style limits and default behaviors
-- YouTube is configured but skipped in the main orchestrator
 - Layer 10 source-priority feedback is not yet fed back into Layer 1
+- YouTube channel selection is still registry-driven rather than dynamically narrowed per run
 
 ### Why it was deferred earlier
 
@@ -135,9 +142,10 @@ From the implementation decisions:
 ### What “done” should mean
 
 - Layer 1 collector calls accept manifest-derived lookback or date bounds
-- `channels.yaml` is wired into run execution cleanly
+- the Layer 0 snapshot of `channels.yaml` is wired into run execution cleanly
 - YouTube collection is an orchestrated source group, not a manual side path
 - future Layer 10 source-priority and watchlist guidance can influence Layer 1 query/collection policy
+- the policy for undated/unparseable documents is explicit rather than incidental
 
 ### Key files
 
@@ -267,13 +275,30 @@ Implemented:
 
 - Layer 10 records prepared videos
 - memory snapshot / novelty now correctly distinguish published vs unpublished in key consumers
+- publish-state updater exists through `publishing_memory.py mark-published`
+- authenticated owner-channel sync exists through `publishing_memory.py sync-channel`
+- `performance_memory.jsonl` now has a concrete ingestion path
+- memory rebuild after publish-state changes is automated
 
-Missing:
+Still pending in practice:
 
-- publish-state updater
-- channel sync path
-- performance-memory ingestion
-- real analytics-driven learning loop
+- first real published video flowing through the workflow
+- enough real performance history for analytics-driven learning signals to become meaningful
+
+Completed in practice:
+
+- live OAuth authorization on the local machine
+- authenticated owner-channel sync
+- canonical channel resolution to `UCp4tfcoFDQIFu7Cnodrqq_w`
+- fresh-start memory reset so the first production runs begin from clean editorial memory
+
+Current project assumptions captured for this feature:
+
+- single publishing channel first
+- current public handle is `@Eswar-P2`
+- canonical `channel_id` should be discovered via authenticated sync, not treated as a permanent manual input
+- no historical video backfill is needed yet
+- full analytics ingest requires OAuth credentials, not only `YOUTUBE_API_KEY`
 
 ### Why it was deferred earlier
 
@@ -291,6 +316,7 @@ From the implementation decisions:
 ### What “done” should mean
 
 - a published run can be marked with timestamp and platform video ID
+- the system can resolve the authenticated publishing channel and sync its published-video state
 - `performance_memory.jsonl` has a supported ingestion path
 - memory snapshot/index rebuild automatically after publication-state changes
 
@@ -299,6 +325,8 @@ From the implementation decisions:
 - `pipelines/layer_10_memory_learning/video_memory_writer.py`
 - `pipelines/layer_10_memory_learning/memory_snapshot_builder.py`
 - `pipelines/layer_10_memory_learning/learning_signal_builder.py`
+- `docs/reference/publishing_channel_and_analytics_setup.md`
+- `docs/workflows/publishing_memory_workflow.md`
 
 ---
 
@@ -337,12 +365,13 @@ Implemented:
 - Layer 7 already produces blocked title angles
 - Layer 10 stores editorial pattern memory
 - handoff exporter uses published-memory repetition guidance
+- Layer 9 `repetition_safety_checker.py` now checks published-memory story/title reuse before final approval
 
-Missing:
+Still incomplete:
 
-- Layer 9 `repetition_safety_checker.py`
 - richer Layer 7 direct memory use for title/hook repetition avoidance
 - explicit takeaway/thumbnail repetition checks
+- stronger cross-video family logic beyond direct story/title reuse
 
 ### Why it was deferred earlier
 
@@ -368,7 +397,7 @@ From the implementation decisions:
 - `pipelines/layer_5_editorial_intelligence/novelty_checker.py`
 - `pipelines/layer_7_content_planning/title_thumbnail_planner.py`
 - `pipelines/layer_10_memory_learning/editorial_pattern_memory_writer.py`
-- future `repetition_safety_checker.py`
+- `pipelines/layer_9_verification_firewall/repetition_safety_checker.py`
 
 ---
 
@@ -487,13 +516,14 @@ Operationally, those calls need to be inspectable and configurable.
 Implemented:
 
 - model/temperature profiles in `config/llm_config.py`
-- some active modules read that config correctly
+- Layer 0 snapshots effective LLM runtime profiles into the run manifest
+- shared async runtime now centralizes AsyncOpenAI calls for active LLM modules in Layers 4, 5, 7, 8, and 9
+- per-call request/response logs now write to `output/llm_logs/{run_id}/...`
 
-Missing:
+Still incomplete:
 
-- shared async client wrapper
-- full provider abstraction for the active async path
-- complete LLM logging for the active pipeline
+- full multi-provider abstraction for the active async path
+- migrating remaining standalone/inactive LLM paths onto the same runtime
 
 ### Why it was deferred earlier
 
@@ -516,7 +546,7 @@ Missing:
 ### Key files
 
 - `config/llm_config.py`
-- `llm/llm_client.py`
+- `llm/async_llm_runtime.py`
 - `llm/llm_logger.py`
 - active async LLM modules in Layers 4, 5, 7, 8, and 9
 
@@ -823,6 +853,103 @@ Missing:
 
 ---
 
+## 12. Manifest Authority and Config Ownership Cleanup
+
+**Priority:** `Now`
+**Status:** Active runtime implementation completed on 2026-05-12. Remaining work is standalone/inactive utility cleanup plus adjacent LLM-runtime/logging work.
+
+### What this feature is
+
+Make the Layer 0 run manifest the actual runtime control plane for the whole pipeline.
+
+This means:
+
+- Layer 0 reads authoring config once
+- Layer 0 writes the resolved run-scoped snapshot into the manifest
+- downstream layers stop re-reading original config files directly
+
+### Why it exists in the design
+
+The Layer 0 design is explicit that downstream layers should read one `run_manifest.json`, not separately read random config files.
+
+This is the mechanism that makes a run:
+
+- reproducible
+- auditable
+- safe from mid-run config edits
+
+### Layers involved
+
+- Layer 0
+- Layer 1
+- Layer 3
+- Layer 5
+- Layer 7
+- Layer 8
+- Layer 9
+- `chatgpt_export.py`
+- the shared LLM runtime path
+
+### Current implementation
+
+Implemented:
+
+- Layer 0 already assembles the main run manifest
+- Layer 1 now uses the manifest for collection windows, enabled source groups, and query themes
+- Layer 0 now writes `resolved_config` snapshots for source registry, YouTube channels, LLM runtime, entity/topic taxonomy, and ChatGPT handoff prompts
+- Layer 1 now reads source/channel registry data from manifest snapshots in the active path
+- Layer 3 now reads entity/topic taxonomy from the manifest in the active path
+- Layer 5 now reads effective format requirements from the manifest in the active path
+- active LLM modules in Layers 4, 5, 7, 8, and 9 now read manifest-backed runtime profiles
+- `chatgpt_export.py` now reads manifest-backed handoff prompt config
+
+Missing or incomplete:
+
+- some standalone or inactive utilities still read config directly
+- Layer 0 authoring helpers still read config directly by design
+- unified provider abstraction and centralized LLM logging are still separate unfinished features
+
+### Why it was deferred earlier
+
+From the implementation decisions and current code shape:
+
+- the initial goal was to make the workflow function end-to-end first
+- existing helpers were easier to wrap than to fully convert to manifest snapshots
+- some config reads looked harmless while the system was still evolving quickly
+
+### Why it mattered now
+
+- the architecture intent was already clear in the design docs
+- the pipeline had become stable enough that control-plane cleanup was worth doing
+- this reduces hidden drift between runs and makes debugging much easier
+- it also sets up the future unified LLM runtime work on a cleaner foundation
+
+### What “done” should mean
+
+- Layer 0 is the only place that resolves authoring config into run behavior
+- downstream layers consume the manifest plus upstream artifacts
+- resolved run-scoped snapshots exist for:
+  - source registry subset
+  - YouTube channel subset
+  - format requirements
+  - effective LLM profiles and module overrides
+  - handoff strategy if needed
+- direct config reads in downstream runtime paths are either removed or explicitly justified as global infrastructure
+
+### Key files
+
+- `pipelines/layer_0_control/run_manifest_builder.py`
+- `config/format_config.yaml`
+- `config/sources.yaml`
+- `config/source_strategy.yaml`
+- `config/channels.yaml`
+- `config/chatgpt_prompts.yaml`
+- `config/entity_topic_taxonomy.yaml`
+- `config/llm_config.py`
+- `docs/reference/manifest_authority_and_config_ownership.md`
+
+---
+
 ## Suggested Build Order
 
 ### Phase 1 — Core system completion
@@ -849,4 +976,5 @@ Missing:
 
 - [System Audit — 2026-05-12](../audits/2026-05-12_system_audit.md)
 - [Run Dataflow and Run-State Recommendation](../reference/run_dataflow_and_run_state.md)
+- [Manifest Authority and Config Ownership](../reference/manifest_authority_and_config_ownership.md)
 - [Layer Output Map](../reference/layer_output_map.md)

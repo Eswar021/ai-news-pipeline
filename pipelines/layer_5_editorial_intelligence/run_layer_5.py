@@ -39,13 +39,13 @@ Usage:
 """
 
 import sys
-import yaml
 import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from config.paths import RUNS_DIR, ROOT
+from config.paths import RUNS_DIR
+from pipelines.runtime_manifest import get_format_requirements, load_manifest
 
 from pipelines.layer_5_editorial_intelligence.editorial_candidate_loader import load
 from pipelines.layer_5_editorial_intelligence.evidence_safety_gate       import gate_all
@@ -73,9 +73,9 @@ def run_layer_5(run_id: str) -> dict:
     print(f"[Layer 5] Input  : {layer4_dir}")
     print(f"[Layer 5] Output : {layer5_dir}\n")
 
-    # ── Load format config once ───────────────────────────────────────────────
-    with open(ROOT / "config" / "format_config.yaml") as f:
-        fmt_cfg = yaml.safe_load(f)["formats"]
+    # ── Load format requirements from run manifest ────────────────────────────
+    manifest = load_manifest(run_id=run_id)
+    fmt_cfg = get_format_requirements(manifest)
 
     # ── Step 1: Load editorial candidates ────────────────────────────────────
     print("[Layer 5] Step 1 — Loading editorial candidates...")
@@ -101,7 +101,7 @@ def run_layer_5(run_id: str) -> dict:
 
     # ── Step 4: Viewer value analysis (LLM, parallel) ────────────────────────
     print(f"[Layer 5] Step 4 — Analyzing viewer value (LLM, {len(candidates)} stories)...")
-    viewer_values = viewer_value_all(candidates)
+    viewer_values = viewer_value_all(candidates, run_id=run_id)
     avg_vv = int(sum(vv["viewer_value_score"] for vv in viewer_values) / max(len(viewer_values), 1))
     print(f"  Avg viewer value score: {avg_vv}")
 

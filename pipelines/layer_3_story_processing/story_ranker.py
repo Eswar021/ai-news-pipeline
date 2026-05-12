@@ -26,6 +26,7 @@ import sys
 import json
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -51,7 +52,7 @@ def _days_ago(date_str: str | None) -> float:
         return 999.0
     try:
         dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        now = datetime.now(timezone.utc)
+        now = now_project()
         return (now - dt).total_seconds() / 86400
     except Exception:
         return 999.0

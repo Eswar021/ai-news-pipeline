@@ -26,11 +26,13 @@ import json
 import asyncio
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
-from config.llm_config import get_profile
+from pipelines.runtime_manifest import get_format_requirements, get_llm_profile, load_manifest
+from llm.async_llm_runtime import execute_chat_request
 
 _MAX_SAFE_FACTS_IN_PROMPT = 6
 _MAX_SEGMENT_STORIES = 8
@@ -98,28 +100,7 @@ def _facts_snippet(safe_facts: list[dict], limit: int) -> str:
     return "\n".join(lines) if lines else "(no facts)"
 
 
-def _build_create_kwargs(model: str, temperature: float, messages: list) -> dict:
-    kwargs: dict = {
-        "model":           model,
-        "response_format": {"type": "json_object"},
-        "messages":        messages,
-    }
-    if "nano" not in model:
-        kwargs["temperature"] = temperature
-    return kwargs
-
-
-def _make_openai_client():
-    import openai
-    from dotenv import load_dotenv
-    import os
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_A_C_C")
-    return openai.AsyncOpenAI(api_key=api_key)
-
-
-async def _call_deep_dive(client, model: str, temperature: float,
-                          cand: dict, viewer_value: dict) -> dict:
+async def _call_deep_dive(run_id: str | None, cand: dict, viewer_value: dict) -> dict:
     facts_text = _facts_snippet(cand.get("safe_facts", []), _MAX_SAFE_FACTS_IN_PROMPT)
     vq = viewer_value.get("primary_viewer_question", "")
 
@@ -135,14 +116,21 @@ async def _call_deep_dive(client, model: str, temperature: float,
         {"role": "system", "content": _DEEP_DIVE_SYSTEM},
         {"role": "user",   "content": user_msg},
     ]
-    resp = await client.chat.completions.create(
-        **_build_create_kwargs(model, temperature, messages)
+    return await execute_chat_request(
+        module_name="editorial_brief_builder",
+        run_id=run_id,
+        messages=messages,
+        request_name=f"deep_dive_{cand.get('story_id', 'story')}",
+        metadata={
+            "brief_format": "deep_dive",
+            "story_id": cand.get("story_id", ""),
+            "story_title": cand.get("story_title", ""),
+        },
+        parse_json=True,
     )
-    return json.loads(resp.choices[0].message.content)
 
 
-async def _call_roundup(client, model: str, temperature: float,
-                        selected_cands: list[dict],
+async def _call_roundup(run_id: str | None, selected_cands: list[dict],
                         viewer_values_by_id: dict,
                         episode_theme: str) -> dict:
     stories_text = []
@@ -167,10 +155,18 @@ async def _call_roundup(client, model: str, temperature: float,
         {"role": "system", "content": _ROUNDUP_SYSTEM},
         {"role": "user",   "content": user_msg},
     ]
-    resp = await client.chat.completions.create(
-        **_build_create_kwargs(model, temperature, messages)
+    return await execute_chat_request(
+        module_name="editorial_brief_builder",
+        run_id=run_id,
+        messages=messages,
+        request_name="roundup_brief",
+        metadata={
+            "brief_format": "roundup",
+            "story_ids": [cand.get("story_id", "") for cand in selected_cands],
+            "story_count": len(selected_cands),
+        },
+        parse_json=True,
     )
-    return json.loads(resp.choices[0].message.content)
 
 
 def _build_evidence_boundaries(candidates: list[dict]) -> dict:
@@ -226,13 +222,10 @@ async def _build_async(editorial_decision: dict,
                        candidates_by_id: dict,
                        viewer_values_by_id: dict,
                        format_config: dict) -> dict:
-    profile     = get_profile("editorial_brief_builder")
-    client      = _make_openai_client()
-    model       = profile["model"]
-    temperature = profile["temperature"]
+    run_id      = editorial_decision.get("run_id")
 
     selected_format = editorial_decision.get("selected_format")
-    video_id = f"video_brief_{datetime.now(timezone.utc).strftime('%Y%m%d')}_{selected_format[:2]}_001"
+    video_id = f"video_brief_{now_project().strftime('%Y%m%d')}_{selected_format[:2]}_001"
 
     if selected_format == "deep_dive":
         primary_sid = editorial_decision["primary_story_id"]
@@ -241,7 +234,7 @@ async def _build_async(editorial_decision: dict,
         roundup_cfg = format_config.get("deep_dive", {})
 
         try:
-            llm_result = await _call_deep_dive(client, model, temperature, cand, vv)
+            llm_result = await _call_deep_dive(run_id, cand, vv)
         except Exception:
             llm_result = _fallback_brief_deep_dive(cand, vv)
 
@@ -286,8 +279,7 @@ async def _build_async(editorial_decision: dict,
         roundup_cfg    = format_config.get("roundup", {})
 
         try:
-            llm_result = await _call_roundup(client, model, temperature,
-                                             selected_cands, viewer_values_by_id, episode_theme)
+            llm_result = await _call_roundup(run_id, selected_cands, viewer_values_by_id, episode_theme)
         except Exception:
             llm_result = _fallback_brief_roundup(selected_cands, episode_theme)
 
@@ -363,7 +355,6 @@ if __name__ == "__main__":
                 break
         print(f"Auto-discovered run: {run_id}")
 
-    import yaml
     from pipelines.layer_5_editorial_intelligence.editorial_candidate_loader import load
     from pipelines.layer_5_editorial_intelligence.evidence_safety_gate       import gate_all
     from pipelines.layer_5_editorial_intelligence.audience_fit_analyzer      import analyze_all as af_all
@@ -382,14 +373,14 @@ if __name__ == "__main__":
     safety  = gate_all(candidates)
     af      = af_all(candidates)
     print("  Running LLM for viewer value...")
-    vv      = vv_all(candidates)
+    vv      = vv_all(candidates, run_id=run_id)
     novelty = check_all(candidates)
     ffs     = ffs_all(candidates, safety, af, vv, novelty)
     routing = route_all(candidates, ffs, safety, novelty)
     opp     = opp_all(candidates, safety, af, vv, novelty)
 
-    with open("config/format_config.yaml") as f:
-        fmt_cfg = yaml.safe_load(f)["formats"]
+    manifest = load_manifest(run_id=run_id)
+    fmt_cfg = get_format_requirements(manifest)
 
     ed = decide(candidates, routing, opp, fmt_cfg)
     ed["run_id"] = run_id

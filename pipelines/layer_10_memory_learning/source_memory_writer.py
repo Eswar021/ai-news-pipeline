@@ -14,6 +14,7 @@ Trust tier derived from domain:
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -75,7 +76,7 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
     existing_keys = _load_existing_keys(path)
     run_id        = ctx["run_id"]
     video_id      = mc["video_id"]
-    now           = datetime.now(timezone.utc).isoformat()
+    now           = now_project_iso()
 
     # Count claims per domain for this run
     domain_claims: dict[str, list] = {}

@@ -4,7 +4,7 @@ Use this file when you want to inspect the main downstream artifacts for a run q
 
 | Layer | Main output files | What to read first |
 | --- | --- | --- |
-| Layer 0 | `data/runs/{run_id}/run_manifest.json` | The full run contract |
+| Layer 0 | `data/runs/{run_id}/run_manifest.json` | The full run contract, including `resolved_config` snapshots for active runtime consumers |
 | Layer 1 | `data/runs/{run_id}/layer_1/raw_documents.jsonl`, `extraction_manifest.json` | `extraction_manifest.json` |
 | Layer 2 | `data/runs/{run_id}/layer_2/canonical_documents.jsonl`, `source_spans.jsonl`, `provenance_map.jsonl` | `canonical_documents.jsonl` |
 | Layer 3 | `data/runs/{run_id}/layer_3/story_clusters.json`, `ranked_stories.json`, `story_timeline.json` | `ranked_stories.json` |
@@ -21,6 +21,7 @@ Use this file when you want to inspect the main downstream artifacts for a run q
 If you want:
 
 - Source collection summary: read Layer 1 `extraction_manifest.json`
+  It now also includes the applied collection window policy for the run.
 - Final story ranking: read Layer 3 `ranked_stories.json`
 - Evidence-backed facts: read Layer 4 `story_fact_sheets.json`
 - Which video the system chose: read Layer 5 `selected_video_brief.json`

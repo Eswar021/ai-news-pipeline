@@ -14,6 +14,7 @@ Output: memory/followups.jsonl
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -74,7 +75,7 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
     video_id      = mc["video_id"]
     story_ids_set = set(mc["story_ids"])
     gaps          = ctx["evidence_gaps"]
-    now           = datetime.now(timezone.utc).isoformat()
+    now           = now_project_iso()
 
     written = []
     skipped = []

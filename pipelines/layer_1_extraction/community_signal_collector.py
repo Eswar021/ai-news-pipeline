@@ -15,6 +15,7 @@ import sys
 import hashlib
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -24,6 +25,7 @@ from pipelines.layer_1_extraction.hackernews_collector import fetch_ai_stories
 from pipelines.layer_1_extraction.raw_document_writer import write_raw_documents, read_raw_documents
 from pipelines.layer_1_extraction.raw_payload_writer import save_payload
 from pipelines.layer_1_extraction.extraction_audit_logger import log_event
+from pipelines.layer_1_extraction.window_filter import filter_raw_documents_by_window
 
 
 _COLLECTOR_NAME = "community_signal_collector"
@@ -67,7 +69,7 @@ def _to_raw_document(story: dict, run_id: str) -> dict:
         "collection": {
             "collector_name": _COLLECTOR_NAME,
             "collection_method": "hackernews_firebase_api",
-            "collected_at": datetime.now(timezone.utc).isoformat(),
+            "collected_at": now_project_iso(),
             "extraction_status": "success",
         },
     }
@@ -80,6 +82,8 @@ def collect(
     scan_depth: int = 100,
     output_path: Path = None,
     layer1_dir: Path = None,
+    start_at: str = None,
+    end_at: str = None,
 ) -> list:
     """
     Fetch AI-related HN stories and return as RawExtractedDocuments.
@@ -115,16 +119,43 @@ def collect(
         return []
 
     docs = [_to_raw_document(s, run_id) for s in stories]
-    write_raw_documents(docs, output_path)
+    docs, filter_stats = filter_raw_documents_by_window(
+        docs, start_at=start_at, end_at=end_at
+    )
 
     import json
     save_payload(run_id, f"batch_{source_id}_{story_type}", _SOURCE_GROUP, source_id,
                  "json", json.dumps(stories, ensure_ascii=False), layer1_dir)
 
+    if filter_stats["outside_window_count"] > 0:
+        log_event(
+            run_id, source_id, _COLLECTOR_NAME,
+            "success_note", "info",
+            f"Dropped {filter_stats['outside_window_count']} HN story/stories outside the manifest window.",
+            extra=filter_stats,
+        )
+    if filter_stats["undated_or_unparseable_count"] > 0:
+        log_event(
+            run_id, source_id, _COLLECTOR_NAME,
+            "date_missing", "warning",
+            f"Kept {filter_stats['undated_or_unparseable_count']} HN story/stories with missing or unparseable publish dates.",
+            extra=filter_stats,
+        )
+    if not docs:
+        log_event(
+            run_id, source_id, _COLLECTOR_NAME,
+            "empty_result", "warning",
+            "All fetched HN stories were outside the manifest window.",
+            extra=filter_stats,
+        )
+        return []
+
+    write_raw_documents(docs, output_path)
+
     log_event(run_id, source_id, _COLLECTOR_NAME,
               "success_note", "info",
               f"Collected {len(docs)} HN {story_type} stories",
-              extra={"doc_count": len(docs), "story_type": story_type})
+              extra={"doc_count": len(docs), "story_type": story_type, **filter_stats})
 
     return docs
 

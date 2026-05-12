@@ -23,6 +23,7 @@ Key function:
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -70,7 +71,7 @@ def write(
     youtube_metadata:        dict,
 ) -> dict:
     layer8_dir.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_project_iso()
 
     total_words = sum(s.get("word_count", 0) for s in section_scripts)
     total_secs  = sum(s.get("estimated_seconds", 0) for s in section_scripts)

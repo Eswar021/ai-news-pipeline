@@ -22,6 +22,7 @@ import json
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
@@ -101,7 +102,7 @@ def build(
     role_rank = {r: i for i, r in enumerate(_SOURCE_ROLE_ORDER)}
     sources.sort(key=lambda s: (s["trust_tier"], role_rank.get(s["source_role"], 99)))
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_project_iso()
     source_pack_id = f"source_pack_{now[:10].replace('-', '')}"
 
     return {

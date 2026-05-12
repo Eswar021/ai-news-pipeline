@@ -2,6 +2,8 @@
 python-dotenv
 pyyaml
 requests
+google-auth
+google-auth-oauthlib
 
 # ── LLM (existing) ──
 langchain-openai

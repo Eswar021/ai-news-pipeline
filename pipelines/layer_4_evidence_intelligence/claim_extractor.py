@@ -29,13 +29,14 @@ import sys
 import json
 import asyncio
 import argparse
-import re
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
-from config.llm_config import get_profile
+from pipelines.runtime_manifest import get_llm_profile
+from llm.async_llm_runtime import execute_chat_request
 
 MAX_CONCURRENT = 20
 MAX_CLAIMS_PER_STORY = 20
@@ -86,20 +87,7 @@ def _make_claim_id(story_id: str, counter: int) -> str:
     return f"claim_{_story_hash(story_id)}_{counter:04d}"
 
 
-def _build_create_kwargs(model: str, temperature: float, messages: list) -> dict:
-    kwargs: dict = {
-        "model": model,
-        "response_format": {"type": "json_object"},
-        "messages": messages,
-    }
-    # nano models only accept default temperature (1)
-    if "nano" not in model:
-        kwargs["temperature"] = temperature
-    return kwargs
-
-
-async def _call_llm(client, model: str, temperature: float, span: dict,
-                    story_title: str, story_type: str, semaphore) -> list[dict]:
+async def _call_llm(run_id: str, span: dict, story_title: str, story_type: str, semaphore) -> list[dict]:
     user_msg = (
         f"Story: {story_title} (type: {story_type})\n"
         f"Source type: {span.get('source_role', 'unknown')} "
@@ -114,13 +102,22 @@ async def _call_llm(client, model: str, temperature: float, span: dict,
 
     async with semaphore:
         try:
-            resp = await client.chat.completions.create(
-                **_build_create_kwargs(model, temperature, messages)
+            data = await execute_chat_request(
+                module_name="claim_extractor",
+                run_id=run_id,
+                messages=messages,
+                request_name=span.get("span_id", "source_span"),
+                metadata={
+                    "story_title": story_title,
+                    "story_type": story_type,
+                    "story_id_hint": span.get("story_id", ""),
+                    "span_id": span.get("span_id", ""),
+                    "source_url": span.get("source_url", ""),
+                },
+                parse_json=True,
             )
-            raw = resp.choices[0].message.content
-            data = json.loads(raw)
             return data.get("claims", [])
-        except Exception as e:
+        except Exception:
             return []
 
 
@@ -142,15 +139,14 @@ def _validate_claim(raw: dict) -> dict | None:
     }
 
 
-async def _extract_story(client, model: str, temperature: float,
-                          selection: dict, semaphore) -> dict:
+async def _extract_story(run_id: str, selection: dict, semaphore) -> dict:
     sid = selection["story_id"]
     title = selection["story_title"]
     story_type = selection.get("story_type", "unknown")
     spans = selection["selected_spans"]
 
     tasks = [
-        _call_llm(client, model, temperature, sp, title, story_type, semaphore)
+        _call_llm(run_id, sp, title, story_type, semaphore)
         for sp in spans
     ]
     raw_results = await asyncio.gather(*tasks)
@@ -178,7 +174,7 @@ async def _extract_story(client, model: str, temperature: float,
                 "source_url":           span.get("source_url", ""),
                 "extraction_confidence": _SUPPORT_CONFIDENCE[validated["support_level"]],
                 "verification_status":  "pending",
-                "extracted_at":         datetime.now(timezone.utc).isoformat(),
+                "extracted_at":         now_project_iso(),
             }
             atomic_claims.append(claim)
             counter += 1
@@ -202,31 +198,17 @@ async def _extract_story(client, model: str, temperature: float,
         },
     }
 
-
-def _make_openai_client():
-    import openai
-    from dotenv import load_dotenv
-    import os
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_A_C_C")
-    return openai.AsyncOpenAI(api_key=api_key)
-
-
 def extract_all(selections: list[dict], run_id: str) -> list[dict]:
     """
     Extract atomic claims from all story selections.
     Runs spans within each story concurrently; stories are sequential.
     """
-    profile = get_profile("claim_extractor")
-    client = _make_openai_client()
-    model = profile["model"]
-    temperature = profile["temperature"]
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 
     async def _run_all():
         results = []
         for sel in selections:
-            result = await _extract_story(client, model, temperature, sel, semaphore)
+            result = await _extract_story(run_id, sel, semaphore)
             results.append(result)
         return results
 
@@ -262,7 +244,7 @@ if __name__ == "__main__":
         selections = [selections[args.story_index]]
 
     print(f"\nClaim Extractor — {run_id}")
-    print(f"  Model  : {get_profile('claim_extractor')['model']}")
+    print(f"  Model  : {get_llm_profile('claim_extractor', run_id=run_id)['model']}")
     print(f"  Stories: {len(selections)}")
     print(f"  Spans  : {sum(s['counts']['selected'] for s in selections)}")
     print("  Extracting...\n")

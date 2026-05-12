@@ -17,6 +17,7 @@ Output: memory/memory_snapshot.json (overwritten on each run)
 import json
 from collections import Counter
 from datetime import datetime, timezone, timedelta
+from config.time_utils import now_project
 from pathlib import Path
 
 
@@ -45,7 +46,7 @@ def _published_video_records(video_records: list[dict]) -> list[dict]:
 
 
 def build(memory_dir: Path) -> dict:
-    now = datetime.now(timezone.utc)
+    now = now_project()
 
     video_records        = _load_jsonl(memory_dir / "video_memory.jsonl")
     story_records        = _load_jsonl(memory_dir / "story_coverage_memory.jsonl")
@@ -53,8 +54,14 @@ def build(memory_dir: Path) -> dict:
     entity_topic_records = _load_jsonl(memory_dir / "entity_topic_memory.jsonl")
     source_records       = _load_jsonl(memory_dir / "source_memory.jsonl")
     followup_records     = _load_jsonl(memory_dir / "followups.jsonl")
+    performance_records  = _load_jsonl(memory_dir / "performance_memory.jsonl")
 
     published_videos = _published_video_records(video_records)
+    published_video_map = {
+        rec.get("video_id", ""): rec
+        for rec in published_videos
+        if rec.get("video_id")
+    }
     published_video_ids = {
         rec.get("video_id", "")
         for rec in published_videos
@@ -68,6 +75,10 @@ def build(memory_dir: Path) -> dict:
         rec for rec in editorial_records
         if rec.get("video_id") in published_video_ids
     ]
+    published_entity_topic_records = [
+        rec for rec in entity_topic_records
+        if rec.get("coverage_update", {}).get("video_id", "") in published_video_ids
+    ]
 
     # ── Recent coverage (last 30 days) ────────────────────────────────────────
     cutoff_30d = (now - timedelta(days=30)).isoformat()
@@ -78,6 +89,11 @@ def build(memory_dir: Path) -> dict:
             or v.get("published_at", "")
         ) >= cutoff_30d
     ]
+    recent_video_ids = {
+        v.get("video_id", "")
+        for v in recent_videos
+        if v.get("video_id")
+    }
 
     top_entities = Counter(
         e for v in recent_videos
@@ -93,12 +109,12 @@ def build(memory_dir: Path) -> dict:
     recent_title_angles = [
         ep.get("titles", {}).get("working_title", "")
         for ep in published_editorial_records
-        if ep.get("created_at", "") >= cutoff_30d
+        if ep.get("video_id", "") in recent_video_ids
     ]
     recent_hook_types = list({
         ep.get("hook", {}).get("hook_type", "")
         for ep in published_editorial_records
-        if ep.get("created_at", "") >= cutoff_30d
+        if ep.get("video_id", "") in recent_video_ids
     })
     blocked_title_angles = list({
         angle
@@ -107,7 +123,7 @@ def build(memory_dir: Path) -> dict:
     })
 
     avoid_angle_topics = []
-    for et in entity_topic_records:
+    for et in published_entity_topic_records:
         if et.get("memory_type") == "topic":
             avoid_until = (now + timedelta(days=30)).strftime("%Y-%m-%d")
             avoid_angle_topics.append({
@@ -164,6 +180,22 @@ def build(memory_dir: Path) -> dict:
             "high_priority_sources":  tier1,
             "medium_priority_sources": tier2,
             "trend_signal_sources":   tier3,
+        },
+        "performance_highlights": {
+            "top_videos_by_views_48h": [
+                {
+                    "video_id": rec.get("video_id", ""),
+                    "published_video_id": rec.get("published_video_id", ""),
+                    "views_48h": rec.get("performance", {}).get("views_48h"),
+                    "format": rec.get("content_attributes", {}).get("format", ""),
+                    "top_topic": (rec.get("content_attributes", {}).get("topics") or [None])[0],
+                }
+                for rec in sorted(
+                    performance_records,
+                    key=lambda r: r.get("performance", {}).get("views_48h") or 0,
+                    reverse=True,
+                )[:5]
+            ]
         },
         "layer_guidance": {
             "for_layer5": {

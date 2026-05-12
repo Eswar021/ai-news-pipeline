@@ -18,6 +18,9 @@ import yaml
 from config.paths import (
     CHANNEL_THESIS_YAML,
     AUDIENCE_PROFILES_YAML,
+    CHANNELS_YAML,
+    CHATGPT_PROMPTS_YAML,
+    ENTITY_TOPIC_TAXONOMY_YAML,
     FORMAT_CONFIG_YAML,
     QUALITY_RULES_YAML,
     SOURCES_YAML,
@@ -40,6 +43,7 @@ from pipelines.layer_0_control.quality_policy_loader import load_quality_policy
 from pipelines.layer_0_control.memory_context_planner import plan_memory_context
 from pipelines.layer_0_control.budget_depth_controller import build_depth_limits
 from pipelines.layer_0_control.output_contract_builder import build_output_contract
+from pipelines.layer_0_control.resolved_config_snapshot_builder import build_resolved_config_snapshots
 from pipelines.layer_0_control.run_manifest_builder import build_run_manifest
 from pipelines.layer_0_control.run_validation_gate import validate_manifest
 
@@ -147,6 +151,18 @@ def run_layer_0(
         scripts_dir=SCRIPTS_OUTPUT,
     )
 
+    # Step 11A — Snapshot resolved runtime config for downstream layers
+    resolved_config = build_resolved_config_snapshots(
+        sources_path=SOURCES_YAML,
+        source_strategy_path=SOURCE_STRATEGY_YAML,
+        channels_path=CHANNELS_YAML,
+        run_defaults_path=RUN_DEFAULTS_YAML,
+        entity_topic_taxonomy_path=ENTITY_TOPIC_TAXONOMY_YAML,
+        chatgpt_prompts_path=CHATGPT_PROMPTS_YAML,
+        enabled_source_groups=source_scope["source_collection_plan"]["enabled_source_groups"],
+        source_group_details=source_scope["source_group_details"],
+    )
+
     # Step 12 — Assemble and write run_manifest.json
     manifest, manifest_path = build_run_manifest(
         run_request=run_request,
@@ -160,6 +176,7 @@ def run_layer_0(
         memory_context=memory_context,
         depth_limits=depth_limits,
         output_contract=output_contract,
+        resolved_config=resolved_config,
         runs_dir=RUNS_DIR,
     )
 

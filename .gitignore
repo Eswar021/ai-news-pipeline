@@ -2,6 +2,9 @@
 .env
 .env.*
 !.env.example
+secrets/*.json
+secrets/*.token
+secrets/*.pickle
 
 # ── Python ─────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -40,6 +43,8 @@ output/chatgpt_handoffs/
 output/llm_logs/
 
 data/runs/
+
+local_tests/
 
 # ── IDE & Editor ───────────────────────────────────────────────────────────────
 .vscode/

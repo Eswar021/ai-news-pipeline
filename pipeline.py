@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config.paths import RUNS_DIR, CONFIG_DIR, DATA_DIR, SCRIPTS_OUTPUT
+from config.paths import RUNS_DIR, CONFIG_DIR, DATA_DIR, MEMORY_DIR, SCRIPTS_OUTPUT
 from pipelines.layer_0_control.output_contract_builder import build_output_contract
 
 PIPELINE_CONFIG = CONFIG_DIR / "pipeline_config.yaml"
@@ -141,13 +141,19 @@ def _resolve_output_contract(run_id: str) -> dict:
         for key, expected_path in active_outputs.items()
     )
 
-    if manifest_contract and contract_is_current:
-        return manifest_contract
+    if not manifest_contract:
+        raise KeyError(
+            f"run_manifest.json for run '{run_id}' is missing output_contract. "
+            "Rebuild the run from Layer 0."
+        )
 
-    if manifest_contract:
-        print("[pipeline] Output contract in run_manifest.json is stale; using the active contract mapping for enforcement.")
+    if not contract_is_current:
+        raise RuntimeError(
+            f"run_manifest.json for run '{run_id}' has a stale output_contract. "
+            "Rebuild the run from Layer 0 so the pipeline uses only manifest-defined output paths."
+        )
 
-    return active_contract
+    return manifest_contract
 
 
 def _enforce_layer_outputs(layer_num: int, output_contract: dict) -> None:
@@ -282,6 +288,11 @@ def main():
     parser.add_argument("--topic-focus", dest="topic_focus", default=None)
     parser.add_argument("--depth", default=None)
     parser.add_argument("--max-videos", dest="max_videos", type=int, default=None)
+    parser.add_argument(
+        "--sync-publishing-channel",
+        action="store_true",
+        help="Sync authenticated publishing-channel state before running pipeline layers.",
+    )
 
     args = parser.parse_args()
 
@@ -305,6 +316,20 @@ def main():
 
     if continuing:
         output_contract = _resolve_output_contract(run_id)
+
+    if args.sync_publishing_channel:
+        from pipelines.layer_10_memory_learning.publishing_channel_sync import sync_channel_state
+        print("[pipeline] Syncing publishing channel before pipeline run...")
+        sync_result = sync_channel_state(
+            memory_dir=MEMORY_DIR,
+            interactive=True,
+            sync_analytics_for_mapped_videos=True,
+        )
+        print(
+            f"[pipeline] Publishing channel synced: "
+            f"{sync_result['videos_seen_this_sync']} videos seen, "
+            f"{sync_result['analytics_records_synced']} analytics record(s) updated."
+        )
 
     # Print run plan
     preset_label = args.preset or cfg["pipeline"]["default_preset"] if not args.layers else "custom"

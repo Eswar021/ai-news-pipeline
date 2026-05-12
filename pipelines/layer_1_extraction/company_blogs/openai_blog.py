@@ -14,6 +14,7 @@ import json
 import argparse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from config.time_utils import now_project
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent.parent.parent))
 from config.paths import RAW_BLOGS, ensure_output_dirs
@@ -102,7 +103,7 @@ def save_results(posts):
     out_dir = RAW_BLOGS / "openai"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = now_project().strftime("%Y-%m-%d")
     filepath = out_dir / f"{date_str}.json"
 
     with open(filepath, "w", encoding="utf-8") as f:

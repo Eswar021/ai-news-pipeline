@@ -2,7 +2,7 @@
 Layer 7 — Module 9: Hook Planner (LLM)
 
 Generates 3 hook directions for the video opening.
-Uses AsyncOpenAI with the dev profile (gpt-5-nano by default).
+Uses the shared async LLM runtime with the manifest-backed profile.
 
 Hook types for roundup:
   roundup_speed_hook, tension_hook, contrast_hook, question_hook, stakes_hook
@@ -26,7 +26,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths    import RUNS_DIR
-from config.llm_config import get_profile
+from pipelines.runtime_manifest import get_llm_profile
+from llm.async_llm_runtime import execute_chat_request
 from pipelines.layer_7_content_planning.packet_loader          import load as load_packet
 from pipelines.layer_7_content_planning.section_planner         import plan as plan_sections
 from pipelines.layer_7_content_planning.viewer_promise_refiner  import refine
@@ -76,27 +77,6 @@ Return only valid JSON matching this schema:
   ]
 }"""
 
-
-def _build_create_kwargs(model: str, temperature: float, messages: list) -> dict:
-    kwargs: dict = {
-        "model":           model,
-        "response_format": {"type": "json_object"},
-        "messages":        messages,
-    }
-    if "nano" not in model:
-        kwargs["temperature"] = temperature
-    return kwargs
-
-
-def _make_openai_client():
-    import openai
-    from dotenv import load_dotenv
-    import os
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_A_C_C")
-    return openai.AsyncOpenAI(api_key=api_key)
-
-
 def _build_prompt(layer7_ctx: dict, section_plan: list[dict]) -> str:
     editorial    = layer7_ctx.get("editorial", {})
     episode_theme = editorial.get("episode_theme", "")
@@ -131,15 +111,19 @@ def _build_prompt(layer7_ctx: dict, section_plan: list[dict]) -> str:
     )
 
 
-async def _call_llm(client, model: str, temperature: float, prompt: str) -> dict:
+async def _call_llm(run_id: str | None, prompt: str, packet_type: str) -> dict:
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user",   "content": prompt},
     ]
-    resp = await client.chat.completions.create(
-        **_build_create_kwargs(model, temperature, messages)
+    return await execute_chat_request(
+        module_name="hook_planner",
+        run_id=run_id,
+        messages=messages,
+        request_name=f"hook_{packet_type}",
+        metadata={"packet_type": packet_type},
+        parse_json=True,
     )
-    return json.loads(resp.choices[0].message.content)
 
 
 def _validate_hook_plan(raw: dict) -> dict:
@@ -160,14 +144,10 @@ def _validate_hook_plan(raw: dict) -> dict:
 
 
 def plan(layer7_ctx: dict, section_plan: list[dict]) -> dict:
-    profile     = get_profile("hook_planner")
-    client      = _make_openai_client()
-    model       = profile["model"]
-    temperature = profile["temperature"]
     prompt      = _build_prompt(layer7_ctx, section_plan)
 
     async def _run():
-        return await _call_llm(client, model, temperature, prompt)
+        return await _call_llm(layer7_ctx.get("run_id"), prompt, layer7_ctx["packet_type"])
 
     raw = asyncio.run(_run())
     return _validate_hook_plan(raw)
@@ -185,7 +165,7 @@ if __name__ == "__main__":
     arc      = plan_arc(ctx, strategy)
     sections = plan_sections(ctx, arc)
 
-    print(f"[hook_planner] Calling LLM (profile: {get_profile('hook_planner')['model']})...")
+    print(f"[hook_planner] Calling LLM (profile: {get_llm_profile('hook_planner', run_id=run_id)['model']})...")
     hook_plan = plan(ctx, sections)
 
     rec = hook_plan["recommended_hook"]

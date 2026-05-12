@@ -11,6 +11,7 @@ Dedup key: video_id — skips if already recorded.
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -38,7 +39,7 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
 
     ttp = ctx["title_thumbnail_plan"]
     run_id = ctx["run_id"]
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = now_project_iso()
 
     # Approved title angles (safe ones)
     approved_title_angles = [

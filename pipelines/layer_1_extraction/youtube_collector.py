@@ -28,6 +28,8 @@ import time
 import hashlib
 import argparse
 from datetime import datetime, timezone, timedelta
+from config.time_utils import now_project
+from config.time_utils import now_project_iso
 from urllib.parse import urlparse, parse_qs
 from urllib.request import urlopen, Request
 from urllib.parse import urlencode
@@ -171,7 +173,7 @@ def build_document(video_id: str, video_url: str, title: str, channel_name: str,
         "raw_text": flat_text,              # full flat transcript — used by LLM agents
         "transcript_blocks": transcript_blocks,  # timestamped blocks for citation
         "content_hash": content_hash,
-        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collected_at": now_project_iso(),
     }
 
     return doc
@@ -219,7 +221,7 @@ def search_channel_videos(channel_id: str, max_results: int = 5,
         List of video metadata dicts (not full documents yet — no transcript).
     """
     published_after = (
-        datetime.now(timezone.utc) - timedelta(days=days_back)
+        now_project() - timedelta(days=days_back)
     ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     params = {
@@ -411,4 +413,3 @@ if __name__ == "__main__":
             print(f"\n\nTotal: {len(all_docs)} transcript(s) saved.")
         else:
             print("\nNo transcripts collected across all channels.")
-

@@ -33,6 +33,7 @@ import json
 import re
 import argparse
 from datetime import datetime, timezone, timedelta
+from config.time_utils import now_project
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -95,7 +96,7 @@ def _load_followup_memory(memory_dir: Path) -> list[dict]:
 
 
 def _filter_recent(videos: list[dict]) -> list[dict]:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=_MEMORY_WINDOW_DAYS)
+    cutoff = now_project() - timedelta(days=_MEMORY_WINDOW_DAYS)
     recent = []
     for v in videos:
         timestamps = v.get("timestamps", {})

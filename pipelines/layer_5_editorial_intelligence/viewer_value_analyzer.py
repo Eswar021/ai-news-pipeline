@@ -29,7 +29,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
-from config.llm_config import get_profile
+from pipelines.runtime_manifest import get_llm_profile
+from llm.async_llm_runtime import execute_chat_request
 
 MAX_CONCURRENT   = 10
 MAX_FACTS_IN_PROMPT = 5
@@ -73,20 +74,7 @@ def _facts_to_bullets(safe_facts: list[dict], limit: int) -> str:
         lines.append(f"- {f['claim_text']}")
     return "\n".join(lines) if lines else "(no verified facts available)"
 
-
-def _build_create_kwargs(model: str, temperature: float, messages: list) -> dict:
-    kwargs: dict = {
-        "model":           model,
-        "response_format": {"type": "json_object"},
-        "messages":        messages,
-    }
-    if "nano" not in model:
-        kwargs["temperature"] = temperature
-    return kwargs
-
-
-async def _call_llm(client, model: str, temperature: float,
-                    candidate: dict, semaphore) -> dict:
+async def _call_llm(run_id: str | None, candidate: dict, semaphore) -> dict:
     story_title = candidate["story_title"]
     story_type  = candidate.get("story_type", "unknown")
     topics      = ", ".join(candidate.get("topics", [])) or "general AI"
@@ -106,11 +94,18 @@ async def _call_llm(client, model: str, temperature: float,
     ]
 
     async with semaphore:
-        resp = await client.chat.completions.create(
-            **_build_create_kwargs(model, temperature, messages)
+        data = await execute_chat_request(
+            module_name="viewer_value_analyzer",
+            run_id=run_id,
+            messages=messages,
+            request_name=candidate.get("story_id", "story"),
+            metadata={
+                "story_id": candidate.get("story_id", ""),
+                "story_title": story_title,
+                "story_type": story_type,
+            },
+            parse_json=True,
         )
-        raw = resp.choices[0].message.content
-        data = json.loads(raw)
         return data
 
 
@@ -136,30 +131,19 @@ def _validate_result(raw: dict, story_id: str) -> dict:
         "viewer_value_score":      score,
     }
 
-
-def _make_openai_client():
-    import openai
-    from dotenv import load_dotenv
-    import os
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_A_C_C")
-    return openai.AsyncOpenAI(api_key=api_key)
-
-
-def analyze_all(candidates: list[dict]) -> list[dict]:
+def analyze_all(candidates: list[dict], run_id: str | None = None) -> list[dict]:
     """
     Analyze viewer value for all candidates concurrently.
     Returns list of viewer_value dicts in same order as candidates.
     """
-    profile     = get_profile("viewer_value_analyzer")
-    client      = _make_openai_client()
-    model       = profile["model"]
-    temperature = profile["temperature"]
+    if run_id is None and candidates:
+        run_id = candidates[0].get("run_id")
+
     semaphore   = asyncio.Semaphore(MAX_CONCURRENT)
 
     async def _run():
         tasks = [
-            _call_llm(client, model, temperature, cand, semaphore)
+            _call_llm(run_id, cand, semaphore)
             for cand in candidates
         ]
         raw_results = await asyncio.gather(*tasks)
@@ -198,11 +182,11 @@ if __name__ == "__main__":
         candidates = [candidates[args.story_index]]
 
     print(f"\nViewer Value Analyzer — {run_id}")
-    print(f"  Model  : {get_profile('viewer_value_analyzer')['model']}")
+    print(f"  Model  : {get_llm_profile('viewer_value_analyzer', run_id=run_id)['model']}")
     print(f"  Stories: {len(candidates)}")
     print("  Analyzing...\n")
 
-    vv_results = analyze_all(candidates)
+    vv_results = analyze_all(candidates, run_id=run_id)
     for cand, vv in zip(candidates, vv_results):
         print(f"  [{vv['viewer_value_score']:3d}] {cand['story_title'][:50]:50s}")
         print(f"         Q: {vv['primary_viewer_question'][:80]}")

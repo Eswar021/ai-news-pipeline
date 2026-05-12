@@ -40,55 +40,83 @@ this run.
 
 ---
 
-### Known gap: Time windows computed but not applied in Layer 1
+### Decision: Time windows are now enforced from the manifest in Layer 1
 
 **Design doc said:** `time_window_resolver.py` should produce collection windows that
 collectors use to filter content by date (48h window for news, 7 days for papers).
 
 **What we did:** `time_window_resolver.py` computes these windows and writes them to
-the manifest (`collection_window.start`, `collection_window.end`,
-`source_specific_windows.research_papers`). But Layer 1 collectors don't use them —
-arxiv_collector fetches the "latest" papers, hackernews fetches "top" stories,
-neither filters by the manifest's time window.
+the manifest, and the active Layer 1 orchestration now applies them. Collectors
+receive the resolved run window from the manifest and drop out-of-window documents
+before `raw_documents.jsonl` is written. Sources that support fetch-side narrowing
+also receive `days_back` where it is useful.
 
-**Why this is acceptable now:** The primary value of the time window is in Layer 3
-(story ranking by recency) and Layer 5 (editorial freshness checks). For our first
-working version, "latest N items" from each source is close enough. Time window
-filtering will be added to collectors when Layer 3 needs it.
+**Why:** Collection policy is run-scoped, not repo-global. Once Layer 0 became the
+authoritative runtime control plane, Layer 1 needed to stop behaving like "latest N"
+best-effort collection and start behaving like "collect within the resolved run window."
 
-**What needs to happen later:** Each collector should accept `days_back` from the
-manifest and filter accordingly. The time window fields in the manifest are already
-correct — just not consumed yet.
+**Remaining gap:** Some sources still rely on post-fetch filtering rather than native
+server-side date constraints. That is acceptable for correctness, but there is still
+room to improve efficiency.
 
 ---
 
-### Known gap: Memory policy flags are decorative until Layer 5/9/10 exist
+### Known gap: Memory policy is now real, but still only partially consumed
 
 **Design doc said:** `memory_context_planner.py` should produce policy flags
 (`load_published_video_memory`, `load_claim_ledger` etc.) that Layer 5 and Layer 9
 use to decide what memory to load.
 
-**What we did:** The flags are computed and written to the manifest. No layer
-reads them yet because Layers 5, 9, and 10 are not built.
+**What we did:** The flags are computed and written to the manifest. Layer 5 and the
+handoff/export path now consume the published-memory distinction in practice, and
+Layer 10 plus the publish-state workflow now exist. But the broader design-level
+memory policy is still not consumed uniformly across all intended downstream layers.
 
-**Why this is acceptable now:** The manifest fields are correct. When Layer 5 is
-built, it will read `manifest.memory_policy` to decide whether to load similarity
-memory. Nothing is broken — the flags are just unused.
+**Why this is acceptable now:** The important semantic split is now in place:
+published memory influences novelty/repetition, while prepared-run records can remain
+for audit. The remaining gap is completeness of policy consumption, not correctness
+of the current behavior.
 
 ---
 
-### Known gap: output_contract and document count thresholds are never validated
+### Decision: output_contract is now enforced at run time
 
 **Design doc said:** `output_contract_builder.py` should declare expected output
 paths for all layers, and `source_scope_planner.py` should set
 `minimum_expected_documents: 30`.
 
-**What we did:** Both are computed and written to the manifest, but no validation
-gate checks these thresholds or validates the output contract.
+**What we did:** The output contract is computed in Layer 0 and now enforced by the
+pipeline runner. A layer is no longer considered complete just because it exited
+without raising an exception; its core artifacts and validation report must exist and
+pass. The contract paths were also corrected to the active `data/runs/{run_id}/layer_X/`
+layout.
 
-**Why this is acceptable now:** These are planning aids, not enforcement mechanisms.
-As layers are built, their validation gates will check actual outputs rather than
-comparing against a pre-declared contract.
+**Why:** Partial runs were producing misleading downstream states, especially in
+handoff/export flows. A small but strict completeness gate gives us predictable run
+semantics without adding heavy schema validation everywhere.
+
+**Remaining gap:** `minimum_expected_documents` still behaves more like advisory
+planning than a hard cross-source threshold. That is intentional for now because
+source availability varies too much to make one global count a reliable blocker.
+
+---
+
+### Decision: Active async LLM calls now use one shared runtime + per-run logs
+
+**Design doc said:** The system should be centrally configurable and operationally
+inspectable, but it did not prescribe one exact async runtime implementation.
+
+**What we did:** Added `llm/async_llm_runtime.py` and routed the active async LLM
+modules in Layers 4, 5, 7, 8, and 9 through it. The runtime now owns:
+
+- manifest-backed profile resolution
+- AsyncOpenAI client creation
+- model/temperature request shaping
+- structured per-call request/response logs in `output/llm_logs/{run_id}/`
+
+**Why:** The previous state had the right model profiles in config, but every active
+module still instantiated its own client and silently bypassed logging. Centralizing
+the runtime keeps model selection, execution behavior, and observability tied together.
 
 ---
 
@@ -151,20 +179,24 @@ when RSS text is under 500 chars. Updated `anthropic_blog.py` to use it instead 
 
 ---
 
-### Decision: YouTube orchestration is not in run_layer_1.py
+### Decision: YouTube orchestration now runs in `run_layer_1.py`
 
 **Design doc said:** `youtube_podcast_transcripts` is a source group that should be
 collected in each run.
 
-**What we did:** `youtube_podcast_collector.py` is fully built. `run_layer_1.py`
-mentions the group but skips actual collection with a comment: "requires channel IDs."
+**What we did:** `run_layer_1.py` now dispatches the YouTube collector when the
+source group is enabled and YouTube is not explicitly skipped. The active channel
+subset is snapshotted into the run manifest and the collector uses that manifest
+snapshot rather than reading live config directly.
 
-**Why:** The YouTube Data API requires `YOUTUBE_API_KEY` and explicit channel IDs.
-The run manifest doesn't carry channel IDs (they live in `config/channels.yaml`).
-YouTube collection is meant to be run directly via
-`youtube_podcast_collector.py --channel UCxxxxx`, not auto-dispatched by the
-orchestrator. This is a known limitation — the orchestrator will dispatch YouTube
-once channels.yaml is wired into the manifest.
+**Why:** YouTube is part of the same evidence-collection layer as the other source
+groups, so leaving it outside the main orchestrator would keep Layer 1 incomplete.
+Manifest snapshotting also keeps the run reproducible even if the channel registry
+changes later.
+
+**Remaining gap:** Transcript availability is still source-dependent, and the current
+channel subset is driven by the resolved registry snapshot rather than a richer
+run-specific editorial selector.
 
 ---
 
@@ -590,7 +622,7 @@ Elapsed             : ~13 min (gpt-5-nano, 97 async LLM calls)
 | Layer 6 | Complete | 11 flat modules, roundup packet built, quality 92/100, ready_for_layer_7 |
 | Layer 7 | Complete | 18 flat modules, 2 LLM calls, 9/9 checks pass, ready_for_layer_8 |
 | Layer 8 | Complete | 12 flat modules, 1 LLM module (11 async calls), 7/7 checks pass, ready_for_layer_9 |
-| Layer 9 | Complete | 18 flat modules, 1 LLM module (9 async section checks), 15 output files, approved_with_warnings, ready_for_layer_10 |
+| Layer 9 | Complete | 19 flat modules, published-memory repetition gate added, async runtime logging added, ready_for_layer_10 |
 | Layer 10 | Complete | 18 flat modules, 13 persistent memory files, 108 total JSONL records, ready_for_future_runs |
 
 ---
@@ -985,25 +1017,32 @@ Elapsed         : ~8.5s (11 async LLM calls + 9 rule-based steps)
 
 ## Layer 9 — Verification Firewall
 
-**Actual output (run_2026_05_10_48h_auto):** 18 flat modules, 15 output files, 48 sentences verified (35 covered, 3 analysis-only, 10 no-support-needed), 34 claims traced to source spans, 9 async LLM section checks, 0 critical/high issues, 3 medium issues, 2 auto-patches applied, final status `approved_with_warnings`, `ready_for_layer_10 = true`.
+**Actual output (run_2026_05_10_48h_auto):** Originally 18 flat modules and 15 output files. Current implementation is now 19 flat modules with `repetition_safety_checker.py` added and an additional `repetition_safety_report.json` output, while preserving the same overall verification role.
 
-### Decision: 18 flat modules instead of design doc's sub-packages (loaders/, validation/, verification/, metadata/, scoring/, correction/, output/)
+### Decision: 19 flat modules instead of design doc's sub-packages (loaders/, validation/, verification/, metadata/, scoring/, correction/, output/)
 
 **Design doc said:** 20+ modules in 7 sub-packages.
 
-**What we did:** 18 flat modules in `pipelines/layer_9_verification_firewall/`. Flat structure consistent with all prior layers.
+**What we did:** 19 flat modules in `pipelines/layer_9_verification_firewall/`. Flat structure consistent with all prior layers.
 
 **Why:** Same rationale as every prior layer. 16 modules in sub-packages would add `from pipelines.layer_9_verification_firewall.verification.overclaim_detector import...` style paths with no organizational benefit. All modules will remain individually testable.
 
 ---
 
-### Decision: Skip `repetition_safety_checker.py` (Module 9.13B)
+### Decision: `repetition_safety_checker.py` is now a published-memory post-script gate
 
 **Design doc said:** Build a repetition checker that compares current title/hook/thumbnail against memory files (`memory/video_memory.jsonl`, `memory/title_hook_memory.jsonl`) to detect recycled content.
 
-**What we did:** Not built for this version.
+**What we did:** Built it as a Layer 9 gate against published-memory state. It now:
 
-**Why:** The memory system (Layer 10) does not exist yet. There are no memory files to compare against. The module would need to read `memory/video_memory.jsonl` which is empty. Building it now means building a module that silently passes everything because its lookup table is empty — which gives false confidence. This module is enabled the moment Layer 10 writes its first memory file.
+- checks selected story IDs against previously published story coverage
+- checks the current title direction against previously published titles and prior blocked title angles
+- reports hook-type fatigue as a softer warning
+- writes `repetition_safety_report.json`
+
+**Why:** Layer 5 novelty is still the first defense, but it evaluates candidate
+selection before the final title/metadata shape exists. The Layer 9 version is where
+we can evaluate the actual post-planning framing that would reach viewers.
 
 ---
 
@@ -1068,7 +1107,7 @@ Elapsed         : ~8.5s (11 async LLM calls + 9 rule-based steps)
 | `risk_scorer.py` | Rule | Aggregate all issues → severity counts → approved / approved_with_warnings / requires_revision / blocked |
 | `correction_patch_generator.py` | Rule | Structured patch per issue: original + replacement + auto_patch_safe flag |
 | `verified_script_builder.py` | Rule | Apply safe patches to script.md → verified_script.md (skips instruction-style replacements) |
-| `layer9_writer.py` | Rule | Writes all 15 output files + manifest |
+| `layer9_writer.py` | Rule | Writes all Layer 9 output files + manifest |
 | `layer9_validation_gate.py` | Rule | Hard/soft gate checks on output completeness; writes layer9_validation_report.json |
 | `run_layer_9.py` | — | 17-step orchestrator; auto-discovers latest run |
 
@@ -1076,7 +1115,6 @@ Elapsed         : ~8.5s (11 async LLM calls + 9 rule-based steps)
 
 | Design doc module | Reason skipped |
 |---|---|
-| `repetition_safety_checker.py` (9.13B) | Layer 10 now exists — this module can be enabled on next Layer 9 run |
 | 7 YAML config files | Thresholds inline as constants (consistent with L4–L8 pattern) |
 | All sub-packages (loaders/, validation/, etc.) | Flat structure consistent with all layers |
 | `final_publish_package_builder.py` as separate module | Folded into `layer9_writer.py` — just a dict assembly step |
@@ -1086,6 +1124,11 @@ Elapsed         : ~8.5s (11 async LLM calls + 9 rule-based steps)
 ## Layer 10 — Memory + Learning
 
 **Actual output (run_2026_05_10_48h_auto):** 18 flat modules, 13 persistent memory files in `memory/` at project root, 2 per-run files in `data/runs/{run_id}/layer_10/`. First run: 1 video record, 8 story coverage records, 34 claim ledger records, 12 entity/topic records, 8 source records, 1 editorial pattern record, 9 follow-up records, 12 evidence gap watchlist records, 7 rejected claim patterns, 16 learning signals. `ready_for_future_runs = true`.
+
+**Current system note (2026-05-13):** Layer 10 still writes the prepared-run memory
+artifacts above, but the overall memory system now also includes a post-run publishing
+workflow for OAuth auth, owner-channel sync, publish-state updates, analytics ingest,
+and memory rebuild after publication changes.
 
 ### Decision: 18 flat modules instead of 18 modules in 7 sub-packages
 
@@ -1107,13 +1150,53 @@ Elapsed         : ~8.5s (11 async LLM calls + 9 rule-based steps)
 
 ---
 
-### Decision: Performance Feedback Ingestor skipped
+### Decision: Performance feedback now lives in a post-run publishing workflow
 
 **Design doc said:** Module 10.14 — ingest YouTube performance data (views, CTR, retention)
 
-**What we did:** Skipped. `performance_memory.jsonl` exists but is empty.
+**What we did:** Implemented it outside the core `run_layer_10.py` path. The project
+now has:
 
-**Why:** No videos have been published yet. This module requires a YouTube video ID and real analytics. It will be added when the first video goes live.
+- `publishing_memory.py auth` for OAuth token creation
+- `publishing_memory.py sync-channel` for authenticated owner-channel sync
+- `publishing_memory.py mark-published` for attaching a real YouTube video ID and
+  publish timestamp to a prepared run
+- `performance_memory.jsonl` ingestion from YouTube Analytics during publish-state
+  updates and channel sync
+- automatic rebuild of `learning_signals.jsonl`, `memory_index.json`, and
+  `memory_snapshot.json` after publish-state changes
+
+**Why:** The design requirement is real, but it does not belong entirely inside the
+Layer 10 run itself. Real performance data only exists after publication. Treating it
+as a post-run workflow keeps the pipeline honest: Layer 10 stores prepared memory,
+and publication sync enriches that memory only when platform data actually exists.
+
+**Current state:** OAuth authorization and the first owner-channel sync are complete.
+The authenticated channel resolves to `UCp4tfcoFDQIFu7Cnodrqq_w`, and the channel
+currently has zero published videos, so `performance_memory.jsonl` is correctly empty.
+
+---
+
+### Decision: Fresh-start memory cleanup keeps platform state but resets exploratory content memory
+
+**Design doc said:** Durable memory should represent reusable long-term knowledge for
+future runs.
+
+**What we did:** After adding the publish-state workflow and before the first real
+production run, we reset the exploratory content memory files back to an empty
+baseline while preserving the authenticated publishing-channel state files:
+
+- kept: `publishing_channel_state.json`, `published_video_inventory.jsonl`
+- reset: `video_memory.jsonl`, `claim_ledger.jsonl`, `story_coverage_memory.jsonl`,
+  `entity_topic_memory.jsonl`, `source_memory.jsonl`, `editorial_pattern_memory.jsonl`,
+  `followups.jsonl`, `evidence_gap_watchlist.jsonl`, `rejected_claim_patterns.jsonl`,
+  `performance_memory.jsonl`, `learning_signals.jsonl`
+- rebuilt: `memory_index.json`, `memory_snapshot.json`
+
+**Why:** The channel is starting fresh with zero published videos. Keeping exploratory
+draft-run memory would make novelty, repetition, and future learning look more mature
+than the real channel history actually is. Preserving platform-state files keeps the
+OAuth/authenticated channel setup intact while clearing misleading editorial memory.
 
 ---
 

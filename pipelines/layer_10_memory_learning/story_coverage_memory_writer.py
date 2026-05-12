@@ -11,6 +11,7 @@ For deep_dive, coverage_type = "deep_dive".
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -54,7 +55,7 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
     cov_type  = _coverage_type(mc["selected_format"])
     written   = []
     skipped   = []
-    now       = datetime.now(timezone.utc).isoformat()
+    now       = now_project_iso()
 
     with open(path, "a", encoding="utf-8") as f:
         for story_id in mc["story_ids"]:

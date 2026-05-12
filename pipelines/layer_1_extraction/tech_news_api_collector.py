@@ -14,6 +14,7 @@ import sys
 import hashlib
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -22,6 +23,7 @@ from config.paths import RUNS_DIR
 from pipelines.layer_1_extraction.raw_document_writer import write_raw_documents, read_raw_documents
 from pipelines.layer_1_extraction.raw_payload_writer import save_payload
 from pipelines.layer_1_extraction.extraction_audit_logger import log_event
+from pipelines.layer_1_extraction.window_filter import filter_raw_documents_by_window
 
 
 _COLLECTOR_NAME = "tech_news_api_collector"
@@ -64,14 +66,15 @@ def _to_raw_document(article: dict, run_id: str, source_id: str, source_name: st
         "collection": {
             "collector_name": _COLLECTOR_NAME,
             "collection_method": article.get("module", "news_api").replace("_collector", "_api"),
-            "collected_at": datetime.now(timezone.utc).isoformat(),
+            "collected_at": now_project_iso(),
             "extraction_status": "success",
         },
     }
 
 
 def _collect_from_source(run_id, fetch_fn, source_id, source_name, query, max_results,
-                          output_path, layer1_dir, extra_kwargs=None):
+                          output_path, layer1_dir, extra_kwargs=None,
+                          start_at=None, end_at=None):
     """Generic helper: call fetch_fn, map results, write docs."""
     try:
         kwargs = {"query": query, "max_results": max_results}
@@ -89,16 +92,43 @@ def _collect_from_source(run_id, fetch_fn, source_id, source_name, query, max_re
         return []
 
     docs = [_to_raw_document(a, run_id, source_id, source_name) for a in articles]
-    write_raw_documents(docs, output_path)
+    docs, filter_stats = filter_raw_documents_by_window(
+        docs, start_at=start_at, end_at=end_at
+    )
 
     import json
     save_payload(run_id, f"batch_{source_id}", _SOURCE_GROUP, source_id,
                  "json", json.dumps(articles, ensure_ascii=False), layer1_dir)
 
+    if filter_stats["outside_window_count"] > 0:
+        log_event(
+            run_id, source_id, _COLLECTOR_NAME,
+            "success_note", "info",
+            f"Dropped {filter_stats['outside_window_count']} article(s) outside the manifest window from {source_name}.",
+            extra=filter_stats,
+        )
+    if filter_stats["undated_or_unparseable_count"] > 0:
+        log_event(
+            run_id, source_id, _COLLECTOR_NAME,
+            "date_missing", "warning",
+            f"Kept {filter_stats['undated_or_unparseable_count']} {source_name} article(s) with missing or unparseable publish dates.",
+            extra=filter_stats,
+        )
+    if not docs:
+        log_event(
+            run_id, source_id, _COLLECTOR_NAME,
+            "empty_result", "warning",
+            f"All fetched articles from {source_name} were outside the manifest window.",
+            extra=filter_stats,
+        )
+        return []
+
+    write_raw_documents(docs, output_path)
+
     log_event(run_id, source_id, _COLLECTOR_NAME,
               "success_note", "info",
               f"Fetched {len(docs)} articles from {source_name}",
-              extra={"doc_count": len(docs)})
+              extra={"doc_count": len(docs), **filter_stats})
 
     return docs
 
@@ -110,6 +140,9 @@ def collect(
     sources: list = None,
     output_path: Path = None,
     layer1_dir: Path = None,
+    days_back: int = None,
+    start_at: str = None,
+    end_at: str = None,
 ) -> list:
     """
     Collect news from all enabled tech news APIs and return RawExtractedDocuments.
@@ -139,6 +172,8 @@ def collect(
         docs = _collect_from_source(
             run_id, fetch_newsapi, "newsapi_ai", "NewsAPI.org",
             query, max_per_source, output_path, layer1_dir,
+            extra_kwargs={"days_back": days_back} if days_back else None,
+            start_at=start_at, end_at=end_at,
         )
         all_docs.extend(docs)
 
@@ -147,6 +182,7 @@ def collect(
         docs = _collect_from_source(
             run_id, fetch_newsdata, "newsdata_ai", "Newsdata.io",
             query, max_per_source, output_path, layer1_dir,
+            start_at=start_at, end_at=end_at,
         )
         all_docs.extend(docs)
 
@@ -155,6 +191,7 @@ def collect(
         docs = _collect_from_source(
             run_id, fetch_mediastack, "mediastack_ai", "Mediastack",
             query, max_per_source, output_path, layer1_dir,
+            start_at=start_at, end_at=end_at,
         )
         all_docs.extend(docs)
 

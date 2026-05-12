@@ -12,6 +12,7 @@ Run standalone:
 import sys
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -61,7 +62,7 @@ if __name__ == "__main__":
     if output_path.exists():
         output_path.unlink()
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_project_iso()
 
     sample_doc = {
         "raw_document_id": "rawdoc_openai_news_test001",

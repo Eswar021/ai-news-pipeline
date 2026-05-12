@@ -16,6 +16,7 @@ import json
 import hashlib
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -90,7 +91,7 @@ def build(raw_doc: dict, canonical_document_id: str,
             "original_url":    original_url,
             "canonical_url":   canonical_url,
             "collected_at":    collected_at,
-            "canonicalized_at": datetime.now(timezone.utc).isoformat(),
+            "canonicalized_at": now_project_iso(),
         },
         "storage_trace": {
             "raw_payload_ref":  raw_payload_ref,

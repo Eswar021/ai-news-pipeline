@@ -21,11 +21,11 @@ Usage:
 import sys
 import json
 from collections import Counter
-from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
+from config.time_utils import now_project_iso
 
 
 def _write_json(path: Path, data) -> None:
@@ -57,7 +57,7 @@ def write(
     Returns the layer4_manifest dict.
     """
     layer4_dir.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_project_iso()
 
     # ── Flatten claims ────────────────────────────────────────────────────────
     all_atomic:   list[dict] = []
@@ -138,8 +138,8 @@ def write(
             "claim_id":       c["claim_id"],
             "story_id":       c["story_id"],
             "claim_text":     c["claim_text"],
-            "confidence":     c["confidence_label"],
-            "confidence_score": c["confidence_score"],
+            "confidence":     c.get("confidence", ""),
+            "confidence_score": c.get("confidence_score", 0.0),
             "uncertainty_reason": c.get("verification_status", ""),
             "recommended_qualifier": c.get("recommended_qualifier", ""),
         }

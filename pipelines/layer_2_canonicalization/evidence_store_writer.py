@@ -20,6 +20,7 @@ import json
 import argparse
 from collections import Counter
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -107,7 +108,7 @@ def write(
         "source_spans_created":     len(source_spans),
         "quality_summary":          dict(completeness_counts),
         "warnings":                 quality_warnings,
-        "generated_at":             datetime.now(timezone.utc).isoformat(),
+        "generated_at":             now_project_iso(),
     }
     _write_json(layer2_dir / "content_quality_report.json", quality_report)
 
@@ -128,7 +129,7 @@ def write(
             "research_sources_can_support_technical_claims": True,
             "partial_snippets_can_support_claims": False,
         },
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": now_project_iso(),
     }
     _write_json(layer2_dir / "source_trust_report.json", trust_report)
 
@@ -138,7 +139,7 @@ def write(
     manifest = {
         "run_id":  run_id,
         "layer":   "layer_2_canonicalization_evidence_store",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": now_project_iso(),
 
         "inputs": {
             "raw_documents": str(layer2_dir.parent / "layer_1" / "raw_documents.jsonl"),

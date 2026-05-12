@@ -26,31 +26,11 @@ from pathlib import Path
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from config.llm_config import get_profile
+from llm.async_llm_runtime import execute_chat_request
 
 _SKIP_SECTIONS  = {"intro_hook", "cta"}
 _MAX_SPAN_CHARS = 1200  # truncate each span to keep prompt size reasonable
 _MAX_SPANS      = 4     # max source spans per section
-
-
-def _make_openai_client():
-    import openai
-    from dotenv import load_dotenv
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_A_C_C")
-    return openai.AsyncOpenAI(api_key=api_key)
-
-
-def _llm_settings() -> tuple[str, float]:
-    profile = get_profile("sentence_support_verifier")
-    provider = profile.get("provider", "openai")
-    if provider != "openai":
-        raise ValueError(
-            "sentence_support_verifier currently supports only provider='openai' "
-            f"via AsyncOpenAI, got provider='{provider}'."
-        )
-    return profile["model"], profile["temperature"]
-
 
 def _get_section_spans(section_key: str, classified: list, ctx: dict) -> list:
     """Collect unique source span texts for all claim_ids in this section."""
@@ -140,13 +120,11 @@ Return ONLY a JSON object with this exact format:
 
 
 async def _verify_section(
-    client,
+    run_id: str | None,
     section_key: str,
     sentences: list,
     spans: list,
     ctx: dict,
-    model: str,
-    temperature: float,
 ) -> list:
     if not sentences:
         return []
@@ -154,16 +132,22 @@ async def _verify_section(
     prompt = _build_prompt(section_key, sentences, spans, ctx)
 
     try:
-        resp = await client.chat.completions.create(
-            model=model,
-            temperature=temperature,
-            response_format={"type": "json_object"},
+        data = await execute_chat_request(
+            module_name="sentence_support_verifier",
+            run_id=run_id,
             messages=[
                 {"role": "system", "content": "You are a strict but fair factual verification analyst. Return only JSON."},
                 {"role": "user",   "content": prompt},
             ],
+            request_name=section_key,
+            metadata={
+                "section_key": section_key,
+                "sentence_count": len(sentences),
+                "source_span_count": len(spans),
+                "sentence_ids": [s.get("sentence_id", "") for s in sentences],
+            },
+            parse_json=True,
         )
-        data = json.loads(resp.choices[0].message.content)
         verifications = data.get("sentence_verifications", [])
         # attach section_key to each
         for v in verifications:
@@ -185,9 +169,6 @@ async def _verify_section(
 
 
 async def _verify_all(classified: list, ctx: dict) -> list:
-    client = _make_openai_client()
-    model, temperature = _llm_settings()
-
     # Group sentences by section
     sections = {}
     for sent in classified:
@@ -202,7 +183,7 @@ async def _verify_all(classified: list, ctx: dict) -> list:
     section_keys = []
     for sk, sents in sections.items():
         spans = _get_section_spans(sk, classified, ctx)
-        tasks.append(_verify_section(client, sk, sents, spans, ctx, model, temperature))
+        tasks.append(_verify_section(ctx.get("run_id"), sk, sents, spans, ctx))
         section_keys.append(sk)
 
     results_by_section = await asyncio.gather(*tasks)

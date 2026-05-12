@@ -22,6 +22,7 @@ import sys
 import json
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -129,7 +130,7 @@ def write_report(run_id: str, report: dict, layer3_dir: Path = None) -> Path:
         layer3_dir = RUNS_DIR / run_id / "layer_3"
     path = layer3_dir / "layer3_validation_report.json"
     report["run_id"]     = run_id
-    report["checked_at"] = datetime.now(timezone.utc).isoformat()
+    report["checked_at"] = now_project_iso()
     path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     return path
 

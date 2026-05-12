@@ -14,6 +14,7 @@ import sys
 import hashlib
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -23,6 +24,7 @@ from pipelines.layer_1_extraction.arxiv_collector import fetch_arxiv_papers
 from pipelines.layer_1_extraction.raw_document_writer import write_raw_documents, read_raw_documents
 from pipelines.layer_1_extraction.raw_payload_writer import save_payload
 from pipelines.layer_1_extraction.extraction_audit_logger import log_event
+from pipelines.layer_1_extraction.window_filter import filter_raw_documents_by_window
 
 
 _COLLECTOR_NAME = "research_paper_collector"
@@ -68,7 +70,7 @@ def _to_raw_document(paper: dict, run_id: str, source_id: str, source_name: str)
         "collection": {
             "collector_name": _COLLECTOR_NAME,
             "collection_method": "arxiv_api",
-            "collected_at": datetime.now(timezone.utc).isoformat(),
+            "collected_at": now_project_iso(),
             "extraction_status": "success",
         },
     }
@@ -80,6 +82,8 @@ def collect(
     max_per_category: int = 10,
     output_path: Path = None,
     layer1_dir: Path = None,
+    start_at: str = None,
+    end_at: str = None,
 ) -> list:
     """
     Fetch papers from arXiv for each category and return as RawExtractedDocuments.
@@ -120,17 +124,44 @@ def collect(
             continue
 
         docs = [_to_raw_document(p, run_id, source_id, source_name) for p in papers]
-        write_raw_documents(docs, output_path)
+        docs, filter_stats = filter_raw_documents_by_window(
+            docs, start_at=start_at, end_at=end_at
+        )
 
         # Save one combined payload per category (the raw API response is reconstructed as JSON)
         import json
         save_payload(run_id, f"batch_{source_id}", _SOURCE_GROUP, source_id,
                      "json", json.dumps(papers, ensure_ascii=False), layer1_dir)
 
+        if filter_stats["outside_window_count"] > 0:
+            log_event(
+                run_id, source_id, _COLLECTOR_NAME,
+                "success_note", "info",
+                f"Dropped {filter_stats['outside_window_count']} paper(s) outside the manifest window for {cat}.",
+                extra=filter_stats,
+            )
+        if filter_stats["undated_or_unparseable_count"] > 0:
+            log_event(
+                run_id, source_id, _COLLECTOR_NAME,
+                "date_missing", "warning",
+                f"Kept {filter_stats['undated_or_unparseable_count']} paper(s) with missing or unparseable publish dates for {cat}.",
+                extra=filter_stats,
+            )
+        if not docs:
+            log_event(
+                run_id, source_id, _COLLECTOR_NAME,
+                "empty_result", "warning",
+                f"All fetched papers for {cat} were outside the manifest window.",
+                extra=filter_stats,
+            )
+            continue
+
+        write_raw_documents(docs, output_path)
+
         log_event(run_id, source_id, _COLLECTOR_NAME,
                   "success_note", "info",
                   f"Fetched {len(docs)} papers from {cat}",
-                  extra={"doc_count": len(docs), "category": cat})
+                  extra={"doc_count": len(docs), "category": cat, **filter_stats})
 
         all_docs.extend(docs)
 

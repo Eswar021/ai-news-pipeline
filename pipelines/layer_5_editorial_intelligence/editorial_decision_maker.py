@@ -34,6 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
+from pipelines.runtime_manifest import get_format_requirements, load_manifest
 
 _DEEP_DIVE_STRONG_THRESHOLD = 80
 _ROUNDUP_MIN_STORIES = 5
@@ -282,9 +283,8 @@ if __name__ == "__main__":
     routing = route_all(candidates, ffs, safety, novelty)
     opp     = opp_all(candidates, safety, af, vv, novelty)
 
-    import yaml
-    with open("config/format_config.yaml") as f:
-        fmt_cfg = yaml.safe_load(f)["formats"]
+    manifest = load_manifest(run_id=run_id)
+    fmt_cfg = get_format_requirements(manifest)
 
     ed = decide(candidates, routing, opp, fmt_cfg)
     print(f"\nEditorial Decision Maker — {run_id}")

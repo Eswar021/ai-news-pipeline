@@ -10,8 +10,9 @@ Output files:
   overclaim_report.json
   cautious_language_verification.json
   rejected_claim_leakage_report.json
-  contradiction_handling_report.json
-  metadata_safety_report.json
+      contradiction_handling_report.json
+      repetition_safety_report.json
+      metadata_safety_report.json
   source_attribution_report.json
   correction_patch.json
   verified_script.md
@@ -25,6 +26,7 @@ Key function:
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -55,6 +57,7 @@ def write(
     cautious_result:     dict,
     leakage_result:      dict,
     contradiction_result: dict,
+    repetition_result:   dict,
     metadata_result:     dict,
     attribution_result:  dict,
     risk_result:         dict,
@@ -63,7 +66,7 @@ def write(
     structure_result:    dict,
 ) -> dict:
     layer9_dir.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_project_iso()
 
     gs  = ctx["generated_script"]
     yt  = ctx["youtube_metadata"]
@@ -88,6 +91,7 @@ def write(
             "medium_issue_count":        risk_result["medium_count"],
             "overclaim_count":           overclaim_result["overclaim_count"],
             "leaks_found":               leakage_result["leak_count"],
+            "repetition_issue_count":    repetition_result.get("issue_count", 0),
         },
         "checks": {
             "script_structure":        structure_result.get("status", "passed"),
@@ -98,6 +102,7 @@ def write(
             "overclaim_detector":      "passed" if overclaim_result["passed"] else "failed",
             "cautious_language":       "passed" if cautious_result["passed"] else "failed",
             "rejected_claim_leakage":  "passed" if leakage_result["passed"] else "failed",
+            "repetition_safety":       repetition_result.get("status", "passed"),
             "metadata_safety":         metadata_result.get("status", "passed"),
             "source_attribution":      "passed" if attribution_result["passed"] else "failed",
         },
@@ -169,6 +174,13 @@ def write(
         "run_id":       run_id,
         "generated_at": now,
         **contradiction_result,
+    })
+
+    # ── repetition_safety_report.json ─────────────────────────────────────────
+    _write_json(layer9_dir / "repetition_safety_report.json", {
+        "run_id":       run_id,
+        "generated_at": now,
+        **repetition_result,
     })
 
     # ── metadata_safety_report.json ───────────────────────────────────────────
@@ -277,6 +289,7 @@ def write(
             "cautious_language_verification":  str(layer9_dir / "cautious_language_verification.json"),
             "rejected_claim_leakage_report":   str(layer9_dir / "rejected_claim_leakage_report.json"),
             "contradiction_handling_report":   str(layer9_dir / "contradiction_handling_report.json"),
+            "repetition_safety_report":        str(layer9_dir / "repetition_safety_report.json"),
             "metadata_safety_report":          str(layer9_dir / "metadata_safety_report.json"),
             "source_attribution_report":       str(layer9_dir / "source_attribution_report.json"),
             "correction_patch":                str(layer9_dir / "correction_patch.json"),
@@ -294,6 +307,7 @@ def write(
             "high_issue_count":          risk_result["high_count"],
             "medium_issue_count":        risk_result["medium_count"],
             "overclaim_count":           overclaim_result["overclaim_count"],
+            "repetition_issue_count":    repetition_result.get("issue_count", 0),
             "patches_applied":           verified_script.get("patches_applied_count", 0),
         },
         "handoff": {

@@ -9,6 +9,7 @@ Dedup key: story_id + gap_type + run_id.
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -67,7 +68,7 @@ def write(mc: dict, ctx: dict, memory_dir: Path) -> dict:
     run_id        = ctx["run_id"]
     video_id      = mc["video_id"]
     gaps          = ctx["evidence_gaps"]
-    now           = datetime.now(timezone.utc).isoformat()
+    now           = now_project_iso()
 
     written = []
     skipped = []

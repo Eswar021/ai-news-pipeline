@@ -38,6 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR, MEMORY_DIR
+from config.time_utils import now_project
 
 from pipelines.layer_10_memory_learning.context_loader import load
 from pipelines.layer_10_memory_learning.eligibility_gate import gate
@@ -59,7 +60,7 @@ from pipelines.layer_10_memory_learning.layer10_validation_gate import validate,
 
 
 def run_layer_10(run_id: str) -> dict:
-    started_at = datetime.now(timezone.utc)
+    started_at = now_project()
 
     base        = RUNS_DIR / run_id
     layer9_dir  = base / "layer_9"

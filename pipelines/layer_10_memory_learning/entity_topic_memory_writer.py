@@ -12,6 +12,7 @@ how many videos have covered this entity/topic (computed from existing memory).
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -50,7 +51,7 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
     existing = _load_existing(path)
     run_id   = ctx["run_id"]
     video_id = mc["video_id"]
-    now      = datetime.now(timezone.utc).isoformat()
+    now      = now_project_iso()
 
     # Dedup: skip entity/topic already written for this run_id
     already_written = {r["entity_or_topic"] for r in existing if r.get("run_id") == run_id}

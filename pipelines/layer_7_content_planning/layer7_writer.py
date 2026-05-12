@@ -27,6 +27,7 @@ Key function:
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -54,7 +55,7 @@ def write(
     script_writer_brief:  dict,
 ) -> dict:
     layer7_dir.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_project_iso()
 
     packet_type     = layer7_ctx["packet_type"]
     total_dur       = pacing_plan["target_duration_seconds"]

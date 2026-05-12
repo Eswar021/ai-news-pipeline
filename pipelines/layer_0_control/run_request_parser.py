@@ -4,8 +4,9 @@ Layer: 0 — Channel Strategy + Run Control
 Purpose: Normalize any trigger (manual, scheduled, API) into a clean RunRequest dict with a stable run_id.
 """
 
-from datetime import datetime, timezone
 from typing import Optional
+
+from config.time_utils import now_project, parse_to_project_timezone
 
 VALID_FORMATS = {"auto", "roundup", "deep_dive", "evergreen", "comparison", "follow_up"}
 VALID_DEPTHS = {"light", "standard", "deep"}
@@ -36,15 +37,11 @@ def parse_run_request(
 
     # Normalize timestamp
     if requested_at is None:
-        dt = datetime.now(timezone.utc)
+        dt = now_project()
         requested_at = dt.isoformat()
     else:
-        try:
-            dt = datetime.fromisoformat(requested_at.replace("Z", "+00:00"))
-            requested_at = dt.isoformat()
-        except ValueError:
-            dt = datetime.now(timezone.utc)
-            requested_at = dt.isoformat()
+        dt = parse_to_project_timezone(requested_at)
+        requested_at = dt.isoformat()
 
     if trigger_type not in VALID_TRIGGER_TYPES:
         trigger_type = "manual"

@@ -8,7 +8,8 @@ Matching is done against:
   - document title (higher confidence)
   - first 500 chars of clean text if available
 
-Config: config/entity_topic_taxonomy.yaml
+Taxonomy source:
+  - resolved run_manifest snapshot from Layer 0
 
 Usage:
     python entity_topic_mapper.py --run-id run_2026_05_10_48h_auto
@@ -18,26 +19,19 @@ import re
 import sys
 import json
 import argparse
+from functools import lru_cache
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
+from pipelines.runtime_manifest import get_entity_topic_taxonomy, load_manifest
 
-try:
-    import yaml
-    _HAS_YAML = True
-except ImportError:
-    _HAS_YAML = False
-
-_TAXONOMY_PATH = Path(__file__).resolve().parents[2] / "config" / "entity_topic_taxonomy.yaml"
-
-
-def _load_taxonomy() -> dict:
-    if _HAS_YAML:
-        with open(_TAXONOMY_PATH) as f:
-            return yaml.safe_load(f)
-    import json as _json
-    raise RuntimeError("PyYAML not installed — run: pip install pyyaml")
+@lru_cache(maxsize=32)
+def _load_taxonomy_for_run(run_id: str | None) -> dict:
+    if not run_id:
+        raise ValueError("Entity/topic mapping requires a run_id so taxonomy comes from the run manifest.")
+    manifest = load_manifest(run_id=run_id)
+    return get_entity_topic_taxonomy(manifest)
 
 
 def _make_pattern(terms: list[str]) -> re.Pattern:
@@ -72,12 +66,12 @@ def _build_matchers(taxonomy: dict) -> dict:
     return matchers
 
 
-# Global singleton loaded once
-_taxonomy = _load_taxonomy()
-_matchers = _build_matchers(_taxonomy)
+@lru_cache(maxsize=32)
+def _matchers_for_run(run_id: str | None) -> dict:
+    return _build_matchers(_load_taxonomy_for_run(run_id))
 
 
-def map_entities_and_topics(doc: dict, clean_text_snippet: str = "") -> dict:
+def map_entities_and_topics(doc: dict, clean_text_snippet: str = "", run_id: str | None = None) -> dict:
     """
     Extract entities and topics from a document.
 
@@ -95,18 +89,19 @@ def map_entities_and_topics(doc: dict, clean_text_snippet: str = "") -> dict:
     """
     title = (doc.get("title") or "").strip()
     search_text = f"{title} {clean_text_snippet}"[:600]
+    matchers = _matchers_for_run(run_id)
 
     entities: dict[str, list[str]] = {
         "companies": [], "models": [], "products": [], "people": []
     }
-    for entity_type, name_patterns in _matchers["entities"].items():
+    for entity_type, name_patterns in matchers["entities"].items():
         for name, pattern in name_patterns.items():
             if pattern.search(search_text):
                 if name not in entities[entity_type]:
                     entities[entity_type].append(name)
 
     topics: list[dict] = []
-    for topic_id, tc in _matchers["topics"].items():
+    for topic_id, tc in matchers["topics"].items():
         if tc["pattern"].search(search_text):
             confidence = 0.85 if tc["pattern"].search(title) else 0.65
             topics.append({"topic_id": topic_id, "label": tc["label"], "confidence": confidence})
@@ -127,7 +122,7 @@ def map_entities_and_topics(doc: dict, clean_text_snippet: str = "") -> dict:
     }
 
 
-def map_all(docs: list[dict], layer2_dir: Path = None) -> list[dict]:
+def map_all(docs: list[dict], layer2_dir: Path = None, run_id: str | None = None) -> list[dict]:
     """Map entities and topics for all documents."""
     results = []
     for doc in docs:
@@ -139,7 +134,7 @@ def map_all(docs: list[dict], layer2_dir: Path = None) -> list[dict]:
                     snippet = txt_path.read_text(encoding="utf-8")[:500]
                 except Exception:
                     pass
-        results.append(map_entities_and_topics(doc, snippet))
+        results.append(map_entities_and_topics(doc, snippet, run_id=run_id))
     return results
 
 

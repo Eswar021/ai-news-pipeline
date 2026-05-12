@@ -20,6 +20,7 @@ Key function:
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -44,7 +45,7 @@ def write(
     brief_ctx:         dict,
 ) -> dict:
     layer6_dir.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_project_iso()
 
     # ── research_packet.json ─────────────────────────────────────────────────
     research_packet = {

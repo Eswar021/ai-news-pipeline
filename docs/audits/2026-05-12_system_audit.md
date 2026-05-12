@@ -28,12 +28,15 @@ For the feature-oriented build backlog derived from this audit and the design do
 ## Executive Summary
 
 - `config/llm_config.py` is the intended model source, and the last known hardcoded `gpt-4o-mini` usages were removed from Layer 8 and Layer 9 on 2026-05-12.
-- Layer 0 correctly computes run-time collection windows, but Layer 1 still does not fully enforce those windows when dispatching collectors.
-- YouTube collection is configured, but the main Layer 1 orchestrator still skips it.
+- Layer 0 correctly computes run-time collection windows, and Layer 1 now enforces them in the active path with a mix of fetch-side narrowing and post-fetch filtering.
+- YouTube collection is now wired into the main Layer 1 orchestrator through the `resolved_config.youtube_channels` manifest snapshot authored from `channels.yaml`.
+- The design rule that downstream layers should read the Layer 0 run manifest is now implemented in the active runtime path through `resolved_config` snapshots in `run_manifest.json`; downstream runtime consumers no longer fall back to original repo config files.
 - ChatGPT handoff generation had a format-selection bug for `auto` runs; this was fixed on 2026-05-12 so the exporter now infers the actual selected format from downstream outputs.
 - ChatGPT handoff export now also refuses partial runs that never produced Layer 3 outputs, instead of generating empty story handoffs.
 - Core run-completeness enforcement was added on 2026-05-12: the pipeline now checks for each layer's minimum required artifacts and honors the layer's existing validation report instead of assuming success from "no exception raised".
 - The handoff memory block was also corrected on 2026-05-12 so unpublished runs no longer show up as past-video repetition guidance.
+- A Layer 4 write-path bug was fixed on 2026-05-13: `layer4_writer.py` was incorrectly reading `confidence_label` from an already-flattened verified-claim record shape, which caused the run to fail after successful claim extraction and verification.
+- Active generated pipeline timestamps were standardized to the configured project timezone on 2026-05-13. The source of truth remains `config/run_defaults.yaml` with `Asia/Kolkata`, and the active pipeline now uses shared helpers for run manifests, layer manifests, memory records, and LLM logs. Canonical source `published_at` normalization and some internal elapsed-time math intentionally remain UTC-based.
 - Raw Layer 10 memory still records prepared runs, which is useful for audit, but only published runs should drive novelty and repetition decisions.
 - The active pipeline is not a strict Layer N → Layer N+1 chain. It behaves as a DAG of authoritative artifacts, and later layers intentionally reach back to Layer 2, Layer 3, and Layer 4.
 - A single mutable master file is not recommended as the primary source of truth. A compiled `run_state.json` or `run_graph.json` artifact is the better future direction.
@@ -98,27 +101,23 @@ High priority:
 | `config/run_defaults.yaml` | Lookback, depth, run defaults | Layer 0, `pipeline.py` CLI overrides | Active |
 | `config/channel_thesis.yaml` | Channel identity and thesis | Layer 0 | Active |
 | `config/audience_profiles.yaml` | Audience profile definitions | Layer 0 | Active |
-| `config/format_config.yaml` | Enabled formats and format requirements | Layer 0, Layer 5, Layer 7 | Active |
+| `config/format_config.yaml` | Enabled formats and format requirements | Layer 0 authoring input | Active |
 | `config/quality_rules.yaml` | Quality policy | Layer 0 | Active |
-| `config/sources.yaml` | Per-source definitions and enable flags | Layer 0, Layer 1 | Active |
-| `config/source_strategy.yaml` | Source grouping and source-policy structure | Layer 0, Layer 1 | Active |
-| `config/channels.yaml` | YouTube channel definitions | Standalone YouTube collector path | Active but not wired into main Layer 1 flow |
-| `config/chatgpt_prompts.yaml` | Shared prompt blocks for handoff exporter | `chatgpt_export.py` | Active |
-| `config/entity_topic_taxonomy.yaml` | Entity/topic normalization taxonomy | Layer 3 | Active |
-| `config/llm_config.py` | LLM profiles and overrides | Active LLM modules | Active |
+| `config/sources.yaml` | Per-source definitions and enable flags | Layer 0 authoring input | Active |
+| `config/source_strategy.yaml` | Source grouping and source-policy structure | Layer 0 authoring input | Active |
+| `config/channels.yaml` | YouTube channel definitions | Layer 0 authoring input | Active |
+| `config/chatgpt_prompts.yaml` | Shared prompt blocks for handoff exporter | Layer 0 authoring input | Active |
+| `config/entity_topic_taxonomy.yaml` | Entity/topic normalization taxonomy | Layer 0 authoring input | Active |
+| `config/llm_config.py` | LLM profiles and overrides | Layer 0 authoring input | Active |
 | `config/scoring_config.yaml` | Intended scoring config | No active consumer found in current pipeline | Likely dead / removable |
 
 ### Are configs only used by Layer 0?
 
-No.
+By design, authoring configs are Layer 0 inputs.
 
-- Layer 0 owns the run-manifest assembly from channel, audience, format, quality, source, and run-default configs.
-- Later layers still read config directly in a few places:
-  - `format_config.yaml` is read again in Layer 5.
-  - `chatgpt_prompts.yaml` is read by `chatgpt_export.py`.
-  - `entity_topic_taxonomy.yaml` is read by Layer 3.
-  - `llm_config.py` is read by active LLM modules.
-  - `channels.yaml` is used by the standalone YouTube collector path.
+- Layer 0 owns the run-manifest assembly from channel, audience, format, quality, source, LLM, taxonomy, and handoff-prompt configs.
+- In the active downstream runtime path, those values are now read from the run manifest instead of the original config files.
+- Direct config reads still remain in Layer 0 by design and in some standalone/inactive authoring utilities.
 
 ### Should these files be merged?
 
@@ -138,6 +137,71 @@ Keep separate:
 Remove or merge:
 
 - `scoring_config.yaml` if it truly remains unused
+
+### Manifest authority versus direct config reads
+
+The design docs are explicit on this point:
+
+- Layer 0 should read the authoring config files
+- Layer 0 should resolve them into one immutable `run_manifest.json`
+- downstream layers should read the manifest rather than re-reading config files
+
+See [layer_0.md](../system_design_docs/layer_0.md) and the dedicated reference note [manifest_authority_and_config_ownership.md](../reference/manifest_authority_and_config_ownership.md).
+
+As of 2026-05-12, the active runtime path now follows that rule.
+
+Manifest-driven in the active path:
+
+- Layer 1 collection windows, enabled source groups, and query themes
+- Layer 1 resolved source registry subset
+- Layer 1 resolved YouTube channel subset
+- Layer 3 entity/topic taxonomy
+- Layer 5 format requirements
+- active LLM module profile selection in Layers 4, 5, 7, 8, and 9
+- ChatGPT handoff prompt config
+- Layer 0 memory policy, memory paths, depth limits, and output contracts
+
+Still not fully strict:
+
+- Layer 0 still reads authoring config files by design
+- some standalone or inactive utilities still read config files directly
+
+Recommended architectural rule:
+
+1. `config/` files remain authoring inputs.
+2. Layer 0 snapshots the effective run-scoped values into the manifest.
+3. Downstream layers consume the manifest plus upstream artifacts, not the original config files.
+
+The important nuance is that the manifest should carry the resolved subset used by the run, not an uncontrolled dump of every raw config file.
+
+### What was implemented on 2026-05-12
+
+Layer 0 now writes a `resolved_config` section into `run_manifest.json` with run-scoped snapshots for:
+
+- active source registry subset
+- enabled YouTube channel registry subset
+- effective LLM runtime profiles
+- entity/topic taxonomy
+- ChatGPT handoff prompt config
+
+The following active consumers were switched to use those manifest snapshots:
+
+- Layer 1 source registry loading
+- Layer 1 YouTube channel loading
+- Layer 3 entity/topic mapping
+- Layer 5 format config usage
+- active LLM modules in Layers 4, 5, 7, 8, and 9
+- `chatgpt_export.py`
+
+### Why this drift happened
+
+The implementation decisions show the original intent was already manifest-driven, but the system drifted for practical reasons while the workflow was being completed:
+
+- existing collectors/helpers were wrapped rather than fully rewritten
+- some later modules were implemented faster by reading local config directly
+- the main focus at the time was end-to-end functionality, not full control-plane cleanup
+
+So this was not forgotten. The main active-path migration is now done, and what remains is cleanup of standalone/inactive utilities and any remaining tooling ambiguity.
 
 ### Important code-level note
 
@@ -159,28 +223,57 @@ The design docs put time-window control in Layer 0. The run manifest should defi
 
 Layer 0 does compute those windows and writes them into `run_manifest.json`.
 
+As of 2026-05-12, Layer 1 now also consumes those manifest fields in the active path:
+
+- `collection_strategy.enabled_source_groups`
+- `collection_strategy.query_themes`
+- `collection_strategy.collection_window`
+- `collection_strategy.source_specific_windows`
+
+The main Layer 1 orchestration no longer relies on the older wrong manifest keys for enabled groups and query themes.
+
+### What was implemented on 2026-05-12
+
+Manifest-driven window enforcement is now partially operational in Layer 1:
+
+- source-group windows are resolved from the run manifest during orchestration
+- collectors receive `start` / `end` bounds for post-fetch filtering
+- collectors that already support fetch-side recency narrowing also receive a `days_back` value where useful
+  - currently this is applied to NewsAPI and GitHub search
+- `extraction_manifest.json` now records the collection policy that was applied for the run
+
+This means Layer 1 now enforces the configured collection windows on the produced `raw_documents.jsonl` corpus instead of only computing them in Layer 0.
+
 What is still missing:
 
-- Layer 1 does not fully apply those window definitions when it dispatches collectors.
-- Collector calls still mostly rely on fixed parameters like `max_per_source`, `max_per_category`, or default query behavior.
+- some collectors still fetch first and then filter locally because the upstream source/API wrapper does not support reliable server-side date constraints
+- documents with missing or unparseable `published_at` are currently kept and surfaced via audit warnings instead of being dropped
+- collector sizing still largely relies on fixed caps like `max_per_source` and `max_per_category`
 
 ### Current state of YouTube collection
 
-YouTube is not fully wired into the main orchestration path.
+As of 2026-05-12, YouTube is now wired into the main Layer 1 orchestration path.
 
-- `config/channels.yaml` exists.
-- `config/sources.yaml` and `config/source_strategy.yaml` include YouTube-related source groups.
-- The main Layer 1 orchestrator still prints a skip message for YouTube and does not collect it in normal runs.
+What is now active:
 
-See [pipelines/layer_1_extraction/run_layer_1.py](../../pipelines/layer_1_extraction/run_layer_1.py).
+- `run_layer_1.py` invokes the YouTube wrapper when `youtube_podcast_transcripts` is enabled and `--skip-youtube` is not used
+- the wrapper loads enabled channels from `run_manifest.json` `resolved_config.youtube_channels`
+- manifest-driven `days_back`, `start`, and `end` window policy is passed into the YouTube path
+- channel-specific `search_query` values snapshotted from `channels.yaml` are preserved, with the Layer 1 query-plan value used when a channel entry has no query
+
+What still remains limited:
+
+- YouTube collection still depends on `YOUTUBE_API_KEY`
+- transcript availability remains source-dependent, so some discovered videos may still be partial or unavailable
+- this step did not yet make YouTube channel selection manifest-driven beyond the existing channel registry
 
 ### Recommendation
 
-High priority:
+Still high priority:
 
-1. Carry channel IDs and source-specific collection windows into the run manifest in a form Layer 1 can consume directly.
-2. Update each collector call to accept `start_at` or `lookback_days` from manifest-derived policy.
-3. Wire YouTube collection into `run_layer_1.py` instead of keeping it as a separate manual path.
+1. Extend fetch-side recency filtering to any remaining sources where the upstream API supports it safely.
+2. Decide whether undated documents should remain soft-kept or become format-dependent hard exclusions later.
+3. If needed later, make the YouTube channel subset itself manifest-selectable rather than always registry-driven.
 
 ---
 
@@ -215,7 +308,7 @@ The active pipeline now enforces a small but meaningful completion contract:
 - `output_contract_builder.py` was aligned to the real run-scoped output layout under `data/runs/{run_id}/layer_X/`
 - `pipeline.py` now checks for a minimum set of required artifacts after each completed layer
 - `pipeline.py` now reads the layer's existing validation report and fails the run if that report did not pass
-- older runs with stale manifest contracts are handled through a compatibility fallback that rebuilds the active contract mapping at runtime
+- `pipeline.py` now requires the manifest's `output_contract` to be current and fails clearly if the run needs to be rebuilt from Layer 0
 
 This intentionally reuses the validation logic that already existed inside the layers instead of creating a second, more complex validation framework.
 
@@ -316,11 +409,11 @@ The exporter was using the first eligible format from the run manifest instead o
 2. Layer 7 `script_writer_brief.json`
 3. Layer 6 `research_packet.json`
 4. Layer 5 `selected_video_brief.json`
-5. Manifest fallback only if nothing downstream exists
+5. Manifest-declared target or eligibility default only if no downstream selection exists yet
 
 ### Current handoff behavior
 
-- Shared prompt blocks still come from `config/chatgpt_prompts.yaml`.
+- Shared prompt blocks now come from `run_manifest.json` `resolved_config.chatgpt_handoff`.
 - Format-specific instruction blocks are now resolved dynamically.
 - Deep-dive runs now get deep-dive-specific instruction wording.
 - The memory block now only uses published-video history.
@@ -328,12 +421,11 @@ The exporter was using the first eligible format from the run manifest instead o
 
 ### Remaining limitation
 
-The exporter is more dynamic than before, but it is not fully config-driven yet.
+The exporter is more dynamic than before, but some behavior is still code-defined.
 
 Still code-defined today:
 
 - format-specific instruction assembly
-- some fallback logic
 - how memory is rendered into instructions
 
 ### Recommendation
@@ -385,15 +477,26 @@ That is fine for run history. The problem was downstream consumers treating thos
 2. `memory_snapshot_builder.py` now builds repetition guidance and covered-story guidance from published videos only.
 3. `novelty_checker.py` now only considers published videos inside the recency window.
 
-### What still does not exist
+### Publish-memory workflow status
 
-There is still no built publication-state workflow.
+As of 2026-05-13, the core publication-state workflow is now implemented.
 
-Not present yet:
+Now present:
 
-- automatic YouTube channel sync into memory
-- performance ingest from real video analytics
-- a first-class utility to mark a prepared run as published
+- `publishing_memory.py mark-published` to update a prepared run into published memory
+- `publishing_memory.py sync-channel` to sync the authenticated owner channel into local memory files
+- `performance_memory.jsonl` ingestion from authenticated YouTube Analytics queries
+- automatic rebuild of `learning_signals.jsonl`, `memory_index.json`, and `memory_snapshot.json` after publish-state changes
+
+Completed in practice:
+
+- first live OAuth authorization on the machine
+- first authenticated owner-channel sync
+- canonical publishing channel resolution to `UCp4tfcoFDQIFu7Cnodrqq_w`
+
+Still pending in practice:
+
+- first real published video to exercise the full path end-to-end
 
 ### Recommended model going forward
 
@@ -404,22 +507,38 @@ Keep both concepts:
 2. Published memory
    - only published videos should affect novelty, repetition avoidance, and handoff guidance
 
-### Practical correction path
+### Practical workflow now
 
-Best next step:
+Current workflow:
 
-Add a small utility that updates a matching `video_memory.jsonl` record with:
+1. Run Layer 10 so prepared-run memory exists.
+2. Publish the YouTube video.
+3. Run `publishing_memory.py mark-published --run-id <run_id> --youtube-video-id <youtube_video_id>`.
+4. Optionally run `publishing_memory.py sync-channel` before later runs to refresh channel state and analytics.
 
-- `status = published`
-- `timestamps.published_at = <real publish timestamp>`
-- optional `youtube_video_id`
+### Fresh-start cleanup applied
 
-Then rebuild:
+Because the authenticated publishing channel currently has zero published videos, the
+exploratory editorial memory was reset to a clean baseline before the first real run.
 
+Preserved:
+
+- `memory/publishing_channel_state.json`
+- `memory/published_video_inventory.jsonl`
+
+Reset and rebuilt:
+
+- run-derived JSONL memory files
+- `memory/learning_signals.jsonl`
 - `memory/memory_index.json`
 - `memory/memory_snapshot.json`
 
-This is safer than manually inventing whole new JSON objects from scratch.
+This keeps the publishing/auth state real while preventing novelty and repetition
+guidance from being polluted by exploratory draft history.
+
+For a file-by-file ownership map of the `memory/` folder, see:
+
+- `docs/reference/memory_file_map.md`
 
 ### Memory workflow parity versus design
 
@@ -498,13 +617,13 @@ This section focuses on functionality, not folder structure.
 
 ### Layer 1
 
-- Time windows are computed but not fully enforced in collector dispatch.
-- YouTube orchestration is still skipped in the main run path.
+- Time windows are now enforced in the active Layer 1 path, but some sources still depend on post-fetch filtering instead of native server-side date constraints.
+- YouTube orchestration now runs in the main path, but channel selection remains registry-driven and transcript availability is still source-dependent.
 
 ### Layer 2
 
 - The design called for more explicit source-type parser modules.
-- The current Layer 2 works, but transcript-specific parsing remains effectively skipped until YouTube is wired in.
+- The current Layer 2 works, and transcript content can now enter through the active Layer 1 path, but transcript-specific normalization/parsing is still lighter than the design envisioned.
 
 ### Layer 3
 
@@ -535,23 +654,24 @@ This section focuses on functionality, not folder structure.
 
 ### Layer 9
 
-- Repetition checker is still missing.
+- Repetition checker now exists in Layer 9 against published-memory state.
 - Contradiction/evidence-gap handling is mostly informational right now.
 
 ### Layer 10
 
-- Performance ingest is not built.
-- There is no publish-state updater or real channel-ingest workflow.
+- Performance ingest is built through the post-run publishing workflow.
+- Publish-state updating and authenticated channel sync now exist.
+- The practical remaining gap is the first real published video flowing through the full cycle.
 
 ### Priority view
 
 Build next:
 
-1. Layer 1 time-window enforcement
-2. Layer 1 YouTube orchestration
-3. Published-state memory workflow
-4. Shared async LLM wrapper with logging
-5. Repetition checker in Layer 9
+1. Feature-complete manifest authority for the remaining runtime consumers
+2. Higher-parity story clustering / recurrence behavior from the design docs
+3. Additional format branches (`evergreen`, `comparison`, `follow_up`)
+4. Broader multi-provider support in the async runtime
+5. Deeper memory consumers in Layers 7, 8, and 9 beyond the currently active checks
 
 Build later:
 
@@ -588,14 +708,19 @@ The active layers mostly bypass it:
 
 High priority:
 
-Create one shared async LLM call wrapper that handles:
+That recommendation is now implemented for the active async path.
 
-- provider routing
-- temperature/model kwargs
-- request/response logging
-- per-run log destination
+Now present:
 
-Until that exists, `output/llm_logs/` will remain incomplete for the modern pipeline.
+- `llm/async_llm_runtime.py` as the shared async runtime wrapper
+- manifest-backed model/profile resolution inside the runtime
+- structured per-call logs written under `output/llm_logs/{run_id}/`
+- active async Layers 4, 5, 7, 8, and 9 routed through that shared path
+
+Remaining gap:
+
+- legacy or standalone LLM utilities are not all migrated yet
+- the active async runtime still assumes `provider='openai'`
 
 ---
 

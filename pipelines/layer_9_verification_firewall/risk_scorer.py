@@ -26,6 +26,7 @@ def _collect_issues(
     cautious_result,
     leakage_result,
     contradiction_result,
+    repetition_result,
     metadata_result,
     attribution_result,
 ) -> list:
@@ -102,6 +103,20 @@ def _collect_issues(
     # Contradiction handler (informational only — never block)
     # Don't add to issues list since is_informational = True
 
+    # Repetition safety
+    for issue in repetition_result.get("issues", []):
+        issues.append({
+            "source": "repetition_safety",
+            "severity": issue.get("severity", "medium"),
+            "message": issue.get("message", "Repetition safety issue."),
+        })
+    for warning in repetition_result.get("warnings", []):
+        issues.append({
+            "source": "repetition_safety",
+            "severity": "warning",
+            "message": warning,
+        })
+
     # Metadata safety
     for e in metadata_result.get("errors", []):
         issues.append({
@@ -141,6 +156,7 @@ def score(
     cautious_result,
     leakage_result,
     contradiction_result,
+    repetition_result,
     metadata_result,
     attribution_result,
 ) -> dict:
@@ -148,7 +164,7 @@ def score(
     all_issues = _collect_issues(
         coverage_result, traceability_result, support_results,
         overclaim_result, cautious_result, leakage_result,
-        contradiction_result, metadata_result, attribution_result,
+        contradiction_result, repetition_result, metadata_result, attribution_result,
     )
 
     critical = [i for i in all_issues if i["severity"] == "critical"]
@@ -225,6 +241,7 @@ if __name__ == "__main__":
     from pipelines.layer_9_verification_firewall.cautious_language_verifier import verify as verify_cautious
     from pipelines.layer_9_verification_firewall.rejected_claim_leakage_detector import detect as detect_leakage
     from pipelines.layer_9_verification_firewall.contradiction_evidence_gap_handler import handle as handle_contradictions
+    from pipelines.layer_9_verification_firewall.repetition_safety_checker import check as check_repetition
     from pipelines.layer_9_verification_firewall.metadata_safety_checker import check as check_metadata
     from pipelines.layer_9_verification_firewall.source_attribution_checker import check as check_attribution
 
@@ -239,12 +256,13 @@ if __name__ == "__main__":
     cautious      = verify_cautious(classified, ctx)
     leakage       = detect_leakage(coverage, support, ctx)
     contradiction = handle_contradictions(ctx)
+    repetition    = check_repetition(ctx)
     metadata      = check_metadata(ctx)
     attribution   = check_attribution(ctx)
 
     result = score(
         coverage, traceability, support, overclaims,
-        cautious, leakage, contradiction, metadata, attribution
+        cautious, leakage, contradiction, repetition, metadata, attribution
     )
 
     print(f"Risk level       : {result['overall_risk_level']}")

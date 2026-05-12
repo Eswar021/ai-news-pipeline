@@ -24,7 +24,7 @@ If a run does not have `layer_3/ranked_stories.json`, the exporter now stops wit
 
 ### Shared config
 
-- `config/chatgpt_prompts.yaml` provides shared prompt blocks and wording.
+- Layer 0 snapshots the shared handoff prompt config from `config/chatgpt_prompts.yaml` into `run_manifest.json` under `resolved_config.chatgpt_handoff`.
 
 ### Dynamic run inputs
 
@@ -46,7 +46,7 @@ Current resolution order:
 2. Layer 7 `script_writer_brief.json`
 3. Layer 6 `research_packet.json`
 4. Layer 5 `selected_video_brief.json`
-5. Run-manifest fallback
+5. Run-manifest declared target or eligibility default
 
 This matters for `auto` runs, where the manifest may list multiple eligible formats but the pipeline later selects one concrete format.
 

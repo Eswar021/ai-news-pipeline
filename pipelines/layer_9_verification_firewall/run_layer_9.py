@@ -14,13 +14,14 @@ Processing pipeline:
   8. cautious_language_verifier        → cautious claim language check
   9. rejected_claim_leakage_detector   → blocked claim/phrase check
   10. contradiction_evidence_gap_handler → informational gap report
-  11. metadata_safety_checker          → title/thumbnail/description safety
-  12. source_attribution_checker       → source list completeness
-  13. risk_scorer                      → aggregate + final recommendation
-  14. correction_patch_generator       → structured correction patches
-  15. verified_script_builder          → build verified_script.md
-  16. layer9_writer                    → write all 14 output files
-  17. layer9_validation_gate           → validate output
+  11. repetition_safety_checker        → published-memory repetition gate
+  12. metadata_safety_checker          → title/thumbnail/description safety
+  13. source_attribution_checker       → source list completeness
+  14. risk_scorer                      → aggregate + final recommendation
+  15. correction_patch_generator       → structured correction patches
+  16. verified_script_builder          → build verified_script.md
+  17. layer9_writer                    → write all outputs
+  18. layer9_validation_gate           → validate output
 
 Output:
     data/runs/{run_id}/layer_9/
@@ -31,6 +32,7 @@ Output:
       cautious_language_verification.json
       rejected_claim_leakage_report.json
       contradiction_handling_report.json
+      repetition_safety_report.json
       metadata_safety_report.json
       source_attribution_report.json
       correction_patch.json
@@ -63,6 +65,7 @@ from pipelines.layer_9_verification_firewall.overclaim_detector import detect as
 from pipelines.layer_9_verification_firewall.cautious_language_verifier import verify as verify_cautious
 from pipelines.layer_9_verification_firewall.rejected_claim_leakage_detector import detect as detect_leakage
 from pipelines.layer_9_verification_firewall.contradiction_evidence_gap_handler import handle as handle_contradictions
+from pipelines.layer_9_verification_firewall.repetition_safety_checker import check as check_repetition
 from pipelines.layer_9_verification_firewall.metadata_safety_checker import check as check_metadata
 from pipelines.layer_9_verification_firewall.source_attribution_checker import check as check_attribution
 from pipelines.layer_9_verification_firewall.risk_scorer import score
@@ -164,25 +167,33 @@ def run_layer_9(run_id: str) -> dict:
           f"Gaps: {contradiction['evidence_gaps_checked']}  "
           f"Blocking: {contradiction['blocking_gaps']}")
 
-    # ── Step 11: Metadata safety ──────────────────────────────────────────────
-    print("[Layer 9] Step 11 — Checking metadata safety...")
+    # ── Step 11: Repetition safety ────────────────────────────────────────────
+    print("[Layer 9] Step 11 — Checking repetition safety...")
+    repetition = check_repetition(ctx)
+    print(f"  Status: {repetition['status']}  "
+          f"Issues: {repetition['issue_count']}  "
+          f"Warnings: {len(repetition['warnings'])}  "
+          f"Published refs: {repetition['checked_against_published_videos']}")
+
+    # ── Step 12: Metadata safety ──────────────────────────────────────────────
+    print("[Layer 9] Step 12 — Checking metadata safety...")
     metadata = check_metadata(ctx)
     print(f"  Status: {metadata['status']}  "
           f"Titles: {len(metadata['title_checks'])}  "
           f"Errors: {len(metadata['errors'])}")
 
-    # ── Step 12: Source attribution ───────────────────────────────────────────
-    print("[Layer 9] Step 12 — Checking source attribution...")
+    # ── Step 13: Source attribution ───────────────────────────────────────────
+    print("[Layer 9] Step 13 — Checking source attribution...")
     attribution = check_attribution(ctx)
     print(f"  Sources in script: {attribution['sources_used_in_script']}  "
           f"In list: {attribution['sources_in_list']}  "
           f"Missing: {attribution['missing_from_list']}")
 
-    # ── Step 13: Risk scoring ─────────────────────────────────────────────────
-    print("[Layer 9] Step 13 — Scoring risk...")
+    # ── Step 14: Risk scoring ─────────────────────────────────────────────────
+    print("[Layer 9] Step 14 — Scoring risk...")
     risk = score(
         coverage, traceability, support, overclaims,
-        cautious, leakage, contradiction, metadata, attribution
+        cautious, leakage, contradiction, repetition, metadata, attribution
     )
     print(f"  Risk: {risk['overall_risk_level']}  "
           f"Score: {risk['risk_score']}  "
@@ -191,20 +202,20 @@ def run_layer_9(run_id: str) -> dict:
           f"Medium: {risk['medium_count']}  "
           f"Recommendation: {risk['final_recommendation']}")
 
-    # ── Step 14: Correction patches ───────────────────────────────────────────
-    print("[Layer 9] Step 14 — Generating correction patches...")
+    # ── Step 15: Correction patches ───────────────────────────────────────────
+    print("[Layer 9] Step 15 — Generating correction patches...")
     patch = generate_patch(risk, ctx)
     print(f"  Patches: {patch['patch_count']}  Auto-safe: {patch['auto_patch_safe']}")
 
-    # ── Step 15: Verified script ──────────────────────────────────────────────
-    print("[Layer 9] Step 15 — Building verified script...")
+    # ── Step 16: Verified script ──────────────────────────────────────────────
+    print("[Layer 9] Step 16 — Building verified script...")
     verified = build_verified_script(risk, patch, ctx, layer8_dir)
     print(f"  Status: {verified['status']}  "
           f"Patches applied: {verified['patches_applied_count']}  "
           f"Remaining warns: {verified['remaining_warnings']}")
 
-    # ── Step 16: Write outputs ────────────────────────────────────────────────
-    print("[Layer 9] Step 16 — Writing output files...")
+    # ── Step 17: Write outputs ────────────────────────────────────────────────
+    print("[Layer 9] Step 17 — Writing output files...")
     manifest = write_outputs(
         run_id=run_id,
         layer9_dir=layer9_dir,
@@ -221,6 +232,7 @@ def run_layer_9(run_id: str) -> dict:
         cautious_result=cautious,
         leakage_result=leakage,
         contradiction_result=contradiction,
+        repetition_result=repetition,
         metadata_result=metadata,
         attribution_result=attribution,
         risk_result=risk,
@@ -230,8 +242,8 @@ def run_layer_9(run_id: str) -> dict:
     )
     print(f"  Output: {layer9_dir}")
 
-    # ── Step 17: Validation gate ──────────────────────────────────────────────
-    print("[Layer 9] Step 17 — Validating output...")
+    # ── Step 18: Validation gate ──────────────────────────────────────────────
+    print("[Layer 9] Step 18 — Validating output...")
     val_report = validate_output(run_id, layer9_dir)
     write_report(run_id, val_report, layer9_dir)
 

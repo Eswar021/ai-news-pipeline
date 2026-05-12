@@ -12,6 +12,7 @@ Run standalone:
 import sys
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from collections import defaultdict
 from pathlib import Path
 
@@ -42,6 +43,12 @@ def build_extraction_manifest(
 
     # ── Read raw documents ─────────────────────────────────────────────────────
     docs = read_raw_documents(raw_docs_path)
+
+    run_manifest_path = RUNS_DIR / run_id / "run_manifest.json"
+    run_manifest = {}
+    if run_manifest_path.exists():
+        with open(run_manifest_path, encoding="utf-8") as f:
+            run_manifest = json.load(f)
 
     # Group by source_group and source_id
     by_group   = defaultdict(list)
@@ -75,7 +82,7 @@ def build_extraction_manifest(
     manifest = {
         "run_id": run_id,
         "layer": "layer_1",
-        "built_at": datetime.now(timezone.utc).isoformat(),
+        "built_at": now_project_iso(),
         "status": "complete" if docs else "empty",
         "totals": {
             "total_raw_documents": len(docs),
@@ -85,6 +92,15 @@ def build_extraction_manifest(
             "warning_events": len(warnings),
         },
         "by_source_group": group_summary,
+        "collection_policy": {
+            "enabled_source_groups": run_manifest.get("collection_strategy", {}).get("enabled_source_groups", []),
+            "query_themes": run_manifest.get("collection_strategy", {}).get("query_themes", []),
+            "collection_window": run_manifest.get("collection_strategy", {}).get("collection_window", {}),
+            "source_specific_windows": {
+                group: run_manifest.get("collection_strategy", {}).get("source_specific_windows", {}).get(group, {})
+                for group in group_summary.keys()
+            },
+        },
         "failed_sources": [
             {
                 "source_id":      e.get("source_id"),

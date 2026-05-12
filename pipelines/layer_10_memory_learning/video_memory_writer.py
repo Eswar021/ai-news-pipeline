@@ -16,6 +16,7 @@ Record structure:
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -50,6 +51,7 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
 
     record = {
         "video_id":        video_id,
+        "selected_video_id": mc.get("selected_video_id", video_id),
         "run_id":          run_id,
         "status":          "prepared_for_human_review",
         "selected_format": mc["selected_format"],
@@ -67,13 +69,21 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
             "verified_script_path":      str(layer9_dir / "verified_script.md"),
             "final_publish_package_path": str(layer9_dir / "final_publish_package.json"),
         },
+        "publishing": {
+            "platform": "youtube",
+            "channel_id": None,
+            "channel_title": None,
+            "youtube_video_id": None,
+            "video_url": None,
+            "last_synced_at": None,
+        },
         "verification": {
             "l9_status":          eligibility["l9_approval_status"],
             "risk_level":         risk_level,
             "remaining_warnings": remaining,
         },
         "timestamps": {
-            "created_at":   datetime.now(timezone.utc).isoformat(),
+            "created_at":   now_project_iso(),
             "published_at": None,
         },
     }

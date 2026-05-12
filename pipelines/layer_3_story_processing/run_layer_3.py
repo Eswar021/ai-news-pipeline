@@ -99,7 +99,7 @@ def run_layer_3(run_id: str) -> dict:
 
     # ── Step 4: Entity + topic mapping ────────────────────────────────────────
     print("[Layer 3] Step 4 — Mapping entities and topics...")
-    entity_results = map_all(deduped_docs, layer2_dir)
+    entity_results = map_all(deduped_docs, layer2_dir, run_id=run_id)
     entity_map     = {r["canonical_document_id"]: r for r in entity_results}
     with_entities  = sum(1 for r in entity_results if r["primary_entities"])
     print(f"  Docs with entities: {with_entities}/{len(deduped_docs)}")

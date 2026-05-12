@@ -2,7 +2,7 @@
 Layer 7 — Module 10: Title + Thumbnail Angle Planner (LLM)
 
 Generates 6-8 title options and 5 thumbnail text options.
-Uses AsyncOpenAI with the dev profile (gpt-5-nano by default).
+Uses the shared async LLM runtime with the manifest-backed profile.
 
 Each title has:
   title, angle_type, accuracy_risk, click_potential, supported_by_claim_ids
@@ -25,7 +25,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths    import RUNS_DIR
-from config.llm_config import get_profile
+from pipelines.runtime_manifest import get_llm_profile
+from llm.async_llm_runtime import execute_chat_request
 from pipelines.layer_7_content_planning.packet_loader          import load as load_packet
 from pipelines.layer_7_content_planning.viewer_promise_refiner  import refine
 from pipelines.layer_7_content_planning.narrative_arc_planner   import plan as plan_arc
@@ -70,27 +71,6 @@ Return only valid JSON matching this schema:
   ]
 }"""
 
-
-def _build_create_kwargs(model: str, temperature: float, messages: list) -> dict:
-    kwargs: dict = {
-        "model":           model,
-        "response_format": {"type": "json_object"},
-        "messages":        messages,
-    }
-    if "nano" not in model:
-        kwargs["temperature"] = temperature
-    return kwargs
-
-
-def _make_openai_client():
-    import openai
-    from dotenv import load_dotenv
-    import os
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_A_C_C")
-    return openai.AsyncOpenAI(api_key=api_key)
-
-
 def _build_prompt(layer7_ctx: dict, hook_plan: dict) -> str:
     editorial      = layer7_ctx.get("editorial", {})
     episode_theme  = editorial.get("episode_theme", "")
@@ -123,15 +103,19 @@ def _build_prompt(layer7_ctx: dict, hook_plan: dict) -> str:
     )
 
 
-async def _call_llm(client, model: str, temperature: float, prompt: str) -> dict:
+async def _call_llm(run_id: str | None, prompt: str, packet_type: str) -> dict:
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user",   "content": prompt},
     ]
-    resp = await client.chat.completions.create(
-        **_build_create_kwargs(model, temperature, messages)
+    return await execute_chat_request(
+        module_name="title_thumbnail_planner",
+        run_id=run_id,
+        messages=messages,
+        request_name=f"title_thumbnail_{packet_type}",
+        metadata={"packet_type": packet_type},
+        parse_json=True,
     )
-    return json.loads(resp.choices[0].message.content)
 
 
 def _validate(raw: dict) -> dict:
@@ -160,14 +144,10 @@ def _validate(raw: dict) -> dict:
 
 
 def plan(layer7_ctx: dict, hook_plan: dict) -> dict:
-    profile     = get_profile("title_thumbnail_planner")
-    client      = _make_openai_client()
-    model       = profile["model"]
-    temperature = profile["temperature"]
     prompt      = _build_prompt(layer7_ctx, hook_plan)
 
     async def _run():
-        return await _call_llm(client, model, temperature, prompt)
+        return await _call_llm(layer7_ctx.get("run_id"), prompt, layer7_ctx["packet_type"])
 
     raw = asyncio.run(_run())
     return _validate(raw)
@@ -188,7 +168,7 @@ if __name__ == "__main__":
     print(f"[hook_planner] Calling LLM...")
     hook_plan = plan_hook(ctx, sections)
 
-    print(f"[title_thumbnail_planner] Calling LLM (profile: {get_profile('title_thumbnail_planner')['model']})...")
+    print(f"[title_thumbnail_planner] Calling LLM (profile: {get_llm_profile('title_thumbnail_planner', run_id=run_id)['model']})...")
     tt_plan = plan(ctx, hook_plan)
 
     print(f"\nTitle options ({tt_plan['title_count']}):")

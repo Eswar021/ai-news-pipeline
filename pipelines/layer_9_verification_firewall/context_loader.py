@@ -83,6 +83,7 @@ def load(layer8_dir: Path, layer7_dir: Path, layer4_dir: Path, layer2_dir: Path)
     span_map = {s["span_id"]: s for s in source_spans}
 
     return {
+        "run_id":               script_writer_brief.get("run_id", generated_script.get("run_id", "")),
         "sentence_list":        sentence_list,
         "sentence_map":         sentence_map,
         "claim_map":            claim_map,

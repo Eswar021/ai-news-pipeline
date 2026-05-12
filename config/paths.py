@@ -24,6 +24,7 @@ SOURCE_STRATEGY_YAML   = CONFIG_DIR / "source_strategy.yaml"
 CHATGPT_PROMPTS_YAML   = CONFIG_DIR / "chatgpt_prompts.yaml"
 ENTITY_TOPIC_TAXONOMY_YAML = CONFIG_DIR / "entity_topic_taxonomy.yaml"
 ENV_FILE               = ROOT / ".env"
+SECRETS_DIR            = ROOT / "secrets"
 
 
 # ── LLM Utilities ──
@@ -94,6 +95,8 @@ PERFORMANCE_MEMORY     = MEMORY_DIR / "performance_memory.jsonl"
 LEARNING_SIGNALS       = MEMORY_DIR / "learning_signals.jsonl"
 MEMORY_INDEX           = MEMORY_DIR / "memory_index.json"
 MEMORY_SNAPSHOT        = MEMORY_DIR / "memory_snapshot.json"
+PUBLISHING_CHANNEL_STATE = MEMORY_DIR / "publishing_channel_state.json"
+PUBLISHED_VIDEO_INVENTORY = MEMORY_DIR / "published_video_inventory.jsonl"
 
 
 # ── Output — final publishable scripts only ──
@@ -149,6 +152,8 @@ def ensure_all_dirs():
         SCRIPTS_OUTPUT,
         APPROVAL_REPORTS,
         LLM_LOGS,
+        # Secrets
+        SECRETS_DIR,
         # Schemas
         SCHEMAS_DIR,
     ]

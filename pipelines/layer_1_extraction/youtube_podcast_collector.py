@@ -12,18 +12,22 @@ Run standalone:
 """
 
 import sys
+import os
 import hashlib
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from config.paths import RUNS_DIR
+from config.paths import RUNS_DIR, CHANNELS_YAML
+from pipelines.runtime_manifest import get_youtube_registry_snapshot
 
 from pipelines.layer_1_extraction.youtube_collector import collect_single_video, collect_channel
 from pipelines.layer_1_extraction.raw_document_writer import write_raw_documents, read_raw_documents
 from pipelines.layer_1_extraction.raw_payload_writer import save_payload
 from pipelines.layer_1_extraction.extraction_audit_logger import log_event
+from pipelines.layer_1_extraction.window_filter import filter_raw_documents_by_window
 
 
 _COLLECTOR_NAME = "youtube_podcast_collector"
@@ -77,7 +81,7 @@ def _to_raw_document(video: dict, run_id: str, source_id: str = "youtube_ai_chan
         "collection": {
             "collector_name": _COLLECTOR_NAME,
             "collection_method": "youtube_transcript_api",
-            "collected_at": datetime.now(timezone.utc).isoformat(),
+            "collected_at": now_project_iso(),
             "extraction_status": "success" if has_transcript else "partial",
         },
     }
@@ -121,6 +125,9 @@ def collect_from_channel(
     max_per_duration: int = 3,
     output_path: Path = None,
     layer1_dir: Path = None,
+    search_query: str = None,
+    start_at: str = None,
+    end_at: str = None,
 ) -> list:
     """Collect recent video transcripts from a YouTube channel."""
     if output_path is None:
@@ -137,6 +144,7 @@ def collect_from_channel(
             channel_name=channel_name,
             days_back=days_back,
             max_per_duration=max_per_duration,
+            search_query=search_query,
         )
     except Exception as exc:
         log_event(run_id, source_id, _COLLECTOR_NAME,
@@ -149,18 +157,130 @@ def collect_from_channel(
         return []
 
     docs = [_to_raw_document(v, run_id, source_id, source_name) for v in videos]
-    write_raw_documents(docs, output_path)
+    docs, filter_stats = filter_raw_documents_by_window(
+        docs, start_at=start_at, end_at=end_at
+    )
 
     import json
     save_payload(run_id, f"batch_{source_id}", _SOURCE_GROUP, source_id,
                  "json", json.dumps(videos, ensure_ascii=False), layer1_dir)
 
+    if filter_stats["outside_window_count"] > 0:
+        log_event(
+            run_id, source_id, _COLLECTOR_NAME,
+            "success_note", "info",
+            f"Dropped {filter_stats['outside_window_count']} video(s) outside the manifest window from {source_name}.",
+            extra=filter_stats,
+        )
+    if filter_stats["undated_or_unparseable_count"] > 0:
+        log_event(
+            run_id, source_id, _COLLECTOR_NAME,
+            "date_missing", "warning",
+            f"Kept {filter_stats['undated_or_unparseable_count']} video(s) with missing or unparseable publish dates from {source_name}.",
+            extra=filter_stats,
+        )
+    if not docs:
+        log_event(
+            run_id, source_id, _COLLECTOR_NAME,
+            "empty_result", "warning", f"All fetched videos were outside the manifest window for channel {source_name}",
+            extra=filter_stats,
+        )
+        return []
+
+    write_raw_documents(docs, output_path)
+
     log_event(run_id, source_id, _COLLECTOR_NAME,
               "success_note", "info",
               f"Collected {len(docs)} video transcripts from {source_name}",
-              extra={"doc_count": len(docs), "channel_id": channel_id})
+              extra={"doc_count": len(docs), "channel_id": channel_id, **filter_stats})
 
     return docs
+
+
+def load_enabled_channels(channels_path: Path = CHANNELS_YAML) -> tuple[list[dict], dict]:
+    """
+    Load the enabled channel registry from config/channels.yaml.
+
+    Returns:
+        (enabled_channels, youtube_defaults)
+    """
+    if not channels_path.exists():
+        return [], {}
+
+    import yaml
+    cfg = yaml.safe_load(channels_path.read_text()) or {}
+    yt_cfg = cfg.get("youtube", {})
+    channels = yt_cfg.get("channels", []) or []
+    enabled_channels = [ch for ch in channels if ch.get("enabled", True)]
+    defaults = {
+        "days_back": yt_cfg.get("days_back", 7),
+        "max_per_duration": yt_cfg.get("max_per_duration", 3),
+    }
+    return enabled_channels, defaults
+
+
+def load_enabled_channels_from_manifest(manifest: dict) -> tuple[list[dict], dict]:
+    snapshot = get_youtube_registry_snapshot(manifest)
+    return snapshot.get("enabled_channels", []), snapshot.get("defaults", {})
+
+
+def collect_from_config(
+    run_id: str,
+    manifest: dict | None = None,
+    days_back: int = None,
+    max_per_duration: int = None,
+    output_path: Path = None,
+    layer1_dir: Path = None,
+    start_at: str = None,
+    end_at: str = None,
+    default_search_query: str = None,
+) -> list:
+    """
+    Collect recent transcripts from manifest-selected YouTube channels.
+    """
+    if output_path is None:
+        output_path = RUNS_DIR / run_id / "layer_1" / "raw_documents.jsonl"
+    if layer1_dir is None:
+        layer1_dir = RUNS_DIR / run_id / "layer_1"
+
+    if not os.getenv("YOUTUBE_API_KEY"):
+        log_event(
+            run_id, "youtube_ai_channels", _COLLECTOR_NAME,
+            "auth_error", "warning",
+            "YOUTUBE_API_KEY not set; skipping YouTube orchestration in Layer 1.",
+            retryable=True,
+        )
+        return []
+
+    channels, defaults = load_enabled_channels_from_manifest(manifest or {})
+    if not channels:
+        log_event(
+            run_id, "youtube_ai_channels", _COLLECTOR_NAME,
+            "config_error", "warning",
+            "No enabled YouTube channels found in run_manifest.json resolved_config.youtube_channels.",
+        )
+        return []
+
+    effective_days_back = days_back or defaults.get("days_back", 7)
+    effective_max_per = max_per_duration or defaults.get("max_per_duration", 3)
+
+    all_docs = []
+    for ch in channels:
+        docs = collect_from_channel(
+            run_id=run_id,
+            channel_id=ch["channel_id"],
+            channel_name=ch.get("name", ""),
+            days_back=effective_days_back,
+            max_per_duration=ch.get("max_per_duration", effective_max_per),
+            output_path=output_path,
+            layer1_dir=layer1_dir,
+            search_query=ch.get("search_query") or default_search_query,
+            start_at=start_at,
+            end_at=end_at,
+        )
+        all_docs.extend(docs)
+
+    return all_docs
 
 
 if __name__ == "__main__":

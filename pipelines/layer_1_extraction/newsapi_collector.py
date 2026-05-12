@@ -16,6 +16,8 @@ import json
 import hashlib
 import argparse
 from datetime import datetime, timezone, timedelta
+from config.time_utils import now_project
+from config.time_utils import now_project_iso
 from urllib.request import urlopen, Request
 from urllib.parse import urlencode
 
@@ -47,7 +49,7 @@ def fetch_news(query="artificial intelligence", max_results=10, sort_by="publish
         print("ERROR: NewsAPI key not found in .env")
         return []
 
-    from_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    from_date = (now_project() - timedelta(days=days_back)).strftime("%Y-%m-%d")
 
     params = {
         "q": query,
@@ -105,7 +107,7 @@ def parse_article(raw, query_used):
         "query_used": query_used,
         "language": "en",
         "content_hash": content_hash,
-        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collected_at": now_project_iso(),
     }
 
 
@@ -113,7 +115,7 @@ def save_results(articles, query):
     """Save collected articles to output/layer_1_raw/newsapi/ as JSON."""
     ensure_output_dirs()
 
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = now_project().strftime("%Y-%m-%d")
     query_slug = query.replace(" ", "_")[:30].lower()
     filename = f"{date_str}_{query_slug}.json"
     filepath = RAW_NEWSAPI / filename

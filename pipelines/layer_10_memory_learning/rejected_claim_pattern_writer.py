@@ -15,6 +15,7 @@ Output: memory/rejected_claim_patterns.jsonl
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -43,7 +44,7 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
     path          = memory_dir / "rejected_claim_patterns.jsonl"
     existing_keys = _load_existing_keys(path)
     run_id        = ctx["run_id"]
-    now           = datetime.now(timezone.utc).isoformat()
+    now           = now_project_iso()
 
     written = []
 

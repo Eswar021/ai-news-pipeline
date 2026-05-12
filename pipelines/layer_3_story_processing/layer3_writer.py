@@ -19,6 +19,7 @@ import sys
 import json
 from collections import Counter
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -95,7 +96,7 @@ def write(
 
     _write_json(layer3_dir / "story_clusters.json", {
         "run_id": run_id,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": now_project_iso(),
         "story_cluster_count": len(story_clusters_out),
         "story_clusters": story_clusters_out,
     })
@@ -103,7 +104,7 @@ def write(
     # ── ranked_stories.json ────────────────────────────────────────────────────
     _write_json(layer3_dir / "ranked_stories.json", {
         "run_id": run_id,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": now_project_iso(),
         "ranked_story_count": len(ranked_stories),
         "ranked_stories": ranked_stories,
     })
@@ -164,14 +165,14 @@ def write(
 
     _write_json(layer3_dir / "story_entity_topic_map.json", {
         "run_id": run_id,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": now_project_iso(),
         "story_entity_topic_map": entity_topic_map,
     })
 
     # ── story_timeline.json ────────────────────────────────────────────────────
     _write_json(layer3_dir / "story_timeline.json", {
         "run_id": run_id,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": now_project_iso(),
         "story_timelines": timelines,
     })
 
@@ -181,7 +182,7 @@ def write(
 
     rank_report = {
         "run_id":         run_id,
-        "generated_at":   datetime.now(timezone.utc).isoformat(),
+        "generated_at":   now_project_iso(),
         "total_ranked":   len(ranked_stories),
         "bucket_summary": dict(bucket_counts),
         "top_story_ids":  top_stories,
@@ -198,7 +199,7 @@ def write(
     manifest = {
         "run_id":     run_id,
         "layer":      "layer_3_story_processing",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": now_project_iso(),
 
         "inputs": {
             "canonical_documents": str(layer3_dir.parent / "layer_2" / "canonical_documents.jsonl"),

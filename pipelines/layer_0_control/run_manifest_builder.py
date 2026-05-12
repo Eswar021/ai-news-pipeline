@@ -6,11 +6,12 @@ Purpose: Merge all Layer 0 module outputs into run_manifest.json and write it to
 """
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
+from config.time_utils import now_project_iso
 
-_SCHEMA_VERSION = "1.0"
+
+_SCHEMA_VERSION = "1.1"
 
 
 def build_run_manifest(
@@ -25,6 +26,7 @@ def build_run_manifest(
     memory_context: dict,
     depth_limits: dict,
     output_contract: dict,
+    resolved_config: dict,
     runs_dir: Path,
 ) -> tuple:
     """
@@ -42,7 +44,7 @@ def build_run_manifest(
     manifest = {
         "run_id": run_id,
         "schema_version": _SCHEMA_VERSION,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": now_project_iso(),
         "status": "pending_validation",
 
         "run_request": run_request,
@@ -96,6 +98,7 @@ def build_run_manifest(
         "depth_limits": depth_limits,
 
         "output_contract": output_contract["output_contract"],
+        "resolved_config": resolved_config,
 
         "validation_report": {
             "validation_status": "pending",
@@ -124,6 +127,7 @@ def build_run_manifest(
         "memory_context_raw": memory_context,
         "depth_limits_raw": depth_limits,
         "output_contract_raw": output_contract,
+        "resolved_config_raw": resolved_config,
     }
     snapshot_path = run_dir / "run_config_snapshot.json"
     with open(snapshot_path, "w") as f:

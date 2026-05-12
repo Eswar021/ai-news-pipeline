@@ -11,6 +11,7 @@ Run standalone:
 import sys
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -48,7 +49,7 @@ def log_event(
         "severity": severity,
         "retryable": retryable,
         "message": message,
-        "occurred_at": datetime.now(timezone.utc).isoformat(),
+        "occurred_at": now_project_iso(),
     }
     if extra:
         event.update(extra)

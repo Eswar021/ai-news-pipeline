@@ -15,6 +15,8 @@ import hashlib
 import argparse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from config.time_utils import now_project
+from config.time_utils import now_project_iso
 from urllib.request import urlopen, Request
 from urllib.parse import urlencode
 
@@ -137,7 +139,7 @@ def parse_entry(entry, query_category):
         "journal_ref": journal_ref,
         "doi": doi,
         "content_hash": content_hash,
-        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collected_at": now_project_iso(),
         "raw_text": abstract,  # for papers, abstract is the main raw text
     }
 
@@ -146,7 +148,7 @@ def save_results(papers, category):
     """Save collected papers to output/layer_1_raw/arxiv/ as JSON."""
     ensure_output_dirs()
 
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = now_project().strftime("%Y-%m-%d")
     cat_slug = category.replace(".", "_").lower()
     filename = f"{date_str}_{cat_slug}.json"
     filepath = RAW_ARXIV / filename

@@ -11,6 +11,7 @@ confidence and caution requirements for future reuse.
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -35,7 +36,7 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
     claim_map     = ctx["claim_map"]
     video_id      = mc["video_id"]
     run_id        = ctx["run_id"]
-    now           = datetime.now(timezone.utc).isoformat()
+    now           = now_project_iso()
 
     written  = []
     skipped  = []

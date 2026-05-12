@@ -25,15 +25,14 @@ Output:
 
 import sys
 import json
-import yaml
 import argparse
-from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config.paths import RUNS_DIR, MEMORY_DIR, OUTPUT_DIR, CONFIG_DIR
+from config.paths import RUNS_DIR, MEMORY_DIR, OUTPUT_DIR
+from config.time_utils import format_project_timestamp
+from pipelines.runtime_manifest import get_handoff_prompt_config
 
-PROMPTS_CONFIG = CONFIG_DIR / "chatgpt_prompts.yaml"
 HANDOFFS_DIR   = OUTPUT_DIR / "chatgpt_handoffs"
 
 
@@ -164,7 +163,9 @@ def _read_article_text(doc_meta: dict, max_words: int = 800) -> str:
 
 def _load_run_manifest(run_id: str) -> dict:
     p = RUNS_DIR / run_id / "run_manifest.json"
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    if not p.exists():
+        raise FileNotFoundError(f"run_manifest.json not found for run '{run_id}'")
+    return json.loads(p.read_text(encoding="utf-8"))
 
 
 def _resolve_selected_format(run_dir: Path, manifest: dict) -> str:
@@ -324,7 +325,7 @@ One sentence connecting this story to the next.
 
 def build_instructions(run_id: str, run_dir: Path, level: str, cfg: dict, level_cfg: dict,
                        n_stories: int, n_with_facts: int) -> str:
-    now      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now      = format_project_timestamp()
     script   = cfg["script_requirements"]
     manifest = _load_run_manifest(run_id)
 
@@ -992,11 +993,14 @@ def export(run_id: str, level: str = None) -> dict:
             level = _detect_level(run_dir)
             print(f"[export] Auto-detected level: {level}")
         _validate_level_inputs(run_dir, level)
+        manifest = _load_run_manifest(run_id)
+        cfg = get_handoff_prompt_config(manifest)
     except FileNotFoundError as exc:
         print(f"[export] {exc}")
         sys.exit(1)
-
-    cfg = yaml.safe_load(PROMPTS_CONFIG.read_text(encoding="utf-8"))
+    except KeyError as exc:
+        print(f"[export] {exc}")
+        sys.exit(1)
 
     if level not in cfg["handoff_levels"]:
         available = list(cfg["handoff_levels"].keys())

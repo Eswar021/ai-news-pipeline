@@ -17,6 +17,8 @@ import json
 import hashlib
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project
+from config.time_utils import now_project_iso
 from urllib.request import urlopen, Request
 from urllib.parse import urlencode
 
@@ -109,7 +111,7 @@ def parse_article(raw, query_used):
         "image_url": image,
         "query_used": query_used,
         "content_hash": content_hash,
-        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collected_at": now_project_iso(),
     }
 
 
@@ -117,7 +119,7 @@ def save_results(articles, query):
     """Save collected articles to output/layer_1_raw/mediastack/ as JSON."""
     ensure_output_dirs()
 
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = now_project().strftime("%Y-%m-%d")
     query_slug = query.replace(" ", "_")[:30].lower()
     filename = f"{date_str}_{query_slug}.json"
     filepath = RAW_MEDIASTACK / filename

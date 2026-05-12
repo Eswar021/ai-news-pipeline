@@ -8,6 +8,7 @@ extractors can reuse.
 
 import hashlib
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 from html.parser import HTMLParser
@@ -133,7 +134,7 @@ def make_document(source_id, company, title, url, published_at, raw_text, author
         "company": company,
         "raw_text": raw_text,
         "content_hash": content_hash,
-        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collected_at": now_project_iso(),
     }
 
     if extra:

@@ -21,6 +21,7 @@ Usage:
 import json
 import time
 from datetime import datetime
+from config.time_utils import now_project, now_project_iso
 from pathlib import Path
 
 import sys
@@ -45,7 +46,7 @@ def call_llm(llm, prompt, module="unknown", metadata=None):
 
     # Record start time
     start_time = time.time()
-    timestamp = datetime.now().isoformat()
+    timestamp = now_project_iso()
 
     # Make the actual LLM call
     response = llm.invoke(prompt)
@@ -91,8 +92,8 @@ def call_llm(llm, prompt, module="unknown", metadata=None):
         log_entry["metadata"] = metadata
 
     # Save to file — one file per call, named for easy browsing
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    time_str = datetime.now().strftime("%H%M%S")
+    date_str = now_project().strftime("%Y-%m-%d")
+    time_str = now_project().strftime("%H%M%S")
     filename = f"{date_str}_{module}_{time_str}.json"
     filepath = LLM_LOGS / filename
 

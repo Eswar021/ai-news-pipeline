@@ -23,6 +23,7 @@ Key function:
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -54,7 +55,7 @@ def write(
     selected_video_brief:  dict,
 ) -> dict:
     layer5_dir.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_project_iso()
 
     # ── editorial_candidates.json ─────────────────────────────────────────────
     _write_json(layer5_dir / "editorial_candidates.json", {

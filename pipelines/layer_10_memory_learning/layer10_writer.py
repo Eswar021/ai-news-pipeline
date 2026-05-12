@@ -12,6 +12,7 @@ Manifest records what memory was updated, counts, and handoff status.
 
 import json
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 
@@ -34,7 +35,7 @@ def write(
     started_at: str,
     write_results: dict,
 ) -> dict:
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_project_iso()
 
     # Count records per memory file
     video_count    = len(_load_jsonl(memory_dir / "video_memory.jsonl"))
@@ -47,6 +48,7 @@ def write(
     gap_count      = len(_load_jsonl(memory_dir / "evidence_gap_watchlist.jsonl"))
     risk_count     = len(_load_jsonl(memory_dir / "rejected_claim_patterns.jsonl"))
     signal_count   = len(_load_jsonl(memory_dir / "learning_signals.jsonl"))
+    performance_count = len(_load_jsonl(memory_dir / "performance_memory.jsonl"))
 
     manifest = {
         "run_id":  run_id,
@@ -72,9 +74,12 @@ def write(
             "followups":                 str(memory_dir / "followups.jsonl"),
             "evidence_gap_watchlist":    str(memory_dir / "evidence_gap_watchlist.jsonl"),
             "rejected_claim_patterns":   str(memory_dir / "rejected_claim_patterns.jsonl"),
+            "performance_memory":        str(memory_dir / "performance_memory.jsonl"),
             "learning_signals":          str(memory_dir / "learning_signals.jsonl"),
             "memory_index":              str(memory_dir / "memory_index.json"),
             "memory_snapshot":           str(memory_dir / "memory_snapshot.json"),
+            "publishing_channel_state":  str(memory_dir / "publishing_channel_state.json"),
+            "published_video_inventory": str(memory_dir / "published_video_inventory.jsonl"),
         },
 
         "memory_update_summary": {
@@ -87,6 +92,7 @@ def write(
             "followup_records":              followup_count,
             "evidence_gap_watchlist_records": gap_count,
             "rejected_claim_pattern_records": risk_count,
+            "performance_memory_records":     performance_count,
             "learning_signal_records":        signal_count,
         },
 
@@ -136,7 +142,7 @@ if __name__ == "__main__":
     elig   = gate(ctx)
     mc     = extract(ctx)
 
-    started = datetime.now(timezone.utc).isoformat()
+    started = now_project_iso()
     mc["layer9_dir"] = base / "layer_9"
 
     result = write(run_id, mc, base / "layer_10", MEMORY_DIR, started, {})

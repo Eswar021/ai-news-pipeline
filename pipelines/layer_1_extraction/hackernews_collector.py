@@ -15,6 +15,8 @@ import json
 import hashlib
 import argparse
 from datetime import datetime, timezone
+from config.time_utils import now_project
+from config.time_utils import now_project_iso
 from urllib.request import urlopen, Request
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent.parent))
@@ -135,7 +137,7 @@ def parse_story(story):
         "comment_count": comment_count,
         "signal_type": "developer_discussion",
         "content_hash": content_hash,
-        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collected_at": now_project_iso(),
     }
 
 
@@ -143,7 +145,7 @@ def save_results(stories, story_type):
     """Save collected stories to output/layer_1_raw/hackernews/ as JSON."""
     ensure_output_dirs()
 
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = now_project().strftime("%Y-%m-%d")
     filename = f"{date_str}_{story_type}.json"
     filepath = RAW_HACKERNEWS / filename
 

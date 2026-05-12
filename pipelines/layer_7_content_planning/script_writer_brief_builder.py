@@ -25,6 +25,7 @@ Individual test:
 
 import sys
 from datetime import datetime, timezone
+from config.time_utils import now_project_iso
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -115,7 +116,7 @@ def build(
     boundary_review:      dict,
     research_packet_id:   str,
 ) -> dict:
-    now          = datetime.now(timezone.utc).isoformat()
+    now          = now_project_iso()
     packet_type  = layer7_ctx["packet_type"]
     total_dur    = pacing_plan["target_duration_seconds"]
     target_min   = round(total_dur / 60, 1)
