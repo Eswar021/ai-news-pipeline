@@ -8,6 +8,9 @@ This snapshot is consumed by future Layer 5 and Layer 7 runs to:
   - find open follow-ups
   - prioritize high-value sources
 
+Only published videos contribute to repetition guidance and covered-story
+tracking. Prepared-but-unpublished runs stay in raw memory files for audit.
+
 Output: memory/memory_snapshot.json (overwritten on each run)
 """
 
@@ -28,6 +31,19 @@ def _load_jsonl(path: Path) -> list:
     return records
 
 
+def _published_video_records(video_records: list[dict]) -> list[dict]:
+    published = []
+    for rec in video_records:
+        published_at = (
+            rec.get("timestamps", {}).get("published_at")
+            or rec.get("published_at")
+            or ""
+        )
+        if published_at:
+            published.append(rec)
+    return published
+
+
 def build(memory_dir: Path) -> dict:
     now = datetime.now(timezone.utc)
 
@@ -38,11 +54,29 @@ def build(memory_dir: Path) -> dict:
     source_records       = _load_jsonl(memory_dir / "source_memory.jsonl")
     followup_records     = _load_jsonl(memory_dir / "followups.jsonl")
 
+    published_videos = _published_video_records(video_records)
+    published_video_ids = {
+        rec.get("video_id", "")
+        for rec in published_videos
+        if rec.get("video_id")
+    }
+    published_story_records = [
+        rec for rec in story_records
+        if rec.get("video_id") in published_video_ids
+    ]
+    published_editorial_records = [
+        rec for rec in editorial_records
+        if rec.get("video_id") in published_video_ids
+    ]
+
     # ── Recent coverage (last 30 days) ────────────────────────────────────────
     cutoff_30d = (now - timedelta(days=30)).isoformat()
     recent_videos = [
-        v for v in video_records
-        if v.get("timestamps", {}).get("created_at", "") >= cutoff_30d
+        v for v in published_videos
+        if (
+            v.get("timestamps", {}).get("published_at")
+            or v.get("published_at", "")
+        ) >= cutoff_30d
     ]
 
     top_entities = Counter(
@@ -58,17 +92,17 @@ def build(memory_dir: Path) -> dict:
     # ── Avoid repetition ──────────────────────────────────────────────────────
     recent_title_angles = [
         ep.get("titles", {}).get("working_title", "")
-        for ep in editorial_records
+        for ep in published_editorial_records
         if ep.get("created_at", "") >= cutoff_30d
     ]
     recent_hook_types = list({
         ep.get("hook", {}).get("hook_type", "")
-        for ep in editorial_records
+        for ep in published_editorial_records
         if ep.get("created_at", "") >= cutoff_30d
     })
     blocked_title_angles = list({
         angle
-        for ep in editorial_records
+        for ep in published_editorial_records
         for angle in ep.get("titles", {}).get("blocked_title_angles", [])
     })
 
@@ -101,18 +135,19 @@ def build(memory_dir: Path) -> dict:
     tier3 = sorted({r["domain"] for r in source_records if r.get("trust_tier") == 3})
 
     # ── Covered story IDs ─────────────────────────────────────────────────────
-    covered_story_ids = list({r["story_id"] for r in story_records})
+    covered_story_ids = list({r["story_id"] for r in published_story_records})
 
     snapshot = {
         "snapshot_created_at": now.isoformat(),
         "stats": {
             "total_videos_in_memory": len(video_records),
-            "total_stories_covered":  len(story_records),
+            "published_videos_in_memory": len(published_videos),
+            "total_stories_covered":  len(published_story_records),
             "open_followups":         len(open_followups),
         },
         "recent_coverage": {
             "last_30_days": {
-                "videos_prepared": len(recent_videos),
+                "videos_published": len(recent_videos),
                 "top_entities":    [e for e, _ in top_entities],
                 "top_topics":      [t for t, _ in top_topics],
             }

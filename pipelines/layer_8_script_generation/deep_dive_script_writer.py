@@ -26,10 +26,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
+from config.llm_config import get_profile
 from pipelines.layer_8_script_generation.brief_loader             import load as load_brief
 from pipelines.layer_8_script_generation.evidence_context_builder import build as build_evidence
 
-_MODEL = "gpt-4o-mini"
 _WPM   = 130
 
 _ROLE_TONE = {
@@ -77,6 +77,17 @@ def _make_openai_client():
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_A_C_C")
     return openai.AsyncOpenAI(api_key=api_key)
+
+
+def _llm_settings() -> tuple[str, float]:
+    profile = get_profile("deep_dive_script_writer")
+    provider = profile.get("provider", "openai")
+    if provider != "openai":
+        raise ValueError(
+            "deep_dive_script_writer currently supports only provider='openai' "
+            f"via AsyncOpenAI, got provider='{provider}'."
+        )
+    return profile["model"], profile["temperature"]
 
 
 def _word_budget(target_seconds: int) -> int:
@@ -141,15 +152,17 @@ async def _write_section(
     sec:             dict,
     evidence:        dict,
     blocked_phrases: list,
+    model:           str,
+    temperature:     float,
 ) -> dict:
     prompt = _build_section_prompt(sec, evidence, blocked_phrases)
     kwargs = _build_create_kwargs(
-        _MODEL,
+        model,
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user",   "content": prompt},
         ],
-        temperature=0.35,
+        temperature=temperature,
         response_format={"type": "json_object"},
     )
     resp = await client.chat.completions.create(**kwargs)
@@ -174,10 +187,11 @@ async def _write_section(
 
 async def _write_all(layer8_ctx: dict, evidence: dict) -> list:
     client          = _make_openai_client()
+    model, temperature = _llm_settings()
     blocked_phrases = layer8_ctx["evidence_rules"].get("blocked_phrases", [])
 
     tasks = [
-        _write_section(client, sec, evidence, blocked_phrases)
+        _write_section(client, sec, evidence, blocked_phrases, model, temperature)
         for sec in layer8_ctx["sections"]
     ]
     return await asyncio.gather(*tasks)

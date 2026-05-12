@@ -21,6 +21,8 @@ QUALITY_RULES_YAML     = CONFIG_DIR / "quality_rules.yaml"
 AUDIENCE_PROFILES_YAML = CONFIG_DIR / "audience_profiles.yaml"
 RUN_DEFAULTS_YAML      = CONFIG_DIR / "run_defaults.yaml"
 SOURCE_STRATEGY_YAML   = CONFIG_DIR / "source_strategy.yaml"
+CHATGPT_PROMPTS_YAML   = CONFIG_DIR / "chatgpt_prompts.yaml"
+ENTITY_TOPIC_TAXONOMY_YAML = CONFIG_DIR / "entity_topic_taxonomy.yaml"
 ENV_FILE               = ROOT / ".env"
 
 
@@ -39,8 +41,8 @@ LAYER_5_DIR            = PIPELINES_DIR / "layer_5_editorial_intelligence"
 LAYER_6_DIR            = PIPELINES_DIR / "layer_6_research_packets"
 LAYER_7_DIR            = PIPELINES_DIR / "layer_7_content_planning"
 LAYER_8_DIR            = PIPELINES_DIR / "layer_8_script_generation"
-LAYER_9_DIR            = PIPELINES_DIR / "layer_9_verification"
-LAYER_10_DIR           = PIPELINES_DIR / "layer_10_memory"
+LAYER_9_DIR            = PIPELINES_DIR / "layer_9_verification_firewall"
+LAYER_10_DIR           = PIPELINES_DIR / "layer_10_memory_learning"
 
 
 # ── Schemas ──

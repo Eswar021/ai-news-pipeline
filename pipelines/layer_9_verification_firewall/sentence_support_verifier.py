@@ -24,8 +24,11 @@ import json
 import asyncio
 from pathlib import Path
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from config.llm_config import get_profile
+
 _SKIP_SECTIONS  = {"intro_hook", "cta"}
-_MODEL          = "gpt-4o-mini"
 _MAX_SPAN_CHARS = 1200  # truncate each span to keep prompt size reasonable
 _MAX_SPANS      = 4     # max source spans per section
 
@@ -36,6 +39,17 @@ def _make_openai_client():
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_A_C_C")
     return openai.AsyncOpenAI(api_key=api_key)
+
+
+def _llm_settings() -> tuple[str, float]:
+    profile = get_profile("sentence_support_verifier")
+    provider = profile.get("provider", "openai")
+    if provider != "openai":
+        raise ValueError(
+            "sentence_support_verifier currently supports only provider='openai' "
+            f"via AsyncOpenAI, got provider='{provider}'."
+        )
+    return profile["model"], profile["temperature"]
 
 
 def _get_section_spans(section_key: str, classified: list, ctx: dict) -> list:
@@ -125,7 +139,15 @@ Return ONLY a JSON object with this exact format:
 }}"""
 
 
-async def _verify_section(client, section_key: str, sentences: list, spans: list, ctx: dict) -> list:
+async def _verify_section(
+    client,
+    section_key: str,
+    sentences: list,
+    spans: list,
+    ctx: dict,
+    model: str,
+    temperature: float,
+) -> list:
     if not sentences:
         return []
 
@@ -133,8 +155,8 @@ async def _verify_section(client, section_key: str, sentences: list, spans: list
 
     try:
         resp = await client.chat.completions.create(
-            model=_MODEL,
-            temperature=0.1,
+            model=model,
+            temperature=temperature,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": "You are a strict but fair factual verification analyst. Return only JSON."},
@@ -164,6 +186,7 @@ async def _verify_section(client, section_key: str, sentences: list, spans: list
 
 async def _verify_all(classified: list, ctx: dict) -> list:
     client = _make_openai_client()
+    model, temperature = _llm_settings()
 
     # Group sentences by section
     sections = {}
@@ -179,7 +202,7 @@ async def _verify_all(classified: list, ctx: dict) -> list:
     section_keys = []
     for sk, sents in sections.items():
         spans = _get_section_spans(sk, classified, ctx)
-        tasks.append(_verify_section(client, sk, sents, spans, ctx))
+        tasks.append(_verify_section(client, sk, sents, spans, ctx, model, temperature))
         section_keys.append(sk)
 
     results_by_section = await asyncio.gather(*tasks)

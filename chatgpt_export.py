@@ -65,11 +65,43 @@ def _load_jsonl(path: Path) -> list:
 
 
 def _detect_level(run_dir: Path) -> str:
-    if (run_dir / "layer_6").exists():
+    if (run_dir / "layer_6" / "research_packet.json").exists():
         return "after_layer_6"
-    if (run_dir / "layer_4").exists():
+    if (run_dir / "layer_4" / "story_fact_sheets.json").exists():
         return "after_layer_4"
-    return "after_layer_3"
+    if (run_dir / "layer_3" / "ranked_stories.json").exists():
+        return "after_layer_3"
+    raise FileNotFoundError(
+        "No completed Layer 3+ handoff inputs found for this run. "
+        "Expected at least layer_3/ranked_stories.json."
+    )
+
+
+def _validate_level_inputs(run_dir: Path, level: str) -> None:
+    required = {
+        "after_layer_3": [
+            run_dir / "layer_3" / "ranked_stories.json",
+            run_dir / "layer_3" / "story_clusters.json",
+        ],
+        "after_layer_4": [
+            run_dir / "layer_3" / "ranked_stories.json",
+            run_dir / "layer_3" / "story_clusters.json",
+            run_dir / "layer_4" / "story_fact_sheets.json",
+            run_dir / "layer_4" / "verified_claims.jsonl",
+        ],
+        "after_layer_6": [
+            run_dir / "layer_3" / "ranked_stories.json",
+            run_dir / "layer_3" / "story_clusters.json",
+            run_dir / "layer_4" / "story_fact_sheets.json",
+            run_dir / "layer_4" / "verified_claims.jsonl",
+            run_dir / "layer_6" / "research_packet.json",
+        ],
+    }
+    missing = [str(p.relative_to(run_dir)) for p in required[level] if not p.exists()]
+    if missing:
+        raise FileNotFoundError(
+            f"Run is missing required inputs for {level}: {', '.join(missing)}"
+        )
 
 
 def _build_doc_map(run_dir: Path) -> dict:
@@ -135,7 +167,162 @@ def _load_run_manifest(run_id: str) -> dict:
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
-def build_instructions(run_id: str, level: str, cfg: dict, level_cfg: dict,
+def _resolve_selected_format(run_dir: Path, manifest: dict) -> str:
+    candidates = [
+        (run_dir / "layer_8" / "generated_script.json", ("selected_format",)),
+        (run_dir / "layer_7" / "script_writer_brief.json", ("video_identity", "selected_format")),
+        (run_dir / "layer_6" / "research_packet.json", ("selected_format",)),
+        (run_dir / "layer_5" / "selected_video_brief.json", ("selected_format",)),
+    ]
+
+    for path, keys in candidates:
+        data = _load_json(path)
+        if not data:
+            continue
+        value = data
+        for key in keys:
+            if not isinstance(value, dict):
+                value = None
+                break
+            value = value.get(key)
+        if value:
+            return value
+
+    requested = manifest.get("run_request", {}).get("target_format")
+    if requested and requested != "auto":
+        return requested
+
+    eligible = manifest.get("format_strategy", {}).get("eligible_formats", [])
+    return eligible[0] if eligible else "roundup"
+
+
+def _build_published_memory_block() -> str:
+    video_records = _load_jsonl(MEMORY_DIR / "video_memory.jsonl")
+    published_video_ids = {
+        rec.get("video_id", "")
+        for rec in video_records
+        if rec.get("timestamps", {}).get("published_at") or rec.get("published_at")
+    }
+    if not published_video_ids:
+        return ""
+
+    editorial_records = [
+        rec for rec in _load_jsonl(MEMORY_DIR / "editorial_pattern_memory.jsonl")
+        if rec.get("video_id", "") in published_video_ids
+    ]
+    story_records = [
+        rec for rec in _load_jsonl(MEMORY_DIR / "story_coverage_memory.jsonl")
+        if rec.get("video_id", "") in published_video_ids
+    ]
+
+    angles = [
+        rec.get("titles", {}).get("working_title", "")
+        for rec in editorial_records
+        if rec.get("titles", {}).get("working_title")
+    ]
+    hooks = list({
+        rec.get("hook", {}).get("hook_type", "")
+        for rec in editorial_records
+        if rec.get("hook", {}).get("hook_type")
+    })
+    blocked = list({
+        angle
+        for rec in editorial_records
+        for angle in rec.get("titles", {}).get("blocked_title_angles", [])
+        if angle
+    })
+    covered = list({
+        rec.get("story_id", "")
+        for rec in story_records
+        if rec.get("story_id")
+    })
+
+    av_lines = []
+    if angles:
+        av_lines.append("**Do NOT reuse these title angles from published videos:**")
+        av_lines.extend(f"- {angle}" for angle in angles)
+        av_lines.append("")
+    if hooks:
+        av_lines.append("**Vary the hook — these hook types were used in published videos recently:**")
+        av_lines.extend(f"- {hook}" for hook in hooks)
+        av_lines.append("")
+    if blocked:
+        av_lines.append("**Permanently blocked angles — never use:**")
+        av_lines.extend(f"- {angle}" for angle in blocked)
+        av_lines.append("")
+    if covered:
+        av_lines.append(
+            f"**Stories already covered in published videos ({len(covered)}) — skip or cover only what is genuinely new:**"
+        )
+        av_lines.extend(f"- `{story_id}`" for story_id in covered)
+        av_lines.append("")
+
+    if not av_lines:
+        return ""
+    return "## CONTENT MEMORY — WHAT TO AVOID\n\n" + "\n".join(av_lines) + "---\n\n"
+
+
+def _build_format_instruction_blocks(primary_fmt: str) -> dict:
+    if primary_fmt == "deep_dive":
+        return {
+            "making_line": "You are writing a **deep-dive video** focused on the single most important AI development from this run.",
+            "stories_line": "**Stories to cover:** 1 primary story (you may reference 1–2 supporting sources only if they deepen the analysis)",
+            "pacing_line": "**Pacing:** medium — let the argument build, but keep every section concrete",
+            "structure_block": "Hook (30 sec) → What Happened → Why It Matters → Technical Context / Background → Limitations / Open Questions → Close (60 sec)",
+            "step_2": "Read the primary source carefully, then check any supporting sources included in the run for corroboration or useful context.",
+            "step_3": "Focus on the selected story. Do not turn this into a roundup. The goal is depth, not breadth.",
+            "step_4": "Decide the analytical order. Lead with the viewer question, then move through verified facts, context, implications, and limitations.",
+            "step_6": "Write the core analysis in sections: what happened, why it matters, technical context, and limitations or open questions.",
+            "output_format": """[HOOK]
+...30-second hook. Specific, creates intrigue. Never "Welcome back"...
+
+[WHAT HAPPENED]
+...State the verified facts clearly...
+...Each factual sentence followed by [SOURCE: domain/path]...
+[B-ROLL: specific visual suggestion — what should be on screen here]
+
+[WHY IT MATTERS]
+...Explain the practical impact...
+
+[TECHNICAL CONTEXT]
+...Explain the technical or business background...
+
+[LIMITATIONS / OPEN QUESTIONS]
+...Be explicit about what is still uncertain, unverified, or early...
+
+[CLOSE]
+...Balanced takeaway. Natural subscribe CTA. ~60 seconds...""",
+        }
+
+    return {
+        "making_line": "You are writing a **roundup video** covering the most important AI developments from the run window.",
+        "stories_line": "**Stories to cover:** 5–8 (select the most important and interesting, not just the highest scored)",
+        "pacing_line": "**Pacing:** fast — keep each story segment to 1–2 minutes maximum",
+        "structure_block": "Hook (30 sec) → Story 1 → Transition → Story 2 → ... → Story N → Close (60 sec)",
+        "step_2": "If in Deep Research mode: visit the source URLs for the top 6–10 stories.",
+        "step_3": "Select 5–8 stories.",
+        "step_4": "Decide story order.",
+        "step_6": "Write each story segment.",
+        "output_format": """[HOOK]
+...30-second hook. Specific, creates intrigue. Never "Welcome back"...
+
+[STORY: Exact Story Title From 02_stories.md]
+...1–2 minute segment...
+...Each factual sentence followed by [SOURCE: domain/path]...
+[B-ROLL: specific visual suggestion — what should be on screen here]
+
+[TRANSITION]
+One sentence connecting this story to the next.
+
+[STORY: Next Story Title]
+...
+
+[CLOSE]
+...Forward-looking observation. Natural subscribe CTA. ~60 seconds...""",
+    }
+
+
+def build_instructions(run_id: str, run_dir: Path, level: str, cfg: dict, level_cfg: dict,
                        n_stories: int, n_with_facts: int) -> str:
     now      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     script   = cfg["script_requirements"]
@@ -172,15 +359,15 @@ def build_instructions(run_id: str, level: str, cfg: dict, level_cfg: dict,
         "Being talked down to — they know what an LLM is",
     ])
 
-    fmt_eligible    = fmt_strategy.get("eligible_formats", ["roundup"])
     fmt_req         = fmt_strategy.get("format_requirements", {})
-    primary_fmt     = fmt_eligible[0] if fmt_eligible else "roundup"
+    primary_fmt     = _resolve_selected_format(run_dir, manifest)
     fmt_details     = fmt_req.get(primary_fmt, {})
     target_mins     = fmt_details.get("target_duration_minutes", script["target_duration_minutes"][1])
     min_stories     = fmt_details.get("min_stories", script["stories_per_video"][0])
     max_stories     = fmt_details.get("max_stories", script["stories_per_video"][1])
     pacing          = fmt_details.get("pacing", "fast")
     lookback        = run_request.get("lookback_hours", 48)
+    fmt_blocks      = _build_format_instruction_blocks(primary_fmt)
 
     has_facts_note = (
         f"{n_with_facts} of these have verified, source-checked fact sheets (marked ✓ FACTS). "
@@ -190,34 +377,7 @@ def build_instructions(run_id: str, level: str, cfg: dict, level_cfg: dict,
     )
 
     # ── Avoid section from memory ─────────────────────────────────────────────
-    avoid_block = ""
-    snap_path   = MEMORY_DIR / "memory_snapshot.json"
-    if snap_path.exists():
-        snap    = json.loads(snap_path.read_text(encoding="utf-8"))
-        avoid   = snap.get("avoid_repetition", {})
-        covered = snap.get("covered_story_ids", [])
-        angles  = [a for a in avoid.get("recent_title_angles", []) if a]
-        hooks   = [h for h in avoid.get("recent_hook_types", []) if h]
-        blocked = [b for b in avoid.get("blocked_title_angles", []) if b]
-        av_lines = []
-        if angles:
-            av_lines.append("**Do NOT reuse these title angles from previous videos:**")
-            av_lines.extend(f"- {a}" for a in angles)
-            av_lines.append("")
-        if hooks:
-            av_lines.append("**Vary the hook — these hook types were used recently:**")
-            av_lines.extend(f"- {h}" for h in hooks)
-            av_lines.append("")
-        if blocked:
-            av_lines.append("**Permanently blocked angles — never use:**")
-            av_lines.extend(f"- {b}" for b in blocked)
-            av_lines.append("")
-        if covered:
-            av_lines.append(f"**Stories already covered in previous videos ({len(covered)}) — skip or cover only what is genuinely new:**")
-            av_lines.extend(f"- `{sid}`" for sid in covered)
-            av_lines.append("")
-        if av_lines:
-            avoid_block = "## CONTENT MEMORY — WHAT TO AVOID\n\n" + "\n".join(av_lines) + "---\n\n"
+    avoid_block = _build_published_memory_block()
 
     # ── Audience wants/hates lines ────────────────────────────────────────────
     wants_lines = "\n".join(f"- {w}" for w in aud_wants) if aud_wants else "- Accurate, evidence-backed information\n- Context on why it matters to them practically"
@@ -241,7 +401,7 @@ You are a professional YouTube scriptwriter for **"{channel_name}"** — a tech 
 
 > *"{content_promise}"*
 
-You are writing a **{primary_fmt} video** covering the most important AI developments from the **last {lookback} hours**.
+{fmt_blocks["making_line"]}
 
 This script will be **read on camera** by the host. Every sentence must work spoken aloud. The host will also **show source URLs on screen** as visual overlays while reading — so every factual claim in the script must end with a `[SOURCE: domain/path]` tag so the video editor knows exactly which source graphic to show.
 
@@ -288,12 +448,12 @@ Use the article text in `02_stories.md` as your source. Do not add facts from yo
 
 **Type:** {primary_fmt.upper()}
 **Target length:** {target_mins} minutes when read at normal speaking pace (~{target_mins * 150} words)
-**Stories to cover:** {min_stories}–{max_stories} (select the most important and interesting, not just the highest scored)
-**Pacing:** {pacing} — keep each story segment to 1–2 minutes maximum
+{fmt_blocks["stories_line"]}
+{fmt_blocks["pacing_line"]}
 
 **Structure:**
 ```
-Hook (30 sec) → Story 1 → Transition → Story 2 → ... → Story N → Close (60 sec)
+{fmt_blocks["structure_block"]}
 ```
 
 ---
@@ -354,11 +514,11 @@ GPT-5.5-Cyber is available in limited preview to security teams protecting criti
 **Step 1 — Read all of `02_stories.md` before making any decisions.**
 Get a complete picture of what happened this week before selecting stories.
 
-**Step 2 — If in Deep Research mode: visit the source URLs for the top 6–10 stories.**
+**Step 2 — {fmt_blocks["step_2"]}**
 Read the actual articles. Find the best quote, the most specific number, the sharpest detail. Our automated data is a starting point — you can find better material in the full source pages.
 
-**Step 3 — Select {min_stories}–{max_stories} stories.**
-Choose stories that together tell a coherent picture of this week in AI. Prioritize:
+**Step 3 — {fmt_blocks["step_3"]}**
+Choose the material that best serves this format. Prioritize:
 - Stories with the highest importance scores AND interesting narrative angles
 - Stories that have something concrete: a number, a product you can describe, a real-world example
 - Stories with independent confirmation (multiple sources) over company-only announcements
@@ -366,7 +526,7 @@ Choose stories that together tell a coherent picture of this week in AI. Priorit
 
 Do NOT include a story just because it has a high score. If it has nothing interesting to say on video, skip it.
 
-**Step 4 — Decide story order.**
+**Step 4 — {fmt_blocks["step_4"]}**
 Lead with the story most likely to make someone stop scrolling. The first 30 seconds are everything.
 Do NOT order by score. Order by what creates the most compelling opening and narrative flow.
 
@@ -376,7 +536,7 @@ The hook runs for exactly 30 seconds (~75 words). It must:
 - Reference something concrete — a specific company, number, or event — not vague promises
 - NOT start with "Welcome back" or any variant of it
 
-**Step 6 — Write each story segment.**
+**Step 6 — {fmt_blocks["step_6"]}**
 Follow this structure for each story:
 1. **Context** (1–2 sentences): What is this company / product / research area? Enough so the viewer knows why to care.
 2. **What happened** (2–4 sentences): The news itself, stated with specific facts. Cite every fact.
@@ -396,22 +556,7 @@ End with one genuinely useful forward-looking observation — a question this we
 Write the complete script using these exact section markers:
 
 ```
-[HOOK]
-...30-second hook. Specific, creates intrigue. Never "Welcome back"...
-
-[STORY: Exact Story Title From 02_stories.md]
-...1–2 minute segment...
-...Each factual sentence followed by [SOURCE: domain/path]...
-[B-ROLL: specific visual suggestion — what should be on screen here]
-
-[TRANSITION]
-One sentence connecting this story to the next.
-
-[STORY: Next Story Title]
-...
-
-[CLOSE]
-...Forward-looking observation. Natural subscribe CTA. ~60 seconds...
+{fmt_blocks["output_format"]}
 ```
 
 ---
@@ -842,9 +987,14 @@ def export(run_id: str, level: str = None) -> dict:
         print(f"[export] Run directory not found: {run_dir}")
         sys.exit(1)
 
-    if not level:
-        level = _detect_level(run_dir)
-        print(f"[export] Auto-detected level: {level}")
+    try:
+        if not level:
+            level = _detect_level(run_dir)
+            print(f"[export] Auto-detected level: {level}")
+        _validate_level_inputs(run_dir, level)
+    except FileNotFoundError as exc:
+        print(f"[export] {exc}")
+        sys.exit(1)
 
     cfg = yaml.safe_load(PROMPTS_CONFIG.read_text(encoding="utf-8"))
 
@@ -870,7 +1020,7 @@ def export(run_id: str, level: str = None) -> dict:
 
     # File 1 — instructions
     print(f"  Building 01_instructions.md ...")
-    instructions_doc = build_instructions(run_id, level, cfg, level_cfg, n_stories, n_with_facts)
+    instructions_doc = build_instructions(run_id, run_dir, level, cfg, level_cfg, n_stories, n_with_facts)
     instructions_path = out_dir / "01_instructions.md"
     instructions_path.write_text(instructions_doc, encoding="utf-8")
 

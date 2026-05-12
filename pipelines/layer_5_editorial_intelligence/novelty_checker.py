@@ -15,7 +15,8 @@ Coverage thresholds (from design doc novelty_rules):
   > 0.55 → related_but_new
   else   → new_topic
 
-Memory window: 60 days. Videos older than 60 days are ignored.
+Memory window: 60 days. Only published videos are considered, and videos older
+than 60 days are ignored.
 
 If memory is empty (first run), all stories get:
   novelty_score=90, coverage_status=new_topic
@@ -97,13 +98,20 @@ def _filter_recent(videos: list[dict]) -> list[dict]:
     cutoff = datetime.now(timezone.utc) - timedelta(days=_MEMORY_WINDOW_DAYS)
     recent = []
     for v in videos:
-        published = v.get("published_at") or v.get("created_at") or ""
+        timestamps = v.get("timestamps", {})
+        published = (
+            timestamps.get("published_at")
+            or v.get("published_at")
+            or ""
+        )
+        if not published:
+            continue
         try:
             dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
             if dt >= cutoff:
                 recent.append(v)
         except (ValueError, AttributeError):
-            recent.append(v)  # can't parse date → include conservatively
+            continue
     return recent
 
 
