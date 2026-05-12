@@ -727,12 +727,16 @@ Implemented:
 
 - manifests carry `output_contract`
 - individual layers have validation gates
+- the active output contract was aligned on 2026-05-12 to the real run-scoped layer outputs
+- `pipeline.py` now enforces each layer's minimum required artifacts and honors the layer's existing validation report
+- the runner can fall back to an active rebuilt contract when older manifests still carry stale contract paths
 - handoff exporter now refuses missing Layer 3 handoff inputs
 
 Missing or incomplete:
 
-- output contract and minimum document expectations are still largely decorative
-- some expected run-state completeness checks are not centralized
+- Layer 0 `minimum_expected_documents` is still not enforced as a centralized runner threshold
+- contract enforcement is intentionally minimal and only covers core artifacts, not every derivative file
+- some expected run-state completeness checks remain distributed inside per-layer validation gates rather than one shared contract engine
 
 ### Why it was deferred earlier
 
@@ -751,6 +755,7 @@ From the implementation decisions:
 - incomplete runs fail in predictable places with helpful reasons
 - handoff/export tools do not silently generate misleading artifacts
 - contract enforcement is strong enough to prevent “looks complete but isn’t” states
+- optional later work can add threshold-style checks without replacing the current lightweight enforcement model
 
 ---
 

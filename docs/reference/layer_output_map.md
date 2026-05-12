@@ -29,6 +29,15 @@ If you want:
 - What Layer 9 approved or flagged: read Layer 9 `verification_report.json`
 - What got written to memory: read Layer 10 `layer10_manifest.json`
 
+## Validation note
+
+Each active layer also writes a validation report:
+
+- Layer 0: `layer0_validation_report.json`
+- Layers 1-10: `layer_X/layerX_validation_report.json`
+
+As of 2026-05-12, `pipeline.py` uses those reports plus a small required-artifact check to decide whether a layer truly completed.
+
 ## Related docs
 
 - [Run Dataflow and Run-State Recommendation](run_dataflow_and_run_state.md)

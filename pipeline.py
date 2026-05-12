@@ -32,12 +32,14 @@ API cost summary (approximate):
 
 import sys
 import argparse
+import json
 import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config.paths import RUNS_DIR, CONFIG_DIR
+from config.paths import RUNS_DIR, CONFIG_DIR, DATA_DIR, SCRIPTS_OUTPUT
+from pipelines.layer_0_control.output_contract_builder import build_output_contract
 
 PIPELINE_CONFIG = CONFIG_DIR / "pipeline_config.yaml"
 
@@ -53,6 +55,34 @@ _LAYER_COSTS = {
     8: "~11 API calls",
     9: "~9 API calls",
     10: "free",
+}
+
+_LAYER_REQUIRED_OUTPUT_KEYS = {
+    0: ["layer_0_manifest", "layer_0_validation_report", "layer_0_config_snapshot"],
+    1: ["layer_1_raw_documents", "layer_1_extraction_manifest", "layer_1_validation_report"],
+    2: ["layer_2_canonical_documents", "layer_2_source_spans", "layer_2_manifest", "layer_2_validation_report"],
+    3: ["layer_3_story_clusters", "layer_3_ranked_stories", "layer_3_manifest", "layer_3_validation_report"],
+    4: ["layer_4_verified_claims", "layer_4_story_fact_sheets", "layer_4_manifest", "layer_4_validation_report"],
+    5: ["layer_5_selected_video_brief", "layer_5_manifest", "layer_5_validation_report"],
+    6: ["layer_6_research_packet", "layer_6_source_pack", "layer_6_manifest", "layer_6_validation_report"],
+    7: ["layer_7_video_plan", "layer_7_script_writer_brief", "layer_7_manifest", "layer_7_validation_report"],
+    8: ["layer_8_script_md", "layer_8_generated_script", "layer_8_manifest", "layer_8_validation_report"],
+    9: ["layer_9_verified_script", "layer_9_verification_report", "layer_9_final_publish_package", "layer_9_manifest", "layer_9_validation_report"],
+    10: ["layer_10_manifest", "layer_10_validation_report", "layer_10_memory_index", "layer_10_memory_snapshot"],
+}
+
+_VALIDATION_REPORT_KEYS = {
+    0: "layer_0_validation_report",
+    1: "layer_1_validation_report",
+    2: "layer_2_validation_report",
+    3: "layer_3_validation_report",
+    4: "layer_4_validation_report",
+    5: "layer_5_validation_report",
+    6: "layer_6_validation_report",
+    7: "layer_7_validation_report",
+    8: "layer_8_validation_report",
+    9: "layer_9_validation_report",
+    10: "layer_10_validation_report",
 }
 
 
@@ -78,6 +108,107 @@ def resolve_layers(args, cfg: dict) -> list[int]:
         print(f"[pipeline] Unknown preset '{preset_name}'. Available: {available}")
         sys.exit(1)
     return cfg["presets"][preset_name]["layers"]
+
+
+def _load_run_manifest(run_id: str) -> dict:
+    manifest_path = RUNS_DIR / run_id / "run_manifest.json"
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"run_manifest.json not found for run '{run_id}' at {manifest_path}")
+    with open(manifest_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _build_active_output_contract(run_id: str, manifest: dict) -> dict:
+    eligible_formats = manifest.get("format_strategy", {}).get("eligible_formats", [])
+    return build_output_contract(
+        run_id=run_id,
+        eligible_formats=eligible_formats,
+        data_dir=DATA_DIR,
+        scripts_dir=SCRIPTS_OUTPUT,
+    )["output_contract"]
+
+
+def _resolve_output_contract(run_id: str) -> dict:
+    manifest = _load_run_manifest(run_id)
+    manifest_contract = manifest.get("output_contract", {})
+    active_contract = _build_active_output_contract(run_id, manifest)
+
+    manifest_outputs = manifest_contract.get("required_layer_outputs", {})
+    active_outputs = active_contract.get("required_layer_outputs", {})
+
+    contract_is_current = all(
+        manifest_outputs.get(key) == expected_path
+        for key, expected_path in active_outputs.items()
+    )
+
+    if manifest_contract and contract_is_current:
+        return manifest_contract
+
+    if manifest_contract:
+        print("[pipeline] Output contract in run_manifest.json is stale; using the active contract mapping for enforcement.")
+
+    return active_contract
+
+
+def _enforce_layer_outputs(layer_num: int, output_contract: dict) -> None:
+    required_outputs = output_contract.get("required_layer_outputs", {})
+    missing = []
+
+    for key in _LAYER_REQUIRED_OUTPUT_KEYS.get(layer_num, []):
+        path_str = required_outputs.get(key)
+        if not path_str:
+            missing.append(f"{key} (missing from output_contract)")
+            continue
+        if not Path(path_str).exists():
+            missing.append(f"{key} -> {path_str}")
+
+    if missing:
+        raise FileNotFoundError(
+            f"Layer {layer_num} completed without required outputs:\n  - " +
+            "\n  - ".join(missing)
+        )
+
+
+def _enforce_validation_report(layer_num: int, output_contract: dict) -> None:
+    report_key = _VALIDATION_REPORT_KEYS.get(layer_num)
+    if not report_key:
+        return
+
+    report_path = Path(output_contract["required_layer_outputs"][report_key])
+    with open(report_path, encoding="utf-8") as f:
+        report = json.load(f)
+
+    if layer_num == 0:
+        passed = report.get("can_start_layer_1", False)
+        status = report.get("validation_status", "unknown")
+    else:
+        passed = bool(report.get("passed"))
+        status = report.get("status", "unknown")
+
+    if passed:
+        return
+
+    failure_reason = report.get("failure_reason")
+    if not failure_reason:
+        errors = report.get("errors")
+        if isinstance(errors, list) and errors:
+            failure_reason = errors[0]
+        elif isinstance(errors, str):
+            failure_reason = errors
+    if not failure_reason:
+        warnings = report.get("warnings")
+        if isinstance(warnings, list) and warnings:
+            failure_reason = warnings[0]
+
+    raise RuntimeError(
+        f"Layer {layer_num} validation did not pass "
+        f"(status={status}): {failure_reason or 'see validation report'}"
+    )
+
+
+def _enforce_layer_completion(layer_num: int, output_contract: dict) -> None:
+    _enforce_layer_outputs(layer_num, output_contract)
+    _enforce_validation_report(layer_num, output_contract)
 
 
 def run_layer(layer_num: int, run_id: str, args, l0_defaults: dict) -> dict:
@@ -159,6 +290,7 @@ def main():
     l0_defaults = cfg.get("layer_0_defaults", {})
     run_id      = args.run_id
     continuing  = run_id is not None
+    output_contract = None
 
     # If continuing an existing run, Layer 0 is not needed
     if continuing and 0 in layers:
@@ -170,6 +302,9 @@ def main():
         print("[pipeline] Error: Layer 0 is required when starting a fresh run.")
         print("           Either include layer 0 in --layers, or provide --run-id to continue an existing run.")
         sys.exit(1)
+
+    if continuing:
+        output_contract = _resolve_output_contract(run_id)
 
     # Print run plan
     preset_label = args.preset or cfg["pipeline"]["default_preset"] if not args.layers else "custom"
@@ -209,6 +344,12 @@ def main():
                     failed_at = layer_num
                     break
                 print(f"[pipeline] Run ID generated: {run_id}")
+                output_contract = _resolve_output_contract(run_id)
+
+            if not output_contract:
+                output_contract = _resolve_output_contract(run_id)
+
+            _enforce_layer_completion(layer_num, output_contract)
 
             results[layer_num] = {"status": "done"}
             print(f"[pipeline] Layer {layer_num} complete.")

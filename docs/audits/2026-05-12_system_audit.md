@@ -8,6 +8,7 @@ This audit covers:
 - Config ownership and whether config is actually being consumed
 - Time-window behavior and source collection behavior
 - Layer-by-layer output files that matter downstream
+- Run completeness and output-contract enforcement status
 - Downstream data flow and artifact ownership across layers
 - ChatGPT handoff generation behavior
 - Memory behavior, especially published vs prepared runs
@@ -31,6 +32,7 @@ For the feature-oriented build backlog derived from this audit and the design do
 - YouTube collection is configured, but the main Layer 1 orchestrator still skips it.
 - ChatGPT handoff generation had a format-selection bug for `auto` runs; this was fixed on 2026-05-12 so the exporter now infers the actual selected format from downstream outputs.
 - ChatGPT handoff export now also refuses partial runs that never produced Layer 3 outputs, instead of generating empty story handoffs.
+- Core run-completeness enforcement was added on 2026-05-12: the pipeline now checks for each layer's minimum required artifacts and honors the layer's existing validation report instead of assuming success from "no exception raised".
 - The handoff memory block was also corrected on 2026-05-12 so unpublished runs no longer show up as past-video repetition guidance.
 - Raw Layer 10 memory still records prepared runs, which is useful for audit, but only published runs should drive novelty and repetition decisions.
 - The active pipeline is not a strict Layer N → Layer N+1 chain. It behaves as a DAG of authoritative artifacts, and later layers intentionally reach back to Layer 2, Layer 3, and Layer 4.
@@ -201,6 +203,42 @@ These are the main downstream files to inspect for each layer.
 | Layer 10 | `data/runs/{run_id}/layer_10/layer10_manifest.json`, `memory/memory_snapshot.json`, `memory/memory_index.json` | Memory write audit and future-run guidance |
 
 For a shorter cheat sheet, see [docs/reference/layer_output_map.md](../reference/layer_output_map.md).
+
+---
+
+## 4A. Run Completeness and Output-Contract Enforcement
+
+### What is implemented now
+
+The active pipeline now enforces a small but meaningful completion contract:
+
+- `output_contract_builder.py` was aligned to the real run-scoped output layout under `data/runs/{run_id}/layer_X/`
+- `pipeline.py` now checks for a minimum set of required artifacts after each completed layer
+- `pipeline.py` now reads the layer's existing validation report and fails the run if that report did not pass
+- older runs with stale manifest contracts are handled through a compatibility fallback that rebuilds the active contract mapping at runtime
+
+This intentionally reuses the validation logic that already existed inside the layers instead of creating a second, more complex validation framework.
+
+### What is intentionally still out of scope
+
+This implementation does not try to enforce everything the design docs mention.
+
+Still deferred:
+
+- enforcing `minimum_expected_documents` from Layer 0 as a centralized runner threshold
+- deep schema validation beyond what each layer's validation gate already checks
+- full final-package validation beyond the active Layer 9 and Layer 10 artifacts
+
+### Why this was the right first implementation
+
+This closes the confusing failure mode where a layer could:
+
+- finish without raising an exception
+- write only partial artifacts
+- write a failed validation report
+- still be shown by the pipeline as complete
+
+That problem is now addressed without adding a large new validation surface.
 
 ---
 
