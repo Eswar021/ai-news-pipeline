@@ -29,3 +29,8 @@ If you want:
 - What Layer 9 approved or flagged: read Layer 9 `verification_report.json`
 - What got written to memory: read Layer 10 `layer10_manifest.json`
 
+## Related docs
+
+- [Run Dataflow and Run-State Recommendation](run_dataflow_and_run_state.md)
+- [System Audit — 2026-05-12](../audits/2026-05-12_system_audit.md)
+- [System Completion Feature Map](../roadmaps/system_completion_feature_map.md)

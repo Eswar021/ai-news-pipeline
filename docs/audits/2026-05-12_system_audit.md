@@ -8,8 +8,10 @@ This audit covers:
 - Config ownership and whether config is actually being consumed
 - Time-window behavior and source collection behavior
 - Layer-by-layer output files that matter downstream
+- Downstream data flow and artifact ownership across layers
 - ChatGPT handoff generation behavior
 - Memory behavior, especially published vs prepared runs
+- Memory workflow parity versus the design docs
 - Legacy pipeline folders still present in the repo
 - Functional gaps between the current pipeline and the design docs
 - Why LLM logs are missing for current runs
@@ -17,6 +19,8 @@ This audit covers:
 The live pipeline audited here is the `pipeline.py` flow that runs:
 
 `layer_0_control` → `layer_1_extraction` → `layer_2_canonicalization` → `layer_3_story_processing` → `layer_4_evidence_intelligence` → `layer_5_editorial_intelligence` → `layer_6_research_packets` → `layer_7_content_planning` → `layer_8_script_generation` → `layer_9_verification_firewall` → `layer_10_memory_learning`
+
+For the feature-oriented build backlog derived from this audit and the design docs, see [system_completion_feature_map.md](../roadmaps/system_completion_feature_map.md).
 
 ---
 
@@ -26,8 +30,11 @@ The live pipeline audited here is the `pipeline.py` flow that runs:
 - Layer 0 correctly computes run-time collection windows, but Layer 1 still does not fully enforce those windows when dispatching collectors.
 - YouTube collection is configured, but the main Layer 1 orchestrator still skips it.
 - ChatGPT handoff generation had a format-selection bug for `auto` runs; this was fixed on 2026-05-12 so the exporter now infers the actual selected format from downstream outputs.
+- ChatGPT handoff export now also refuses partial runs that never produced Layer 3 outputs, instead of generating empty story handoffs.
 - The handoff memory block was also corrected on 2026-05-12 so unpublished runs no longer show up as past-video repetition guidance.
 - Raw Layer 10 memory still records prepared runs, which is useful for audit, but only published runs should drive novelty and repetition decisions.
+- The active pipeline is not a strict Layer N → Layer N+1 chain. It behaves as a DAG of authoritative artifacts, and later layers intentionally reach back to Layer 2, Layer 3, and Layer 4.
+- A single mutable master file is not recommended as the primary source of truth. A compiled `run_state.json` or `run_graph.json` artifact is the better future direction.
 - The legacy folders `layer_2_processing`, `layer_3_intelligence`, and `layer_4_content` are not part of the current pipeline path.
 - LLM logs are missing for the modern pipeline because the active async OpenAI modules bypass `llm/llm_logger.py`.
 
@@ -197,7 +204,63 @@ For a shorter cheat sheet, see [docs/reference/layer_output_map.md](../reference
 
 ---
 
-## 5. ChatGPT Handoff Audit
+## 5. Downstream Data Flow and Artifact Ownership
+
+### The current pattern
+
+The active pipeline is not designed as a pure immediate-downstream chain where each layer only reads the previous one.
+
+Instead, it behaves as a DAG of layer-scoped authoritative artifacts:
+
+- Layer 1 produces raw extraction artifacts.
+- Layer 2 turns those into canonical documents and source spans.
+- Layer 3 turns canonical documents into stories and rankings.
+- Layer 4 turns stories into verified claims and evidence mappings.
+- Later layers often read the latest layer output plus selected earlier authoritative artifacts.
+
+### Real examples from the active code
+
+- Layer 6 reads Layer 5, Layer 4, Layer 3, and Layer 2.
+- Layer 8 reads Layer 7 plus Layer 4 verified claims.
+- Layer 9 reads Layer 8, Layer 7, Layer 4, and Layer 2.
+- Layer 10 reads Layer 9, 8, 7, 5, 4, and 3.
+
+See:
+
+- [run_layer_6.py](../../pipelines/layer_6_research_packets/run_layer_6.py)
+- [brief_loader.py](../../pipelines/layer_8_script_generation/brief_loader.py)
+- [context_loader.py](../../pipelines/layer_9_verification_firewall/context_loader.py)
+- [context_loader.py](../../pipelines/layer_10_memory_learning/context_loader.py)
+
+### Why this happened
+
+This is not just accidental drift. Several later layers need provenance-rich, lower-level truth:
+
+- Layer 6 needs evidence spans and canonical documents to build source packs.
+- Layer 8 needs verified claim text and source URLs, not only a planning brief.
+- Layer 9 should verify against source spans and verified claims, not only the generated script.
+- Layer 10 needs cross-layer context to build durable memory safely.
+
+### What is authoritative today
+
+Best mental model:
+
+- Layer 2 is the authoritative evidence base for documents and source spans.
+- Layer 3 is the authoritative story base.
+- Layer 4 is the authoritative claim/evidence base.
+- Layer 5 is the authoritative editorial decision point.
+- Layer 7 is the authoritative script-writing brief.
+- Layer 9 is the authoritative verification outcome.
+
+### What this means for future work
+
+The dataflow is valid in principle, but it creates repeated backward joins and makes the run harder to inspect in one place.
+
+For a fuller map and recommendation, see [docs/reference/run_dataflow_and_run_state.md](../reference/run_dataflow_and_run_state.md).
+
+---
+
+## 6. ChatGPT Handoff Audit
 
 ### The bug that was happening
 
@@ -223,6 +286,7 @@ The exporter was using the first eligible format from the run manifest instead o
 - Format-specific instruction blocks are now resolved dynamically.
 - Deep-dive runs now get deep-dive-specific instruction wording.
 - The memory block now only uses published-video history.
+- The exporter now requires completed Layer 3 inputs and will refuse partial runs that do not have `layer_3/ranked_stories.json`.
 
 ### Remaining limitation
 
@@ -255,7 +319,7 @@ That config should define:
 
 ---
 
-## 6. Memory Behavior
+## 7. Memory Behavior
 
 ### What exists today
 
@@ -319,9 +383,44 @@ Then rebuild:
 
 This is safer than manually inventing whole new JSON objects from scratch.
 
+### Memory workflow parity versus design
+
+The full design does not limit memory influence to Layer 5 only.
+
+The design expectation is broader:
+
+- Layer 0 uses memory policy and future-run guidance.
+- Layer 1 can later use source priority and follow-up targets.
+- Layer 3 can later use prior story recurrence and story families.
+- Layer 5 uses novelty and prior coverage memory.
+- Layer 6 can later use follow-up and evergreen memory.
+- Layer 7 can later use prior hooks, title angles, and style memory.
+- Layer 8 can later use blocked phrases and prior-risk memory.
+- Layer 9 can later use rejected claim and risky-title memory.
+
+Current implementation status:
+
+- Implemented direct memory consumption in the active pipeline:
+  - Layer 5 reads `video_memory.jsonl` and `followups.jsonl`
+- Implemented planning/policy metadata only:
+  - Layer 0 writes memory policy, windows, and paths into the manifest
+- Implemented outside the main pipeline:
+  - `chatgpt_export.py` reads `memory_snapshot.json`
+- Not yet implemented as active direct memory consumers:
+  - Layer 1
+  - Layer 3
+  - Layer 6
+  - Layer 7
+  - Layer 8
+  - Layer 9
+
+Conclusion:
+
+The current system only partially follows the design's memory feedback loop. The first real consumer is Layer 5. The broader memory-driven workflow is still incomplete.
+
 ---
 
-## 7. Legacy Folders Audit
+## 8. Legacy Folders Audit
 
 These legacy folders still exist:
 
@@ -355,7 +454,7 @@ Medium priority:
 
 ---
 
-## 8. Functional Gaps vs Design Docs
+## 9. Functional Gaps vs Design Docs
 
 This section focuses on functionality, not folder structure.
 
@@ -424,7 +523,7 @@ Build later:
 
 ---
 
-## 9. Why LLM Logs Are Missing
+## 10. Why LLM Logs Are Missing
 
 ### What exists
 
@@ -462,7 +561,115 @@ Until that exists, `output/llm_logs/` will remain incomplete for the modern pipe
 
 ---
 
-## 10. Suggested Cleanup Order
+## 11. Suggested Architecture Direction for Run State
+
+### The question
+
+Should the system move to one cumulative master file where each layer appends more data, instead of later layers tracing back to multiple earlier layer outputs?
+
+### Recommendation
+
+Do not replace the current per-layer outputs with one mutable master file as the primary source of truth.
+
+Instead:
+
+1. Keep per-layer artifacts as the authoritative outputs.
+2. Add one compiled run-state artifact for convenience and inspection.
+
+Suggested names:
+
+- `data/runs/{run_id}/run_state.json`
+- `data/runs/{run_id}/run_graph.json`
+
+### Why a single mutable master file is a bad primary contract
+
+This pipeline does not enrich one object linearly. It creates several different object families:
+
+- documents
+- spans
+- stories
+- claims
+- editorial decisions
+- sections
+- sentences
+- verification results
+
+Forcing all of that into one ever-mutating primary blob would make:
+
+- ownership unclear
+- partial reruns risky
+- provenance harder to audit
+- bugs harder to isolate
+- writes more expensive and conflict-prone
+
+### Why a compiled run-state artifact is a good secondary contract
+
+A compiled run-state artifact would still give the usability benefits the repo currently lacks:
+
+- one place to inspect the full run
+- less repeated joining for tooling and export
+- easier debugging and handoff generation
+- clearer lineage across documents, stories, claims, sections, and sentences
+
+### Best implementation approach later
+
+Start from Layer 2 onward, not Layer 1.
+
+Reason:
+
+- Layer 1 is raw and noisy extraction.
+- Layer 2 is the first canonical, stable evidence layer.
+
+The compiled artifact should be a registry of IDs and links, not one giant duplicated nested blob.
+
+Good direction:
+
+```json
+{
+  "run_id": "run_...",
+  "documents": { "doc_id": {} },
+  "spans": { "span_id": {} },
+  "stories": { "story_id": {} },
+  "claims": { "claim_id": {} },
+  "video": {},
+  "sections": { "section_id": {} },
+  "sentences": { "sentence_id": {} },
+  "verification": {},
+  "artifacts": {
+    "layer_2": {},
+    "layer_3": {},
+    "layer_4": {}
+  }
+}
+```
+
+### Important rule
+
+The compiled run-state artifact should be derived and refreshed by orchestrators, not treated as the only writable truth for every submodule.
+
+### What to keep authoritative even after adding run state
+
+- Layer 2 `canonical_documents.jsonl` and `source_spans.jsonl`
+- Layer 3 `story_clusters.json` and `ranked_stories.json`
+- Layer 4 `verified_claims.jsonl` and `claim_evidence_map.jsonl`
+- Layer 5 `selected_video_brief.json`
+- Layer 7 `script_writer_brief.json`
+- Layer 9 `final_publish_package.json` and `verification_report.json`
+
+### Why this fits the current repo
+
+The repo already has partial master-style checkpoints:
+
+- `run_manifest.json`
+- `research_packet.json`
+- `script_writer_brief.json`
+- `final_publish_package.json`
+
+The missing piece is a unified run graph tying those checkpoints together.
+
+---
+
+## 12. Suggested Cleanup Order
 
 ### First
 
@@ -470,6 +677,7 @@ Until that exists, `output/llm_logs/` will remain incomplete for the modern pipe
 2. Wire time-window policy from Layer 0 into Layer 1 collectors.
 3. Wire YouTube collection into the main Layer 1 orchestration path.
 4. Add a publish-state updater for Layer 10 memory.
+5. Document or prototype a compiled `run_state.json` / `run_graph.json` approach before changing downstream readers.
 
 ### Second
 
@@ -481,4 +689,3 @@ Until that exists, `output/llm_logs/` will remain incomplete for the modern pipe
 
 1. Revisit disabled format branches when the editorial strategy actually needs them.
 2. Move inline per-layer constants into config only where that improves operator control.
-

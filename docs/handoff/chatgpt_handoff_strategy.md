@@ -74,3 +74,4 @@ If more strategies become active later, the clean next step is to make those str
 
 - [System Audit — 2026-05-12](../audits/2026-05-12_system_audit.md)
 - [Layer Output Map](../reference/layer_output_map.md)
+- [System Completion Feature Map](../roadmaps/system_completion_feature_map.md)
