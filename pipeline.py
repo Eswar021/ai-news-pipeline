@@ -8,6 +8,8 @@ Usage:
     python pipeline.py --preset with_facts          # L0-L4 (best ChatGPT handoff point)
     python pipeline.py --preset with_editorial      # L0-L6
     python pipeline.py --preset full_auto           # L0-L10
+    python pipeline.py --run-profile daily_48h_all_sources
+    python pipeline.py --sync-publishing-channel --preset full_auto
 
     python pipeline.py --layers 0,1,2,3,4           # explicit layer list
     python pipeline.py --run-id <id> --layers 5,6   # continue an existing run from a midpoint
@@ -57,8 +59,24 @@ _LAYER_REQUIRED_OUTPUT_KEYS = {
     1: ["layer_1_raw_documents", "layer_1_extraction_manifest", "layer_1_validation_report"],
     2: ["layer_2_canonical_documents", "layer_2_source_spans", "layer_2_manifest", "layer_2_validation_report"],
     3: ["layer_3_story_clusters", "layer_3_ranked_stories", "layer_3_manifest", "layer_3_validation_report"],
-    4: ["layer_4_verified_claims", "layer_4_story_fact_sheets", "layer_4_manifest", "layer_4_validation_report"],
-    5: ["layer_5_selected_video_brief", "layer_5_manifest", "layer_5_validation_report"],
+    4: [
+        "layer_4_verified_claims",
+        "layer_4_rejected_claims",
+        "layer_4_story_fact_sheets",
+        "layer_4_evidence_density_report",
+        "layer_4_evidence_gaps",
+        "layer_4_contradictions",
+        "layer_4_manifest",
+        "layer_4_validation_report",
+    ],
+    5: [
+        "layer_5_editorial_candidates",
+        "layer_5_story_editorial_assessments",
+        "layer_5_editorial_decision",
+        "layer_5_selected_video_brief",
+        "layer_5_manifest",
+        "layer_5_validation_report",
+    ],
     6: ["layer_6_research_packet", "layer_6_source_pack", "layer_6_manifest", "layer_6_validation_report"],
     7: ["layer_7_video_plan", "layer_7_script_writer_brief", "layer_7_manifest", "layer_7_validation_report"],
     8: ["layer_8_script_md", "layer_8_generated_script", "layer_8_manifest", "layer_8_validation_report"],

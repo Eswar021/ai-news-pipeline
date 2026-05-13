@@ -137,6 +137,30 @@ def validate_manifest(manifest: dict, manifest_path: Path) -> dict:
     layer4_limits = layer_limits.get("layer_4", {}) if isinstance(layer_limits, dict) else {}
     if not isinstance(layer4_limits, dict) or int(layer4_limits.get("max_stories", 0) or 0) <= 0:
         errors.append("execution_policy.layer_limits.layer_4.max_stories must be > 0")
+    if int(layer4_limits.get("max_documents_per_story", 0) or 0) <= 0:
+        errors.append("execution_policy.layer_limits.layer_4.max_documents_per_story must be > 0")
+    if int(layer4_limits.get("document_overflow_char_limit", 0) or 0) <= 0:
+        errors.append("execution_policy.layer_limits.layer_4.document_overflow_char_limit must be > 0")
+    if int(layer4_limits.get("roundup_min_verified_claims", 0) or 0) <= 0:
+        errors.append("execution_policy.layer_limits.layer_4.roundup_min_verified_claims must be > 0")
+    if int(layer4_limits.get("deep_dive_min_verified_claims", 0) or 0) <= 0:
+        errors.append("execution_policy.layer_limits.layer_4.deep_dive_min_verified_claims must be > 0")
+    if "deep_dive_requires_primary_source" not in layer4_limits:
+        errors.append("execution_policy.layer_limits.layer_4.deep_dive_requires_primary_source is missing")
+    if "high_severity_contradiction_blocks_deep_dive" not in layer4_limits:
+        errors.append("execution_policy.layer_limits.layer_4.high_severity_contradiction_blocks_deep_dive is missing")
+
+    layer5_limits = layer_limits.get("layer_5", {}) if isinstance(layer_limits, dict) else {}
+    if not isinstance(layer5_limits, dict) or int(layer5_limits.get("novelty_skip_threshold", 0) or 0) <= 0:
+        errors.append("execution_policy.layer_limits.layer_5.novelty_skip_threshold must be > 0")
+    if int(layer5_limits.get("roundup_min_stories", 0) or 0) <= 0:
+        errors.append("execution_policy.layer_limits.layer_5.roundup_min_stories must be > 0")
+    if int(layer5_limits.get("roundup_max_stories", 0) or 0) <= 0:
+        errors.append("execution_policy.layer_limits.layer_5.roundup_max_stories must be > 0")
+    if int(layer5_limits.get("roundup_min_selection_score", 0) or 0) <= 0:
+        errors.append("execution_policy.layer_limits.layer_5.roundup_min_selection_score must be > 0")
+    if int(layer5_limits.get("deep_dive_min_selection_score", 0) or 0) <= 0:
+        errors.append("execution_policy.layer_limits.layer_5.deep_dive_min_selection_score must be > 0")
 
     # 6A. Resolved runtime config snapshots
     resolved = manifest.get("resolved_config", {})

@@ -124,7 +124,6 @@ def write(
             "layer5_manifest":      str(layer5_dir / "layer5_manifest.json"),
             "story_fact_sheets":    str(layer4_dir / "story_fact_sheets.json"),
             "verified_claims":      str(layer4_dir / "verified_claims.jsonl"),
-            "claim_evidence_map":   str(layer4_dir / "claim_evidence_map.jsonl"),
             "story_timeline":       str(layer3_dir / "story_timeline.json"),
             "source_spans":         str(layer2_dir / "source_spans.jsonl"),
             "canonical_documents":  str(layer2_dir / "canonical_documents.jsonl"),

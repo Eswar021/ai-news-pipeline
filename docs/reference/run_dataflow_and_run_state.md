@@ -66,14 +66,14 @@ Later readers:
 ### Layer 4
 
 - Consumes Layer 3 and Layer 2
-- Produces verified claims and evidence mappings
+- Produces verified claims with embedded provenance and story fact packets
 - Becomes the long-lived claim/evidence base
 
 Main authoritative files:
 
 - `layer_4/verified_claims.jsonl`
-- `layer_4/claim_evidence_map.jsonl`
 - `layer_4/story_fact_sheets.json`
+- `layer_4/evidence_density_report.json`
 - `layer_4/evidence_gaps.json`
 
 Later readers:
@@ -87,11 +87,12 @@ Later readers:
 ### Layer 5
 
 - Consumes Layer 3, Layer 4, and memory
-- Produces the selected editorial brief
+- Produces the selected editorial brief and the compact run-level editorial decision
 
 Main authoritative file:
 
 - `layer_5/selected_video_brief.json`
+- `layer_5/editorial_decision.json`
 
 Later readers:
 

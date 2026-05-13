@@ -35,7 +35,6 @@ _MAX_SPANS      = 4     # max source spans per section
 def _get_section_spans(section_key: str, classified: list, ctx: dict) -> list:
     """Collect unique source span texts for all claim_ids in this section."""
     claim_map = ctx["claim_map"]
-    cem_map   = ctx["cem_map"]
     span_map  = ctx["span_map"]
 
     span_ids_seen = set()
@@ -45,9 +44,8 @@ def _get_section_spans(section_key: str, classified: list, ctx: dict) -> list:
         if sent.get("section_key") != section_key:
             continue
         for cid in sent.get("claim_ids", []):
-            cem = cem_map.get(cid, {})
             claim = claim_map.get(cid, {})
-            sids = cem.get("source_span_ids", []) or claim.get("source_span_ids", [])
+            sids = claim.get("source_span_ids", []) or []
             for sid in sids:
                 if sid not in span_ids_seen and sid in span_map:
                     span_ids_seen.add(sid)

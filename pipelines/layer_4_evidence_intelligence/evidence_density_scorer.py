@@ -65,8 +65,7 @@ def _importance(claim: dict) -> str:
     return "low"
 
 
-def score(story_result: dict, contradiction_entry: dict,
-          evidence_bundle: dict) -> dict:
+def score(story_result: dict, contradiction_entry: dict, evidence_bundle: dict, policy: dict) -> dict:
     """Score evidence density for one story."""
     sid = story_result["story_id"]
     verified_claims = story_result.get("verified_claims", [])
@@ -99,10 +98,22 @@ def score(story_result: dict, contradiction_entry: dict,
         0,
     )
 
+    roundup_min_claims = int(policy.get("roundup_min_verified_claims", 2))
+    deep_dive_min_claims = int(policy.get("deep_dive_min_verified_claims", 8))
+    deep_dive_requires_primary = bool(policy.get("deep_dive_requires_primary_source", True))
+    block_deep_dive_on_high_sev = bool(policy.get("high_severity_contradiction_blocks_deep_dive", True))
+
     # Format safety
     n_verified = len(verified_claims)
-    safe_roundup   = n_verified >= 2
-    safe_deep_dive = n_verified >= 8 and primary_cnt >= 1 and high_sev == 0
+    safe_roundup = n_verified >= roundup_min_claims
+
+    deep_dive_checks = [n_verified >= deep_dive_min_claims]
+    if deep_dive_requires_primary:
+        deep_dive_checks.append(primary_cnt >= 1)
+    if block_deep_dive_on_high_sev:
+        deep_dive_checks.append(high_sev == 0)
+    safe_deep_dive = all(deep_dive_checks)
+
     safe_evergreen = n_verified >= 10
     safe_comparison = n_verified >= 4
 
@@ -138,7 +149,10 @@ def score(story_result: dict, contradiction_entry: dict,
             "severity": "high",
             "blocks_roundup": True,
             "blocks_deep_dive": True,
-            "description": f"Only {n_verified} verified claims — minimum 2 required for roundup.",
+            "description": (
+                f"Only {n_verified} verified claims — minimum {roundup_min_claims} "
+                "required for roundup."
+            ),
         })
 
     # Check benchmark claims without research source
@@ -157,7 +171,7 @@ def score(story_result: dict, contradiction_entry: dict,
             "gap_type": "high_contradiction_count",
             "severity": "high",
             "blocks_roundup": False,
-            "blocks_deep_dive": True,
+            "blocks_deep_dive": block_deep_dive_on_high_sev,
             "description": f"{high_sev} high-severity contradictions found.",
         })
 
@@ -186,11 +200,15 @@ def score(story_result: dict, contradiction_entry: dict,
             "format_suitability":       format_suitability,
         },
         "evidence_gaps": gaps,
+        "uncertainty_summary": {
+            "uncertain_claim_count": uncertain,
+            "high_confidence_count": high_conf,
+        },
     }
 
 
 def score_all(verified_results: list[dict], contradiction_results: list[dict],
-              evidence_bundles: list[dict]) -> list[dict]:
+              evidence_bundles: list[dict], policy: dict) -> list[dict]:
     """Score evidence density for all stories."""
     contra_by_sid = {d["story_id"]: d for d in contradiction_results}
     bundle_by_sid = {b["story_id"]: b for b in evidence_bundles}
@@ -200,6 +218,7 @@ def score_all(verified_results: list[dict], contradiction_results: list[dict],
             story_result    = r,
             contradiction_entry = contra_by_sid.get(r["story_id"], {"contradictions": []}),
             evidence_bundle = bundle_by_sid.get(r["story_id"], {}),
+            policy=policy,
         )
         for r in verified_results
     ]

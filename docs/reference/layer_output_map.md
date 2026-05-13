@@ -8,8 +8,8 @@ Use this file when you want to inspect the main downstream artifacts for a run q
 | Layer 1 | `data/runs/{run_id}/layer_1/raw_documents.jsonl`, `extraction_manifest.json` | `extraction_manifest.json` |
 | Layer 2 | `data/runs/{run_id}/layer_2/canonical_documents.jsonl`, `source_spans.jsonl`, `provenance_map.jsonl` | `canonical_documents.jsonl` |
 | Layer 3 | `data/runs/{run_id}/layer_3/story_clusters.json`, `ranked_stories.json`, `story_timeline.json` | `ranked_stories.json` |
-| Layer 4 | `data/runs/{run_id}/layer_4/verified_claims.jsonl`, `story_fact_sheets.json`, `evidence_gaps.json` | `story_fact_sheets.json` |
-| Layer 5 | `data/runs/{run_id}/layer_5/selected_video_brief.json`, `editorial_candidates.json`, `format_routing_decisions.json` | `selected_video_brief.json` |
+| Layer 4 | `data/runs/{run_id}/layer_4/verified_claims.jsonl`, `story_fact_sheets.json`, `evidence_density_report.json`, `evidence_gaps.json` | `story_fact_sheets.json` |
+| Layer 5 | `data/runs/{run_id}/layer_5/selected_video_brief.json`, `editorial_candidates.json`, `story_editorial_assessments.json`, `editorial_decision.json` | `selected_video_brief.json` |
 | Layer 6 | `data/runs/{run_id}/layer_6/research_packet.json`, `source_pack.json`, `claim_section_map.json`, `packet_context_for_layer7.json` | `research_packet.json` |
 | Layer 7 | `data/runs/{run_id}/layer_7/script_writer_brief.json`, `video_plan.json`, `title_thumbnail_plan.json` | `script_writer_brief.json` |
 | Layer 8 | `data/runs/{run_id}/layer_8/generated_script.json`, `script.md`, `youtube_metadata.json`, `section_scripts.json` | `generated_script.json` |

@@ -3,7 +3,7 @@ Layer 9 — Module 5: Claim-to-Source Traceability Checker
 
 For each claim_id used in the script, verifies:
   1. Claim exists in verified_claims
-  2. Claim has source_span_ids (from claim_evidence_map or verified_claims)
+  2. Claim has source_span_ids embedded in verified_claims
   3. Those source_span_ids exist in span_map
   4. Claim has at least one source_url
 
@@ -21,7 +21,6 @@ Returns:
 
 def check(coverage_results: dict, ctx: dict) -> dict:
     claim_map = ctx["claim_map"]
-    cem_map   = ctx["cem_map"]
     span_map  = ctx["span_map"]
 
     # Collect unique used claim_ids from covered sentences
@@ -51,11 +50,8 @@ def check(coverage_results: dict, ctx: dict) -> dict:
             continue
 
         claim = claim_map[cid]
-        cem   = cem_map.get(cid, {})
-
-        # Prefer cem_map for span IDs; fallback to claim record
-        span_ids   = cem.get("source_span_ids", []) or claim.get("source_span_ids", [])
-        source_urls = cem.get("source_urls", []) or claim.get("source_urls", [])
+        span_ids = claim.get("source_span_ids", []) or []
+        source_urls = claim.get("source_urls", []) or []
 
         if not span_ids:
             rec = {

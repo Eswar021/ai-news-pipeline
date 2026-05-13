@@ -170,13 +170,6 @@ if __name__ == "__main__":
                 c = json.loads(line)
                 claims_by_id[c["claim_id"]] = c
 
-    evidence_map_by_id = {}
-    with open(layer4_dir / "claim_evidence_map.jsonl") as f:
-        for line in f:
-            if line.strip():
-                em = json.loads(line)
-                evidence_map_by_id[em["claim_id"]] = em
-
     spans_by_id = {}
     with open(layer2_dir / "source_spans.jsonl") as f:
         for line in f:
@@ -195,7 +188,7 @@ if __name__ == "__main__":
     b_report    = enforce(packet, brief_ctx, claims_by_id)
     source_pack = build_sources(
         brief_ctx["safe_claim_ids"] | brief_ctx["cautious_claim_ids"],
-        evidence_map_by_id, spans_by_id, docs_by_id, run_id
+        claims_by_id, spans_by_id, docs_by_id, run_id
     )
     quality     = score(packet, source_pack, b_report, brief_ctx)
 

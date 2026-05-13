@@ -108,6 +108,7 @@ Implemented:
 - Layer 1 now applies manifest-driven collection windows to the raw document corpus
 - collectors that support it already can also receive fetch-side `days_back` narrowing from the manifest window
 - Layer 0 run profiles now own the active Layer 1 collector caps
+- Layer 0 run profiles now also own the active Layer 4 evidence limits and Layer 5 editorial thresholds
 - `extraction_manifest.json` now records the applied collection policy for the run
 - YouTube is now part of the main Layer 1 orchestration path through the manifest-backed YouTube snapshot and the YouTube transcript wrapper
 - Layer 0 now resolves collection windows from named run profiles instead of hardcoded Python window rules
@@ -190,6 +191,54 @@ Missing or incomplete:
 
 - evergreen, comparison, and follow-up profiles are not yet defined
 - some standalone helper utilities still need cleanup and clearer docs
+
+---
+
+## 2C. Layer 4 / Layer 5 Contract Simplification
+
+**Priority:** `Now`
+
+### What this feature is
+
+Reduce Layer 4 and Layer 5 complexity by:
+
+- making Layer 4 document-first instead of span-first
+- embedding provenance directly into `verified_claims.jsonl`
+- shrinking Layer 5 to a smaller editorial decision pipeline
+- removing redundant intermediate artifacts that no longer need to be durable files
+
+### Current implementation
+
+Implemented:
+
+- Layer 4 now extracts claims per eligible document instead of one LLM call per selected span
+- large documents now overflow internally only when the document exceeds the configured size budget
+- Layer 4 now resolves quote anchors back to Layer 2 spans after extraction
+- unresolved provenance claims are rejected before they can become safe facts
+- `verified_claims.jsonl` now carries embedded provenance for downstream layers
+- Layer 4 now writes a lean output set built around `verified_claims.jsonl`, `story_fact_sheets.json`, and the safety/gap reports
+- Layer 5 now builds one compact `story_editorial_assessments.json` artifact instead of many separate scoring reports
+- Layer 5 now writes a lean run-level `editorial_decision.json` alongside `selected_video_brief.json`
+- Layer 6 now builds `source_pack.json` directly from embedded verified-claim provenance
+- Layer 9 now performs claim traceability without `claim_evidence_map.jsonl`
+
+Missing or incomplete:
+
+- legacy helper modules like `span_selector.py`, `claim_deduplicator.py`, and `format_router.py` are still present in the repo even though the active path no longer depends on them
+- the design docs and some historical reference docs still describe the older wider artifact set
+- Layer 4 still deserves a deeper quality pass on prompt strategy and extraction efficiency once we observe a few live runs
+
+### Why it matters now
+
+- the older Layer 4 span-first path inflated LLM call count and made evidence extraction harder to reason about
+- Layer 5 had become too report-heavy for the amount of real decision signal it produced
+- downstream layers now have a smaller, more stable contract surface
+
+### What “done” should mean
+
+- Layer 4 durable artifacts stay lean and provenance-complete
+- Layer 5 durable artifacts explain the decision without recreating seven separate report files
+- Layers 6–10 operate entirely from the lean contracts in the active path
 
 ### Why it matters now
 

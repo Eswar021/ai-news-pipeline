@@ -54,6 +54,14 @@ def _verify_one(claim: dict) -> dict:
     support = claim.get("support_level", "indirect")
     tier    = claim.get("trust_tier", 4)
 
+    if claim.get("unresolved_provenance"):
+        return _make_result(
+            claim,
+            "rejected",
+            "unknown",
+            rejection_reason="unresolved_provenance",
+        )
+
     # Rejections
     if ctype in _REJECT_TYPES:
         return _make_result(claim, "rejected", "unknown",

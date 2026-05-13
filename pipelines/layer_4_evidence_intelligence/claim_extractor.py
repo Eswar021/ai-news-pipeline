@@ -1,45 +1,32 @@
 """
-Layer 4 — Module 3: Atomic Claim Extractor
+Layer 4 — Module 2: Document Claim Extractor
 
-Extracts atomic factual claims from source spans using the LLM.
-
-One structured JSON call per span. All spans within a story run concurrently
-via asyncio.gather() with a semaphore (max 20 parallel calls).
-
-Claim types (from Layer 4 taxonomy):
-    event_fact, timeline_fact, product_fact, model_capability, feature_claim,
-    benchmark_claim, research_claim, business_claim, partnership_claim,
-    pricing_claim, quote_claim, statistic_claim, limitation_claim, risk_claim,
-    community_signal_claim, interpretive_claim, prediction_claim, opinion_claim
-
-Support levels (LLM-assigned, from the span alone):
-    direct   — text explicitly states this
-    indirect — text implies this, not stated outright
-    partial  — text partially supports with caveats
-
-Key function:
-    extract_all(selections, run_id) → list of story extraction results
-        Each result: {story_id, atomic_claims, counts}
-
-Usage:
-    python claim_extractor.py --run-id run_2026_05_10_48h_auto
+Extracts atomic claims from document-scoped evidence, not span-scoped evidence.
+Large documents are internally chunked only to fit within the model budget.
 """
 
-import sys
-import json
+from __future__ import annotations
+
 import asyncio
-import argparse
-from datetime import datetime, timezone
-from config.time_utils import now_project_iso
+import re
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
-from pipelines.runtime_manifest import get_llm_profile
+from config.time_utils import now_project_iso
 from llm.async_llm_runtime import execute_chat_request
 
-MAX_CONCURRENT = 20
-MAX_CLAIMS_PER_STORY = 20
+MAX_CONCURRENT = 12
+MAX_CLAIMS_PER_STORY = 24
+_DEFAULT_OVERFLOW_CHAR_LIMIT = 12000
+_DEDUP_THRESHOLD = 0.7
+_STOPWORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "has", "have", "had", "be",
+    "been", "being", "will", "would", "could", "should", "may", "might", "it",
+    "its", "to", "of", "and", "or", "in", "on", "at", "for", "with", "that",
+    "this", "by", "from",
+}
 
 _VALID_TYPES = {
     "event_fact", "timeline_fact", "product_fact", "model_capability",
@@ -49,33 +36,33 @@ _VALID_TYPES = {
     "interpretive_claim", "prediction_claim", "opinion_claim",
 }
 _VALID_SUPPORT = {"direct", "indirect", "partial"}
-
 _SUPPORT_CONFIDENCE = {"direct": 0.90, "indirect": 0.65, "partial": 0.42}
 
 _SYSTEM_PROMPT = """\
-You are an evidence extraction specialist. Extract atomic factual claims from a source span.
+You are an evidence extraction specialist. Extract atomic factual claims from a single source document.
 
 Rules:
-1. Extract ONLY claims explicitly present in the text. Never infer or add context.
-2. Each claim must be independently verifiable from the source text alone.
-3. Split compound statements into separate atomic claims (one fact per claim).
-4. If the source makes a prediction or expresses an opinion, label it correctly.
-5. Do not paraphrase away specifics. Keep numbers, dates, product names exact.
-6. If the span contains no extractable factual claims, return an empty claims list.
+1. Extract only claims supported by this document.
+2. Split compound statements into separate atomic claims.
+3. Keep specific names, dates, metrics, prices, and version numbers exact.
+4. Every claim must include a short quote_anchor copied from the document that best grounds the claim.
+5. If the document contains no extractable factual claims, return an empty claims list.
+6. Do not invent context beyond the document.
 
-Claim types (pick the best fit):
+Claim types:
   event_fact, timeline_fact, product_fact, model_capability, feature_claim,
   benchmark_claim, research_claim, business_claim, partnership_claim,
   pricing_claim, quote_claim, statistic_claim, limitation_claim, risk_claim,
   community_signal_claim, interpretive_claim, prediction_claim, opinion_claim
 
-Support levels (from the span text alone):
-  direct   — the text explicitly states this
-  indirect — the text implies this but does not state it directly
-  partial  — the text partially supports this with caveats
+Support levels:
+  direct   — the document explicitly states this
+  indirect — the document implies this but does not state it directly
+  partial  — the document partially supports this with caveats
 
-Return only valid JSON with this exact structure:
-{"claims": [{"claim_text": "...", "claim_type": "...", "support_level": "...", "verbatim_quote": "..."}]}"""
+Return only valid JSON:
+{"claims": [{"claim_text": "...", "claim_type": "...", "support_level": "...", "quote_anchor": "..."}]}
+"""
 
 
 def _story_hash(story_id: str) -> str:
@@ -87,17 +74,121 @@ def _make_claim_id(story_id: str, counter: int) -> str:
     return f"claim_{_story_hash(story_id)}_{counter:04d}"
 
 
-async def _call_llm(run_id: str, span: dict, story_title: str, story_type: str, semaphore) -> list[dict]:
+def _split_paragraphs(text: str) -> list[str]:
+    parts = [part.strip() for part in re.split(r"\n\s*\n+", text) if part.strip()]
+    return parts or [text.strip()]
+
+
+def _chunk_document_text(text: str, char_limit: int) -> list[str]:
+    text = text.strip()
+    if len(text) <= char_limit:
+        return [text]
+
+    chunks: list[str] = []
+    current = ""
+    for paragraph in _split_paragraphs(text):
+        if not current:
+            current = paragraph
+            continue
+        if len(current) + 2 + len(paragraph) <= char_limit:
+            current = f"{current}\n\n{paragraph}"
+            continue
+        chunks.append(current)
+        if len(paragraph) <= char_limit:
+            current = paragraph
+            continue
+
+        sentences = re.split(r"(?<=[.!?])\s+", paragraph)
+        current_sentence_chunk = ""
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            if not current_sentence_chunk:
+                current_sentence_chunk = sentence
+            elif len(current_sentence_chunk) + 1 + len(sentence) <= char_limit:
+                current_sentence_chunk = f"{current_sentence_chunk} {sentence}"
+            else:
+                chunks.append(current_sentence_chunk)
+                current_sentence_chunk = sentence
+        current = current_sentence_chunk
+
+    if current:
+        chunks.append(current)
+    return [chunk for chunk in chunks if chunk.strip()]
+
+
+def _tokens(text: str) -> frozenset[str]:
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return frozenset(word for word in words if word not in _STOPWORDS)
+
+
+def _jaccard(a: frozenset[str], b: frozenset[str]) -> float:
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def _validate_claim(raw: dict) -> dict | None:
+    claim_text = (raw.get("claim_text") or "").strip()
+    if not claim_text:
+        return None
+    claim_type = raw.get("claim_type", "event_fact")
+    if claim_type not in _VALID_TYPES:
+        claim_type = "event_fact"
+    support_level = raw.get("support_level", "indirect")
+    if support_level not in _VALID_SUPPORT:
+        support_level = "indirect"
+    quote_anchor = (raw.get("quote_anchor") or claim_text)[:500].strip()
+    if not quote_anchor:
+        quote_anchor = claim_text[:500]
+    return {
+        "claim_text": claim_text,
+        "claim_type": claim_type,
+        "support_level": support_level,
+        "quote_anchor": quote_anchor,
+    }
+
+
+def _deduplicate_claims(claims: list[dict]) -> list[dict]:
+    deduped: list[dict] = []
+    token_sets: list[frozenset[str]] = []
+
+    for claim in claims:
+        claim_tokens = _tokens(claim["claim_text"])
+        merged = False
+        for index, existing in enumerate(deduped):
+            if existing["claim_type"] != claim["claim_type"]:
+                continue
+            if _jaccard(token_sets[index], claim_tokens) < _DEDUP_THRESHOLD:
+                continue
+            if claim.get("extraction_confidence", 0.0) > existing.get("extraction_confidence", 0.0):
+                merged_quote = existing.get("quote_anchor", "")
+                deduped[index] = {**claim}
+                if not deduped[index].get("quote_anchor") and merged_quote:
+                    deduped[index]["quote_anchor"] = merged_quote
+            merged = True
+            break
+        if not merged:
+            deduped.append(dict(claim))
+            token_sets.append(claim_tokens)
+
+    return deduped
+
+
+async def _call_llm(run_id: str, document: dict, text_chunk: str, chunk_index: int, semaphore) -> list[dict]:
     user_msg = (
-        f"Story: {story_title} (type: {story_type})\n"
-        f"Source type: {span.get('source_role', 'unknown')} "
-        f"(trust tier: {span.get('trust_tier', '?')})\n\n"
-        f"Source text:\n{span['text']}\n\n"
-        "Extract atomic claims from the source text above."
+        f"Story: {document['story_title']} (type: {document['story_type']})\n"
+        f"Document title: {document['title']}\n"
+        f"Document ID: {document['canonical_document_id']}\n"
+        f"Source role: {document['source_role']} | trust tier: {document['trust_tier']}\n"
+        f"Document chunk index: {chunk_index}\n\n"
+        f"Document text:\n{text_chunk}\n\n"
+        "Extract atomic claims from the document text above."
     )
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
-        {"role": "user",   "content": user_msg},
+        {"role": "user", "content": user_msg},
     ]
 
     async with semaphore:
@@ -106,13 +197,13 @@ async def _call_llm(run_id: str, span: dict, story_title: str, story_type: str, 
                 module_name="claim_extractor",
                 run_id=run_id,
                 messages=messages,
-                request_name=span.get("span_id", "source_span"),
+                request_name=f"{document['canonical_document_id']}_{chunk_index:02d}",
                 metadata={
-                    "story_title": story_title,
-                    "story_type": story_type,
-                    "story_id_hint": span.get("story_id", ""),
-                    "span_id": span.get("span_id", ""),
-                    "source_url": span.get("source_url", ""),
+                    "story_id": document["story_id"],
+                    "story_title": document["story_title"],
+                    "story_type": document["story_type"],
+                    "canonical_document_id": document["canonical_document_id"],
+                    "source_url": document["source_url"],
                 },
                 parse_json=True,
             )
@@ -121,143 +212,139 @@ async def _call_llm(run_id: str, span: dict, story_title: str, story_type: str, 
             return []
 
 
-def _validate_claim(raw: dict) -> dict | None:
-    text = (raw.get("claim_text") or "").strip()
-    if not text:
-        return None
-    ctype = raw.get("claim_type", "event_fact")
-    if ctype not in _VALID_TYPES:
-        ctype = "event_fact"
-    support = raw.get("support_level", "indirect")
-    if support not in _VALID_SUPPORT:
-        support = "indirect"
-    return {
-        "claim_text":     text,
-        "claim_type":     ctype,
-        "support_level":  support,
-        "verbatim_quote": (raw.get("verbatim_quote") or "")[:500],
-    }
-
-
-async def _extract_story(run_id: str, selection: dict, semaphore) -> dict:
-    sid = selection["story_id"]
-    title = selection["story_title"]
-    story_type = selection.get("story_type", "unknown")
-    spans = selection["selected_spans"]
-
+async def _extract_document(run_id: str, document: dict, overflow_char_limit: int, semaphore) -> dict:
+    chunks = _chunk_document_text(document["clean_text"], overflow_char_limit)
     tasks = [
-        _call_llm(run_id, sp, title, story_type, semaphore)
-        for sp in spans
+        _call_llm(run_id, document, text_chunk, chunk_index, semaphore)
+        for chunk_index, text_chunk in enumerate(chunks)
     ]
     raw_results = await asyncio.gather(*tasks)
 
-    atomic_claims: list[dict] = []
-    counter = 1
-    spans_with_claims = 0
-
-    for span, raw_claims in zip(spans, raw_results):
-        span_claims = 0
+    claims: list[dict] = []
+    for raw_claims in raw_results:
         for raw in raw_claims:
             validated = _validate_claim(raw)
             if not validated:
                 continue
-            claim = {
-                "claim_id":             _make_claim_id(sid, counter),
-                "story_id":             sid,
-                "claim_text":           validated["claim_text"],
-                "claim_type":           validated["claim_type"],
-                "support_level":        validated["support_level"],
-                "verbatim_quote":       validated["verbatim_quote"],
-                "extracted_from_span_id": span["span_id"],
-                "source_role":          span.get("source_role", ""),
-                "trust_tier":           span.get("trust_tier", 4),
-                "source_url":           span.get("source_url", ""),
-                "extraction_confidence": _SUPPORT_CONFIDENCE[validated["support_level"]],
-                "verification_status":  "pending",
-                "extracted_at":         now_project_iso(),
-            }
-            atomic_claims.append(claim)
-            counter += 1
-            span_claims += 1
+            claims.append(
+                {
+                    "story_id": document["story_id"],
+                    "story_title": document["story_title"],
+                    "story_type": document["story_type"],
+                    "canonical_document_id": document["canonical_document_id"],
+                    "source_role": document["source_role"],
+                    "trust_tier": document["trust_tier"],
+                    "source_url": document["source_url"],
+                    "claim_text": validated["claim_text"],
+                    "claim_type": validated["claim_type"],
+                    "support_level": validated["support_level"],
+                    "quote_anchor": validated["quote_anchor"],
+                    "extraction_confidence": _SUPPORT_CONFIDENCE[validated["support_level"]],
+                    "verification_status": "pending",
+                    "extracted_at": now_project_iso(),
+                }
+            )
 
-        if span_claims > 0:
-            spans_with_claims += 1
+    deduped_claims = _deduplicate_claims(claims)
+    return {
+        "canonical_document_id": document["canonical_document_id"],
+        "chunk_count": len(chunks),
+        "claims": deduped_claims,
+    }
 
-    # Respect max claims per story — keep earliest (highest-priority span order)
-    atomic_claims = atomic_claims[:MAX_CLAIMS_PER_STORY]
+
+async def _extract_story(run_id: str, bundle: dict, overflow_char_limit: int, semaphore) -> dict:
+    story_id = bundle["story_id"]
+    story_title = bundle["story_title"]
+    story_type = bundle.get("story_type", "unknown")
+    eligible_documents = bundle.get("eligible_documents", [])
+
+    document_records = [
+        {
+            "story_id": story_id,
+            "story_title": story_title,
+            "story_type": story_type,
+            "canonical_document_id": entry["document"]["canonical_document_id"],
+            "title": entry["document"].get("title", ""),
+            "source_role": entry["document"].get("source_role", ""),
+            "trust_tier": entry["document"].get("trust_tier", 4),
+            "source_url": entry["document"].get("canonical_url") or entry["document"].get("original_url", ""),
+            "clean_text": entry["clean_text"],
+        }
+        for entry in eligible_documents
+    ]
+
+    document_results = await asyncio.gather(
+        *[_extract_document(run_id, document, overflow_char_limit, semaphore) for document in document_records]
+    )
+
+    atomic_claims: list[dict] = []
+    claim_counter = 1
+    documents_with_claims = 0
+    total_chunks = 0
+    for result in document_results:
+        total_chunks += result["chunk_count"]
+        if result["claims"]:
+            documents_with_claims += 1
+        for claim in result["claims"]:
+            atomic_claims.append(
+                {
+                    **claim,
+                    "claim_id": _make_claim_id(story_id, claim_counter),
+                }
+            )
+            claim_counter += 1
+
+    atomic_claims = _deduplicate_claims(atomic_claims)[:MAX_CLAIMS_PER_STORY]
 
     return {
-        "story_id":     sid,
-        "story_title":  title,
-        "story_type":   story_type,
+        "story_id": story_id,
+        "story_title": story_title,
+        "story_type": story_type,
         "atomic_claims": atomic_claims,
         "counts": {
-            "spans_processed":  len(spans),
-            "spans_with_claims": spans_with_claims,
+            "documents_processed": len(document_records),
+            "documents_with_claims": documents_with_claims,
+            "chunks_processed": total_chunks,
             "claims_extracted": len(atomic_claims),
         },
     }
 
-def extract_all(selections: list[dict], run_id: str) -> list[dict]:
-    """
-    Extract atomic claims from all story selections.
-    Runs spans within each story concurrently; stories are sequential.
-    """
+
+def extract_all(evidence_bundles: list[dict], run_id: str, overflow_char_limit: int = _DEFAULT_OVERFLOW_CHAR_LIMIT) -> list[dict]:
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 
     async def _run_all():
         results = []
-        for sel in selections:
-            result = await _extract_story(run_id, sel, semaphore)
-            results.append(result)
+        for bundle in evidence_bundles:
+            results.append(await _extract_story(run_id, bundle, overflow_char_limit, semaphore))
         return results
 
     return asyncio.run(_run_all())
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--run-id", required=False)
-    parser.add_argument("--story-index", type=int, default=None,
-                        help="Test a single story (0-based index)")
-    args = parser.parse_args()
-
-    run_id = args.run_id
-    if not run_id:
-        for rp in sorted(RUNS_DIR.glob("*/run_manifest.json"),
-                         key=lambda p: p.stat().st_mtime, reverse=True):
-            if (rp.parent / "layer_3" / "ranked_stories.json").exists():
-                run_id = rp.parent.name
-                break
-        print(f"Auto-discovered run: {run_id}")
+    run_id = None
+    for manifest_path in sorted(RUNS_DIR.glob("*/run_manifest.json"), key=lambda path: path.stat().st_mtime, reverse=True):
+        if (manifest_path.parent / "layer_3" / "ranked_stories.json").exists():
+            run_id = manifest_path.parent.name
+            break
+    print(f"Auto-discovered run: {run_id}")
 
     from pipelines.layer_4_evidence_intelligence.evidence_loader import load
-    from pipelines.layer_4_evidence_intelligence.span_selector import select_all
 
     layer3_dir = RUNS_DIR / run_id / "layer_3"
     layer2_dir = RUNS_DIR / run_id / "layer_2"
     loader_result = load(run_id, layer3_dir, layer2_dir)
-    selections = select_all(loader_result["evidence_bundles"], loader_result["spans_by_id"])
-
-    if args.story_index is not None:
-        selections = [selections[args.story_index]]
+    results = extract_all(loader_result["evidence_bundles"][:2], run_id)
 
     print(f"\nClaim Extractor — {run_id}")
-    print(f"  Model  : {get_llm_profile('claim_extractor', run_id=run_id)['model']}")
-    print(f"  Stories: {len(selections)}")
-    print(f"  Spans  : {sum(s['counts']['selected'] for s in selections)}")
-    print("  Extracting...\n")
-
-    results = extract_all(selections, run_id)
-    total_claims = sum(r["counts"]["claims_extracted"] for r in results)
-    print(f"  Total claims extracted: {total_claims}")
-    for r in results:
-        c = r["counts"]
-        print(f"  {r['story_title'][:50]:50s}  "
-              f"spans={c['spans_processed']}  "
-              f"claims={c['claims_extracted']}")
-    if results:
-        print(f"\n  Sample claims from '{results[0]['story_title']}':")
-        for cl in results[0]["atomic_claims"][:3]:
-            print(f"    [{cl['claim_type']}] {cl['claim_text'][:80]}")
+    print(f"  Stories: {len(results)}")
+    print(f"  Claims : {sum(r['counts']['claims_extracted'] for r in results)}")
+    for result in results:
+        print(
+            f"  {result['story_title'][:50]:50s} "
+            f"docs={result['counts']['documents_processed']} "
+            f"chunks={result['counts']['chunks_processed']} "
+            f"claims={result['counts']['claims_extracted']}"
+        )

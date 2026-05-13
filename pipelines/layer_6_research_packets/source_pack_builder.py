@@ -4,7 +4,7 @@ Layer 6 — Module 5: Source Pack Builder
 Resolves all claim IDs used in the packet to their backing sources.
 
 Data join chain:
-  claim_id → claim_evidence_map → source_span_ids
+  claim_id → verified_claims.source_span_ids / canonical_document_ids
            → source_spans → canonical_document_id
            → canonical_documents → title, URL, publisher, trust_tier
 
@@ -12,7 +12,7 @@ Deduplicates by canonical_url. Marks trust_tier=1 sources as
 recommended_for_youtube_description.
 
 Key function:
-    build(all_claim_ids, evidence_map_by_id, spans_by_id, docs_by_id) → source_pack dict
+    build(all_claim_ids, claims_by_id, spans_by_id, docs_by_id) → source_pack dict
 
 Individual test:
     python source_pack_builder.py
@@ -39,18 +39,21 @@ _SOURCE_ROLE_ORDER = [
 
 
 def build(
-    all_claim_ids:      set,
-    evidence_map_by_id: dict,
-    spans_by_id:        dict,
-    docs_by_id:         dict,
-    run_id:             str = "",
+    all_claim_ids: set,
+    claims_by_id: dict,
+    spans_by_id: dict,
+    docs_by_id: dict,
+    run_id: str = "",
 ) -> dict:
     # claim_id → {doc_id → {span_ids, claim_ids}}
     doc_to_data: dict[str, dict] = {}
 
     for cid in all_claim_ids:
-        em = evidence_map_by_id.get(cid, {})
-        for span_id in em.get("source_span_ids", []):
+        claim = claims_by_id.get(cid, {})
+        span_ids = claim.get("source_span_ids", []) or []
+        canonical_document_ids = claim.get("canonical_document_ids", []) or []
+
+        for span_id in span_ids:
             span  = spans_by_id.get(span_id, {})
             doc_id = span.get("canonical_document_id", "")
             if not doc_id:
@@ -58,6 +61,13 @@ def build(
             if doc_id not in doc_to_data:
                 doc_to_data[doc_id] = {"span_ids": set(), "claim_ids": set()}
             doc_to_data[doc_id]["span_ids"].add(span_id)
+            doc_to_data[doc_id]["claim_ids"].add(cid)
+
+        for doc_id in canonical_document_ids:
+            if not doc_id:
+                continue
+            if doc_id not in doc_to_data:
+                doc_to_data[doc_id] = {"span_ids": set(), "claim_ids": set()}
             doc_to_data[doc_id]["claim_ids"].add(cid)
 
     # Deduplicate by canonical_url; build source list
@@ -139,13 +149,6 @@ if __name__ == "__main__":
                 c = json.loads(line)
                 claims_by_id[c["claim_id"]] = c
 
-    evidence_map_by_id = {}
-    with open(layer4_dir / "claim_evidence_map.jsonl") as f:
-        for line in f:
-            if line.strip():
-                em = json.loads(line)
-                evidence_map_by_id[em["claim_id"]] = em
-
     spans_by_id = {}
     with open(layer2_dir / "source_spans.jsonl") as f:
         for line in f:
@@ -163,7 +166,7 @@ if __name__ == "__main__":
     packet      = build_roundup(brief_ctx, fact_sheets_by_id, claims_by_id)
     b_report    = enforce(packet, brief_ctx, claims_by_id)
     all_cids    = brief_ctx["safe_claim_ids"] | brief_ctx["cautious_claim_ids"]
-    source_pack = build(all_cids, evidence_map_by_id, spans_by_id, docs_by_id, run_id)
+    source_pack = build(all_cids, claims_by_id, spans_by_id, docs_by_id, run_id)
 
     print(f"Sources total       : {source_pack['source_count']}")
     print(f"Recommended (YT)    : {source_pack['recommended_count']}")

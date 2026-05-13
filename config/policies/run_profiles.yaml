@@ -66,6 +66,18 @@ profiles:
     layer_limits:
       layer_4:
         max_stories: 12
+        max_documents_per_story: 6
+        document_overflow_char_limit: 12000
+        roundup_min_verified_claims: 2
+        deep_dive_min_verified_claims: 8
+        deep_dive_requires_primary_source: true
+        high_severity_contradiction_blocks_deep_dive: true
+      layer_5:
+        novelty_skip_threshold: 45
+        roundup_min_stories: 5
+        roundup_max_stories: 8
+        roundup_min_selection_score: 65
+        deep_dive_min_selection_score: 80
     memory_windows:
       published_video_similarity_days: 60
       entity_context_days: 180
@@ -133,6 +145,18 @@ profiles:
     layer_limits:
       layer_4:
         max_stories: 15
+        max_documents_per_story: 6
+        document_overflow_char_limit: 12000
+        roundup_min_verified_claims: 2
+        deep_dive_min_verified_claims: 8
+        deep_dive_requires_primary_source: true
+        high_severity_contradiction_blocks_deep_dive: true
+      layer_5:
+        novelty_skip_threshold: 45
+        roundup_min_stories: 5
+        roundup_max_stories: 8
+        roundup_min_selection_score: 65
+        deep_dive_min_selection_score: 80
     memory_windows:
       published_video_similarity_days: 60
       entity_context_days: 180
@@ -199,6 +223,18 @@ profiles:
     layer_limits:
       layer_4:
         max_stories: 15
+        max_documents_per_story: 6
+        document_overflow_char_limit: 12000
+        roundup_min_verified_claims: 2
+        deep_dive_min_verified_claims: 8
+        deep_dive_requires_primary_source: true
+        high_severity_contradiction_blocks_deep_dive: true
+      layer_5:
+        novelty_skip_threshold: 45
+        roundup_min_stories: 5
+        roundup_max_stories: 8
+        roundup_min_selection_score: 65
+        deep_dive_min_selection_score: 80
     memory_windows:
       published_video_similarity_days: 60
       entity_context_days: 180
@@ -265,6 +301,18 @@ profiles:
     layer_limits:
       layer_4:
         max_stories: 18
+        max_documents_per_story: 7
+        document_overflow_char_limit: 14000
+        roundup_min_verified_claims: 2
+        deep_dive_min_verified_claims: 8
+        deep_dive_requires_primary_source: true
+        high_severity_contradiction_blocks_deep_dive: true
+      layer_5:
+        novelty_skip_threshold: 45
+        roundup_min_stories: 5
+        roundup_max_stories: 8
+        roundup_min_selection_score: 65
+        deep_dive_min_selection_score: 80
     memory_windows:
       published_video_similarity_days: 90
       entity_context_days: 180
@@ -331,6 +379,18 @@ profiles:
     layer_limits:
       layer_4:
         max_stories: 12
+        max_documents_per_story: 8
+        document_overflow_char_limit: 16000
+        roundup_min_verified_claims: 2
+        deep_dive_min_verified_claims: 8
+        deep_dive_requires_primary_source: true
+        high_severity_contradiction_blocks_deep_dive: true
+      layer_5:
+        novelty_skip_threshold: 45
+        roundup_min_stories: 5
+        roundup_max_stories: 8
+        roundup_min_selection_score: 65
+        deep_dive_min_selection_score: 80
     memory_windows:
       published_video_similarity_days: 90
       entity_context_days: 180

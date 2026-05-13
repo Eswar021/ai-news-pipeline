@@ -46,8 +46,8 @@ def _safe_facts(verified_claims: list[dict]) -> list[dict]:
             "claim_type":     c["claim_type"],
             "confidence":     c["confidence_label"],
             "importance":     c.get("claim_importance", "medium"),
-            "source_span_ids": c.get("evidence", {}).get("source_span_ids", []),
-            "source_urls":    c.get("evidence", {}).get("source_urls", []),
+            "source_span_ids": c.get("source_span_ids", []),
+            "source_urls":    c.get("source_urls", []),
         }
         for c in verified_claims
         if c.get("verification_status") in _SAFE_STATUSES
@@ -64,7 +64,8 @@ def _cautious_facts(verified_claims: list[dict]) -> list[dict]:
             "confidence":          c["confidence_label"],
             "verification_status": c["verification_status"],
             "required_qualifier":  c.get("recommended_qualifier", ""),
-            "source_span_ids":     c.get("evidence", {}).get("source_span_ids", []),
+            "source_span_ids":     c.get("source_span_ids", []),
+            "source_urls":         c.get("source_urls", []),
         }
         for c in verified_claims
         if (c.get("verification_status") in _CAUTION_STATUSES

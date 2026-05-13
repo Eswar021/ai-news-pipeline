@@ -9,7 +9,6 @@ Returns ctx dict with:
   sentence_list       — ordered list of sentence records
   claim_map           — claim_id → verified claim record
   rejected_claim_map  — claim_id → rejected claim record
-  cem_map             — claim_id → claim_evidence_map record
   span_map            — span_id → source span record
   cautious_claim_ids  — set of claim_ids requiring cautious language
   safe_claim_ids      — set of usable, non-cautious claim_ids
@@ -61,13 +60,11 @@ def load(layer8_dir: Path, layer7_dir: Path, layer4_dir: Path, layer2_dir: Path)
     # ── Layer 4 ──────────────────────────────────────────────────────────────
     verified_claims = _load_jsonl(layer4_dir / "verified_claims.jsonl")
     rejected_claims = _load_jsonl(layer4_dir / "rejected_claims.jsonl")
-    cem_records = _load_jsonl(layer4_dir / "claim_evidence_map.jsonl")
     contradictions = json.loads((layer4_dir / "contradictions.json").read_text())
     evidence_gaps = json.loads((layer4_dir / "evidence_gaps.json").read_text())
 
     claim_map = {c["claim_id"]: c for c in verified_claims}
     rejected_claim_map = {c["claim_id"]: c for c in rejected_claims}
-    cem_map = {r["claim_id"]: r for r in cem_records}
 
     cautious_claim_ids = {
         c["claim_id"] for c in verified_claims if c.get("requires_cautious_language")
@@ -88,7 +85,6 @@ def load(layer8_dir: Path, layer7_dir: Path, layer4_dir: Path, layer2_dir: Path)
         "sentence_map":         sentence_map,
         "claim_map":            claim_map,
         "rejected_claim_map":   rejected_claim_map,
-        "cem_map":              cem_map,
         "span_map":             span_map,
         "cautious_claim_ids":   cautious_claim_ids,
         "safe_claim_ids":       safe_claim_ids,
@@ -120,7 +116,6 @@ if __name__ == "__main__":
     print(f"sentence_map    : {len(ctx['sentence_map'])}")
     print(f"verified claims : {len(ctx['claim_map'])}")
     print(f"rejected claims : {len(ctx['rejected_claim_map'])}")
-    print(f"cem records     : {len(ctx['cem_map'])}")
     print(f"source spans    : {len(ctx['span_map'])}")
     print(f"cautious claims : {len(ctx['cautious_claim_ids'])}")
     print(f"safe claims     : {len(ctx['safe_claim_ids'])}")

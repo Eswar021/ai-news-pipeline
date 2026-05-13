@@ -15,7 +15,7 @@ Usage:
 Levels (auto-detected from run output if not specified):
     after_layer_3   — story article text only (no verified facts)
     after_layer_4   — verified facts + article text (RECOMMENDED)
-    after_layer_6   — editorial brief + verified facts + article text
+    after_layer_6   — research packet context + verified facts + article text
 
 Output:
     output/chatgpt_handoffs/{run_id}/01_instructions.md
@@ -323,6 +323,28 @@ One sentence connecting this story to the next.
     }
 
 
+_SOURCE_GROUP_LABELS = {
+    "ai_company_blogs": "official company blogs",
+    "tech_news_apis": "tech news APIs",
+    "research_papers": "research papers and preprints",
+    "community_signals": "community signals",
+    "youtube_podcast_transcripts": "YouTube transcripts",
+    "github_open_source_signals": "GitHub/open-source signals",
+}
+
+
+def _describe_active_source_groups(manifest: dict) -> str:
+    groups = manifest.get("collection_strategy", {}).get("enabled_source_groups", [])
+    labels = [_SOURCE_GROUP_LABELS.get(group, group.replace("_", " ")) for group in groups]
+    if not labels:
+        return "the source groups configured for this run"
+    if len(labels) == 1:
+        return labels[0]
+    if len(labels) == 2:
+        return f"{labels[0]} and {labels[1]}"
+    return ", ".join(labels[:-1]) + f", and {labels[-1]}"
+
+
 def build_instructions(run_id: str, run_dir: Path, level: str, cfg: dict, level_cfg: dict,
                        n_stories: int, n_with_facts: int) -> str:
     now      = format_project_timestamp()
@@ -376,6 +398,7 @@ def build_instructions(run_id: str, run_dir: Path, level: str, cfg: dict, level_
         if n_with_facts else
         f"All {n_stories} include the original article text. No fact-level verification was run."
     )
+    source_groups_text = _describe_active_source_groups(manifest)
 
     # ── Avoid section from memory ─────────────────────────────────────────────
     avoid_block = _build_published_memory_block()
@@ -424,7 +447,7 @@ This script will be **read on camera** by the host. Every sentence must work spo
 
 ## THE DATA YOU HAVE
 
-I ran an automated pipeline that collected AI news from the last {lookback} hours across official company blogs, research preprints, and tech news sources.
+I ran an automated pipeline that collected material from the last {lookback} hours across {source_groups_text}.
 
 **`02_stories.md`** — **{n_stories} stories** with full article text. {has_facts_note}
 

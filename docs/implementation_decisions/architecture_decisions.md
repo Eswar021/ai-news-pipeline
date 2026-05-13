@@ -842,6 +842,19 @@ Going story-level would lose per-claim source attribution. The full chain ensure
 in source_pack is actually linked to a specific claim in the packet, not just any claim from
 the story.
 
+### Superseded on 2026-05-13: Source pack now uses embedded verified-claim provenance
+
+**What changed:** Layer 4 was simplified so `verified_claims.jsonl` now embeds the durable
+provenance fields downstream layers need: `source_span_ids`, `source_urls`, and
+`canonical_document_ids`.
+
+**What we do now:** `claim_id → verified_claims.jsonl → source_span_ids → source_spans →
+canonical_document_id → canonical_documents`.
+
+**Why this replaced the old decision:** The separate `claim_evidence_map.jsonl` file no longer
+adds unique runtime value in the active path. The claim record itself is now the authoritative
+contract, which reduces artifact count and removes one extra join dependency in Layers 6 and 9.
+
 ---
 
 ### Layer 6 actual output (run_2026_05_10_48h_auto)

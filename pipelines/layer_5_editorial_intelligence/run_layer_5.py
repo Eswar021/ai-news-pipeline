@@ -7,27 +7,20 @@ sequence, and writes the complete Layer 5 output including selected_video_brief.
 Processing pipeline:
   1.  editorial_candidate_loader   → join L3+L4, build candidates
   2.  evidence_safety_gate         → per-story per-format safety
-  3.  audience_fit_analyzer        → audience relevance + impact dimensions
+  3.  audience_fit_analyzer        → rule-based editorial relevance
   4.  viewer_value_analyzer        → LLM: viewer promise, question, value (async, 1/story)
   5.  novelty_checker              → memory comparison, follow-up detection
-  6.  format_fit_scorer            → score each story vs roundup + deep_dive
-  7.  format_router                → recommend format per story
-  8.  video_opportunity_scorer     → composite opportunity score
-  9.  editorial_decision_maker     → final selection + portfolio balance
-  10. editorial_brief_builder      → LLM: selected_video_brief (1 call total)
-  11. layer5_writer                → write all output files
-  12. layer5_validation_gate       → validate before Layer 6
+  6.  story_editorial_assessor     → merged per-story editorial assessment
+  7.  editorial_decision_maker     → final selection
+  8.  editorial_brief_builder      → LLM: selected_video_brief (1 call total)
+  9.  layer5_writer                → write lean output files
+  10. layer5_validation_gate       → validate before Layer 6
 
 Output:
     data/runs/{run_id}/layer_5/
       editorial_candidates.json
-      evidence_safety_decisions.json
-      audience_fit_report.json
-      viewer_value_report.json
-      novelty_report.json
-      format_fit_scores.json
-      format_routing_decisions.json
-      video_opportunity_scores.json
+      story_editorial_assessments.json
+      editorial_decision.json
       selected_video_brief.json
       rejected_editorial_candidates.jsonl
       layer5_manifest.json
@@ -52,9 +45,7 @@ from pipelines.layer_5_editorial_intelligence.evidence_safety_gate       import 
 from pipelines.layer_5_editorial_intelligence.audience_fit_analyzer      import analyze_all as audience_fit_all
 from pipelines.layer_5_editorial_intelligence.viewer_value_analyzer      import analyze_all as viewer_value_all
 from pipelines.layer_5_editorial_intelligence.novelty_checker            import check_all, MEMORY_DIR
-from pipelines.layer_5_editorial_intelligence.format_fit_scorer          import score_all as format_fit_all
-from pipelines.layer_5_editorial_intelligence.format_router              import route_all
-from pipelines.layer_5_editorial_intelligence.video_opportunity_scorer   import score_all as opportunity_all
+from pipelines.layer_5_editorial_intelligence.story_editorial_assessor   import assess_all
 from pipelines.layer_5_editorial_intelligence.editorial_decision_maker   import decide
 from pipelines.layer_5_editorial_intelligence.editorial_brief_builder    import build as build_brief
 from pipelines.layer_5_editorial_intelligence.layer5_writer              import write
@@ -76,8 +67,8 @@ def run_layer_5(run_id: str) -> dict:
     manifest = load_manifest(run_id=run_id)
     fmt_cfg = get_format_requirements(manifest)
     run_profile = get_run_profile(manifest)
-    routing_rules = manifest.get("format_strategy", {}).get("routing_rules", {})
     allowed_formats = list(run_profile.get("allowed_formats", []))
+    layer5_policy = manifest.get("execution_policy", {}).get("layer_limits", {}).get("layer_5", {})
 
     # ── Step 1: Load editorial candidates ────────────────────────────────────
     print("[Layer 5] Step 1 — Loading editorial candidates...")
@@ -90,7 +81,7 @@ def run_layer_5(run_id: str) -> dict:
 
     # ── Step 2: Evidence safety gate ─────────────────────────────────────────
     print("[Layer 5] Step 2 — Running evidence safety gate...")
-    safety_decisions = gate_all(candidates)
+    safety_decisions = gate_all(candidates, allowed_formats)
     n_safe    = sum(1 for s in safety_decisions if s["overall_status"] == "safe")
     n_blocked = sum(1 for s in safety_decisions if s["overall_status"] == "blocked")
     print(f"  Safe: {n_safe}  Blocked: {n_blocked}")
@@ -114,44 +105,29 @@ def run_layer_5(run_id: str) -> dict:
     follow_ups  = sum(1 for n in novelty_results if n["is_follow_up_candidate"])
     print(f"  New topics: {new_topics}  Follow-up candidates: {follow_ups}")
 
-    # ── Step 6: Format fit scoring ────────────────────────────────────────────
-    print("[Layer 5] Step 6 — Scoring format fit...")
-    format_fit_scores = format_fit_all(candidates, safety_decisions, audience_fits,
-                                       viewer_values, novelty_results,
-                                       allowed_formats=allowed_formats)
-    print(f"  Scored {len(format_fit_scores)} stories vs {', '.join(allowed_formats)}")
-
-    # ── Step 7: Format routing ────────────────────────────────────────────────
-    print("[Layer 5] Step 7 — Routing stories to formats...")
-    routing_decisions = route_all(
+    # ── Step 6: Compact editorial assessments ────────────────────────────────
+    print("[Layer 5] Step 6 — Building story editorial assessments...")
+    story_assessments = assess_all(
         candidates,
-        format_fit_scores,
         safety_decisions,
+        audience_fits,
+        viewer_values,
         novelty_results,
         allowed_formats=allowed_formats,
-        routing_rules=routing_rules,
+        policy=layer5_policy,
     )
-    dd_count  = sum(1 for r in routing_decisions if r["recommended_format"] == "deep_dive")
-    rnd_count = sum(1 for r in routing_decisions if r["recommended_format"] == "roundup_segment")
-    skip_count = sum(1 for r in routing_decisions if r["recommended_format"] in ("skip", "monitor_only"))
+    dd_count  = sum(1 for a in story_assessments if a["recommended_format"] == "deep_dive")
+    rnd_count = sum(1 for a in story_assessments if a["recommended_format"] == "roundup")
+    skip_count = sum(1 for a in story_assessments if a["recommended_format"] in ("skip", "monitor_only"))
     print(f"  Deep-dive: {dd_count}  Roundup: {rnd_count}  Skip/monitor: {skip_count}")
 
-    # ── Step 8: Video opportunity scoring ─────────────────────────────────────
-    print("[Layer 5] Step 8 — Scoring video opportunity...")
-    opportunity_scores = opportunity_all(candidates, safety_decisions, audience_fits,
-                                         viewer_values, novelty_results)
-    strong = sum(1 for o in opportunity_scores if o["overall_recommendation"] == "strong_video_candidate")
-    print(f"  Strong candidates: {strong}/{len(opportunity_scores)}")
-
-    # ── Step 9: Editorial decision ────────────────────────────────────────────
-    print("[Layer 5] Step 9 — Making editorial decision...")
+    # ── Step 7: Editorial decision ────────────────────────────────────────────
+    print("[Layer 5] Step 7 — Making editorial decision...")
     editorial_decision = decide(
         candidates,
-        routing_decisions,
-        opportunity_scores,
-        fmt_cfg,
+        story_assessments,
         run_profile=run_profile,
-        routing_rules=routing_rules,
+        layer5_policy=layer5_policy,
     )
     editorial_decision["run_id"] = run_id
     fmt  = editorial_decision.get("selected_format", "no_video")
@@ -161,8 +137,8 @@ def run_layer_5(run_id: str) -> dict:
     print(f"  Decision: {dec}  Format: {fmt}  Stories: {n_sel}  "
           f"Rejected: {len(editorial_decision.get('rejected_candidates', []))}")
 
-    # ── Step 10: Build editorial brief (LLM, 1 call) ──────────────────────────
-    print("[Layer 5] Step 10 — Building editorial brief (1 LLM call)...")
+    # ── Step 8: Build editorial brief (LLM, 1 call) ──────────────────────────
+    print("[Layer 5] Step 8 — Building editorial brief (1 LLM call)...")
     candidates_by_id = {c["story_id"]: c for c in candidates}
     vv_by_id         = {v["story_id"]: v for v in viewer_values}
 
@@ -181,28 +157,22 @@ def run_layer_5(run_id: str) -> dict:
         }
     print(f"  Brief ready: {selected_video_brief.get('handoff', {}).get('ready_for_layer_6', False)}")
 
-    # ── Step 11: Write output ─────────────────────────────────────────────────
-    print("[Layer 5] Step 11 — Writing output files...")
+    # ── Step 9: Write output ─────────────────────────────────────────────────
+    print("[Layer 5] Step 9 — Writing output files...")
     manifest = write(
         run_id=run_id,
         layer5_dir=layer5_dir,
         layer3_dir=layer3_dir,
         layer4_dir=layer4_dir,
         candidates=candidates,
-        safety_decisions=safety_decisions,
-        audience_fits=audience_fits,
-        viewer_values=viewer_values,
-        novelty_results=novelty_results,
-        format_fit_scores=format_fit_scores,
-        routing_decisions=routing_decisions,
-        opportunity_scores=opportunity_scores,
+        story_assessments=story_assessments,
         editorial_decision=editorial_decision,
         selected_video_brief=selected_video_brief,
     )
     print(f"  Output: {layer5_dir}")
 
-    # ── Step 12: Validate ─────────────────────────────────────────────────────
-    print("[Layer 5] Step 12 — Validating output...")
+    # ── Step 10: Validate ─────────────────────────────────────────────────────
+    print("[Layer 5] Step 10 — Validating output...")
     report = validate(run_id, layer5_dir)
     write_report(run_id, report, layer5_dir)
 

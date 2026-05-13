@@ -41,6 +41,10 @@ For the feature-oriented build backlog derived from this audit and the design do
 - The config surface was reorganized on 2026-05-13 into `config/registries/` and `config/policies/`, and Layer 0 now resolves a named run profile from `config/policies/run_profiles.yaml` before building `run_manifest.json`.
 - A strict `daily_48h_all_sources` run profile was added on 2026-05-13 for true 48-hour collection across every active source group, without the mixed-window overrides used by the broader monitoring profiles.
 - Layer 5 now respects the Layer 0 run profile instead of always behaving like an auto-route run. Explicit roundup and deep-dive profiles now use forced-format behavior, while `auto` remains format arbitration in Layer 5.
+- Layer 4 was simplified on 2026-05-13 from a span-first extraction path to a document-first evidence path. Claims are now extracted per eligible document, large documents overflow internally only when needed, and provenance is resolved back to Layer 2 spans after extraction.
+- Layer 5 was simplified on 2026-05-13 into a smaller editorial decision pipeline. The active path now centers on evidence safety, editorial relevance, viewer value, novelty, a compact per-story assessment, and one final selection stage.
+- `verified_claims.jsonl` is now the single authoritative Layer 4 claim contract. It embeds `source_span_ids`, `source_urls`, and `canonical_document_ids`, and downstream layers no longer depend on `claim_evidence_map.jsonl`.
+- The active Layer 4 and Layer 5 output trees were reduced on 2026-05-13. Lean contracts now replace the earlier spread of intermediate reports and evidence-map artifacts.
 - Active async LLM logs are no longer written as one file per call. The shared runtime now writes one JSONL file per module under layer-specific folders and maintains a run-level `llm_log_summary.json`.
 - Pipeline-level static API cost banners have been removed. The runner now treats LLM workload as dynamic and leaves concrete workload reporting to the layers that inspect real inputs.
 - The active runtime no longer creates unused top-level `data/...` folders just because an LLM call happens, and active layer orchestrators no longer create empty `layer_X/` run folders before any outputs are written.
@@ -309,8 +313,8 @@ These are the main downstream files to inspect for each layer.
 | Layer 1 | `data/runs/{run_id}/layer_1/raw_documents.jsonl`, `extraction_manifest.json` | Raw collected corpus and collection summary |
 | Layer 2 | `data/runs/{run_id}/layer_2/canonical_documents.jsonl`, `source_spans.jsonl`, `provenance_map.jsonl` | Canonical text, evidence spans, provenance |
 | Layer 3 | `data/runs/{run_id}/layer_3/story_clusters.json`, `ranked_stories.json` | Story objects and ranking |
-| Layer 4 | `data/runs/{run_id}/layer_4/verified_claims.jsonl`, `story_fact_sheets.json`, `evidence_gaps.json` | Evidence-ready claims and story fact packets |
-| Layer 5 | `data/runs/{run_id}/layer_5/selected_video_brief.json`, `editorial_candidates.json`, `format_routing_decisions.json` | Editorial selection and routing |
+| Layer 4 | `data/runs/{run_id}/layer_4/verified_claims.jsonl`, `story_fact_sheets.json`, `evidence_density_report.json`, `evidence_gaps.json` | Evidence-ready claims with embedded provenance and story fact packets |
+| Layer 5 | `data/runs/{run_id}/layer_5/selected_video_brief.json`, `editorial_candidates.json`, `story_editorial_assessments.json`, `editorial_decision.json` | Compact editorial selection and run-level decision |
 | Layer 6 | `data/runs/{run_id}/layer_6/research_packet.json`, `source_pack.json`, `claim_section_map.json` | Format-specific research packet |
 | Layer 7 | `data/runs/{run_id}/layer_7/script_writer_brief.json`, `video_plan.json` | Consolidated plan for the script writer |
 | Layer 8 | `data/runs/{run_id}/layer_8/generated_script.json`, `script.md`, `youtube_metadata.json` | Generated script and publishing metadata |
@@ -368,7 +372,7 @@ Instead, it behaves as a DAG of layer-scoped authoritative artifacts:
 - Layer 1 produces raw extraction artifacts.
 - Layer 2 turns those into canonical documents and source spans.
 - Layer 3 turns canonical documents into stories and rankings.
-- Layer 4 turns stories into verified claims and evidence mappings.
+- Layer 4 turns stories into verified claims with embedded provenance.
 - Later layers often read the latest layer output plus selected earlier authoritative artifacts.
 
 ### Real examples from the active code
@@ -815,8 +819,8 @@ The compiled run-state artifact should be derived and refreshed by orchestrators
 
 - Layer 2 `canonical_documents.jsonl` and `source_spans.jsonl`
 - Layer 3 `story_clusters.json` and `ranked_stories.json`
-- Layer 4 `verified_claims.jsonl` and `claim_evidence_map.jsonl`
-- Layer 5 `selected_video_brief.json`
+- Layer 4 `verified_claims.jsonl` and `story_fact_sheets.json`
+- Layer 5 `selected_video_brief.json` and `editorial_decision.json`
 - Layer 7 `script_writer_brief.json`
 - Layer 9 `final_publish_package.json` and `verification_report.json`
 

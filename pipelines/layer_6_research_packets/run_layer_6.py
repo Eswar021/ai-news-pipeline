@@ -6,7 +6,7 @@ research packet, and writes the complete Layer 6 output.
 
 Processing pipeline:
   1.  brief_loader          → load + validate selected_video_brief
-  2.  Load Layer 4 data     → fact_sheets, verified_claims, evidence_map, gaps
+  2.  Load Layer 4 data     → fact_sheets, verified_claims, gaps
   3.  Load Layer 3 data     → story_timeline, entity_topic_map
   4.  Load Layer 2 data     → source_spans, canonical_documents
   5.  packet_builder        → roundup_packet_builder or deep_dive_packet_builder
@@ -92,7 +92,6 @@ def run_layer_6(run_id: str) -> dict:
     fact_sheets_by_id = {fs["story_id"]: fs for fs in raw_sheets["story_fact_sheets"]}
 
     verified_claims_by_id = {c["claim_id"]: c for c in _load_jsonl(layer4_dir / "verified_claims.jsonl")}
-    evidence_map_by_id    = {em["claim_id"]: em for em in _load_jsonl(layer4_dir / "claim_evidence_map.jsonl")}
 
     raw_gaps  = json.load(open(layer4_dir / "evidence_gaps.json"))
     gap_list  = raw_gaps if isinstance(raw_gaps, list) else raw_gaps.get("evidence_gaps", [])
@@ -102,8 +101,7 @@ def run_layer_6(run_id: str) -> dict:
         gaps_by_story.setdefault(sid, []).append(g)
 
     print(f"  Fact sheets: {len(fact_sheets_by_id)}  "
-          f"Verified claims: {len(verified_claims_by_id)}  "
-          f"Evidence map: {len(evidence_map_by_id)}")
+          f"Verified claims: {len(verified_claims_by_id)}")
 
     # ── Step 3: Load Layer 3 data ────────────────────────────────────────────
     print("[Layer 6] Step 3 — Loading Layer 3 data...")
@@ -148,7 +146,7 @@ def run_layer_6(run_id: str) -> dict:
     # ── Step 7: Build source pack ────────────────────────────────────────────
     print("[Layer 6] Step 7 — Building source pack...")
     all_cids    = brief_ctx["safe_claim_ids"] | brief_ctx["cautious_claim_ids"]
-    source_pack = build_sources(all_cids, evidence_map_by_id, spans_by_id, docs_by_id, run_id)
+    source_pack = build_sources(all_cids, verified_claims_by_id, spans_by_id, docs_by_id, run_id)
     print(f"  Sources: {source_pack['source_count']}  "
           f"Recommended (YT): {source_pack['recommended_count']}")
 
