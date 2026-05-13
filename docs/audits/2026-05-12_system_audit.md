@@ -29,6 +29,7 @@ For the feature-oriented build backlog derived from this audit and the design do
 
 - `config/llm_config.py` is the intended model source, and the last known hardcoded `gpt-4o-mini` usages were removed from Layer 8 and Layer 9 on 2026-05-12.
 - Layer 0 correctly computes run-time collection windows, and Layer 1 now enforces them in the active path with a mix of fetch-side narrowing and post-fetch filtering.
+- Layer 0 run profiles now also own the active Layer 1 collector caps and the Layer 4 evidence-loader story cap, and those limits are resolved into the manifest instead of living in orchestrator code.
 - YouTube collection is now wired into the main Layer 1 orchestrator through the `resolved_config.youtube_channels` manifest snapshot authored from `channels.yaml`.
 - The design rule that downstream layers should read the Layer 0 run manifest is now implemented in the active runtime path through `resolved_config` snapshots in `run_manifest.json`; downstream runtime consumers no longer fall back to original repo config files.
 - ChatGPT handoff generation had a format-selection bug for `auto` runs; this was fixed on 2026-05-12 so the exporter now infers the actual selected format from downstream outputs.
@@ -38,8 +39,11 @@ For the feature-oriented build backlog derived from this audit and the design do
 - A Layer 4 write-path bug was fixed on 2026-05-13: `layer4_writer.py` was incorrectly reading `confidence_label` from an already-flattened verified-claim record shape, which caused the run to fail after successful claim extraction and verification.
 - Active generated pipeline timestamps were standardized to the configured project timezone on 2026-05-13. The source of truth remains `config/policies/run_defaults.yaml` with `Asia/Kolkata`, and the active pipeline now uses shared helpers for run manifests, layer manifests, memory records, and LLM logs. Canonical source `published_at` normalization and some internal elapsed-time math intentionally remain UTC-based.
 - The config surface was reorganized on 2026-05-13 into `config/registries/` and `config/policies/`, and Layer 0 now resolves a named run profile from `config/policies/run_profiles.yaml` before building `run_manifest.json`.
+- A strict `daily_48h_all_sources` run profile was added on 2026-05-13 for true 48-hour collection across every active source group, without the mixed-window overrides used by the broader monitoring profiles.
 - Layer 5 now respects the Layer 0 run profile instead of always behaving like an auto-route run. Explicit roundup and deep-dive profiles now use forced-format behavior, while `auto` remains format arbitration in Layer 5.
 - Active async LLM logs are no longer written as one file per call. The shared runtime now writes one JSONL file per module under layer-specific folders and maintains a run-level `llm_log_summary.json`.
+- Pipeline-level static API cost banners have been removed. The runner now treats LLM workload as dynamic and leaves concrete workload reporting to the layers that inspect real inputs.
+- The active runtime no longer creates unused top-level `data/...` folders just because an LLM call happens, and active layer orchestrators no longer create empty `layer_X/` run folders before any outputs are written.
 - Raw Layer 10 memory still records prepared runs, which is useful for audit, but only published runs should drive novelty and repetition decisions.
 - The active pipeline is not a strict Layer N → Layer N+1 chain. It behaves as a DAG of authoritative artifacts, and later layers intentionally reach back to Layer 2, Layer 3, and Layer 4.
 - A single mutable master file is not recommended as the primary source of truth. A compiled `run_state.json` or `run_graph.json` artifact is the better future direction.
@@ -159,9 +163,11 @@ Manifest-driven in the active path:
 
 - Layer 0 selected run profile and decision mode
 - Layer 1 collection windows, enabled source groups, and query themes
+- Layer 1 collector caps
 - Layer 1 resolved source registry subset
 - Layer 1 resolved YouTube channel subset
 - Layer 1 per-run YouTube fetch caps
+- Layer 4 story-selection cap
 - Layer 3 entity/topic taxonomy
 - Layer 5 format requirements and forced-format vs auto-route behavior
 - active LLM module profile selection in Layers 4, 5, 7, 8, and 9
@@ -205,6 +211,7 @@ Layer 0 itself is now run-profile-driven:
 
 - `config/policies/run_profiles.yaml` is the primary policy surface
 - explicit `roundup` / `deep_dive` selectors resolve to named profiles
+- `daily` now resolves to `daily_48h_all_sources`
 - explicit profiles can force format behavior in Layer 5
 - collection windows and YouTube fetch caps now come from the selected profile rather than from hardcoded Python rules or registry defaults
 

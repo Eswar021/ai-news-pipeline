@@ -98,6 +98,7 @@ def build_extraction_manifest(
             "query_themes": run_manifest.get("collection_strategy", {}).get("query_themes", []),
             "query_theme_set": run_manifest.get("collection_strategy", {}).get("query_theme_set"),
             "collection_window": run_manifest.get("collection_strategy", {}).get("collection_window", {}),
+            "collector_caps": run_manifest.get("collection_strategy", {}).get("collector_caps", {}),
             "source_specific_windows": {
                 group: run_manifest.get("collection_strategy", {}).get("source_specific_windows", {}).get(group, {})
                 for group in group_summary.keys()

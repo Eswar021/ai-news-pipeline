@@ -158,6 +158,8 @@ def resolve_run_profile(
         "source_plan": dict(profile.get("source_plan", {})),
         "collection_windows": dict(profile.get("collection_windows", {})),
         "youtube": dict(profile.get("youtube", {})),
+        "collection_caps": dict(profile.get("collection_caps", {})),
+        "layer_limits": dict(profile.get("layer_limits", {})),
         "memory_windows": dict(profile.get("memory_windows", {})),
         "operational_overrides": operational_overrides,
         "resolution_notes": resolution_notes,

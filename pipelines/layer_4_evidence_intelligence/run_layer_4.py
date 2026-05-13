@@ -44,6 +44,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
+from pipelines.runtime_manifest import get_layer_limits, load_manifest
 
 from pipelines.layer_4_evidence_intelligence.evidence_loader        import load
 from pipelines.layer_4_evidence_intelligence.span_selector          import select_all
@@ -67,20 +68,26 @@ def run_layer_4(run_id: str) -> dict:
     layer3_dir = RUNS_DIR / run_id / "layer_3"
     layer2_dir = RUNS_DIR / run_id / "layer_2"
     layer4_dir = RUNS_DIR / run_id / "layer_4"
-    layer4_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[Layer 4] Run    : {run_id}")
     print(f"[Layer 4] Input  : {layer3_dir}")
     print(f"[Layer 4] Output : {layer4_dir}\n")
 
+    manifest = load_manifest(run_id=run_id)
+    layer4_limits = get_layer_limits(manifest, "layer_4")
+    max_stories = int(layer4_limits.get("max_stories", 0))
+    if max_stories <= 0:
+        raise ValueError("execution_policy.layer_limits.layer_4.max_stories must be > 0")
+
     # ── Step 1: Load evidence bundles ─────────────────────────────────────────
     print("[Layer 4] Step 1 — Loading evidence bundles...")
-    loader_result = load(run_id, layer3_dir, layer2_dir)
+    loader_result = load(run_id, layer3_dir, layer2_dir, max_stories=max_stories)
     evidence_bundles = loader_result["evidence_bundles"]
     spans_by_id = loader_result["spans_by_id"]
     docs_by_id  = loader_result["docs_by_id"]
     print(f"  Stories: {loader_result['stories_loaded']}  "
-          f"Spans: {loader_result['counts']['total_spans_loaded']}")
+          f"Spans: {loader_result['counts']['total_spans_loaded']}  "
+          f"Story cap: {max_stories}")
 
     # ── Step 2: Select spans for extraction ──────────────────────────────────
     print("[Layer 4] Step 2 — Selecting spans for claim extraction...")

@@ -54,6 +54,8 @@ Each profile defines:
 - `max_videos`
 - `source_plan`
 - `collection_windows`
+- `collection_caps`
+- `layer_limits`
 - `youtube`
 - `memory_windows`
 
@@ -63,8 +65,9 @@ Each profile defines:
 
 Used when Layer 5 is allowed to compare formats and choose.
 
-Current example:
+Current examples:
 
+- `daily_48h_all_sources`
 - `auto_48h`
 
 Behavior:
@@ -115,8 +118,15 @@ Layer 1 now consumes the manifest's resolved run policy for:
 - query theme set and query themes
 - collection window
 - per-source-group window overrides
+- collector execution caps such as `max_per_source`, `max_per_category`, and `max_stories`
 - YouTube channel registry snapshot
 - YouTube per-run max-per-duration policy
+
+### Layer 4
+
+Layer 4 now consumes the manifest's execution policy for:
+
+- evidence-loader story-selection cap (`execution_policy.layer_limits.layer_4.max_stories`)
 
 ### Layer 5
 
@@ -136,14 +146,27 @@ This gives the pipeline:
 - cleaner config ownership
 - fewer hidden runtime config reads
 - a stable place to add future profiles such as evergreen, comparison, and follow-up
+- one policy home for both collection caps and downstream story-analysis caps
 
 ## Current profile set
 
 At the moment the active policy file defines:
 
+- `daily_48h_all_sources`
 - `auto_48h`
 - `roundup_48h`
 - `roundup_weekly`
 - `deep_dive_weekly`
 
 Future format profiles should be added here rather than implemented as hardcoded branches inside downstream layers.
+
+## Strict all-sources daily profile
+
+`daily_48h_all_sources` is the strict two-day monitoring profile.
+
+It differs from `auto_48h` in two ways:
+
+- every active source group uses the same `48h` collection window
+- all active source groups are enabled as required groups for the run
+
+It still uses `decision_mode=auto_route`, so Layer 5 may choose roundup or deep dive after collection. If we want a strict all-sources daily roundup later, that should be a separate forced-format profile.

@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
+from pipelines.runtime_manifest import get_layer_limits, load_manifest
 
 _PRIMARY_ROLES   = {"primary_evidence", "company_blog", "official_announcement"}
 _SECONDARY_ROLES = {"secondary_evidence", "cross_reference", "industry_news", "news_coverage"}
@@ -51,7 +52,7 @@ def _classify_span(span: dict) -> str:
     return "trend_signal_spans"
 
 
-def load(run_id: str, layer3_dir: Path, layer2_dir: Path, max_stories: int = 15) -> dict:
+def load(run_id: str, layer3_dir: Path, layer2_dir: Path, max_stories: int | None = None) -> dict:
     """
     Build evidence bundles for all Layer 4 stories.
 
@@ -64,6 +65,12 @@ def load(run_id: str, layer3_dir: Path, layer2_dir: Path, max_stories: int = 15)
           "counts": {...}
         }
     """
+    if max_stories is None:
+        manifest = load_manifest(run_id=run_id)
+        max_stories = int(get_layer_limits(manifest, "layer_4").get("max_stories", 0))
+        if max_stories <= 0:
+            raise ValueError("execution_policy.layer_limits.layer_4.max_stories must be > 0")
+
     # ── Load Layer 3 outputs ─────────────────────────────────────────────────
     ranked_stories = json.loads((layer3_dir / "ranked_stories.json").read_text())["ranked_stories"]
     l4_ranked = [r for r in ranked_stories if r.get("recommended_for_layer_4")][:max_stories]

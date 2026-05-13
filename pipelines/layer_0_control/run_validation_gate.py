@@ -21,6 +21,7 @@ _REQUIRED_TOP_LEVEL_KEYS = [
     "quality_policy",
     "memory_policy",
     "depth_limits",
+    "execution_policy",
     "output_contract",
     "resolved_config",
 ]
@@ -103,6 +104,10 @@ def validate_manifest(manifest: dict, manifest_path: Path) -> dict:
             "no source groups have enabled sources"
         )
 
+    collector_caps = coll.get("collector_caps", {})
+    if not isinstance(collector_caps, dict) or not collector_caps:
+        errors.append("collection_strategy.collector_caps is missing or empty")
+
     # 4. Quality policy
     qp = manifest.get("quality_policy", {})
     if not qp.get("quality_policy_id"):
@@ -126,6 +131,12 @@ def validate_manifest(manifest: dict, manifest_path: Path) -> dict:
         errors.append("output_contract.run_data_dir is missing")
     if not contract.get("required_layer_outputs"):
         errors.append("output_contract.required_layer_outputs is missing or empty")
+
+    execution_policy = manifest.get("execution_policy", {})
+    layer_limits = execution_policy.get("layer_limits", {})
+    layer4_limits = layer_limits.get("layer_4", {}) if isinstance(layer_limits, dict) else {}
+    if not isinstance(layer4_limits, dict) or int(layer4_limits.get("max_stories", 0) or 0) <= 0:
+        errors.append("execution_policy.layer_limits.layer_4.max_stories must be > 0")
 
     # 6A. Resolved runtime config snapshots
     resolved = manifest.get("resolved_config", {})

@@ -107,14 +107,15 @@ Implemented:
 - Layer 1 now reads enabled source groups and query themes from the correct `collection_strategy` manifest fields
 - Layer 1 now applies manifest-driven collection windows to the raw document corpus
 - collectors that support it already can also receive fetch-side `days_back` narrowing from the manifest window
+- Layer 0 run profiles now own the active Layer 1 collector caps
 - `extraction_manifest.json` now records the applied collection policy for the run
 - YouTube is now part of the main Layer 1 orchestration path through the manifest-backed YouTube snapshot and the YouTube transcript wrapper
 - Layer 0 now resolves collection windows from named run profiles instead of hardcoded Python window rules
+- Layer 4 now reads its evidence-loader story cap from the manifest instead of a hardcoded default
 
 Missing or incomplete:
 
 - some source groups still rely on post-fetch window filtering because their current wrappers do not expose clean server-side date constraints
-- collector dispatch still relies on fixed-style limits and default behaviors
 - Layer 10 source-priority feedback is not yet fed back into Layer 1
 - YouTube channel selection is still registry-driven rather than dynamically narrowed per run
 
@@ -144,7 +145,7 @@ From the implementation decisions:
 
 ### Status note
 
-The core manifest-driven behavior is now implemented for the active path. The remaining work here is about richer source selection and efficiency, not about whether Layer 1 obeys Layer 0.
+The core manifest-driven behavior is now implemented for the active path. The remaining work here is about richer source selection, stricter fetch-side narrowing, and efficiency, not basic Layer 0 → downstream policy ownership.
 
 ### Key files
 
@@ -179,9 +180,11 @@ Implemented:
 - config files are now split into `config/registries/` and `config/policies/`
 - Layer 0 resolves `config/policies/run_profiles.yaml`
 - `pipeline.py` and `run_layer_0.py` now support `--run-profile`
+- `daily_48h_all_sources` now exists as a strict all-sources 48-hour monitoring profile
 - explicit roundup and deep-dive selectors resolve to named profiles
 - Layer 5 now respects `decision_mode` and `allowed_formats` from the manifest
 - explicit forced-format runs now produce format-specific `create_video` or `no_video`
+- active per-source collector caps and Layer 4 story-selection caps are now resolved from the selected profile into the manifest
 
 Missing or incomplete:
 
@@ -201,6 +204,69 @@ Missing or incomplete:
 - `pipelines/layer_0_control/run_profile_resolver.py`
 - `pipelines/layer_0_control/run_layer_0.py`
 - `pipelines/layer_5_editorial_intelligence/run_layer_5.py`
+
+---
+
+## 2A. Dynamic Workload Reporting
+
+**Priority:** `Now`
+
+### What this feature is
+
+Remove misleading hardcoded API-call estimates from the pipeline runner and make workload reporting come from the layers after they inspect real inputs.
+
+### Current implementation
+
+Implemented:
+
+- `pipeline.py` no longer prints hardcoded `~218`, `~12`, `~11`, or `~9` API-cost summaries
+- `pipeline_config.yaml` preset descriptions no longer claim fixed API totals
+- the pipeline runner now labels LLM work as dynamic and lets the layers report real run-derived workload sizes
+
+Missing or incomplete:
+
+- some layers could expose clearer pre-dispatch estimates before starting their LLM work
+- run-level summaries still do not aggregate actual request counts from the shared runtime logs
+
+### Why it matters now
+
+- static cost banners were materially misleading
+- LLM workload depends on selected spans, stories, sections, and verifiable content units
+- the layers already know the real work shape better than the orchestrator does
+
+### What “done” should mean
+
+- pipeline-level output never claims static API usage for dynamic layers
+- each LLM layer reports its own real run-derived workload
+- future observability can summarize actual request counts from logs rather than from assumptions
+
+---
+
+## 2B. Output Tree Hygiene
+
+**Priority:** `Now`
+
+### What this feature is
+
+Stop creating empty runtime folders that the active pipeline does not actually use.
+
+### Current implementation
+
+Implemented:
+
+- the active async LLM runtime now creates only `output/llm_logs/...` instead of calling a broad directory-creation helper
+- active layer orchestrators no longer eagerly create per-run `layer_X/` directories before outputs are written
+- output directories are now created by the modules that actually write files
+
+Why it matters:
+
+- the old behavior left confusing empty top-level `data/...` folders behind
+- failed runs could leave empty per-layer directories that looked like partial outputs
+
+Remaining work:
+
+- legacy and inactive helper paths still keep broader compatibility helpers around
+- those should be cleaned only when we do the legacy-folder removal pass
 
 ---
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from config.time_utils import now_project_iso
 
 
-_SCHEMA_VERSION = "1.2"
+_SCHEMA_VERSION = "1.3"
 
 
 def build_run_manifest(
@@ -59,6 +59,8 @@ def build_run_manifest(
             "lookback_hours": run_profile["lookback_hours"],
             "depth": run_profile["depth"],
             "max_videos": run_profile["max_videos"],
+            "collection_caps": run_profile.get("collection_caps", {}),
+            "layer_limits": run_profile.get("layer_limits", {}),
             "operational_overrides": run_profile.get("operational_overrides", {}),
             "resolution_notes": run_profile.get("resolution_notes", []),
         },
@@ -99,11 +101,16 @@ def build_run_manifest(
             "query_themes": source_scope["source_collection_plan"]["query_themes"],
             "query_theme_set": source_scope["source_collection_plan"].get("query_theme_set"),
             "profile_name": run_profile["profile_name"],
+            "collector_caps": run_profile.get("collection_caps", {}),
             "collection_limits": {
                 "minimum_expected_documents": source_scope["source_collection_plan"]["minimum_expected_documents"],
                 "maximum_expected_documents": source_scope["source_collection_plan"]["maximum_expected_documents"],
             },
             "source_group_details": source_scope["source_group_details"],
+        },
+
+        "execution_policy": {
+            "layer_limits": run_profile.get("layer_limits", {}),
         },
 
         "quality_policy": quality_policy,

@@ -53,6 +53,25 @@ def get_decision_mode(manifest: dict) -> str:
     return get_run_profile(manifest).get("decision_mode", "auto_route")
 
 
+def get_collection_caps(manifest: dict) -> dict:
+    caps = manifest.get("collection_strategy", {}).get("collector_caps", {})
+    if not isinstance(caps, dict):
+        raise KeyError("run_manifest.json is missing collection_strategy.collector_caps")
+    return caps
+
+
+def get_layer_limits(manifest: dict, layer_name: str | None = None) -> dict:
+    limits = manifest.get("execution_policy", {}).get("layer_limits", {})
+    if not isinstance(limits, dict):
+        raise KeyError("run_manifest.json is missing execution_policy.layer_limits")
+    if layer_name is None:
+        return limits
+    layer_limits = limits.get(layer_name, {})
+    if not isinstance(layer_limits, dict):
+        raise KeyError(f"run_manifest.json is missing execution_policy.layer_limits.{layer_name}")
+    return layer_limits
+
+
 def get_source_registry_snapshot(manifest: dict) -> dict:
     snapshot = _resolved_config(manifest).get("source_registry", {})
     if not isinstance(snapshot, dict) or not snapshot.get("sources"):

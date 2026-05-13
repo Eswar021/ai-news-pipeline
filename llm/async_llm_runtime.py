@@ -24,7 +24,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
-from config.paths import ENV_FILE, LLM_LOGS, ensure_all_dirs
+from config.paths import ENV_FILE, LLM_LOGS
 from config.time_utils import now_project_file_stamp, now_project_iso
 from pipelines.runtime_manifest import get_llm_profile
 
@@ -53,7 +53,7 @@ def _safe_label(value: str | None, fallback: str) -> str:
 
 
 def _log_dir_for_run(run_id: str | None) -> Path:
-    ensure_all_dirs()
+    LLM_LOGS.mkdir(parents=True, exist_ok=True)
     log_dir = LLM_LOGS / _safe_label(run_id, "adhoc")
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir

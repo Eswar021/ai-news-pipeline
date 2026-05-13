@@ -7,6 +7,7 @@ Purpose: Normalize any trigger (manual, scheduled, API) into a clean RunRequest 
 from typing import Optional
 
 from config.time_utils import now_project, parse_to_project_timezone
+from config.paths import RUNS_DIR
 
 VALID_FORMATS = {"auto", "roundup", "deep_dive", "evergreen", "comparison", "follow_up"}
 VALID_DEPTHS = {"light", "standard", "deep"}
@@ -14,6 +15,47 @@ VALID_TRIGGER_TYPES = {"manual", "scheduled", "api"}
 
 _MAX_LOOKBACK_HOURS = 720  # 30 days
 _MIN_LOOKBACK_HOURS = 1
+
+
+def _safe_slug(text: str) -> str:
+    cleaned = []
+    last_was_sep = False
+    for ch in (text or "").strip().lower():
+        if ch.isalnum():
+            cleaned.append(ch)
+            last_was_sep = False
+        else:
+            if not last_was_sep:
+                cleaned.append("_")
+                last_was_sep = True
+    slug = "".join(cleaned).strip("_")
+    return slug or "run"
+
+
+def _build_unique_run_id(
+    *,
+    dt,
+    run_profile: Optional[str],
+    lookback_hours: int,
+    target_format: str,
+) -> str:
+    """
+    Build a readable run ID that is:
+    - timestamped to seconds
+    - profile-aware when a named run profile is present
+    - collision-safe if a same-second directory already exists
+    """
+    timestamp = dt.strftime("%Y_%m_%d_%H%M%S")
+    profile_or_selector = run_profile or f"{lookback_hours}h_{target_format}"
+    base_id = f"run_{timestamp}_{_safe_slug(profile_or_selector)}"
+
+    candidate = base_id
+    counter = 2
+    while (RUNS_DIR / candidate).exists():
+        candidate = f"{base_id}_{counter:02d}"
+        counter += 1
+
+    return candidate
 
 
 def parse_run_request(
@@ -62,9 +104,12 @@ def parse_run_request(
     if not topic_focus:
         topic_focus = defaults.get("topic_focus", "AI news")
 
-    # run_id format: run_YYYY_MM_DD_Nh_<format>
-    date_str = dt.strftime("%Y_%m_%d")
-    run_id = f"run_{date_str}_{lookback_hours}h_{target_format}"
+    run_id = _build_unique_run_id(
+        dt=dt,
+        run_profile=run_profile,
+        lookback_hours=lookback_hours,
+        target_format=target_format,
+    )
 
     return {
         "run_id": run_id,

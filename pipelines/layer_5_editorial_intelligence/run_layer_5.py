@@ -67,7 +67,6 @@ def run_layer_5(run_id: str) -> dict:
     layer3_dir  = RUNS_DIR / run_id / "layer_3"
     layer4_dir  = RUNS_DIR / run_id / "layer_4"
     layer5_dir  = RUNS_DIR / run_id / "layer_5"
-    layer5_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[Layer 5] Run    : {run_id}")
     print(f"[Layer 5] Input  : {layer4_dir}")

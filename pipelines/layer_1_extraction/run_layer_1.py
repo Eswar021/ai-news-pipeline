@@ -32,6 +32,7 @@ from pipelines.layer_1_extraction.query_topic_expansion_planner import expand_qu
 from pipelines.layer_1_extraction.layer1_output_packager import build_extraction_manifest
 from pipelines.layer_1_extraction.layer1_validation_gate import validate, write_report
 from pipelines.layer_1_extraction.window_filter import window_days_for_fetch
+from pipelines.runtime_manifest import get_collection_caps
 
 def _load_manifest(manifest_path: Path) -> dict:
     with open(manifest_path, encoding="utf-8") as f:
@@ -64,6 +65,10 @@ def _window_label(window: dict) -> str:
     else:
         lookback = f"{window.get('lookback_hours', '?')}h"
     return f"{start} → {end} ({lookback})"
+
+
+def _collector_caps(manifest: dict, source_group: str) -> dict:
+    return get_collection_caps(manifest).get(source_group, {})
 
 
 def run_layer_1(run_id: str, manifest_path: Path = None, skip_youtube: bool = False) -> dict:
@@ -127,10 +132,11 @@ def run_layer_1(run_id: str, manifest_path: Path = None, skip_youtube: bool = Fa
     # ── ai_company_blogs ──────────────────────────────────────────────────────
     if "ai_company_blogs" in enabled_groups:
         blogs_window = _window_for_group(manifest, "ai_company_blogs")
+        blog_caps = _collector_caps(manifest, "ai_company_blogs")
         print("[Layer 1] Collecting: official company blogs...")
         print(f"  Window: {_window_label(blogs_window)}")
         from pipelines.layer_1_extraction.official_company_blog_collector import collect as collect_blogs
-        docs = collect_blogs(run_id=run_id, max_per_source=10,
+        docs = collect_blogs(run_id=run_id, max_per_source=int(blog_caps.get("max_per_source", 10)),
                              output_path=output_path, layer1_dir=layer1_dir,
                              start_at=blogs_window.get("start"), end_at=blogs_window.get("end"))
         print(f"  → {len(docs)} blog posts\n")
@@ -139,11 +145,12 @@ def run_layer_1(run_id: str, manifest_path: Path = None, skip_youtube: bool = Fa
     # ── research_papers ───────────────────────────────────────────────────────
     if "research_papers" in enabled_groups:
         papers_window = _window_for_group(manifest, "research_papers")
+        paper_caps = _collector_caps(manifest, "research_papers")
         print("[Layer 1] Collecting: research papers (arXiv)...")
         print(f"  Window: {_window_label(papers_window)}")
         from pipelines.layer_1_extraction.research_paper_collector import collect as collect_papers
         categories = query_plan.get("research_papers", {}).get("categories", ["cs.AI", "cs.LG", "cs.CL"])
-        docs = collect_papers(run_id=run_id, categories=categories, max_per_category=10,
+        docs = collect_papers(run_id=run_id, categories=categories, max_per_category=int(paper_caps.get("max_per_category", 10)),
                               output_path=output_path, layer1_dir=layer1_dir,
                               start_at=papers_window.get("start"), end_at=papers_window.get("end"))
         print(f"  → {len(docs)} papers\n")
@@ -152,13 +159,14 @@ def run_layer_1(run_id: str, manifest_path: Path = None, skip_youtube: bool = Fa
     # ── tech_news_apis ────────────────────────────────────────────────────────
     if "tech_news_apis" in enabled_groups:
         news_window = _window_for_group(manifest, "tech_news_apis")
+        news_caps = _collector_caps(manifest, "tech_news_apis")
         print("[Layer 1] Collecting: tech news APIs...")
         print(f"  Window: {_window_label(news_window)}")
         from pipelines.layer_1_extraction.tech_news_api_collector import collect as collect_news
         queries = query_plan.get("tech_news_apis", [])
         primary_query = queries[0] if queries else "artificial intelligence OR LLM"
         news_days_back = window_days_for_fetch(news_window)
-        docs = collect_news(run_id=run_id, query=primary_query, max_per_source=10,
+        docs = collect_news(run_id=run_id, query=primary_query, max_per_source=int(news_caps.get("max_per_source", 10)),
                             output_path=output_path, layer1_dir=layer1_dir,
                             days_back=news_days_back,
                             start_at=news_window.get("start"), end_at=news_window.get("end"))
@@ -168,10 +176,11 @@ def run_layer_1(run_id: str, manifest_path: Path = None, skip_youtube: bool = Fa
     # ── community_signals ─────────────────────────────────────────────────────
     if "community_signals" in enabled_groups:
         community_window = _window_for_group(manifest, "community_signals")
+        community_caps = _collector_caps(manifest, "community_signals")
         print("[Layer 1] Collecting: community signals (Hacker News)...")
         print(f"  Window: {_window_label(community_window)}")
         from pipelines.layer_1_extraction.community_signal_collector import collect as collect_community
-        docs = collect_community(run_id=run_id, story_type="top", max_stories=20,
+        docs = collect_community(run_id=run_id, story_type="top", max_stories=int(community_caps.get("max_stories", 20)),
                                  output_path=output_path, layer1_dir=layer1_dir,
                                  start_at=community_window.get("start"), end_at=community_window.get("end"))
         print(f"  → {len(docs)} HN stories\n")
@@ -180,13 +189,14 @@ def run_layer_1(run_id: str, manifest_path: Path = None, skip_youtube: bool = Fa
     # ── github_open_source_signals ────────────────────────────────────────────
     if "github_open_source_signals" in enabled_groups:
         github_window = _window_for_group(manifest, "github_open_source_signals")
+        github_caps = _collector_caps(manifest, "github_open_source_signals")
         print("[Layer 1] Collecting: GitHub open-source signals...")
         print(f"  Window: {_window_label(github_window)}")
         from pipelines.layer_1_extraction.github_open_source_collector import collect as collect_github
         topics = query_plan.get("github_open_source_signals", {}).get("topics", [])
         queries = [" ".join(topics[:3])] if topics else ["artificial intelligence LLM"]
         github_days_back = window_days_for_fetch(github_window) or 7
-        docs = collect_github(run_id=run_id, queries=queries, max_per_query=5,
+        docs = collect_github(run_id=run_id, queries=queries, max_per_query=int(github_caps.get("max_per_query", 5)),
                               days_back=github_days_back,
                               output_path=output_path, layer1_dir=layer1_dir,
                               start_at=github_window.get("start"), end_at=github_window.get("end"))

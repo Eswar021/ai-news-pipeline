@@ -184,7 +184,6 @@ def run_layer_2(run_id: str, layer1_dir: Path = None) -> dict:
         layer1_dir = RUNS_DIR / run_id / "layer_1"
 
     layer2_dir = RUNS_DIR / run_id / "layer_2"
-    layer2_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[Layer 2] Run       : {run_id}")
     print(f"[Layer 2] Input     : {layer1_dir}")

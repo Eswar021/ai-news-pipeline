@@ -66,7 +66,6 @@ def run_layer_3(run_id: str) -> dict:
     started_at = datetime.now(timezone.utc)
     layer2_dir = RUNS_DIR / run_id / "layer_2"
     layer3_dir = RUNS_DIR / run_id / "layer_3"
-    layer3_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[Layer 3] Run    : {run_id}")
     print(f"[Layer 3] Input  : {layer2_dir}")
