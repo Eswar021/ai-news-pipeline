@@ -1,104 +1,104 @@
 """
-Layer 9 — Module 17: Layer 9 Validation Gate
-
-Validates Layer 9 output before handoff to Layer 10.
-
-Hard failures (block Layer 10):
-  1. verification_report.json missing
-  2. verified_script.md missing or empty
-  3. layer9_manifest.json missing
-  4. final_recommendation is 'blocked' (critical issues found)
-
-Soft warnings (pass with warning):
-  5. correction_patch has unapplied patches
-  6. source_attribution missing sources
-  7. metadata_safety has errors
-
-Key functions:
-    validate(run_id, layer9_dir) → report dict
-    write_report(run_id, report, layer9_dir) → path
+Layer 9 validation gate with tri-state output semantics.
 """
+
+from __future__ import annotations
 
 import json
 from pathlib import Path
 
 
+_APPROVED_STATUSES = {"approved", "approved_with_warnings"}
+_REVISION_STATUSES = {"revisable", "blocked"}
+
+
 def validate(run_id: str, layer9_dir: Path) -> dict:
-    errors   = []
+    errors = []
     warnings = []
 
-    # ── Check 1: verification_report.json ────────────────────────────────────
     vr_path = layer9_dir / "verification_report.json"
     if not vr_path.exists():
         return {
-            "run_id":            run_id,
-            "passed":            False,
-            "status":            "failed",
-            "failure_reason":    "verification_report.json missing",
-            "errors":            ["verification_report.json not found."],
-            "warnings":          [],
+            "run_id": run_id,
+            "passed": False,
+            "status": "failed",
+            "failure_reason": "verification_report.json missing",
+            "errors": ["verification_report.json not found."],
+            "warnings": [],
             "ready_for_layer_10": False,
         }
 
-    vr = json.loads(vr_path.read_text())
+    report = json.loads(vr_path.read_text(encoding="utf-8"))
+    final_status = report.get("summary", {}).get("final_status", "")
 
-    # ── Check 2: verified_script.md ───────────────────────────────────────────
-    vs_path = layer9_dir / "verified_script.md"
-    if not vs_path.exists() or vs_path.stat().st_size < 100:
-        errors.append("verified_script.md missing or too small.")
-
-    # ── Check 3: layer9_manifest.json ─────────────────────────────────────────
     if not (layer9_dir / "layer9_manifest.json").exists():
         errors.append("layer9_manifest.json missing.")
 
-    # ── Check 4: final_recommendation == 'blocked' ────────────────────────────
-    final_status = vr.get("summary", {}).get("final_status", "")
-    if final_status == "blocked":
-        errors.append(f"Verification result is 'blocked'. Critical issues must be resolved.")
+    revision_package_path = layer9_dir / "revision_package.json"
+    if not revision_package_path.exists():
+        errors.append("revision_package.json missing.")
 
-    # ── Check 5 (soft): unapplied patches ────────────────────────────────────
-    patch_path = layer9_dir / "correction_patch.json"
-    if patch_path.exists():
-        patch = json.loads(patch_path.read_text())
-        if patch.get("patch_required") and not patch.get("auto_patch_safe"):
-            warnings.append(f"Correction patch requires manual review ({patch.get('patch_count', 0)} patches).")
+    if not (layer9_dir / "verified_youtube_metadata.json").exists():
+        errors.append("verified_youtube_metadata.json missing.")
 
-    # ── Check 6 (soft): source attribution ───────────────────────────────────
-    attr_path = layer9_dir / "source_attribution_report.json"
-    if attr_path.exists():
-        attr = json.loads(attr_path.read_text())
-        if attr.get("missing_from_list", 0) > 0:
-            warnings.append(f"Source attribution: {attr['missing_from_list']} sources used but not listed.")
+    if not (layer9_dir / "final_publish_package.json").exists():
+        errors.append("final_publish_package.json missing.")
 
-    # ── Check 7 (soft): metadata safety errors ───────────────────────────────
-    meta_path = layer9_dir / "metadata_safety_report.json"
-    if meta_path.exists():
-        meta = json.loads(meta_path.read_text())
-        if meta.get("errors"):
-            warnings.append(f"Metadata safety errors: {meta['errors'][:1]}")
+    verified_script_path = layer9_dir / "verified_script.md"
+    if final_status in _APPROVED_STATUSES:
+        if not verified_script_path.exists() or verified_script_path.stat().st_size < 100:
+            errors.append("verified_script.md missing or too small for approved output.")
 
-    passed            = len(errors) == 0
-    ready_for_layer_10 = passed and final_status not in ("blocked", "requires_revision")
+    if final_status in _REVISION_STATUSES:
+        if report.get("decision", {}).get("ready_for_layer_10"):
+            errors.append("Revision-required outcome incorrectly marked ready_for_layer_10.")
+        warnings.append(
+            f"Layer 9 requires revision ({final_status}). See revision_package.json before rerunning layers 8,9."
+        )
+
+    metadata_detail = report.get("check_details", {}).get("metadata_safety", {})
+    if metadata_detail.get("errors"):
+        warnings.append(f"Metadata safety errors: {metadata_detail['errors'][:1]}")
+
+    attribution_detail = report.get("check_details", {}).get("source_attribution", {})
+    if attribution_detail.get("missing_from_list", 0) > 0:
+        warnings.append(
+            f"Source attribution: {attribution_detail['missing_from_list']} sources used but not listed."
+        )
+
+    if errors:
+        status = "failed"
+        passed = False
+    elif final_status in _APPROVED_STATUSES:
+        status = "passed"
+        passed = True
+    elif final_status in _REVISION_STATUSES:
+        status = "revisable"
+        passed = False
+    else:
+        status = "failed"
+        passed = False
+        errors.append(f"Unknown Layer 9 final_status: {final_status!r}")
 
     return {
-        "run_id":             run_id,
-        "passed":             passed,
-        "status":             "passed" if passed else "failed",
-        "failure_reason":     errors[0] if errors else None,
-        "errors":             errors,
-        "warnings":           warnings,
-        "ready_for_layer_10": ready_for_layer_10,
-        "final_status":       final_status,
-        "risk_level":         vr.get("summary", {}).get("overall_risk_level", ""),
-        "risk_score":         vr.get("summary", {}).get("risk_score", 0),
-        "critical_issues":    vr.get("summary", {}).get("critical_issue_count", 0),
-        "high_issues":        vr.get("summary", {}).get("high_issue_count", 0),
-        "medium_issues":      vr.get("summary", {}).get("medium_issue_count", 0),
+        "run_id": run_id,
+        "passed": passed,
+        "status": status,
+        "failure_reason": errors[0] if errors else None,
+        "errors": errors,
+        "warnings": warnings,
+        "ready_for_layer_10": final_status in _APPROVED_STATUSES and not errors,
+        "final_status": final_status,
+        "risk_level": report.get("summary", {}).get("overall_risk_level", ""),
+        "risk_score": report.get("summary", {}).get("risk_score", 0),
+        "critical_issues": report.get("summary", {}).get("critical_issue_count", 0),
+        "high_issues": report.get("summary", {}).get("high_issue_count", 0),
+        "medium_issues": report.get("summary", {}).get("medium_issue_count", 0),
     }
 
 
 def write_report(run_id: str, report: dict, layer9_dir: Path) -> Path:
     path = layer9_dir / "layer9_validation_report.json"
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     return path

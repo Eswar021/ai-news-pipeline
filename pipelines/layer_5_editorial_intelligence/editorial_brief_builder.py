@@ -25,6 +25,7 @@ import sys
 import json
 import asyncio
 import argparse
+from string import Template
 from datetime import datetime, timezone
 from config.time_utils import now_project
 from pathlib import Path
@@ -33,67 +34,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
 from pipelines.runtime_manifest import get_format_requirements, get_llm_profile, load_manifest
 from llm.async_llm_runtime import execute_chat_request
+from llm.prompt_loader import load_prompt_bundle
 
 _MAX_SAFE_FACTS_IN_PROMPT = 6
 _MAX_SEGMENT_STORIES = 8
-
-_DEEP_DIVE_SYSTEM = """\
-You are a senior editorial director for "AI Signal Brief," a YouTube channel for AI developers
-and tech professionals. Evidence-first, practical, analytical, low-hype.
-
-Given one selected story and its verified facts, generate the editorial direction for a
-deep dive video. Your job is to define the editorial angle — NOT write the script.
-
-Rules:
-1. working_angle: a short, compelling editorial angle (1 sentence, present tense, active voice).
-2. central_viewer_question: the question that structures the whole video.
-3. suggested_thesis: what the video ultimately argues (grounded in the facts given, not hype).
-4. tone_guidance: 3–4 words (e.g., "analytical, practical, skeptical").
-5. required_sections: the logical sections of this video (4–6 sections from standard list).
-6. opening_hook_idea: one sentence — a surprising fact or question to open with.
-7. Never invent facts. Stay within what the verified facts show.
-
-Standard sections: hook, what_happened, why_it_matters, technical_context,
-  limitations, comparison, implications, final_takeaway
-
-Return only valid JSON:
-{
-  "working_angle": "...",
-  "central_viewer_question": "...",
-  "suggested_thesis": "...",
-  "tone_guidance": "...",
-  "required_sections": ["..."],
-  "opening_hook_idea": "..."
-}"""
-
-_ROUNDUP_SYSTEM = """\
-You are a senior editorial director for "AI Signal Brief," a YouTube channel for AI developers
-and tech professionals. Evidence-first, practical, analytical, low-hype.
-
-Given a list of selected stories and their verified facts, generate the editorial structure
-for a weekly AI news roundup video. Your job is to define the editorial structure — NOT write the script.
-
-Rules:
-1. episode_theme: one sentence tying all stories together with a real insight.
-2. viewer_promise: what viewers understand/can do after watching (concrete, not generic).
-3. opening_hook_idea: one sentence — the most surprising or counterintuitive thing across all stories.
-4. story_order: reorder the stories from most to least impactful/surprising (return story_ids in order).
-5. segment_guidance: for each story, assign segment_role and target_duration_seconds.
-   - segment_roles: lead_story (90–110s), major_update (70–90s), short_update (50–70s), brief_mention (30–50s)
-6. Total target: ~8 minutes = 480 seconds. Budget accordingly.
-7. Never invent facts. Base everything on the story titles and verified facts provided.
-
-Return only valid JSON:
-{
-  "episode_theme": "...",
-  "viewer_promise": "...",
-  "opening_hook_idea": "...",
-  "story_order": ["story_id_1", "story_id_2", ...],
-  "segment_guidance": {
-    "story_id": {"segment_role": "...", "target_duration_seconds": 0}
-  }
-}"""
-
 
 def _facts_snippet(safe_facts: list[dict], limit: int) -> str:
     lines = [f"- {f['claim_text']}" for f in safe_facts[:limit]]
@@ -101,8 +45,24 @@ def _facts_snippet(safe_facts: list[dict], limit: int) -> str:
 
 
 async def _call_deep_dive(run_id: str | None, cand: dict, viewer_value: dict) -> dict:
+    prompt_bundle = load_prompt_bundle("editorial_brief_builder", run_id=run_id)
     facts_text = _facts_snippet(cand.get("safe_facts", []), _MAX_SAFE_FACTS_IN_PROMPT)
     vq = viewer_value.get("primary_viewer_question", "")
+    preamble = Template(prompt_bundle.get("user_preamble", "")).safe_substitute(
+        format_mode="deep_dive",
+        format_specific_instructions=(
+            "Generate the working angle, central viewer question, suggested thesis, "
+            "tone guidance, required sections, and opening hook idea for one selected story."
+        ),
+        json_schema="{\n"
+        '  "working_angle": "...",\n'
+        '  "central_viewer_question": "...",\n'
+        '  "suggested_thesis": "...",\n'
+        '  "tone_guidance": "...",\n'
+        '  "required_sections": ["..."],\n'
+        '  "opening_hook_idea": "..."\n'
+        "}",
+    )
 
     user_msg = (
         f"Story: {cand['story_title']}\n"
@@ -110,10 +70,10 @@ async def _call_deep_dive(run_id: str | None, cand: dict, viewer_value: dict) ->
         f"Topics: {', '.join(cand.get('topics', []))}\n"
         f"Viewer question (from analysis): {vq}\n\n"
         f"Verified facts:\n{facts_text}\n\n"
-        "Generate the editorial direction for a 10-minute deep dive video."
+        f"{preamble}"
     )
     messages = [
-        {"role": "system", "content": _DEEP_DIVE_SYSTEM},
+        {"role": "system", "content": prompt_bundle["system"]},
         {"role": "user",   "content": user_msg},
     ]
     return await execute_chat_request(
@@ -133,6 +93,23 @@ async def _call_deep_dive(run_id: str | None, cand: dict, viewer_value: dict) ->
 async def _call_roundup(run_id: str | None, selected_cands: list[dict],
                         viewer_values_by_id: dict,
                         episode_theme: str) -> dict:
+    prompt_bundle = load_prompt_bundle("editorial_brief_builder", run_id=run_id)
+    preamble = Template(prompt_bundle.get("user_preamble", "")).safe_substitute(
+        format_mode="roundup",
+        format_specific_instructions=(
+            "Generate the episode theme, viewer promise, opening hook idea, "
+            "story order, and segment guidance for the selected story set."
+        ),
+        json_schema="{\n"
+        '  "episode_theme": "...",\n'
+        '  "viewer_promise": "...",\n'
+        '  "opening_hook_idea": "...",\n'
+        '  "story_order": ["story_id_1", "story_id_2"],\n'
+        '  "segment_guidance": {\n'
+        '    "story_id": {"segment_role": "...", "target_duration_seconds": 0}\n'
+        "  }\n"
+        "}",
+    )
     stories_text = []
     for cand in selected_cands[:_MAX_SEGMENT_STORIES]:
         vv = viewer_values_by_id.get(cand["story_id"], {})
@@ -149,10 +126,10 @@ async def _call_roundup(run_id: str | None, selected_cands: list[dict],
         f"Roundup episode with {len(selected_cands)} stories.\n"
         f"Working theme: {episode_theme}\n\n"
         + "\n\n---\n\n".join(stories_text) +
-        "\n\nGenerate the editorial structure for an 8-minute roundup video."
+        f"\n\n{preamble}"
     )
     messages = [
-        {"role": "system", "content": _ROUNDUP_SYSTEM},
+        {"role": "system", "content": prompt_bundle["system"]},
         {"role": "user",   "content": user_msg},
     ]
     return await execute_chat_request(

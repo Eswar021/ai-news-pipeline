@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
 from pipelines.runtime_manifest import get_llm_profile
 from llm.async_llm_runtime import execute_chat_request
+from llm.prompt_loader import load_prompt_bundle
 
 MAX_CONCURRENT   = 10
 MAX_FACTS_IN_PROMPT = 5
@@ -45,29 +46,6 @@ _VALID_VALUE_TYPES = {
     "assess_business_impact",
 }
 
-_SYSTEM_PROMPT = """\
-You are an editorial strategist for "AI Signal Brief," a YouTube channel explaining AI news
-to software developers and tech professionals. The channel is evidence-first, practical, and low-hype.
-
-Given a story with verified facts, generate the viewer value package that tells us why
-this story is worth covering and what viewers will actually get from watching.
-
-Rules:
-1. primary_viewer_question must be a real question a developer or tech professional would ask.
-2. viewer_promise must be specific and concrete — what they will KNOW or be able to DO after watching.
-3. Never use hype language. Stay grounded in what the facts actually show.
-4. value_types: pick 2–4 from the allowed list only.
-5. viewer_value_score: 0–100 based on how much practical/intellectual value the story delivers.
-   70+ = worth covering, 50–69 = borderline, <50 = low value for this audience.
-
-Allowed value_types:
-  understand_what_happened, understand_why_it_matters, decide_whether_to_use_tool,
-  avoid_hype, learn_technical_context, track_industry_shift, assess_business_impact
-
-Return only valid JSON:
-{"primary_viewer_question": "...", "viewer_promise": "...", "value_types": ["..."], "viewer_value_score": 0}"""
-
-
 def _facts_to_bullets(safe_facts: list[dict], limit: int) -> str:
     lines = []
     for f in safe_facts[:limit]:
@@ -75,6 +53,7 @@ def _facts_to_bullets(safe_facts: list[dict], limit: int) -> str:
     return "\n".join(lines) if lines else "(no verified facts available)"
 
 async def _call_llm(run_id: str | None, candidate: dict, semaphore) -> dict:
+    prompt_bundle = load_prompt_bundle("viewer_value_analyzer", run_id=run_id)
     story_title = candidate["story_title"]
     story_type  = candidate.get("story_type", "unknown")
     topics      = ", ".join(candidate.get("topics", [])) or "general AI"
@@ -89,7 +68,7 @@ async def _call_llm(run_id: str | None, candidate: dict, semaphore) -> dict:
         "Generate the viewer value package for this story."
     )
     messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": prompt_bundle["system"]},
         {"role": "user",   "content": user_msg},
     ]
 

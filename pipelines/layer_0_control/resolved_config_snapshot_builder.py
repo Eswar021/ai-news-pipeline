@@ -118,12 +118,35 @@ def _build_llm_snapshot() -> dict:
     }
 
 
+def _build_prompt_snapshot(prompt_config_path: Path) -> dict:
+    cfg = _load_yaml(prompt_config_path)
+    defaults = cfg.get("defaults", {})
+    modules = cfg.get("modules", {})
+    active_version = defaults.get("active_prompt_version")
+
+    resolved_modules = {}
+    for module_name in _ACTIVE_LLM_MODULES:
+        raw = modules.get(module_name, {})
+        resolved_modules[module_name] = {
+            "version": raw.get("version", active_version),
+            "module_dir": raw.get("module_dir", module_name),
+            "system_file": raw.get("system_file", "system.txt"),
+            "user_preamble_file": raw.get("user_preamble_file"),
+        }
+
+    return {
+        "active_prompt_version": active_version,
+        "modules": resolved_modules,
+    }
+
+
 def build_resolved_config_snapshots(
     *,
     sources_path: Path,
     source_strategy_path: Path,
     channels_path: Path,
     run_defaults_path: Path,
+    prompt_config_path: Path,
     entity_topic_taxonomy_path: Path,
     chatgpt_prompts_path: Path,
     enabled_source_groups: list[str],
@@ -161,6 +184,7 @@ def build_resolved_config_snapshots(
         "entity_topic_taxonomy": _load_yaml(entity_topic_taxonomy_path),
         "chatgpt_handoff": _load_yaml(chatgpt_prompts_path),
         "llm": _build_llm_snapshot(),
+        "prompts": _build_prompt_snapshot(prompt_config_path),
         "runtime": {
             "timezone_name": get_project_timezone_name(),
             "run_defaults_snapshot": _load_yaml(run_defaults_path),

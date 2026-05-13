@@ -6,12 +6,12 @@ via asyncio.gather(). The writer receives each section's evidence bundle (requir
 claim texts + source URLs), word budget, writer instructions, and visual notes.
 
 LLM returns JSON per section:
-    {"script_text": "...", "used_claim_ids": ["claim_...", ...]}
+    {"narration_text": "...", "used_claim_ids": ["claim_...", ...], "analysis_sentences": []}
 
 Returns:
     list of section_script dicts:
-        {section_id, section_key, script_text, word_count,
-         estimated_seconds, used_claim_ids}
+        {section_id, section_key, narration_text, visual_notes, word_count,
+         estimated_seconds, used_claim_ids, analysis_sentences}
 
 Individual test:
     python roundup_script_writer.py
@@ -28,26 +28,10 @@ from pipelines.runtime_manifest import get_llm_profile
 from pipelines.layer_8_script_generation.brief_loader          import load as load_brief
 from pipelines.layer_8_script_generation.evidence_context_builder import build as build_evidence
 from llm.async_llm_runtime import execute_chat_request
+from llm.prompt_loader import load_prompt_bundle
 
 _WPM   = 130
-
-_SYSTEM_PROMPT = """\
-You are a script writer for "AI Signal Brief" — a weekly YouTube channel covering AI news.
-
-Style rules:
-- Fast, clear, analytical, evidence-first. No hype, no filler.
-- Write in natural spoken language as if being read aloud. No bullet points, no headers.
-- Every factual claim must be backed by a claim ID from the provided list.
-- Do NOT introduce facts not in the provided claim list.
-- Do NOT use the blocked phrases listed in the prompt.
-- Cautious claims must use qualifying language: "may", "could", "suggests", "appears to".
-
-Output format — return ONLY valid JSON:
-{
-  "script_text": "<script for this section only, plain text, no markdown>",
-  "used_claim_ids": ["claim_id_1", "claim_id_2"]
-}
-"""
+_ANALYSIS_ALLOWED_SECTIONS = {"final_takeaway", "outro"}
 
 def _word_budget(target_seconds: int) -> int:
     return max(20, int(target_seconds / 60 * _WPM))
@@ -63,15 +47,23 @@ def _format_claims(claims: list) -> str:
     return "\n".join(lines)
 
 
+def _analysis_allowed(sec: dict) -> bool:
+    key = sec.get("section_key", "")
+    role = sec.get("segment_role", key)
+    return key in _ANALYSIS_ALLOWED_SECTIONS or role in _ANALYSIS_ALLOWED_SECTIONS
+
+
 def _build_section_prompt(sec: dict, evidence: dict, blocked_phrases: list,
-                          hook_instruction: dict = None) -> str:
+                          hook_instruction: dict = None, prompt_bundle: dict | None = None) -> str:
     ev    = evidence[sec["section_id"]]
     wbgt  = _word_budget(sec["target_duration_seconds"])
+    analysis_allowed = _analysis_allowed(sec)
     parts = [
         f"SECTION: {sec['section_key']}",
         f"GOAL: {sec['section_goal']}",
         f"WORD BUDGET: ~{wbgt} words ({sec['target_duration_seconds']}s at {_WPM} wpm)",
         f"SEGMENT ROLE: {sec.get('segment_role', sec['section_key'])}",
+        f"ANALYSIS ALLOWED: {'yes' if analysis_allowed else 'no'}",
         "",
     ]
 
@@ -101,7 +93,7 @@ def _build_section_prompt(sec: dict, evidence: dict, blocked_phrases: list,
         ]
 
     if sec.get("visual_notes"):
-        parts.append("VISUAL CUES (mention on-screen text naturally in script if it fits):")
+        parts.append("VISUAL NOTES (editor-facing only; DO NOT read these aloud):")
         for v in sec["visual_notes"]:
             txt = f" | on-screen: '{v['on_screen_text']}'" if v.get("on_screen_text") else ""
             parts.append(f"  {v['visual_type']}: {v['visual_goal']}{txt}")
@@ -116,10 +108,10 @@ def _build_section_prompt(sec: dict, evidence: dict, blocked_phrases: list,
     parts += [
         f"BLOCKED PHRASES (never use): {', '.join(blocked_phrases)}",
         "",
-        "Return JSON only. Script text in plain spoken prose. No bullets, no headers.",
+        (prompt_bundle or {}).get("user_preamble", "").strip(),
     ]
 
-    return "\n".join(parts)
+    return "\n".join(part for part in parts if part != "")
 
 
 async def _write_section(
@@ -129,12 +121,13 @@ async def _write_section(
     blocked_phrases: list,
     hook_instruction: dict,
 ) -> dict:
-    prompt = _build_section_prompt(sec, evidence, blocked_phrases, hook_instruction)
+    prompt_bundle = load_prompt_bundle("roundup_script_writer", run_id=run_id)
+    prompt = _build_section_prompt(sec, evidence, blocked_phrases, hook_instruction, prompt_bundle)
     data = await execute_chat_request(
         module_name="roundup_script_writer",
         run_id=run_id,
         messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": prompt_bundle["system"]},
             {"role": "user",   "content": prompt},
         ],
         request_name=sec["section_key"],
@@ -147,19 +140,24 @@ async def _write_section(
         parse_json=True,
     )
 
-    script_text    = data.get("script_text", "").strip()
+    narration_text = (data.get("narration_text") or data.get("script_text") or "").strip()
     used_claim_ids = data.get("used_claim_ids", [])
-    word_count     = len(script_text.split())
+    analysis_sentences = data.get("analysis_sentences", [])
+    if not _analysis_allowed(sec):
+        analysis_sentences = []
+    word_count     = len(narration_text.split())
 
     return {
         "section_id":        sec["section_id"],
         "section_key":       sec["section_key"],
         "segment_role":      sec.get("segment_role", sec["section_key"]),
         "target_seconds":    sec["target_duration_seconds"],
-        "script_text":       script_text,
+        "narration_text":    narration_text,
+        "visual_notes":      sec.get("visual_notes", []),
         "word_count":        word_count,
         "estimated_seconds": round(word_count / _WPM * 60),
         "used_claim_ids":    used_claim_ids,
+        "analysis_sentences": [s.strip() for s in analysis_sentences if isinstance(s, str) and s.strip()],
     }
 
 
@@ -213,7 +211,7 @@ if __name__ == "__main__":
               f"claims_used={len(s['used_claim_ids'])}")
     print()
     print("=== intro_hook script ===")
-    print(section_scripts[0]["script_text"])
+    print(section_scripts[0]["narration_text"])
     print()
     print("=== story_1 script ===")
-    print(section_scripts[1]["script_text"])
+    print(section_scripts[1]["narration_text"])

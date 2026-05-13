@@ -170,6 +170,7 @@ def validate_manifest(manifest: dict, manifest_path: Path) -> dict:
         "entity_topic_taxonomy",
         "chatgpt_handoff",
         "llm",
+        "prompts",
         "runtime",
     ]
     for key in required_resolved:
@@ -194,6 +195,10 @@ def validate_manifest(manifest: dict, manifest_path: Path) -> dict:
     llm = resolved.get("llm", {})
     if not llm.get("effective_profiles"):
         errors.append("resolved_config.llm.effective_profiles is missing or empty")
+
+    prompts = resolved.get("prompts", {})
+    if not prompts.get("modules"):
+        errors.append("resolved_config.prompts.modules is missing or empty")
 
     runtime = resolved.get("runtime", {})
     if not runtime.get("timezone_name"):

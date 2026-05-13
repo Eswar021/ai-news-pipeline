@@ -20,7 +20,6 @@ Individual test:
 """
 
 import sys
-import json
 import asyncio
 from pathlib import Path
 
@@ -28,56 +27,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths    import RUNS_DIR
 from pipelines.runtime_manifest import get_llm_profile
 from llm.async_llm_runtime import execute_chat_request
+from llm.prompt_loader import load_prompt_bundle
 from pipelines.layer_7_content_planning.packet_loader          import load as load_packet
 from pipelines.layer_7_content_planning.section_planner         import plan as plan_sections
 from pipelines.layer_7_content_planning.viewer_promise_refiner  import refine
 from pipelines.layer_7_content_planning.narrative_arc_planner   import plan as plan_arc
 
 
-_SYSTEM_PROMPT = """\
-You are a YouTube content strategist for "AI Signal Brief," a channel explaining AI news
-to software developers and tech professionals. The channel is evidence-first, practical, and low-hype.
-
-Your task: plan the hook for a video — NOT write the hook. Give hook DIRECTIONS only.
-
-Rules:
-1. Each hook_direction is a brief instruction for the script writer, not a script line.
-2. Hooks must not require claims that are not in the verified claim list.
-3. Hooks cannot predict the future, exaggerate, or use fake urgency.
-4. risk_level must be one of: low, medium, high.
-5. why_it_works must explain the retention/curiosity logic in one sentence.
-6. blocked_hook_angles: list 1-2 angles that would overclaim or distort evidence.
-
-Return only valid JSON matching this schema:
-{
-  "recommended_hook": {
-    "hook_type": "roundup_speed_hook|tension_hook|contrast_hook|question_hook|stakes_hook",
-    "hook_direction": "...",
-    "supported_by_claim_ids": ["..."],
-    "risk_level": "low|medium|high",
-    "why_it_works": "..."
-  },
-  "alternative_hooks": [
-    {
-      "hook_type": "...",
-      "hook_direction": "...",
-      "risk_level": "low|medium|high"
-    },
-    {
-      "hook_type": "...",
-      "hook_direction": "...",
-      "risk_level": "low|medium|high"
-    }
-  ],
-  "blocked_hook_angles": [
-    {
-      "angle": "...",
-      "reason": "..."
-    }
-  ]
-}"""
-
 def _build_prompt(layer7_ctx: dict, section_plan: list[dict]) -> str:
+    prompt_bundle = load_prompt_bundle("hook_planner", run_id=layer7_ctx.get("run_id"))
     editorial    = layer7_ctx.get("editorial", {})
     episode_theme = editorial.get("episode_theme", "")
     viewer_promise = editorial.get("viewer_promise", "")
@@ -98,6 +56,7 @@ def _build_prompt(layer7_ctx: dict, section_plan: list[dict]) -> str:
     stories_text  = "\n".join(story_lines) or "  (no stories)"
     dnu_text      = ", ".join(sorted(list(dnu_ids))[:6]) or "none"
     claims_sample = ", ".join(sample_claims[:6]) if sample_claims else "none"
+    preamble      = prompt_bundle.get("user_preamble", "")
 
     return (
         f"Video format: {packet_type}\n"
@@ -107,13 +66,14 @@ def _build_prompt(layer7_ctx: dict, section_plan: list[dict]) -> str:
         f"Stories covered:\n{stories_text}\n\n"
         f"Sample verified claim IDs (safe to use):\n{claims_sample}\n\n"
         f"Do-not-use claim IDs (must NOT appear in hook):\n{dnu_text}\n\n"
-        "Generate the hook plan (directions only, not the actual script)."
+        f"{preamble}"
     )
 
 
 async def _call_llm(run_id: str | None, prompt: str, packet_type: str) -> dict:
+    prompt_bundle = load_prompt_bundle("hook_planner", run_id=run_id)
     messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": prompt_bundle["system"]},
         {"role": "user",   "content": prompt},
     ]
     return await execute_chat_request(

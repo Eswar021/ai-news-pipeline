@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
 from config.time_utils import now_project_iso
 from llm.async_llm_runtime import execute_chat_request
+from llm.prompt_loader import load_prompt_bundle
 
 MAX_CONCURRENT = 12
 MAX_CLAIMS_PER_STORY = 24
@@ -37,33 +38,6 @@ _VALID_TYPES = {
 }
 _VALID_SUPPORT = {"direct", "indirect", "partial"}
 _SUPPORT_CONFIDENCE = {"direct": 0.90, "indirect": 0.65, "partial": 0.42}
-
-_SYSTEM_PROMPT = """\
-You are an evidence extraction specialist. Extract atomic factual claims from a single source document.
-
-Rules:
-1. Extract only claims supported by this document.
-2. Split compound statements into separate atomic claims.
-3. Keep specific names, dates, metrics, prices, and version numbers exact.
-4. Every claim must include a short quote_anchor copied from the document that best grounds the claim.
-5. If the document contains no extractable factual claims, return an empty claims list.
-6. Do not invent context beyond the document.
-
-Claim types:
-  event_fact, timeline_fact, product_fact, model_capability, feature_claim,
-  benchmark_claim, research_claim, business_claim, partnership_claim,
-  pricing_claim, quote_claim, statistic_claim, limitation_claim, risk_claim,
-  community_signal_claim, interpretive_claim, prediction_claim, opinion_claim
-
-Support levels:
-  direct   — the document explicitly states this
-  indirect — the document implies this but does not state it directly
-  partial  — the document partially supports this with caveats
-
-Return only valid JSON:
-{"claims": [{"claim_text": "...", "claim_type": "...", "support_level": "...", "quote_anchor": "..."}]}
-"""
-
 
 def _story_hash(story_id: str) -> str:
     parts = story_id.split("_")
@@ -177,6 +151,7 @@ def _deduplicate_claims(claims: list[dict]) -> list[dict]:
 
 
 async def _call_llm(run_id: str, document: dict, text_chunk: str, chunk_index: int, semaphore) -> list[dict]:
+    prompt_bundle = load_prompt_bundle("claim_extractor", run_id=run_id)
     user_msg = (
         f"Story: {document['story_title']} (type: {document['story_type']})\n"
         f"Document title: {document['title']}\n"
@@ -187,7 +162,7 @@ async def _call_llm(run_id: str, document: dict, text_chunk: str, chunk_index: i
         "Extract atomic claims from the document text above."
     )
     messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": prompt_bundle["system"]},
         {"role": "user", "content": user_msg},
     ]
 

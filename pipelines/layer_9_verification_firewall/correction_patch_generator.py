@@ -79,6 +79,7 @@ if __name__ == "__main__":
     from pipelines.layer_9_verification_firewall.context_loader import load
     from pipelines.layer_9_verification_firewall.sentence_classification_validator import classify
     from pipelines.layer_9_verification_firewall.sentence_claim_coverage_checker import check as check_coverage
+    from pipelines.layer_9_verification_firewall.editorial_analysis_validator import validate as validate_editorial_analysis
     from pipelines.layer_9_verification_firewall.claim_source_traceability_checker import check as check_traceability
     from pipelines.layer_9_verification_firewall.sentence_support_verifier import verify as verify_support
     from pipelines.layer_9_verification_firewall.overclaim_detector import detect as detect_overclaims
@@ -95,6 +96,7 @@ if __name__ == "__main__":
     ctx = load(base / "layer_8", base / "layer_7", base / "layer_4", base / "layer_2")
     classified    = classify(ctx)
     coverage      = check_coverage(classified, ctx)
+    editorial_analysis = validate_editorial_analysis(classified, ctx)
     traceability  = check_traceability(coverage, ctx)
     support       = verify_support(classified, ctx)
     overclaims    = detect_overclaims(classified, ctx)
@@ -104,8 +106,10 @@ if __name__ == "__main__":
     repetition    = check_repetition(ctx)
     metadata      = check_metadata(ctx)
     attribution   = check_attribution(ctx)
-    risk          = score(coverage, traceability, support, overclaims,
-                         cautious, leakage, contradiction, repetition, metadata, attribution)
+    risk          = score(
+        coverage, traceability, support, editorial_analysis, overclaims,
+        cautious, leakage, contradiction, repetition, metadata, attribution,
+    )
 
     result = generate(risk, ctx)
     print(f"Patch required   : {result['patch_required']}")

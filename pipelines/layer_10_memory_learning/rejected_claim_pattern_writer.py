@@ -5,7 +5,7 @@ Stores rejected claims as risk patterns (NOT as facts).
 
 Two sources:
   1. Layer 4 rejected_claims.jsonl — claims that failed verification
-  2. Layer 9 overclaim_report.json — patterns detected in the script
+  2. Layer 9 sentence_verification_results.jsonl — overclaim/unsupported patterns detected in the script
 
 Dedup key: claim_id + run_id for Layer 4 claims;
            sentence_id + run_id for Layer 9 overclaims.
@@ -31,12 +31,19 @@ def _load_existing_keys(path: Path) -> set:
     return keys
 
 
-def _load_overclaim_report(layer9_dir: Path) -> list:
-    path = layer9_dir / "overclaim_report.json"
+def _load_sentence_issues(layer9_dir: Path) -> list:
+    path = layer9_dir / "sentence_verification_results.jsonl"
     if not path.exists():
         return []
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return data.get("overclaims", [])
+    issues = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        record = json.loads(line)
+        if record.get("support_status") in {"overclaim", "unsupported"}:
+            issues.append(record)
+    return issues
 
 
 def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
@@ -81,10 +88,10 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
             written.append(claim_id)
             existing_keys.add(key)
 
-        # Source 2: Layer 9 overclaims (if any)
-        overclaims = _load_overclaim_report(ctx["layer9_dir"])
+        # Source 2: Layer 9 sentence-level risk patterns
+        overclaims = _load_sentence_issues(ctx["layer9_dir"])
         for oc in overclaims:
-            oc_id = oc.get("sentence_id") or oc.get("overclaim_id", "")
+            oc_id = oc.get("sentence_id", "")
             key   = (oc_id, run_id)
             if key in existing_keys:
                 continue
@@ -96,15 +103,15 @@ def write(mc: dict, ctx: dict, eligibility: dict, memory_dir: Path) -> dict:
                 "source":          "layer9_overclaim",
                 "story_id":        "",
                 "pattern": {
-                    "risk_type":    oc.get("overclaim_type", "overclaim"),
-                    "blocked_text": oc.get("matched_text", "") or oc.get("sentence_text", ""),
-                    "reason":       oc.get("reason", ""),
+                    "risk_type":    oc.get("support_status", "overclaim"),
+                    "blocked_text": oc.get("sentence_text", ""),
+                    "reason":       oc.get("issue", ""),
                 },
                 "future_guidance": {
                     "block_in_scripts":    True,
                     "block_in_titles":     oc.get("severity") == "critical",
                     "block_in_thumbnails": oc.get("severity") == "critical",
-                    "safe_alternative":    oc.get("suggested_replacement", ""),
+                    "safe_alternative":    oc.get("recommended_fix", ""),
                 },
                 "created_at": now,
             }

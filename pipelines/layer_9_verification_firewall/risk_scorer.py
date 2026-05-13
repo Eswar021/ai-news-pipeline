@@ -3,12 +3,12 @@ Layer 9 — Module 13: Risk Scorer + Severity Classifier
 
 Aggregates all verification issues from all modules and assigns:
   - overall_risk_level: low | medium | high | critical
-  - final_recommendation: approved | approved_with_warnings | requires_revision | blocked
+  - final_recommendation: approved | approved_with_warnings | revisable | blocked
 
 Approval gate rules (inline):
   approved              : 0 critical, 0 high, 0 medium
   approved_with_warnings: 0 critical, 0 high, ≤5 medium
-  requires_revision     : 0 critical, ≥1 high (or >5 medium)
+  revisable             : 0 critical, ≥1 high (or >5 medium)
   blocked               : ≥1 critical
 
 Returns:
@@ -22,6 +22,7 @@ def _collect_issues(
     coverage_result,
     traceability_result,
     support_results,
+    editorial_analysis_result,
     overclaim_result,
     cautious_result,
     leakage_result,
@@ -73,6 +74,15 @@ def _collect_issues(
                 "issue":       r.get("issue", ""),
                 "fix":         r.get("recommended_fix", ""),
             })
+
+    for issue in editorial_analysis_result.get("issues", []):
+        issues.append({
+            "source": "editorial_analysis",
+            "severity": issue.get("severity", "medium"),
+            "message": issue.get("message", ""),
+            "sentence_id": issue.get("sentence_id", ""),
+            "issue": issue.get("issue_type", ""),
+        })
 
     # Overclaims (pattern-based)
     for oc in overclaim_result.get("overclaims", []):
@@ -152,6 +162,7 @@ def score(
     coverage_result,
     traceability_result,
     support_results,
+    editorial_analysis_result,
     overclaim_result,
     cautious_result,
     leakage_result,
@@ -163,7 +174,7 @@ def score(
 
     all_issues = _collect_issues(
         coverage_result, traceability_result, support_results,
-        overclaim_result, cautious_result, leakage_result,
+        editorial_analysis_result, overclaim_result, cautious_result, leakage_result,
         contradiction_result, repetition_result, metadata_result, attribution_result,
     )
 
@@ -184,10 +195,10 @@ def score(
         recommendation    = "blocked"
         overall_risk      = "critical"
     elif high:
-        recommendation    = "requires_revision"
+        recommendation    = "revisable"
         overall_risk      = "high"
     elif len(medium) > 5:
-        recommendation    = "requires_revision"
+        recommendation    = "revisable"
         overall_risk      = "high"
     elif medium:
         recommendation    = "approved_with_warnings"
@@ -235,6 +246,7 @@ if __name__ == "__main__":
     from pipelines.layer_9_verification_firewall.context_loader import load
     from pipelines.layer_9_verification_firewall.sentence_classification_validator import classify
     from pipelines.layer_9_verification_firewall.sentence_claim_coverage_checker import check as check_coverage
+    from pipelines.layer_9_verification_firewall.editorial_analysis_validator import validate as validate_editorial_analysis
     from pipelines.layer_9_verification_firewall.claim_source_traceability_checker import check as check_traceability
     from pipelines.layer_9_verification_firewall.sentence_support_verifier import verify as verify_support
     from pipelines.layer_9_verification_firewall.overclaim_detector import detect as detect_overclaims
@@ -250,6 +262,7 @@ if __name__ == "__main__":
     ctx = load(base / "layer_8", base / "layer_7", base / "layer_4", base / "layer_2")
     classified    = classify(ctx)
     coverage      = check_coverage(classified, ctx)
+    editorial_analysis = validate_editorial_analysis(classified, ctx)
     traceability  = check_traceability(coverage, ctx)
     support       = verify_support(classified, ctx)
     overclaims    = detect_overclaims(classified, ctx)
@@ -261,7 +274,7 @@ if __name__ == "__main__":
     attribution   = check_attribution(ctx)
 
     result = score(
-        coverage, traceability, support, overclaims,
+        coverage, traceability, support, editorial_analysis, overclaims,
         cautious, leakage, contradiction, repetition, metadata, attribution
     )
 

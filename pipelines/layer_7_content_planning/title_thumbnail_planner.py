@@ -19,7 +19,6 @@ Individual test:
 """
 
 import sys
-import json
 import asyncio
 from pathlib import Path
 
@@ -27,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths    import RUNS_DIR
 from pipelines.runtime_manifest import get_llm_profile
 from llm.async_llm_runtime import execute_chat_request
+from llm.prompt_loader import load_prompt_bundle
 from pipelines.layer_7_content_planning.packet_loader          import load as load_packet
 from pipelines.layer_7_content_planning.viewer_promise_refiner  import refine
 from pipelines.layer_7_content_planning.narrative_arc_planner   import plan as plan_arc
@@ -34,44 +34,8 @@ from pipelines.layer_7_content_planning.section_planner         import plan as p
 from pipelines.layer_7_content_planning.hook_planner            import plan as plan_hook
 
 
-_SYSTEM_PROMPT = """\
-You are a YouTube title strategist for "AI Signal Brief," a channel covering AI news
-for software developers and tech professionals. Evidence-first, no hype, no clickbait.
-
-Your task: generate title and thumbnail angle OPTIONS — not final copy.
-
-Rules:
-1. Titles must be accurate — they cannot promise more than the verified evidence shows.
-2. Titles should be curiosity-driving but not misleading.
-3. accuracy_risk must be one of: low, medium, high.
-4. click_potential must be one of: low, medium, medium_high, high.
-5. thumbnail_text: 2-4 words max, designed for on-screen overlay. ALL CAPS.
-6. blocked_title_angles: list 1-2 angles that would overclaim or mislead.
-7. Generate exactly 6-8 titles and exactly 5 thumbnail texts.
-
-Allowed angle_types:
-  what_changed, question, hype_vs_reality, practical_impact, trend_shift, weekly_roundup, speed_summary
-
-Return only valid JSON matching this schema:
-{
-  "recommended_title_angles": [
-    {
-      "title": "...",
-      "angle_type": "...",
-      "accuracy_risk": "low|medium|high",
-      "click_potential": "low|medium|medium_high|high",
-      "supported_by_claim_ids": []
-    }
-  ],
-  "thumbnail_text_options": [
-    { "text": "...", "risk": "low|medium|high" }
-  ],
-  "blocked_title_angles": [
-    { "title": "...", "reason": "..." }
-  ]
-}"""
-
 def _build_prompt(layer7_ctx: dict, hook_plan: dict) -> str:
+    prompt_bundle = load_prompt_bundle("title_thumbnail_planner", run_id=layer7_ctx.get("run_id"))
     editorial      = layer7_ctx.get("editorial", {})
     episode_theme  = editorial.get("episode_theme", "")
     viewer_promise = editorial.get("viewer_promise", "")
@@ -90,6 +54,7 @@ def _build_prompt(layer7_ctx: dict, hook_plan: dict) -> str:
 
     dnu_ids = layer7_ctx.get("do_not_use_claim_ids", set())
     dnu_text = ", ".join(sorted(list(dnu_ids))[:4]) or "none"
+    preamble = prompt_bundle.get("user_preamble", "")
 
     return (
         f"Video format: {packet_type}\n"
@@ -99,13 +64,14 @@ def _build_prompt(layer7_ctx: dict, hook_plan: dict) -> str:
         f"Stories covered:\n{stories_text}\n\n"
         f"Recommended hook direction:\n{hook_dir}\n\n"
         f"Do-not-use claims (must NOT be implied in titles):\n{dnu_text}\n\n"
-        "Generate title and thumbnail angle options (6-8 titles, 5 thumbnail texts)."
+        f"{preamble}"
     )
 
 
 async def _call_llm(run_id: str | None, prompt: str, packet_type: str) -> dict:
+    prompt_bundle = load_prompt_bundle("title_thumbnail_planner", run_id=run_id)
     messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": prompt_bundle["system"]},
         {"role": "user",   "content": prompt},
     ]
     return await execute_chat_request(

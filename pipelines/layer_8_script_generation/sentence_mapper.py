@@ -1,7 +1,7 @@
 """
 Layer 8 — Module 5: Sentence Mapper
 
-Splits each section's script_text into sentences, classifies each sentence,
+Splits each section's narration_text into sentences, classifies each sentence,
 and maps evidence sentences to claim_ids and source_urls.
 
 Sentence types:
@@ -9,6 +9,7 @@ Sentence types:
     transition  — starts with a transition phrase
     cta         — contains subscribe/comment/like/let me know
     claim       — evidence-bearing statement (default for content sections)
+    editorial_analysis — synthesis sentence allowed in closing-analysis sections
     closing     — final sentence of takeaway or cta sections
 
 Claim mapping strategy:
@@ -54,8 +55,16 @@ def _split_sentences(text: str) -> list[str]:
     return [s.strip() for s in raw if s.strip()]
 
 
-def _classify(sentence: str, section_role: str, idx: int, total: int) -> str:
+def _normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip())
+
+
+def _classify(sentence: str, section_role: str, idx: int, total: int, analysis_set: set[str]) -> str:
     lower = sentence.lower()
+    normalized = _normalize(sentence)
+
+    if normalized in analysis_set:
+        return "editorial_analysis"
 
     if any(sig in lower for sig in _CTA_SIGNALS):
         return "cta"
@@ -93,15 +102,20 @@ def build(section_scripts: list, layer8_ctx: dict) -> dict:
             if cid in claim_source_map and claim_source_map[cid]
         })
 
-        sentences = _split_sentences(sec_script.get("script_text", ""))
+        sentences = _split_sentences(sec_script.get("narration_text", ""))
         total     = len(sentences)
+        analysis_set = {
+            _normalize(s)
+            for s in sec_script.get("analysis_sentences", [])
+            if isinstance(s, str) and s.strip()
+        }
 
         for i, sent in enumerate(sentences):
             sent_id   = f"sent_{sent_counter:04d}"
-            sent_type = _classify(sent, role, i, total)
+            sent_type = _classify(sent, role, i, total, analysis_set)
 
             # Only evidence sentences get claim/source mapping
-            mapped_ids  = used_ids  if sent_type == "claim" else []
+            mapped_ids  = used_ids if sent_type == "claim" else []
             mapped_urls = source_urls if sent_type == "claim" else []
 
             sentence_claim_map.append({

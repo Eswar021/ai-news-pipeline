@@ -1,0 +1,25 @@
+Generate the hook plan as directions only, not actual script copy.
+
+Return only valid JSON with this exact schema:
+{
+  "recommended_hook": {
+    "hook_type": "roundup_speed_hook|tension_hook|contrast_hook|question_hook|stakes_hook",
+    "hook_direction": "...",
+    "supported_by_claim_ids": ["..."],
+    "risk_level": "low|medium|high",
+    "why_it_works": "..."
+  },
+  "alternative_hooks": [
+    {
+      "hook_type": "...",
+      "hook_direction": "...",
+      "risk_level": "low|medium|high"
+    }
+  ],
+  "blocked_hook_angles": [
+    {
+      "angle": "...",
+      "reason": "..."
+    }
+  ]
+}

@@ -100,6 +100,13 @@ def get_handoff_prompt_config(manifest: dict) -> dict:
     raise KeyError("run_manifest.json is missing resolved_config.chatgpt_handoff")
 
 
+def get_prompt_runtime_snapshot(manifest: dict) -> dict:
+    snapshot = _resolved_config(manifest).get("prompts", {})
+    if not isinstance(snapshot, dict) or not snapshot.get("modules"):
+        raise KeyError("run_manifest.json is missing resolved_config.prompts.modules")
+    return snapshot
+
+
 def get_llm_runtime_snapshot(manifest: dict) -> dict:
     snapshot = _resolved_config(manifest).get("llm", {})
     if not isinstance(snapshot, dict) or not snapshot.get("effective_profiles"):

@@ -192,6 +192,20 @@ Missing or incomplete:
 - evergreen, comparison, and follow-up profiles are not yet defined
 - some standalone helper utilities still need cleanup and clearer docs
 
+### Why it matters now
+
+- this is the control-plane foundation for future format expansion
+- collection policy and editorial routing now share one manifest-driven source of truth
+- it removes another category of hidden downstream config drift
+
+### Key files
+
+- `config/policies/run_profiles.yaml`
+- `docs/reference/run_profile_control_plane.md`
+- `pipelines/layer_0_control/run_profile_resolver.py`
+- `pipelines/layer_0_control/run_layer_0.py`
+- `pipelines/layer_5_editorial_intelligence/run_layer_5.py`
+
 ---
 
 ## 2C. Layer 4 / Layer 5 Contract Simplification
@@ -240,19 +254,48 @@ Missing or incomplete:
 - Layer 5 durable artifacts explain the decision without recreating seven separate report files
 - Layers 6–10 operate entirely from the lean contracts in the active path
 
+---
+
+## 2D. Layer 8 / Prompt System / Layer 9 Contract Cleanup
+
+**Priority:** `Now`
+
+### What this feature is
+
+Finish the script-generation and verification cleanup by:
+
+- separating spoken narration from visual/editor notes in Layer 8
+- making prompt versioning real and manifest-backed
+- making Layer 9 revision outcomes explicit instead of treating them like pseudo runtime failures
+
+### Current implementation
+
+Implemented:
+
+- Layer 0 now snapshots `resolved_config.prompts` into the run manifest
+- active LLM modules in Layers 4, 5, 7, 8, and 9 now load prompt text from `prompts/v1/...` through the manifest-backed prompt loader
+- Layer 8 section outputs now separate `narration_text`, `visual_notes`, and `analysis_sentences`
+- Layer 8 narration-only outputs now feed `script.md`, `script.txt`, `generated_script.json`, sentence maps, and Layer 9 verification
+- Layer 9 now has tri-state validation semantics: `passed`, `revisable`, `failed`
+- `revision_package.json` is now the durable fix handoff for revisable and blocked Layer 9 outcomes
+- `pipeline.py` now halts cleanly for Layer 9 revision-required outcomes without a traceback-style runtime failure
+
+Missing or incomplete:
+
+- older design docs still describe inline prompts and the older wider Layer 9 report tree
+- a few adjacent layers still deserve a bounded simplification audit now that the new contract is in place
+
 ### Why it matters now
 
-- this is the control-plane foundation for future format expansion
-- collection policy and editorial routing now share one manifest-driven source of truth
-- it removes another category of hidden downstream config drift
+- the old Layer 8 contract let visual/on-screen notes leak into spoken narration
+- the old Layer 9 behavior made content rejection look like a broken pipeline
+- prompt versioning existed in concept but not in the active runtime path
 
-### Key files
+### What “done” should mean
 
-- `config/policies/run_profiles.yaml`
-- `docs/reference/run_profile_control_plane.md`
-- `pipelines/layer_0_control/run_profile_resolver.py`
-- `pipelines/layer_0_control/run_layer_0.py`
-- `pipelines/layer_5_editorial_intelligence/run_layer_5.py`
+- spoken narration and visual/editor guidance stay separate all the way into verification
+- active prompt behavior is versioned, file-backed, and manifest-resolved
+- Layer 9 revision outcomes are operationally clean and easy to inspect
 
 ---
 

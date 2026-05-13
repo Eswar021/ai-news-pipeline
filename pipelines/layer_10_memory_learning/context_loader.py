@@ -6,7 +6,6 @@ Loads all input files from Layers 3–9 needed for memory updates.
 Returns a flat ctx dict:
   run_id, base_dir
   final_publish_package, verification_report, verified_youtube_metadata
-  source_attribution_report
   claim_usage_report, youtube_metadata
   video_plan, title_thumbnail_plan, script_writer_brief
   selected_video_brief
@@ -46,7 +45,6 @@ def load(
     final_publish_package      = _load_json(layer9_dir / "final_publish_package.json")
     verification_report        = _load_json(layer9_dir / "verification_report.json")
     verified_youtube_metadata  = _load_json(layer9_dir / "verified_youtube_metadata.json")
-    source_attribution_report  = _load_json(layer9_dir / "source_attribution_report.json")
 
     # Layer 8
     claim_usage_report  = _load_json(layer8_dir / "claim_usage_report.json")
@@ -85,7 +83,6 @@ def load(
         "final_publish_package":     final_publish_package,
         "verification_report":       verification_report,
         "verified_youtube_metadata": verified_youtube_metadata,
-        "source_attribution_report": source_attribution_report,
         "claim_usage_report":        claim_usage_report,
         "youtube_metadata":          youtube_metadata,
         "video_plan":                video_plan,

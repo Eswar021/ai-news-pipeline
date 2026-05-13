@@ -50,7 +50,7 @@ def _build_script_md(section_scripts: list, layer8_ctx: dict) -> str:
         label = sec["section_key"].replace("_", " ").title()
         lines.append(f"## {label}")
         lines.append("")
-        lines.append(sec.get("script_text", ""))
+        lines.append(sec.get("narration_text", ""))
         lines.append("")
         lines.append("---")
         lines.append("")
@@ -75,7 +75,7 @@ def write(
 
     total_words = sum(s.get("word_count", 0) for s in section_scripts)
     total_secs  = sum(s.get("estimated_seconds", 0) for s in section_scripts)
-    full_text   = "\n\n".join(s.get("script_text", "") for s in section_scripts)
+    full_text   = "\n\n".join(s.get("narration_text", "") for s in section_scripts)
 
     # ── script.md ────────────────────────────────────────────────────────────
     script_md = _build_script_md(section_scripts, layer8_ctx)

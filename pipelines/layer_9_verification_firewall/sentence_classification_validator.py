@@ -10,6 +10,7 @@ Classification rules:
   - section 'intro_hook': hook → no claim support needed (preview sentences)
   - type 'cta' or section 'cta': no support needed
   - type 'closing': no support needed
+  - type 'editorial_analysis': no claim support needed, but validated separately
   - sentences starting with transition phrases: transition → no support needed
   - all other 'claim' sentences: factual → claim support required
 
@@ -48,6 +49,14 @@ def _classify(sentence_rec: dict) -> dict:
             "verified_sentence_type": "cta_no_source_needed",
             "requires_claim_support": False,
             "classification_note":    f"original_type={stype}",
+        }
+
+    if stype == "editorial_analysis":
+        return {
+            **sentence_rec,
+            "verified_sentence_type": "editorial_analysis",
+            "requires_claim_support": False,
+            "classification_note":    "layer8_marked_editorial_analysis",
         }
 
     # Hook (intro_hook section)

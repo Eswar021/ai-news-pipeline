@@ -88,8 +88,9 @@ def build_output_contract(
         "layer_8_manifest":            str(run_data_dir / "layer_8" / "layer8_manifest.json"),
         "layer_8_validation_report":   str(run_data_dir / "layer_8" / "layer8_validation_report.json"),
 
-        "layer_9_verified_script":     str(run_scripts_dir / "verified_script.md"),
         "layer_9_verification_report": str(run_scripts_dir / "verification_report.json"),
+        "layer_9_revision_package":    str(run_scripts_dir / "revision_package.json"),
+        "layer_9_verified_script":     str(run_scripts_dir / "verified_script.md"),
         "layer_9_verified_youtube_metadata": str(run_scripts_dir / "verified_youtube_metadata.json"),
         "layer_9_final_publish_package": str(run_scripts_dir / "final_publish_package.json"),
         "layer_9_manifest":            str(run_scripts_dir / "layer9_manifest.json"),
@@ -108,7 +109,7 @@ def build_output_contract(
         "verified_script.md",
         "verified_youtube_metadata.json",
         "verification_report.json",
-        "correction_patch.json",
+        "revision_package.json",
         "final_publish_package.json",
     ]
 

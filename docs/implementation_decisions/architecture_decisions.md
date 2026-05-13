@@ -1023,9 +1023,26 @@ Elapsed         : ~62s (2 LLM calls + 13 rule-based steps)
 
 **Design doc said:** Script generation produces one script, implying one LLM call.
 
-**What we did:** One async LLM call per section, all 11 dispatched concurrently via `asyncio.gather()`. Each call returns `{script_text, used_claim_ids}` as JSON.
+**What we did:** One async LLM call per section, all 11 dispatched concurrently via `asyncio.gather()`. Each call now returns narration-first JSON like `{narration_text, used_claim_ids, analysis_sentences}` and keeps visual/editor notes separate in the section contract.
 
 **Why:** One large call for an 827-word script across 11 sections would give the LLM no structural grounding per section. Per-section calls let each section get its exact claims, visual notes, word budget, and instructions. The async pattern keeps total latency similar to one slow call while getting 11x more focused outputs. JSON response format gives accurate per-section claim tracking.
+
+---
+
+### Decision: Layer 8 narration and visual guidance are now separate contracts
+
+**Design doc said:** The script-generation layer described section script text and visual planning together, which made it easy for implementation prompts to blur spoken narration with on-screen/editor notes.
+
+**What we did:** `section_scripts.json` now separates:
+
+- `narration_text`
+- `visual_notes`
+- `used_claim_ids`
+- `analysis_sentences`
+
+`script.md`, `script.txt`, `generated_script.json.full_script_text`, sentence maps, and Layer 9 verification now use narration only.
+
+**Why:** The previous mixed contract let Layer 8 write things like “On-screen callout...” directly into spoken script text. That inflated Layer 9 issue counts for the wrong reason and made the verification layer look harsher than it really was.
 
 ---
 
@@ -1071,7 +1088,7 @@ Elapsed         : ~8.5s (11 async LLM calls + 9 rule-based steps)
 
 ## Layer 9 — Verification Firewall
 
-**Actual output (run_2026_05_10_48h_auto):** Originally 18 flat modules and 15 output files. Current implementation is now 19 flat modules with `repetition_safety_checker.py` added and an additional `repetition_safety_report.json` output, while preserving the same overall verification role.
+**Actual output:** The active Layer 9 path now keeps a lean durable output tree built around `verification_report.json`, `sentence_verification_results.jsonl`, `revision_package.json`, `verified_script.md` when approved, `verified_youtube_metadata.json`, and `final_publish_package.json`.
 
 ### Decision: 19 flat modules instead of design doc's sub-packages (loaders/, validation/, verification/, metadata/, scoring/, correction/, output/)
 
@@ -1109,6 +1126,36 @@ we can evaluate the actual post-planning framing that would reach viewers.
 **Why:** Consistent with L4–L8 pattern. Layer 9 is the only consumer of these rules — there is no cross-layer config sharing happening. Inlining keeps each module self-contained and individually testable.
 
 ---
+
+### Decision: Revision-required outcomes are now tri-state, not fake file-missing failures
+
+**Design doc said:** Layer 9 distinguishes approved, warning, revision, and blocked outcomes, but the earlier implementation still let revision-needed runs collapse into “verified_script.md missing” failures at the pipeline level.
+
+**What we did:** Layer 9 now validates to:
+
+- `passed`
+- `revisable`
+- `failed`
+
+`revision_package.json` is now the durable handoff for revisable or blocked outcomes. `verified_script.md` is required only for approved outcomes. `pipeline.py` now halts cleanly for Layer 9 revision-needed outcomes without a traceback-style runtime failure.
+
+**Why:** A script needing revision is a content workflow result, not a broken run. Treating it as a pseudo missing-file error made the pipeline harder to trust and obscured the actual fix path.
+
+---
+
+### Decision: Active prompt text is now externalized and manifest-backed
+
+**Design doc said:** Prompt families should be versionable, but the active runtime still kept prompt text inline in the LLM modules.
+
+**What we did:** Added:
+
+- `config/policies/prompt_config.yaml`
+- `prompts/v1/...`
+- `llm/prompt_loader.py`
+
+Layer 0 now snapshots `resolved_config.prompts` into the run manifest, and active LLM modules in Layers 4, 5, 7, 8, and 9 load prompt text through that manifest snapshot.
+
+**Why:** This makes prompt behavior reproducible per run, aligns prompt loading with the manifest-authority rule, and stops prompt-version drift from hiding inside code edits.
 
 ### Decision: `contradiction_handler.py` is informational only — not a blocking check
 

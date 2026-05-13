@@ -9,7 +9,7 @@ Deep dive sections explore one topic in analytical depth:
   limitations → background → final_takeaway → cta
 
 LLM returns JSON per section:
-    {"script_text": "...", "used_claim_ids": ["claim_...", ...]}
+    {"narration_text": "...", "used_claim_ids": ["claim_...", ...], "analysis_sentences": []}
 
 Returns:
     list of section_script dicts (same structure as roundup_script_writer)
@@ -29,8 +29,10 @@ from pipelines.runtime_manifest import get_llm_profile
 from pipelines.layer_8_script_generation.brief_loader             import load as load_brief
 from pipelines.layer_8_script_generation.evidence_context_builder import build as build_evidence
 from llm.async_llm_runtime import execute_chat_request
+from llm.prompt_loader import load_prompt_bundle
 
 _WPM   = 130
+_ANALYSIS_ALLOWED_SECTIONS = {"final_takeaway", "outro"}
 
 _ROLE_TONE = {
     "hook":              "Pose the central viewer question directly. Create curiosity. No facts yet.",
@@ -42,26 +44,6 @@ _ROLE_TONE = {
     "final_takeaway":    "Give a balanced, evidence-grounded conclusion. Acknowledge uncertainty where it exists.",
     "cta":               "Invite viewers to share their perspective. Keep it short and genuine.",
 }
-
-_SYSTEM_PROMPT = """\
-You are a script writer for "AI Signal Brief" — a YouTube channel that publishes
-deep-dive analysis of AI announcements.
-
-Style rules for deep dives:
-- Analytical, precise, structured. More thorough than a roundup.
-- Write in natural spoken language as if being read aloud. No bullet points, no headers.
-- Every factual claim must be backed by a claim ID from the provided list.
-- Do NOT introduce facts not in the provided claim list.
-- Do NOT use the blocked phrases listed in the prompt.
-- Cautious claims must use qualifying language: "may", "could", "suggests", "appears to".
-- Each section has a specific analytical role — honour the role tone provided.
-
-Output format — return ONLY valid JSON:
-{
-  "script_text": "<script for this section only, plain spoken prose>",
-  "used_claim_ids": ["claim_id_1", "claim_id_2"]
-}
-"""
 
 def _word_budget(target_seconds: int) -> int:
     return max(20, int(target_seconds / 60 * _WPM))
@@ -77,11 +59,18 @@ def _format_claims(claims: list) -> str:
     return "\n".join(lines)
 
 
-def _build_section_prompt(sec: dict, evidence: dict, blocked_phrases: list) -> str:
+def _analysis_allowed(sec: dict) -> bool:
+    key = sec.get("section_key", "")
+    role = sec.get("segment_role", key)
+    return key in _ANALYSIS_ALLOWED_SECTIONS or role in _ANALYSIS_ALLOWED_SECTIONS
+
+
+def _build_section_prompt(sec: dict, evidence: dict, blocked_phrases: list, prompt_bundle: dict | None = None) -> str:
     ev      = evidence[sec["section_id"]]
     wbgt    = _word_budget(sec["target_duration_seconds"])
     role    = sec.get("segment_role", sec["section_key"])
     tone    = _ROLE_TONE.get(role, f"Cover {role} analytically.")
+    analysis_allowed = _analysis_allowed(sec)
 
     parts = [
         f"SECTION: {sec['section_key']}",
@@ -89,6 +78,7 @@ def _build_section_prompt(sec: dict, evidence: dict, blocked_phrases: list) -> s
         f"ROLE TONE: {tone}",
         f"GOAL: {sec['section_goal']}",
         f"WORD BUDGET: ~{wbgt} words ({sec['target_duration_seconds']}s at {_WPM} wpm)",
+        f"ANALYSIS ALLOWED: {'yes' if analysis_allowed else 'no'}",
         "",
         "REQUIRED CLAIMS (must reference all):",
         _format_claims(ev["required"]),
@@ -105,6 +95,13 @@ def _build_section_prompt(sec: dict, evidence: dict, blocked_phrases: list) -> s
             "",
         ]
 
+    if sec.get("visual_notes"):
+        parts.append("VISUAL NOTES (editor-facing only; DO NOT read these aloud):")
+        for v in sec["visual_notes"]:
+            txt = f" | on-screen: '{v['on_screen_text']}'" if v.get("on_screen_text") else ""
+            parts.append(f"  {v['visual_type']}: {v['visual_goal']}{txt}")
+        parts.append("")
+
     if sec.get("writer_instructions"):
         parts.append("WRITER INSTRUCTIONS:")
         for instr in sec["writer_instructions"]:
@@ -114,10 +111,10 @@ def _build_section_prompt(sec: dict, evidence: dict, blocked_phrases: list) -> s
     parts += [
         f"BLOCKED PHRASES (never use): {', '.join(blocked_phrases)}",
         "",
-        "Return JSON only. Script text in plain spoken analytical prose. No bullets, no headers.",
+        (prompt_bundle or {}).get("user_preamble", "").strip(),
     ]
 
-    return "\n".join(parts)
+    return "\n".join(part for part in parts if part != "")
 
 
 async def _write_section(
@@ -126,12 +123,13 @@ async def _write_section(
     evidence:        dict,
     blocked_phrases: list,
 ) -> dict:
-    prompt = _build_section_prompt(sec, evidence, blocked_phrases)
+    prompt_bundle = load_prompt_bundle("deep_dive_script_writer", run_id=run_id)
+    prompt = _build_section_prompt(sec, evidence, blocked_phrases, prompt_bundle)
     data = await execute_chat_request(
         module_name="deep_dive_script_writer",
         run_id=run_id,
         messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": prompt_bundle["system"]},
             {"role": "user",   "content": prompt},
         ],
         request_name=sec["section_key"],
@@ -144,19 +142,24 @@ async def _write_section(
         parse_json=True,
     )
 
-    script_text    = data.get("script_text", "").strip()
+    narration_text = (data.get("narration_text") or data.get("script_text") or "").strip()
     used_claim_ids = data.get("used_claim_ids", [])
-    word_count     = len(script_text.split())
+    analysis_sentences = data.get("analysis_sentences", [])
+    if not _analysis_allowed(sec):
+        analysis_sentences = []
+    word_count     = len(narration_text.split())
 
     return {
         "section_id":        sec["section_id"],
         "section_key":       sec["section_key"],
         "segment_role":      sec.get("segment_role", sec["section_key"]),
         "target_seconds":    sec["target_duration_seconds"],
-        "script_text":       script_text,
+        "narration_text":    narration_text,
+        "visual_notes":      sec.get("visual_notes", []),
         "word_count":        word_count,
         "estimated_seconds": round(word_count / _WPM * 60),
         "used_claim_ids":    used_claim_ids,
+        "analysis_sentences": [s.strip() for s in analysis_sentences if isinstance(s, str) and s.strip()],
     }
 
 

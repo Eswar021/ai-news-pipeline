@@ -22,11 +22,13 @@ import os
 import re
 import json
 import asyncio
+from string import Template
 from pathlib import Path
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from llm.async_llm_runtime import execute_chat_request
+from llm.prompt_loader import load_prompt_bundle
 
 _SKIP_SECTIONS  = {"intro_hook", "cta"}
 _MAX_SPAN_CHARS = 1200  # truncate each span to keep prompt size reasonable
@@ -85,36 +87,18 @@ def _build_prompt(section_key: str, sentences: list, spans: list, ctx: dict) -> 
         for s in sentences
     )
 
-    return f"""You are a factual verification analyst. Your job is to check whether script sentences are properly supported by their source material.
+    prompt_bundle = load_prompt_bundle("sentence_support_verifier", run_id=ctx.get("run_id"))
+    preamble = Template(prompt_bundle.get("user_preamble") or "").safe_substitute(section_key=section_key)
 
-## Source Text
-{source_block}
-
-## Verified Claims (extracted from source)
-{claims_block}
-
-## Script Sentences to Verify (section: {section_key})
-{sent_block}
-
-## Instructions
-For each sentence, check whether it stays within what the source text and verified claims actually say.
-Do NOT be overly strict — general analytical statements that follow from the evidence are acceptable as "analysis_supported".
-Flag as "overclaim" only if the sentence adds specific facts, rankings, predictions, or certainty that the source does not support.
-Flag as "unsupported" only if the sentence makes claims with no connection to the source material.
-
-Return ONLY a JSON object with this exact format:
-{{
-  "section_key": "{section_key}",
-  "sentence_verifications": [
-    {{
-      "sentence_id": "sent_XXXX",
-      "support_status": "directly_supported|supported_with_caution|analysis_supported|overclaim|unsupported",
-      "severity": "info|warning|medium|high",
-      "issue": null or "short explanation if overclaim/unsupported",
-      "recommended_fix": null or "suggested replacement"
-    }}
-  ]
-}}"""
+    return (
+        "## Source Text\n"
+        f"{source_block}\n\n"
+        "## Verified Claims (extracted from source)\n"
+        f"{claims_block}\n\n"
+        f"## Script Sentences to Verify (section: {section_key})\n"
+        f"{sent_block}\n\n"
+        f"{preamble}"
+    )
 
 
 async def _verify_section(
@@ -128,13 +112,14 @@ async def _verify_section(
         return []
 
     prompt = _build_prompt(section_key, sentences, spans, ctx)
+    prompt_bundle = load_prompt_bundle("sentence_support_verifier", run_id=run_id)
 
     try:
         data = await execute_chat_request(
             module_name="sentence_support_verifier",
             run_id=run_id,
             messages=[
-                {"role": "system", "content": "You are a strict but fair factual verification analyst. Return only JSON."},
+                {"role": "system", "content": prompt_bundle["system"]},
                 {"role": "user",   "content": prompt},
             ],
             request_name=section_key,
@@ -200,11 +185,12 @@ async def _verify_all(classified: list, ctx: dict) -> list:
         sk  = sent.get("section_key", "")
 
         if not sent.get("requires_claim_support") or sk in _SKIP_SECTIONS:
+            status = "editorial_analysis_not_checked" if sent.get("verified_sentence_type") == "editorial_analysis" else "no_verification_needed"
             final.append({
                 "sentence_id":    sid,
                 "section_key":    sk,
                 "sentence_text":  sent.get("sentence_text", ""),
-                "support_status": "no_verification_needed",
+                "support_status": status,
                 "severity":       "info",
                 "issue":          None,
                 "recommended_fix": None,

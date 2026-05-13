@@ -36,7 +36,7 @@ def _context(text: str, phrase: str, window: int = 60) -> str:
 
 
 def check(section_scripts: list, layer8_ctx: dict) -> dict:
-    full_text        = " ".join(s.get("script_text", "") for s in section_scripts)
+    full_text        = " ".join(s.get("narration_text", "") for s in section_scripts)
     blocked_phrases  = layer8_ctx["evidence_rules"].get("blocked_phrases", [])
     cautious_ids     = set(layer8_ctx["evidence_rules"].get("cautious_claim_ids", []))
     claim_text_map   = layer8_ctx["claim_text_map"]
@@ -62,7 +62,7 @@ def check(section_scripts: list, layer8_ctx: dict) -> dict:
         if not used_caut:
             continue
 
-        script_lower = sec_script.get("script_text", "").lower()
+        script_lower = sec_script.get("narration_text", "").lower()
         for cid in used_caut:
             has_qualifier = any(q in script_lower for q in _QUALIFIERS)
             if not has_qualifier:

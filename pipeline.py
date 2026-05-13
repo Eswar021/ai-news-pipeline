@@ -80,7 +80,14 @@ _LAYER_REQUIRED_OUTPUT_KEYS = {
     6: ["layer_6_research_packet", "layer_6_source_pack", "layer_6_manifest", "layer_6_validation_report"],
     7: ["layer_7_video_plan", "layer_7_script_writer_brief", "layer_7_manifest", "layer_7_validation_report"],
     8: ["layer_8_script_md", "layer_8_generated_script", "layer_8_manifest", "layer_8_validation_report"],
-    9: ["layer_9_verified_script", "layer_9_verification_report", "layer_9_final_publish_package", "layer_9_manifest", "layer_9_validation_report"],
+    9: [
+        "layer_9_verification_report",
+        "layer_9_revision_package",
+        "layer_9_verified_youtube_metadata",
+        "layer_9_final_publish_package",
+        "layer_9_manifest",
+        "layer_9_validation_report",
+    ],
     10: ["layer_10_manifest", "layer_10_validation_report", "layer_10_memory_index", "layer_10_memory_snapshot"],
 }
 
@@ -97,6 +104,10 @@ _VALIDATION_REPORT_KEYS = {
     9: "layer_9_validation_report",
     10: "layer_10_validation_report",
 }
+
+
+class LayerRevisionRequired(RuntimeError):
+    pass
 
 
 def load_config() -> dict:
@@ -206,6 +217,13 @@ def _enforce_validation_report(layer_num: int, output_contract: dict) -> None:
 
     if passed:
         return
+
+    if layer_num == 9 and status == "revisable":
+        warnings = report.get("warnings") or []
+        message = warnings[0] if warnings else "Layer 9 requires manual revision."
+        raise LayerRevisionRequired(
+            f"Layer 9 requires revision (final_status={report.get('final_status', 'unknown')}): {message}"
+        )
 
     failure_reason = report.get("failure_reason")
     if not failure_reason:
@@ -369,6 +387,7 @@ def main():
     started_at = datetime.now(timezone.utc)
     results    = {}
     failed_at  = None
+    halted_for_revision = None
 
     for layer_num in layers:
         cost_label = _LAYER_EXECUTION_LABELS.get(layer_num, "unknown")
@@ -398,6 +417,12 @@ def main():
             results[layer_num] = {"status": "done"}
             print(f"[pipeline] Layer {layer_num} complete.")
 
+        except LayerRevisionRequired as e:
+            print(f"\n[pipeline] Layer {layer_num} requires revision:")
+            print(f"  {e}")
+            results[layer_num] = {"status": "revisable", "error": str(e)}
+            halted_for_revision = layer_num
+            break
         except Exception as e:
             import traceback
             print(f"\n[pipeline] Layer {layer_num} FAILED:")
@@ -409,7 +434,13 @@ def main():
     elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
 
     print(f"\n{'='*60}")
-    print(f"Pipeline {'FAILED at Layer ' + str(failed_at) if failed_at is not None else 'COMPLETE'}")
+    if failed_at is not None:
+        headline = f"FAILED at Layer {failed_at}"
+    elif halted_for_revision is not None:
+        headline = f"HALTED FOR REVISION at Layer {halted_for_revision}"
+    else:
+        headline = "COMPLETE"
+    print(f"Pipeline {headline}")
     print(f"  Run ID  : {run_id}")
     print(f"  Elapsed : {elapsed:.1f}s")
     print(f"  Layers:")
@@ -420,7 +451,7 @@ def main():
 
     if run_id:
         print(f"Run output: {RUNS_DIR / run_id}")
-    if failed_at is not None:
+    if failed_at is not None or halted_for_revision is not None:
         sys.exit(1)
 
 

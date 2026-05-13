@@ -12,8 +12,8 @@ Use this file when you want to inspect the main downstream artifacts for a run q
 | Layer 5 | `data/runs/{run_id}/layer_5/selected_video_brief.json`, `editorial_candidates.json`, `story_editorial_assessments.json`, `editorial_decision.json` | `selected_video_brief.json` |
 | Layer 6 | `data/runs/{run_id}/layer_6/research_packet.json`, `source_pack.json`, `claim_section_map.json`, `packet_context_for_layer7.json` | `research_packet.json` |
 | Layer 7 | `data/runs/{run_id}/layer_7/script_writer_brief.json`, `video_plan.json`, `title_thumbnail_plan.json` | `script_writer_brief.json` |
-| Layer 8 | `data/runs/{run_id}/layer_8/generated_script.json`, `script.md`, `youtube_metadata.json`, `section_scripts.json` | `generated_script.json` |
-| Layer 9 | `data/runs/{run_id}/layer_9/verified_script.md`, `final_publish_package.json`, `verification_report.json` | `verification_report.json` |
+| Layer 8 | `data/runs/{run_id}/layer_8/generated_script.json`, `script.md`, `youtube_metadata.json`, `section_scripts.json` | `section_scripts.json` for narration vs visual notes, then `generated_script.json` |
+| Layer 9 | `data/runs/{run_id}/layer_9/verification_report.json`, `revision_package.json`, `final_publish_package.json`, `verified_script.md` when approved | `verification_report.json`, then `revision_package.json` |
 | Layer 10 | `data/runs/{run_id}/layer_10/layer10_manifest.json`, `memory/memory_snapshot.json`, `memory/memory_index.json` | `layer10_manifest.json` |
 
 ## Short reading path by goal
@@ -26,8 +26,10 @@ If you want:
 - Evidence-backed facts: read Layer 4 `story_fact_sheets.json`
 - Which video the system chose: read Layer 5 `selected_video_brief.json`
 - What the script writer saw: read Layer 7 `script_writer_brief.json`
-- Final generated script: read Layer 8 `script.md`
+- Final generated narration: read Layer 8 `script.md`
+- Visual/editor notes carried separately: read Layer 8 `section_scripts.json`
 - What Layer 9 approved or flagged: read Layer 9 `verification_report.json`
+- What to fix on a blocked or revisable run: read Layer 9 `revision_package.json`
 - What got written to memory: read Layer 10 `layer10_manifest.json`
 
 ## Validation note

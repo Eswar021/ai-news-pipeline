@@ -1,0 +1,42 @@
+defaults:
+  active_prompt_version: v1
+
+modules:
+  claim_extractor:
+    version: v1
+    module_dir: claim_extractor
+    system_file: system.txt
+  viewer_value_analyzer:
+    version: v1
+    module_dir: viewer_value_analyzer
+    system_file: system.txt
+  editorial_brief_builder:
+    version: v1
+    module_dir: editorial_brief_builder
+    system_file: system.txt
+    user_preamble_file: user_preamble.txt
+  hook_planner:
+    version: v1
+    module_dir: hook_planner
+    system_file: system.txt
+    user_preamble_file: user_preamble.txt
+  title_thumbnail_planner:
+    version: v1
+    module_dir: title_thumbnail_planner
+    system_file: system.txt
+    user_preamble_file: user_preamble.txt
+  roundup_script_writer:
+    version: v1
+    module_dir: roundup_script_writer
+    system_file: system.txt
+    user_preamble_file: user_preamble.txt
+  deep_dive_script_writer:
+    version: v1
+    module_dir: deep_dive_script_writer
+    system_file: system.txt
+    user_preamble_file: user_preamble.txt
+  sentence_support_verifier:
+    version: v1
+    module_dir: sentence_support_verifier
+    system_file: system.txt
+    user_preamble_file: user_preamble.txt

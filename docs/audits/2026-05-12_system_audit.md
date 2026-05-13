@@ -23,6 +23,8 @@ The live pipeline audited here is the `pipeline.py` flow that runs:
 
 For the feature-oriented build backlog derived from this audit and the design docs, see [system_completion_feature_map.md](../roadmaps/system_completion_feature_map.md).
 
+For the bounded follow-on simplification audit after the Layer 8 / prompt / Layer 9 refactor, see [2026-05-13_layer_6_7_9_simplification_audit.md](2026-05-13_layer_6_7_9_simplification_audit.md).
+
 ---
 
 ## Executive Summary
@@ -43,6 +45,9 @@ For the feature-oriented build backlog derived from this audit and the design do
 - Layer 5 now respects the Layer 0 run profile instead of always behaving like an auto-route run. Explicit roundup and deep-dive profiles now use forced-format behavior, while `auto` remains format arbitration in Layer 5.
 - Layer 4 was simplified on 2026-05-13 from a span-first extraction path to a document-first evidence path. Claims are now extracted per eligible document, large documents overflow internally only when needed, and provenance is resolved back to Layer 2 spans after extraction.
 - Layer 5 was simplified on 2026-05-13 into a smaller editorial decision pipeline. The active path now centers on evidence safety, editorial relevance, viewer value, novelty, a compact per-story assessment, and one final selection stage.
+- Layer 0 now snapshots prompt-version policy into `resolved_config.prompts`, and active LLM modules in Layers 4, 5, 7, 8, and 9 now load durable prompt text from `prompts/v1/...` through the manifest-backed prompt loader instead of inline prompt strings.
+- Layer 8 was cleaned up on 2026-05-13 so narration and visual/editor guidance are now separate contracts. `script.md`, `script.txt`, `generated_script.json`, sentence maps, and Layer 9 verification inputs are built from narration only, while visual notes remain in `section_scripts.json`.
+- Layer 9 was simplified on 2026-05-13 into a tri-state gate: `passed`, `revisable`, or `failed`. `requires_revision` is no longer expressed as a fake missing-file failure; the durable revision handoff is now `revision_package.json`.
 - `verified_claims.jsonl` is now the single authoritative Layer 4 claim contract. It embeds `source_span_ids`, `source_urls`, and `canonical_document_ids`, and downstream layers no longer depend on `claim_evidence_map.jsonl`.
 - The active Layer 4 and Layer 5 output trees were reduced on 2026-05-13. Lean contracts now replace the earlier spread of intermediate reports and evidence-map artifacts.
 - Active async LLM logs are no longer written as one file per call. The shared runtime now writes one JSONL file per module under layer-specific folders and maintains a run-level `llm_log_summary.json`.
@@ -317,8 +322,8 @@ These are the main downstream files to inspect for each layer.
 | Layer 5 | `data/runs/{run_id}/layer_5/selected_video_brief.json`, `editorial_candidates.json`, `story_editorial_assessments.json`, `editorial_decision.json` | Compact editorial selection and run-level decision |
 | Layer 6 | `data/runs/{run_id}/layer_6/research_packet.json`, `source_pack.json`, `claim_section_map.json` | Format-specific research packet |
 | Layer 7 | `data/runs/{run_id}/layer_7/script_writer_brief.json`, `video_plan.json` | Consolidated plan for the script writer |
-| Layer 8 | `data/runs/{run_id}/layer_8/generated_script.json`, `script.md`, `youtube_metadata.json` | Generated script and publishing metadata |
-| Layer 9 | `data/runs/{run_id}/layer_9/verified_script.md`, `final_publish_package.json`, `verification_report.json` | Verified script and publish package |
+| Layer 8 | `data/runs/{run_id}/layer_8/generated_script.json`, `script.md`, `youtube_metadata.json`, `section_scripts.json` | Narration-only script outputs plus separate visual/editor notes |
+| Layer 9 | `data/runs/{run_id}/layer_9/verification_report.json`, `revision_package.json`, `final_publish_package.json`, `verified_script.md` when approved | Verification outcome, revision handoff, and final publish package |
 | Layer 10 | `data/runs/{run_id}/layer_10/layer10_manifest.json`, `memory/memory_snapshot.json`, `memory/memory_index.json` | Memory write audit and future-run guidance |
 
 For a shorter cheat sheet, see [docs/reference/layer_output_map.md](../reference/layer_output_map.md).

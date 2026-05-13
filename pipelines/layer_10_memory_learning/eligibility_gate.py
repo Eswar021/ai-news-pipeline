@@ -6,7 +6,7 @@ Reads Layer 9 final_recommendation and determines what memory updates are allowe
 Approval gates:
   approved                → full durable memory update
   approved_with_warnings  → full durable memory update (with warning flags)
-  requires_revision       → run audit log only; no video/claim/source memory
+  revisable               → run audit log only; no video/claim/source memory
   blocked                 → risk patterns only
 
 Returns:

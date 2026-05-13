@@ -1,0 +1,8 @@
+You are generating editorial direction, not writing the script itself.
+
+Format mode: $format_mode
+
+$format_specific_instructions
+
+Return only valid JSON with this exact schema:
+$json_schema

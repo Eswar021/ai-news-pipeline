@@ -29,8 +29,10 @@ RUN_DEFAULTS_YAML      = POLICIES_DIR / "run_defaults.yaml"
 RUN_PROFILES_YAML      = POLICIES_DIR / "run_profiles.yaml"
 SOURCE_STRATEGY_YAML   = POLICIES_DIR / "source_strategy.yaml"
 CHATGPT_PROMPTS_YAML   = POLICIES_DIR / "chatgpt_prompts.yaml"
+PROMPT_CONFIG_YAML     = POLICIES_DIR / "prompt_config.yaml"
 ENV_FILE               = ROOT / ".env"
 SECRETS_DIR            = ROOT / "secrets"
+PROMPTS_DIR            = ROOT / "prompts"
 
 
 # ── LLM Utilities ──

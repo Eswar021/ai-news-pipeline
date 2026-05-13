@@ -42,9 +42,10 @@ def suggest(section_scripts: list, layer8_ctx: dict) -> list:
         brief_sec = brief_sections.get(sid, {})
         req_count = len(brief_sec.get("required_claim_ids", []))
         vis_count = len(brief_sec.get("visual_notes", []))
-        preview   = (sec_script.get("script_text", "")[:_SCRIPT_PREVIEW_LEN] + "…"
-                     if len(sec_script.get("script_text", "")) > _SCRIPT_PREVIEW_LEN
-                     else sec_script.get("script_text", ""))
+        narration = sec_script.get("narration_text", "")
+        preview   = (narration[:_SCRIPT_PREVIEW_LEN] + "…"
+                     if len(narration) > _SCRIPT_PREVIEW_LEN
+                     else narration)
 
         clip_type = None
         reason    = None

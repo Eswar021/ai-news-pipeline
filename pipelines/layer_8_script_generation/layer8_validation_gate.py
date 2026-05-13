@@ -1,18 +1,19 @@
 """
 Layer 8 — Module 11: Layer 8 Validation Gate
 
-Validates Layer 8 output before handoff to Layer 9.
+Validates narration-first Layer 8 output before handoff to Layer 9.
 
 Hard failures (block Layer 9):
   1. script.md missing
   2. section_scripts.json missing
-  3. total word count < 300
-  4. cautious_language_report has violations (blocked phrases in script)
+  3. no section contains narration_text
+  4. total word count < 300
+  5. cautious_language_report has violations (blocked phrases in script)
 
 Soft warnings (pass with warning):
-  5. word count outside 700-2000 range
-  6. claim usage rate < 10% (script barely touches the evidence)
-  7. no source URLs in youtube_metadata
+  6. word count outside 700-2000 range
+  7. claim usage rate < 10% (script barely touches the evidence)
+  8. no source URLs in youtube_metadata
 
 Key functions:
     validate(run_id, layer8_dir) → report dict
@@ -48,10 +49,20 @@ def validate(run_id: str, layer8_dir: Path) -> dict:
         }
 
     if not section_scripts_path.exists():
-        errors.append("section_scripts.json missing from layer_8 output.")
+        return {
+            "run_id":            run_id,
+            "passed":            False,
+            "status":            "failed",
+            "failure_reason":    "section_scripts.json missing",
+            "errors":            ["section_scripts.json not found in layer_8 output."],
+            "warnings":          [],
+            "ready_for_layer_9": False,
+        }
 
     with open(layer8_dir / "generated_script.json") as f:
         gs = json.load(f)
+    with open(section_scripts_path) as f:
+        ss = json.load(f)
     with open(layer8_dir / "claim_usage_report.json") as f:
         cur = json.load(f)
     with open(layer8_dir / "cautious_language_report.json") as f:
@@ -59,12 +70,16 @@ def validate(run_id: str, layer8_dir: Path) -> dict:
     with open(layer8_dir / "youtube_metadata.json") as f:
         yt = json.load(f)
 
-    # ── Check 3: Word count ───────────────────────────────────────────────────
+    sections = ss.get("sections", [])
+    if not any((section.get("narration_text") or "").strip() for section in sections):
+        errors.append("section_scripts.json has no narration_text content.")
+
+    # ── Check 4: Word count ───────────────────────────────────────────────────
     word_count = gs.get("total_word_count", 0)
     if word_count < _MIN_WORD_COUNT:
         errors.append(f"Script word count {word_count} is below minimum {_MIN_WORD_COUNT}.")
 
-    # ── Check 4: Cautious language violations ────────────────────────────────
+    # ── Check 5: Cautious language violations ────────────────────────────────
     violations = clr.get("violations", [])
     if violations:
         for v in violations:
@@ -72,7 +87,7 @@ def validate(run_id: str, layer8_dir: Path) -> dict:
                 f"Blocked phrase '{v.get('phrase', '?')}' found in script."
             )
 
-    # ── Check 5 (soft): Word count range ─────────────────────────────────────
+    # ── Check 6 (soft): Word count range ─────────────────────────────────────
     if _MIN_WORD_COUNT <= word_count < _TARGET_WORD_LOW:
         warnings.append(
             f"Word count {word_count} is below target range "
@@ -83,7 +98,7 @@ def validate(run_id: str, layer8_dir: Path) -> dict:
             f"Word count {word_count} exceeds target range. Script may run long."
         )
 
-    # ── Check 6 (soft): Claim usage rate ─────────────────────────────────────
+    # ── Check 7 (soft): Claim usage rate ─────────────────────────────────────
     usage_rate = cur.get("usage_rate", 0)
     if usage_rate < _MIN_USAGE_RATE:
         warnings.append(
@@ -91,7 +106,7 @@ def validate(run_id: str, layer8_dir: Path) -> dict:
             "Script may not be grounded in the evidence packet."
         )
 
-    # ── Check 7 (soft): Source URLs ──────────────────────────────────────────
+    # ── Check 8 (soft): Source URLs ──────────────────────────────────────────
     if yt.get("source_count", 0) == 0:
         warnings.append("No source URLs in youtube_metadata. Description will have no citations.")
 
@@ -106,12 +121,13 @@ def validate(run_id: str, layer8_dir: Path) -> dict:
         "errors":             errors,
         "warnings":           warnings,
         "ready_for_layer_9":  ready_for_layer_9,
-        "checks_run":         7,
-        "checks_passed":      7 - len(errors),
+        "checks_run":         8,
+        "checks_passed":      max(0, 8 - len(errors)),
         "word_count":         word_count,
         "claim_usage_rate":   usage_rate,
         "source_count":       yt.get("source_count", 0),
         "cautious_passed":    clr.get("passed", False),
+        "section_count":      len(sections),
     }
 
 

@@ -1,0 +1,20 @@
+Generate title and thumbnail angle options only, not final locked metadata.
+
+Return only valid JSON with this exact schema:
+{
+  "recommended_title_angles": [
+    {
+      "title": "...",
+      "angle_type": "...",
+      "accuracy_risk": "low|medium|high",
+      "click_potential": "low|medium|medium_high|high",
+      "supported_by_claim_ids": []
+    }
+  ],
+  "thumbnail_text_options": [
+    { "text": "...", "risk": "low|medium|high" }
+  ],
+  "blocked_title_angles": [
+    { "title": "...", "reason": "..." }
+  ]
+}
