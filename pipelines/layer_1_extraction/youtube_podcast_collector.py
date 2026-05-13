@@ -199,7 +199,7 @@ def collect_from_channel(
 
 def load_enabled_channels(channels_path: Path = CHANNELS_YAML) -> tuple[list[dict], dict]:
     """
-    Load the enabled channel registry from config/channels.yaml.
+    Load the enabled channel registry from config/registries/channels.yaml.
 
     Returns:
         (enabled_channels, youtube_defaults)
@@ -212,11 +212,7 @@ def load_enabled_channels(channels_path: Path = CHANNELS_YAML) -> tuple[list[dic
     yt_cfg = cfg.get("youtube", {})
     channels = yt_cfg.get("channels", []) or []
     enabled_channels = [ch for ch in channels if ch.get("enabled", True)]
-    defaults = {
-        "days_back": yt_cfg.get("days_back", 7),
-        "max_per_duration": yt_cfg.get("max_per_duration", 3),
-    }
-    return enabled_channels, defaults
+    return enabled_channels, {}
 
 
 def load_enabled_channels_from_manifest(manifest: dict) -> tuple[list[dict], dict]:
@@ -261,7 +257,7 @@ def collect_from_config(
         )
         return []
 
-    effective_days_back = days_back or defaults.get("days_back", 7)
+    effective_days_back = days_back or 7
     effective_max_per = max_per_duration or defaults.get("max_per_duration", 3)
 
     all_docs = []
@@ -271,7 +267,7 @@ def collect_from_config(
             channel_id=ch["channel_id"],
             channel_name=ch.get("name", ""),
             days_back=effective_days_back,
-            max_per_duration=ch.get("max_per_duration", effective_max_per),
+            max_per_duration=ch.get("effective_max_per_duration", effective_max_per),
             output_path=output_path,
             layer1_dir=layer1_dir,
             search_query=ch.get("search_query") or default_search_query,

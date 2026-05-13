@@ -70,12 +70,24 @@ def _roundup_episode_theme(selected: list[dict]) -> str:
     )
 
 
-def decide(candidates: list[dict], routing_decisions: list[dict],
-           opportunity_scores: list[dict], format_config: dict | None = None) -> dict:
+def decide(
+    candidates: list[dict],
+    routing_decisions: list[dict],
+    opportunity_scores: list[dict],
+    format_config: dict | None = None,
+    *,
+    run_profile: dict | None = None,
+    routing_rules: dict | None = None,
+) -> dict:
 
     roundup_config   = (format_config or {}).get("roundup",   {})
     min_roundup      = int(roundup_config.get("min_stories", _ROUNDUP_MIN_STORIES))
     max_roundup      = int(roundup_config.get("max_stories", _ROUNDUP_MAX_STORIES))
+    run_profile = run_profile or {}
+    routing_rules = routing_rules or {}
+    decision_mode = run_profile.get("decision_mode", "auto_route")
+    requested_format = run_profile.get("target_format", "auto")
+    deep_dive_threshold = int(routing_rules.get("deep_dive_threshold", _DEEP_DIVE_STRONG_THRESHOLD))
 
     # Build per-story lookup of routing and opportunity
     routing_by_id = {r["story_id"]: r for r in routing_decisions}
@@ -114,6 +126,7 @@ def decide(candidates: list[dict], routing_decisions: list[dict],
             "recommended_action":  "continue_monitoring",
             "selected_story_ids":  [],
             "rejected_candidates": rejected,
+            "requested_format":    requested_format,
         }
 
     # Sort by opportunity score descending
@@ -123,7 +136,7 @@ def decide(candidates: list[dict], routing_decisions: list[dict],
     deep_dive_candidate = None
     for ac in active_candidates:
         if ("deep_dive" in ac["allowed"] and
-                ac["opp_score"] >= _DEEP_DIVE_STRONG_THRESHOLD):
+                ac["opp_score"] >= deep_dive_threshold):
             deep_dive_candidate = ac
             break
 
@@ -155,9 +168,94 @@ def decide(candidates: list[dict], routing_decisions: list[dict],
     # ── Choose format ─────────────────────────────────────────────────────────
     balanced_roundup = _balance_roundup(roundup_candidates)
 
+    if decision_mode == "forced_format":
+        if requested_format == "deep_dive":
+            if deep_dive_candidate is None:
+                return {
+                    "decision": "no_video",
+                    "reason": "Requested deep_dive profile did not produce any eligible deep-dive candidate.",
+                    "recommended_action": "continue_monitoring",
+                    "selected_story_ids": [],
+                    "rejected_candidates": rejected,
+                    "requested_format": requested_format,
+                }
+
+            cand = deep_dive_candidate["candidate"]
+            conf = round(deep_dive_candidate["opp_score"] / 100, 2)
+            for ac in active_candidates:
+                if ac["candidate"]["story_id"] != cand["story_id"]:
+                    rejected.append({
+                        "story_id":        ac["candidate"]["story_id"],
+                        "story_title":     ac["candidate"].get("story_title", ""),
+                        "rejection_reason": "not_selected_for_this_run",
+                        "details":         [f"Opportunity score {ac['opp_score']}."],
+                        "recommended_action": "monitor_only",
+                    })
+            return {
+                "decision":            "create_video",
+                "selected_format":     "deep_dive",
+                "primary_story_id":    cand["story_id"],
+                "supporting_story_ids": [],
+                "decision_confidence": conf,
+                "decision_reasons":    [
+                    f"Forced-format profile requested deep_dive.",
+                    f"Selected top eligible deep-dive candidate with opportunity score {deep_dive_candidate['opp_score']}.",
+                ],
+                "episode_theme":       None,
+                "rejected_candidates": rejected,
+                "requested_format":    requested_format,
+            }
+
+        if requested_format == "roundup":
+            if len(balanced_roundup) < min_roundup:
+                return {
+                    "decision": "no_video",
+                    "reason": (
+                        f"Requested roundup profile produced only {len(balanced_roundup)} eligible roundup story/stories; "
+                        f"minimum required is {min_roundup}."
+                    ),
+                    "recommended_action": "continue_monitoring",
+                    "selected_story_ids": [],
+                    "rejected_candidates": rejected,
+                    "requested_format": requested_format,
+                }
+
+            selected_cands  = [ac["candidate"] for ac in balanced_roundup]
+            selected_ids    = [c["story_id"] for c in selected_cands]
+            avg_opp         = sum(ac["opp_score"] for ac in balanced_roundup) / len(balanced_roundup)
+            conf            = round(avg_opp / 100, 2)
+            selected_set = set(selected_ids)
+            for ac in active_candidates:
+                if ac["candidate"]["story_id"] not in selected_set:
+                    rejected.append({
+                        "story_id":        ac["candidate"]["story_id"],
+                        "story_title":     ac["candidate"].get("story_title", ""),
+                        "rejection_reason": "not_selected_for_roundup",
+                        "details":         [
+                            f"Opportunity score {ac['opp_score']}.",
+                            "Removed for story count limit or portfolio balance.",
+                        ],
+                        "recommended_action": "include_in_next_roundup",
+                    })
+            return {
+                "decision":           "create_video",
+                "selected_format":    "roundup",
+                "primary_story_id":   None,
+                "selected_story_ids": selected_ids,
+                "decision_confidence": conf,
+                "decision_reasons":   [
+                    "Forced-format profile requested roundup.",
+                    f"{len(balanced_roundup)} stories selected for roundup.",
+                    f"Average opportunity score: {int(avg_opp)}.",
+                ],
+                "episode_theme":      _roundup_episode_theme(selected_cands),
+                "rejected_candidates": rejected,
+                "requested_format":    requested_format,
+            }
+
     prefer_deep_dive = (
         deep_dive_candidate is not None and
-        deep_dive_candidate["opp_score"] >= _DEEP_DIVE_STRONG_THRESHOLD and
+        deep_dive_candidate["opp_score"] >= deep_dive_threshold and
         len(balanced_roundup) < min_roundup
     )
 
@@ -192,6 +290,7 @@ def decide(candidates: list[dict], routing_decisions: list[dict],
             "decision_reasons":   reasons,
             "episode_theme":      None,
             "rejected_candidates": rejected,
+            "requested_format":    requested_format,
         }
 
     # Roundup
@@ -233,6 +332,7 @@ def decide(candidates: list[dict], routing_decisions: list[dict],
             "decision_reasons":   reasons,
             "episode_theme":      _roundup_episode_theme(selected_cands),
             "rejected_candidates": rejected,
+            "requested_format":    requested_format,
         }
 
     # Fallback
@@ -242,6 +342,7 @@ def decide(candidates: list[dict], routing_decisions: list[dict],
         "recommended_action": "continue_monitoring",
         "selected_story_ids": [],
         "rejected_candidates": rejected,
+        "requested_format": requested_format,
     }
 
 

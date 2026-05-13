@@ -1,7 +1,7 @@
 """
 Layer 5 — Module 6: Format Fit Scorer
 
-Scores each story against each enabled format (roundup, deep_dive).
+Scores each story against each manifest-allowed format.
 Consumes evidence safety, audience fit, viewer value, and novelty results.
 
 Roundup score weights:
@@ -171,20 +171,31 @@ def score_deep_dive(candidate: dict, evidence_safety: dict,
     }
 
 
-def score(candidate: dict, evidence_safety: dict, audience_fit: dict,
-          viewer_value: dict, novelty: dict) -> dict:
-    return {
+def score(
+    candidate: dict,
+    evidence_safety: dict,
+    audience_fit: dict,
+    viewer_value: dict,
+    novelty: dict,
+    allowed_formats: list[str] | None = None,
+) -> dict:
+    allowed = allowed_formats or ["roundup", "deep_dive"]
+    payload = {
         "story_id": candidate["story_id"],
-        "roundup":   score_roundup(candidate, evidence_safety, audience_fit, viewer_value),
-        "deep_dive": score_deep_dive(candidate, evidence_safety, audience_fit, viewer_value, novelty),
+        "allowed_formats": list(allowed),
     }
+    if "roundup" in allowed:
+        payload["roundup"] = score_roundup(candidate, evidence_safety, audience_fit, viewer_value)
+    if "deep_dive" in allowed:
+        payload["deep_dive"] = score_deep_dive(candidate, evidence_safety, audience_fit, viewer_value, novelty)
+    return payload
 
 
 def score_all(candidates: list[dict], safety_decisions: list[dict],
               audience_fits: list[dict], viewer_values: list[dict],
-              novelty_results: list[dict]) -> list[dict]:
+              novelty_results: list[dict], allowed_formats: list[str] | None = None) -> list[dict]:
     return [
-        score(cand, sd, af, vv, nv)
+        score(cand, sd, af, vv, nv, allowed_formats=allowed_formats)
         for cand, sd, af, vv, nv
         in zip(candidates, safety_decisions, audience_fits, viewer_values, novelty_results)
     ]

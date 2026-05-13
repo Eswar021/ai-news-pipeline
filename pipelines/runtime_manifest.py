@@ -42,6 +42,17 @@ def get_format_requirements(manifest: dict) -> dict:
     raise KeyError("run_manifest.json is missing format_strategy.format_requirements")
 
 
+def get_run_profile(manifest: dict) -> dict:
+    profile = manifest.get("run_profile", {})
+    if not isinstance(profile, dict) or not profile.get("profile_name"):
+        raise KeyError("run_manifest.json is missing run_profile.profile_name")
+    return profile
+
+
+def get_decision_mode(manifest: dict) -> str:
+    return get_run_profile(manifest).get("decision_mode", "auto_route")
+
+
 def get_source_registry_snapshot(manifest: dict) -> dict:
     snapshot = _resolved_config(manifest).get("source_registry", {})
     if not isinstance(snapshot, dict) or not snapshot.get("sources"):

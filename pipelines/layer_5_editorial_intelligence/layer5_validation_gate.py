@@ -23,7 +23,7 @@ Key functions:
 import json
 from pathlib import Path
 
-_ENABLED_FORMATS = {"roundup", "deep_dive"}
+_SUPPORTED_FORMATS = {"roundup", "deep_dive", "evergreen", "comparison", "follow_up"}
 
 
 def validate(run_id: str, layer5_dir: Path) -> dict:
@@ -51,9 +51,11 @@ def validate(run_id: str, layer5_dir: Path) -> dict:
 
     # ── Check 2: selected format is enabled (hard fail) ──────────────────────
     selected_format = brief.get("selected_format", "")
-    if selected_format not in _ENABLED_FORMATS:
+    decision   = manifest.get("decision", {})
+    create_vid = decision.get("create_video", False)
+    if create_vid and selected_format not in _SUPPORTED_FORMATS:
         errors.append(
-            f"Selected format '{selected_format}' is not in enabled formats {_ENABLED_FORMATS}."
+            f"Selected format '{selected_format}' is not in supported formats {_SUPPORTED_FORMATS}."
         )
 
     # ── Check 3: no do_not_use claims in safe_claim_ids (hard fail) ──────────
@@ -67,8 +69,6 @@ def validate(run_id: str, layer5_dir: Path) -> dict:
         )
 
     # ── Check 4: create_video requires safe_claim_ids ─────────────────────────
-    decision   = manifest.get("decision", {})
-    create_vid = decision.get("create_video", False)
     if create_vid and not safe_ids:
         errors.append("decision=create_video but evidence_boundaries.safe_claim_ids is empty.")
 

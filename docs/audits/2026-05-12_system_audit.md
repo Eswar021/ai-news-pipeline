@@ -15,7 +15,7 @@ This audit covers:
 - Memory workflow parity versus the design docs
 - Legacy pipeline folders still present in the repo
 - Functional gaps between the current pipeline and the design docs
-- Why LLM logs are missing for current runs
+- LLM logging and observability status
 
 The live pipeline audited here is the `pipeline.py` flow that runs:
 
@@ -36,12 +36,15 @@ For the feature-oriented build backlog derived from this audit and the design do
 - Core run-completeness enforcement was added on 2026-05-12: the pipeline now checks for each layer's minimum required artifacts and honors the layer's existing validation report instead of assuming success from "no exception raised".
 - The handoff memory block was also corrected on 2026-05-12 so unpublished runs no longer show up as past-video repetition guidance.
 - A Layer 4 write-path bug was fixed on 2026-05-13: `layer4_writer.py` was incorrectly reading `confidence_label` from an already-flattened verified-claim record shape, which caused the run to fail after successful claim extraction and verification.
-- Active generated pipeline timestamps were standardized to the configured project timezone on 2026-05-13. The source of truth remains `config/run_defaults.yaml` with `Asia/Kolkata`, and the active pipeline now uses shared helpers for run manifests, layer manifests, memory records, and LLM logs. Canonical source `published_at` normalization and some internal elapsed-time math intentionally remain UTC-based.
+- Active generated pipeline timestamps were standardized to the configured project timezone on 2026-05-13. The source of truth remains `config/policies/run_defaults.yaml` with `Asia/Kolkata`, and the active pipeline now uses shared helpers for run manifests, layer manifests, memory records, and LLM logs. Canonical source `published_at` normalization and some internal elapsed-time math intentionally remain UTC-based.
+- The config surface was reorganized on 2026-05-13 into `config/registries/` and `config/policies/`, and Layer 0 now resolves a named run profile from `config/policies/run_profiles.yaml` before building `run_manifest.json`.
+- Layer 5 now respects the Layer 0 run profile instead of always behaving like an auto-route run. Explicit roundup and deep-dive profiles now use forced-format behavior, while `auto` remains format arbitration in Layer 5.
+- Active async LLM logs are no longer written as one file per call. The shared runtime now writes one JSONL file per module under layer-specific folders and maintains a run-level `llm_log_summary.json`.
 - Raw Layer 10 memory still records prepared runs, which is useful for audit, but only published runs should drive novelty and repetition decisions.
 - The active pipeline is not a strict Layer N → Layer N+1 chain. It behaves as a DAG of authoritative artifacts, and later layers intentionally reach back to Layer 2, Layer 3, and Layer 4.
 - A single mutable master file is not recommended as the primary source of truth. A compiled `run_state.json` or `run_graph.json` artifact is the better future direction.
 - The legacy folders `layer_2_processing`, `layer_3_intelligence`, and `layer_4_content` are not part of the current pipeline path.
-- LLM logs are missing for the modern pipeline because the active async OpenAI modules bypass `llm/llm_logger.py`.
+- LLM log coverage for the active async path was fixed on 2026-05-13. The shared runtime now writes one JSONL file per module under layer-specific folders and maintains a run-level `llm_log_summary.json`.
 
 ---
 
@@ -75,11 +78,11 @@ These modules already read model settings from `config/llm_config.py`:
 
 ### Remaining limitation
 
-`llm_config.py` is only partially authoritative today.
+`llm_config.py` is now authoritative for the active async path through the shared runtime, but the provider layer is still only partially abstracted.
 
 - Model and temperature are centralized.
-- Provider routing is not fully abstracted.
-- Several active modules still instantiate `AsyncOpenAI` directly, so a non-OpenAI provider in `llm_config.py` will not work transparently everywhere.
+- Active async modules now use one shared runtime.
+- Provider routing is still not fully abstracted, so a non-OpenAI provider in `llm_config.py` will not yet work transparently everywhere.
 
 ### Recommendation
 
@@ -97,19 +100,20 @@ High priority:
 
 | Config file | Current purpose | Main consumer(s) | Status |
 | --- | --- | --- | --- |
-| `config/pipeline_config.yaml` | Layer presets and CLI defaults | `pipeline.py` | Active |
-| `config/run_defaults.yaml` | Lookback, depth, run defaults | Layer 0, `pipeline.py` CLI overrides | Active |
-| `config/channel_thesis.yaml` | Channel identity and thesis | Layer 0 | Active |
-| `config/audience_profiles.yaml` | Audience profile definitions | Layer 0 | Active |
-| `config/format_config.yaml` | Enabled formats and format requirements | Layer 0 authoring input | Active |
-| `config/quality_rules.yaml` | Quality policy | Layer 0 | Active |
-| `config/sources.yaml` | Per-source definitions and enable flags | Layer 0 authoring input | Active |
-| `config/source_strategy.yaml` | Source grouping and source-policy structure | Layer 0 authoring input | Active |
-| `config/channels.yaml` | YouTube channel definitions | Layer 0 authoring input | Active |
-| `config/chatgpt_prompts.yaml` | Shared prompt blocks for handoff exporter | Layer 0 authoring input | Active |
-| `config/entity_topic_taxonomy.yaml` | Entity/topic normalization taxonomy | Layer 0 authoring input | Active |
+| `config/policies/pipeline_config.yaml` | Layer presets and CLI defaults | `pipeline.py` | Active |
+| `config/policies/run_defaults.yaml` | Global run defaults | Layer 0 | Active |
+| `config/policies/run_profiles.yaml` | Run-type collection and routing policy | Layer 0 | Active |
+| `config/registries/channel_thesis.yaml` | Channel identity and thesis | Layer 0 | Active |
+| `config/registries/audience_profiles.yaml` | Audience profile definitions | Layer 0 | Active |
+| `config/policies/format_config.yaml` | Enabled formats and format requirements | Layer 0 authoring input | Active |
+| `config/policies/quality_rules.yaml` | Quality policy | Layer 0 | Active |
+| `config/registries/sources.yaml` | Per-source definitions and enable flags | Layer 0 authoring input | Active |
+| `config/policies/source_strategy.yaml` | Source grouping and reusable query theme sets | Layer 0 authoring input | Active |
+| `config/registries/channels.yaml` | YouTube channel registry | Layer 0 authoring input | Active |
+| `config/policies/chatgpt_prompts.yaml` | Shared prompt blocks for handoff exporter | Layer 0 authoring input | Active |
+| `config/registries/entity_topic_taxonomy.yaml` | Entity/topic normalization taxonomy | Layer 0 authoring input | Active |
 | `config/llm_config.py` | LLM profiles and overrides | Layer 0 authoring input | Active |
-| `config/scoring_config.yaml` | Intended scoring config | No active consumer found in current pipeline | Likely dead / removable |
+| `config/policies/scoring_config.yaml` | Intended scoring config | No active consumer found in current pipeline | Likely dead / removable |
 
 ### Are configs only used by Layer 0?
 
@@ -125,14 +129,15 @@ A full merge would probably make the system harder to reason about. The better c
 
 Keep separate:
 
-- `pipeline_config.yaml` for execution presets
-- `run_defaults.yaml` for run-time defaults
-- `channel_thesis.yaml` and `audience_profiles.yaml` for editorial identity
-- `format_config.yaml` for format enablement and format rules
-- `sources.yaml`, `source_strategy.yaml`, and `channels.yaml` for source definitions
-- `chatgpt_prompts.yaml` for handoff behavior
-- `entity_topic_taxonomy.yaml` for Layer 3 mapping
-- `llm_config.py` for LLM profiles
+- `config/policies/pipeline_config.yaml` for execution presets
+- `config/policies/run_defaults.yaml` for run-time defaults
+- `config/policies/run_profiles.yaml` for named run behavior
+- `config/registries/channel_thesis.yaml` and `config/registries/audience_profiles.yaml` for editorial identity
+- `config/policies/format_config.yaml` for format enablement and format rules
+- `config/registries/sources.yaml`, `config/policies/source_strategy.yaml`, and `config/registries/channels.yaml` for source definitions and grouping policy
+- `config/policies/chatgpt_prompts.yaml` for handoff behavior
+- `config/registries/entity_topic_taxonomy.yaml` for Layer 3 mapping
+- `config/llm_config.py` for LLM profiles
 
 Remove or merge:
 
@@ -152,11 +157,13 @@ As of 2026-05-12, the active runtime path now follows that rule.
 
 Manifest-driven in the active path:
 
+- Layer 0 selected run profile and decision mode
 - Layer 1 collection windows, enabled source groups, and query themes
 - Layer 1 resolved source registry subset
 - Layer 1 resolved YouTube channel subset
+- Layer 1 per-run YouTube fetch caps
 - Layer 3 entity/topic taxonomy
-- Layer 5 format requirements
+- Layer 5 format requirements and forced-format vs auto-route behavior
 - active LLM module profile selection in Layers 4, 5, 7, 8, and 9
 - ChatGPT handoff prompt config
 - Layer 0 memory policy, memory paths, depth limits, and output contracts
@@ -174,7 +181,7 @@ Recommended architectural rule:
 
 The important nuance is that the manifest should carry the resolved subset used by the run, not an uncontrolled dump of every raw config file.
 
-### What was implemented on 2026-05-12
+### What was implemented on 2026-05-12 and 2026-05-13
 
 Layer 0 now writes a `resolved_config` section into `run_manifest.json` with run-scoped snapshots for:
 
@@ -183,6 +190,7 @@ Layer 0 now writes a `resolved_config` section into `run_manifest.json` with run
 - effective LLM runtime profiles
 - entity/topic taxonomy
 - ChatGPT handoff prompt config
+- runtime run-profile metadata
 
 The following active consumers were switched to use those manifest snapshots:
 
@@ -192,6 +200,13 @@ The following active consumers were switched to use those manifest snapshots:
 - Layer 5 format config usage
 - active LLM modules in Layers 4, 5, 7, 8, and 9
 - `chatgpt_export.py`
+
+Layer 0 itself is now run-profile-driven:
+
+- `config/policies/run_profiles.yaml` is the primary policy surface
+- explicit `roundup` / `deep_dive` selectors resolve to named profiles
+- explicit profiles can force format behavior in Layer 5
+- collection windows and YouTube fetch caps now come from the selected profile rather than from hardcoded Python rules or registry defaults
 
 ### Why this drift happened
 
@@ -681,40 +696,19 @@ Build later:
 
 ---
 
-## 10. Why LLM Logs Are Missing
+## 10. LLM Logging and Observability
 
 ### What exists
 
-[llm/llm_logger.py](../../llm/llm_logger.py) exists and writes structured JSON logs.
+[llm/llm_logger.py](../../llm/llm_logger.py) still exists for older or legacy paths.
+The active async pipeline now uses [llm/async_llm_runtime.py](../../llm/async_llm_runtime.py) as the shared runtime and log writer.
 
-### Why the current runs do not show logs
-
-The active pipeline path mostly uses modern async OpenAI modules that do not call `llm_logger.py`.
-
-Legacy folders still use it:
-
-- `layer_3_intelligence`
-- `layer_4_content`
-
-The active layers mostly bypass it:
-
-- Layer 4 evidence extractor
-- Layer 5 viewer/editorial modules
-- Layer 7 planners
-- Layer 8 script writers
-- Layer 9 sentence support verifier
-
-### Recommendation
-
-High priority:
-
-That recommendation is now implemented for the active async path.
-
-Now present:
+### What the current runs now show
 
 - `llm/async_llm_runtime.py` as the shared async runtime wrapper
 - manifest-backed model/profile resolution inside the runtime
-- structured per-call logs written under `output/llm_logs/{run_id}/`
+- structured logs written under `output/llm_logs/{run_id}/{layer}/{module}.jsonl`
+- one root `llm_log_summary.json` per run
 - active async Layers 4, 5, 7, 8, and 9 routed through that shared path
 
 Remaining gap:

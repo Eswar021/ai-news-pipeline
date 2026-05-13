@@ -93,8 +93,10 @@ def build_extraction_manifest(
         },
         "by_source_group": group_summary,
         "collection_policy": {
+            "run_profile": run_manifest.get("run_profile", {}).get("profile_name"),
             "enabled_source_groups": run_manifest.get("collection_strategy", {}).get("enabled_source_groups", []),
             "query_themes": run_manifest.get("collection_strategy", {}).get("query_themes", []),
+            "query_theme_set": run_manifest.get("collection_strategy", {}).get("query_theme_set"),
             "collection_window": run_manifest.get("collection_strategy", {}).get("collection_window", {}),
             "source_specific_windows": {
                 group: run_manifest.get("collection_strategy", {}).get("source_specific_windows", {}).get(group, {})

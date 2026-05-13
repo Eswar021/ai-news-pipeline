@@ -3,6 +3,7 @@
 
 defaults:
   timezone: "Asia/Kolkata"
+  run_profile: "auto_48h"
   target_format: "auto"
   lookback_hours: 48
   depth: "standard"
@@ -43,18 +44,20 @@ depth_profiles:
 scheduled_runs:
   ai_news_roundup:
     frequency: "every_48_hours"
+    run_profile: "roundup_48h"
     target_format: "roundup"
     lookback_hours: 48
     depth: "standard"
 
   weekly_deep_dive:
     frequency: "weekly"
+    run_profile: "deep_dive_weekly"
     target_format: "deep_dive"
     lookback_hours: 168
     depth: "deep"
 
   evergreen_research:
     frequency: "biweekly"
-    target_format: "evergreen"
+    target_format: "evergreen"   # placeholder until an evergreen run profile is added
     lookback_hours: 720
     depth: "deep"

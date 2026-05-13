@@ -1,7 +1,7 @@
 """
 AI Content Creation — Pipeline Runner
 
-Runs any combination of layers, in order, using config/pipeline_config.yaml.
+Runs any combination of layers, in order, using config/policies/pipeline_config.yaml.
 
 Usage:
     python pipeline.py                              # default preset = collection_only (L0-L3)
@@ -38,10 +38,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config.paths import RUNS_DIR, CONFIG_DIR, DATA_DIR, MEMORY_DIR, SCRIPTS_OUTPUT
+from config.paths import RUNS_DIR, PIPELINE_CONFIG_YAML, DATA_DIR, MEMORY_DIR, SCRIPTS_OUTPUT
 from pipelines.layer_0_control.output_contract_builder import build_output_contract
 
-PIPELINE_CONFIG = CONFIG_DIR / "pipeline_config.yaml"
+PIPELINE_CONFIG = PIPELINE_CONFIG_YAML
 
 _LAYER_COSTS = {
     0: "free",
@@ -220,13 +220,19 @@ def _enforce_layer_completion(layer_num: int, output_contract: dict) -> None:
 def run_layer(layer_num: int, run_id: str, args, l0_defaults: dict) -> dict:
     if layer_num == 0:
         from pipelines.layer_0_control.run_layer_0 import run_layer_0
+        default_run_profile = (
+            l0_defaults.get("run_profile")
+            if not args.run_profile and not args.target_format and not args.lookback_hours
+            else None
+        )
         return run_layer_0(
             trigger_type   = args.trigger_type  or l0_defaults.get("trigger_type", "manual"),
-            target_format  = args.target_format or l0_defaults.get("target_format", "auto"),
+            run_profile    = args.run_profile   or default_run_profile,
+            target_format  = args.target_format or l0_defaults.get("target_format"),
             lookback_hours = args.lookback_hours or l0_defaults.get("lookback_hours"),
             topic_focus    = args.topic_focus   or l0_defaults.get("topic_focus", "AI news"),
-            depth          = args.depth         or l0_defaults.get("depth", "standard"),
-            max_videos     = args.max_videos    or l0_defaults.get("max_videos", 1),
+            depth          = args.depth         or l0_defaults.get("depth"),
+            max_videos     = args.max_videos    or l0_defaults.get("max_videos"),
         )
 
     if layer_num == 1:
@@ -283,6 +289,7 @@ def main():
 
     # Layer 0 overrides
     parser.add_argument("--trigger-type", dest="trigger_type", default=None)
+    parser.add_argument("--run-profile", dest="run_profile", default=None)
     parser.add_argument("--target-format", dest="target_format", default=None)
     parser.add_argument("--lookback-hours", dest="lookback_hours", type=int, default=None)
     parser.add_argument("--topic-focus", dest="topic_focus", default=None)

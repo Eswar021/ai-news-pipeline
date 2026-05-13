@@ -23,6 +23,7 @@ from config.paths import (
     ENTITY_TOPIC_TAXONOMY_YAML,
     FORMAT_CONFIG_YAML,
     QUALITY_RULES_YAML,
+    RUN_PROFILES_YAML,
     SOURCES_YAML,
     DATA_DIR,
     MEMORY_DIR,
@@ -33,6 +34,7 @@ from config.paths import (
 )
 
 from pipelines.layer_0_control.run_request_parser import parse_run_request
+from pipelines.layer_0_control.run_profile_resolver import resolve_run_profile
 from pipelines.layer_0_control.channel_thesis_loader import load_channel_thesis
 from pipelines.layer_0_control.audience_profile_resolver import resolve_audience_profile
 from pipelines.layer_0_control.run_mode_resolver import resolve_run_mode
@@ -50,11 +52,12 @@ from pipelines.layer_0_control.run_validation_gate import validate_manifest
 
 def run_layer_0(
     trigger_type: str = "manual",
-    target_format: str = "auto",
+    run_profile: str | None = None,
+    target_format: str | None = None,
     lookback_hours: int = None,
     topic_focus: str = "AI news",
-    depth: str = "standard",
-    max_videos: int = 1,
+    depth: str | None = None,
+    max_videos: int | None = None,
     requested_at: str = None,
 ) -> dict:
     """
@@ -70,42 +73,52 @@ def run_layer_0(
             raw = yaml.safe_load(f)
             defaults = raw.get("defaults", {})
 
-    # Step 1 — Normalize the run request
+    # Step 1 — Resolve the run profile (single source of run policy)
+    resolved_run_profile = resolve_run_profile(
+        run_profiles_path=RUN_PROFILES_YAML,
+        requested_profile=(
+            run_profile
+            if run_profile is not None
+            else (defaults.get("run_profile") if target_format is None and lookback_hours is None else None)
+        ),
+        requested_target_format=target_format,
+        requested_lookback_hours=lookback_hours,
+        requested_depth=depth,
+        requested_max_videos=max_videos,
+    )
+
+    # Step 2 — Normalize the run request
     run_request = parse_run_request(
         trigger_type=trigger_type,
         requested_at=requested_at,
-        target_format=target_format,
-        lookback_hours=lookback_hours,
+        run_profile=resolved_run_profile["profile_name"],
+        target_format=resolved_run_profile["target_format"],
+        lookback_hours=resolved_run_profile["lookback_hours"],
         topic_focus=topic_focus,
-        depth=depth,
-        max_videos=max_videos,
+        depth=resolved_run_profile["depth"],
+        max_videos=resolved_run_profile["max_videos"],
         defaults=defaults,
     )
 
     run_id = run_request["run_id"]
     print(f"[Layer 0] Run ID: {run_id}")
 
-    # Step 2 — Load channel identity + editorial rules
+    # Step 3 — Load channel identity + editorial rules
     channel_strategy = load_channel_thesis(CHANNEL_THESIS_YAML)
 
-    # Step 3 — Resolve audience profile (default from channel thesis)
+    # Step 4 — Resolve audience profile (default from channel thesis)
     audience_strategy = resolve_audience_profile(
         profiles_path=AUDIENCE_PROFILES_YAML,
         default_audience_id=channel_strategy["primary_audience_id"],
     )
 
-    # Step 4 — Determine run mode and eligible formats
+    # Step 5 — Determine run mode and eligible formats
     run_mode = resolve_run_mode(
         target_format=run_request["target_format"],
         format_config_path=FORMAT_CONFIG_YAML,
-        max_videos=max_videos,
-    )
-
-    # Step 5 — Resolve collection + memory time windows
-    time_window = resolve_time_window(
-        requested_at=run_request["requested_at"],
-        lookback_hours=run_request["lookback_hours"],
-        target_format=run_request["target_format"],
+        decision_mode=resolved_run_profile["decision_mode"],
+        allowed_formats=resolved_run_profile["allowed_formats"],
+        max_videos=run_request["max_videos"],
     )
 
     # Step 6 — Load format requirements for all eligible formats
@@ -119,31 +132,40 @@ def run_layer_0(
         sources_path=SOURCES_YAML,
         source_strategy_path=SOURCE_STRATEGY_YAML,
         topic_focus=run_request["topic_focus"],
-        target_format=run_request["target_format"],
+        source_plan_policy=resolved_run_profile["source_plan"],
     )
 
-    # Step 8 — Load quality + hallucination control rules
+    # Step 8 — Resolve collection + memory time windows
+    time_window = resolve_time_window(
+        requested_at=run_request["requested_at"],
+        lookback_hours=run_request["lookback_hours"],
+        enabled_source_groups=source_scope["source_collection_plan"]["enabled_source_groups"],
+        collection_windows=resolved_run_profile["collection_windows"],
+        memory_windows=resolved_run_profile["memory_windows"],
+    )
+
+    # Step 9 — Load quality + hallucination control rules
     quality_policy = load_quality_policy(
         quality_rules_path=QUALITY_RULES_YAML,
         eligible_formats=run_mode["eligible_formats"],
     )
 
-    # Step 9 — Plan memory usage (what to load at which pipeline stages)
+    # Step 10 — Plan memory usage (what to load at which pipeline stages)
     memory_context = plan_memory_context(
         run_mode=run_mode["run_mode"],
         memory_windows=time_window["memory_windows"],
         memory_dir=MEMORY_DIR,
     )
 
-    # Step 10 — Set processing depth limits for all downstream layers
+    # Step 11 — Set processing depth limits for all downstream layers
     depth_limits = build_depth_limits(
         target_format=run_request["target_format"],
         depth=run_request["depth"],
-        max_videos=max_videos,
+        max_videos=run_request["max_videos"],
         run_defaults_path=RUN_DEFAULTS_YAML,
     )
 
-    # Step 11 — Declare all expected output paths
+    # Step 12 — Declare all expected output paths
     output_contract = build_output_contract(
         run_id=run_id,
         eligible_formats=run_mode["eligible_formats"],
@@ -151,7 +173,7 @@ def run_layer_0(
         scripts_dir=SCRIPTS_OUTPUT,
     )
 
-    # Step 11A — Snapshot resolved runtime config for downstream layers
+    # Step 12A — Snapshot resolved runtime config for downstream layers
     resolved_config = build_resolved_config_snapshots(
         sources_path=SOURCES_YAML,
         source_strategy_path=SOURCE_STRATEGY_YAML,
@@ -161,11 +183,13 @@ def run_layer_0(
         chatgpt_prompts_path=CHATGPT_PROMPTS_YAML,
         enabled_source_groups=source_scope["source_collection_plan"]["enabled_source_groups"],
         source_group_details=source_scope["source_group_details"],
+        run_profile=resolved_run_profile,
     )
 
-    # Step 12 — Assemble and write run_manifest.json
+    # Step 13 — Assemble and write run_manifest.json
     manifest, manifest_path = build_run_manifest(
         run_request=run_request,
+        run_profile=resolved_run_profile,
         channel_strategy=channel_strategy,
         audience_strategy=audience_strategy,
         run_mode=run_mode,
@@ -180,7 +204,7 @@ def run_layer_0(
         runs_dir=RUNS_DIR,
     )
 
-    # Step 13 — Validate manifest (pass/fail gate before Layer 1)
+    # Step 14 — Validate manifest (pass/fail gate before Layer 1)
     validation_report = validate_manifest(manifest, manifest_path)
 
     return {
@@ -197,9 +221,15 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
+        "--run-profile",
+        dest="run_profile",
+        default=None,
+        help="Run profile from config/policies/run_profiles.yaml (preferred over raw format/lookback selectors)",
+    )
+    parser.add_argument(
         "--format",
         dest="target_format",
-        default="auto",
+        default=None,
         choices=["auto", "roundup", "deep_dive", "evergreen", "comparison", "follow_up"],
         help="Target video format (auto = Layer 5 decides after story ranking)",
     )
@@ -216,15 +246,15 @@ def main():
     )
     parser.add_argument(
         "--depth",
-        default="standard",
+        default=None,
         choices=["light", "standard", "deep"],
-        help="Processing depth profile",
+        help="Processing depth override (default comes from the selected run profile)",
     )
     parser.add_argument(
         "--max-videos",
         type=int,
-        default=1,
-        help="Maximum number of videos to produce in this run",
+        default=None,
+        help="Maximum number of videos to produce in this run (default comes from the selected run profile)",
     )
     parser.add_argument(
         "--trigger",
@@ -236,6 +266,7 @@ def main():
 
     result = run_layer_0(
         trigger_type=args.trigger,
+        run_profile=args.run_profile,
         target_format=args.target_format,
         lookback_hours=args.lookback_hours,
         topic_focus=args.topic,

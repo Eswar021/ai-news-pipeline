@@ -31,8 +31,9 @@ presets:
 # Default parameters passed to Layer 0 unless overridden by CLI flags
 layer_0_defaults:
   trigger_type: manual
-  target_format: auto
-  lookback_hours: null      # null = use run_defaults.yaml value
+  run_profile: auto_48h
+  target_format: null       # compatibility selector; prefer run_profile
+  lookback_hours: null      # compatibility selector; prefer run_profile
   topic_focus: "AI news"
-  depth: standard
-  max_videos: 1
+  depth: null               # null = use selected run_profile
+  max_videos: null          # null = use selected run_profile

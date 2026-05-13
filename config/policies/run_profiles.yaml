@@ -1,0 +1,222 @@
+# Run Profiles
+# The single source of truth for run-type-specific collection and editorial policy.
+#
+# Registry files answer "what sources/channels exist?"
+# Run profiles answer "how should this run behave?"
+
+defaults:
+  default_profile: auto_48h
+  profile_aliases:
+    auto: auto_48h
+    roundup: roundup_48h
+    deep_dive: deep_dive_weekly
+
+profiles:
+  auto_48h:
+    description: "Two-day monitoring run. Collect broad AI news and let Layer 5 choose roundup vs deep dive."
+    target_format: auto
+    decision_mode: auto_route
+    allowed_formats:
+      - roundup
+      - deep_dive
+    lookback_hours: 48
+    depth: standard
+    max_videos: 1
+    source_plan:
+      required_groups:
+        - ai_company_blogs
+        - tech_news_apis
+      optional_groups:
+        - research_papers
+        - community_signals
+        - github_open_source_signals
+        - youtube_podcast_transcripts
+      priority_order:
+        - ai_company_blogs
+        - tech_news_apis
+        - research_papers
+        - youtube_podcast_transcripts
+        - github_open_source_signals
+        - community_signals
+      query_theme_set: default
+      minimum_expected_documents: 30
+      maximum_expected_documents: 500
+    collection_windows:
+      default:
+        mode: inherit_base
+      overrides:
+        research_papers:
+          lookback_days: 7
+        youtube_podcast_transcripts:
+          lookback_days: 7
+        github_open_source_signals:
+          lookback_days: 7
+        community_signals:
+          extra_lookback_hours: 24
+    youtube:
+      channel_selection: all_enabled
+      max_per_duration: 3
+      channel_overrides:
+        UCSHZKyawb77ixDdsGog4iWA:
+          max_per_duration: 1
+    memory_windows:
+      published_video_similarity_days: 60
+      entity_context_days: 180
+      claim_history_days: 365
+      followup_window_days: 90
+
+  roundup_48h:
+    description: "Two-day roundup run. Force a roundup decision or no video."
+    target_format: roundup
+    decision_mode: forced_format
+    allowed_formats:
+      - roundup
+    lookback_hours: 48
+    depth: standard
+    max_videos: 1
+    source_plan:
+      required_groups:
+        - ai_company_blogs
+        - tech_news_apis
+      optional_groups:
+        - research_papers
+        - community_signals
+        - github_open_source_signals
+        - youtube_podcast_transcripts
+      priority_order:
+        - ai_company_blogs
+        - tech_news_apis
+        - research_papers
+        - youtube_podcast_transcripts
+        - github_open_source_signals
+        - community_signals
+      query_theme_set: roundup
+      minimum_expected_documents: 30
+      maximum_expected_documents: 500
+    collection_windows:
+      default:
+        mode: inherit_base
+      overrides:
+        research_papers:
+          lookback_days: 7
+        youtube_podcast_transcripts:
+          lookback_days: 7
+        github_open_source_signals:
+          lookback_days: 7
+        community_signals:
+          extra_lookback_hours: 24
+    youtube:
+      channel_selection: all_enabled
+      max_per_duration: 3
+      channel_overrides:
+        UCSHZKyawb77ixDdsGog4iWA:
+          max_per_duration: 1
+    memory_windows:
+      published_video_similarity_days: 60
+      entity_context_days: 180
+      claim_history_days: 365
+      followup_window_days: 90
+
+  roundup_weekly:
+    description: "Weekly roundup run. Broader collection horizon but still force roundup packaging."
+    target_format: roundup
+    decision_mode: forced_format
+    allowed_formats:
+      - roundup
+    lookback_hours: 168
+    depth: deep
+    max_videos: 1
+    source_plan:
+      required_groups:
+        - ai_company_blogs
+        - tech_news_apis
+      optional_groups:
+        - research_papers
+        - youtube_podcast_transcripts
+        - community_signals
+        - github_open_source_signals
+      priority_order:
+        - ai_company_blogs
+        - tech_news_apis
+        - research_papers
+        - youtube_podcast_transcripts
+        - github_open_source_signals
+        - community_signals
+      query_theme_set: roundup
+      minimum_expected_documents: 40
+      maximum_expected_documents: 700
+    collection_windows:
+      default:
+        mode: inherit_base
+      overrides:
+        research_papers:
+          lookback_days: 14
+        youtube_podcast_transcripts:
+          lookback_days: 14
+        github_open_source_signals:
+          lookback_days: 14
+        community_signals:
+          extra_lookback_hours: 48
+    youtube:
+      channel_selection: all_enabled
+      max_per_duration: 4
+      channel_overrides:
+        UCSHZKyawb77ixDdsGog4iWA:
+          max_per_duration: 1
+    memory_windows:
+      published_video_similarity_days: 90
+      entity_context_days: 180
+      claim_history_days: 365
+      followup_window_days: 90
+
+  deep_dive_weekly:
+    description: "Weekly deep-dive run. Broader research horizon and force deep-dive or no video."
+    target_format: deep_dive
+    decision_mode: forced_format
+    allowed_formats:
+      - deep_dive
+    lookback_hours: 168
+    depth: deep
+    max_videos: 1
+    source_plan:
+      required_groups:
+        - ai_company_blogs
+        - research_papers
+      optional_groups:
+        - tech_news_apis
+        - youtube_podcast_transcripts
+        - community_signals
+        - github_open_source_signals
+      priority_order:
+        - ai_company_blogs
+        - research_papers
+        - tech_news_apis
+        - youtube_podcast_transcripts
+        - github_open_source_signals
+        - community_signals
+      query_theme_set: deep_dive
+      minimum_expected_documents: 20
+      maximum_expected_documents: 500
+    collection_windows:
+      default:
+        mode: inherit_base
+      overrides:
+        research_papers:
+          lookback_days: 30
+        youtube_podcast_transcripts:
+          lookback_days: 21
+        github_open_source_signals:
+          lookback_days: 14
+        community_signals:
+          lookback_days: 7
+    youtube:
+      channel_selection: all_enabled
+      max_per_duration: 2
+      channel_overrides:
+        UCSHZKyawb77ixDdsGog4iWA:
+          max_per_duration: 1
+    memory_windows:
+      published_video_similarity_days: 90
+      entity_context_days: 180
+      claim_history_days: 365
+      followup_window_days: 90

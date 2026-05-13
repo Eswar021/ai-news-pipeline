@@ -45,7 +45,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config.paths import RUNS_DIR
-from pipelines.runtime_manifest import get_format_requirements, load_manifest
+from pipelines.runtime_manifest import get_format_requirements, get_run_profile, load_manifest
 
 from pipelines.layer_5_editorial_intelligence.editorial_candidate_loader import load
 from pipelines.layer_5_editorial_intelligence.evidence_safety_gate       import gate_all
@@ -76,6 +76,9 @@ def run_layer_5(run_id: str) -> dict:
     # ── Load format requirements from run manifest ────────────────────────────
     manifest = load_manifest(run_id=run_id)
     fmt_cfg = get_format_requirements(manifest)
+    run_profile = get_run_profile(manifest)
+    routing_rules = manifest.get("format_strategy", {}).get("routing_rules", {})
+    allowed_formats = list(run_profile.get("allowed_formats", []))
 
     # ── Step 1: Load editorial candidates ────────────────────────────────────
     print("[Layer 5] Step 1 — Loading editorial candidates...")
@@ -115,12 +118,20 @@ def run_layer_5(run_id: str) -> dict:
     # ── Step 6: Format fit scoring ────────────────────────────────────────────
     print("[Layer 5] Step 6 — Scoring format fit...")
     format_fit_scores = format_fit_all(candidates, safety_decisions, audience_fits,
-                                       viewer_values, novelty_results)
-    print(f"  Scored {len(format_fit_scores)} stories vs roundup + deep_dive")
+                                       viewer_values, novelty_results,
+                                       allowed_formats=allowed_formats)
+    print(f"  Scored {len(format_fit_scores)} stories vs {', '.join(allowed_formats)}")
 
     # ── Step 7: Format routing ────────────────────────────────────────────────
     print("[Layer 5] Step 7 — Routing stories to formats...")
-    routing_decisions = route_all(candidates, format_fit_scores, safety_decisions, novelty_results)
+    routing_decisions = route_all(
+        candidates,
+        format_fit_scores,
+        safety_decisions,
+        novelty_results,
+        allowed_formats=allowed_formats,
+        routing_rules=routing_rules,
+    )
     dd_count  = sum(1 for r in routing_decisions if r["recommended_format"] == "deep_dive")
     rnd_count = sum(1 for r in routing_decisions if r["recommended_format"] == "roundup_segment")
     skip_count = sum(1 for r in routing_decisions if r["recommended_format"] in ("skip", "monitor_only"))
@@ -135,7 +146,14 @@ def run_layer_5(run_id: str) -> dict:
 
     # ── Step 9: Editorial decision ────────────────────────────────────────────
     print("[Layer 5] Step 9 — Making editorial decision...")
-    editorial_decision = decide(candidates, routing_decisions, opportunity_scores, fmt_cfg)
+    editorial_decision = decide(
+        candidates,
+        routing_decisions,
+        opportunity_scores,
+        fmt_cfg,
+        run_profile=run_profile,
+        routing_rules=routing_rules,
+    )
     editorial_decision["run_id"] = run_id
     fmt  = editorial_decision.get("selected_format", "no_video")
     dec  = editorial_decision.get("decision")

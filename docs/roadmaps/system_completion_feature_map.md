@@ -33,29 +33,24 @@ This map was derived from:
 The remaining work clusters into these feature areas:
 
 1. Manifest-driven collection control and source orchestration
-2. Cross-run memory feedback loop completion
-3. Publication lifecycle and YouTube analytics ingestion
-4. Repetition and similarity safety
-5. Multi-format expansion beyond roundup and deep dive
-6. Unified async LLM runtime, provider abstraction, and observability
-7. Verification and provenance hardening
-8. Compiled run-state / run-graph artifact
-9. Strategy-driven ChatGPT handoff system
-10. Output contract and run completeness enforcement
-11. Story intelligence and recurrence upgrades
-12. Manifest authority and config ownership cleanup
+2. Run-profile control plane and config ownership
+3. Cross-run memory feedback loop completion
+4. Publication lifecycle and YouTube analytics ingestion
+5. Repetition and similarity safety
+6. Multi-format expansion beyond roundup and deep dive
+7. Unified async LLM runtime, provider abstraction, and observability
+8. Verification and provenance hardening
+9. Compiled run-state / run-graph artifact
+10. Strategy-driven ChatGPT handoff system
+11. Output contract and run completeness enforcement
+12. Story intelligence and recurrence upgrades
+13. Manifest authority and config ownership cleanup
 
 ## Priority Summary
 
 ### Build now
 
-- Manifest-driven collection control and source orchestration
 - Cross-run memory feedback loop completion
-- Publication lifecycle and YouTube analytics ingestion
-- Repetition and similarity safety
-- Unified async LLM runtime, provider abstraction, and observability
-- Output contract and run completeness enforcement
-- Active pipeline timestamp standardization to the configured project timezone
 
 ### Build next
 
@@ -63,12 +58,11 @@ The remaining work clusters into these feature areas:
 - Compiled run-state / run-graph artifact
 - Strategy-driven ChatGPT handoff system
 - Story intelligence and recurrence upgrades
+- Multi-format expansion beyond supported profiles
 
 ### Build later
 
-- Multi-format expansion beyond roundup and deep dive
-
-This one is important to the full design, but it should be built after the current supported strategy path is stronger.
+No additional later-only feature bucket is currently called out beyond future strategy and channel expansion.
 
 ---
 
@@ -115,6 +109,7 @@ Implemented:
 - collectors that support it already can also receive fetch-side `days_back` narrowing from the manifest window
 - `extraction_manifest.json` now records the applied collection policy for the run
 - YouTube is now part of the main Layer 1 orchestration path through the manifest-backed YouTube snapshot and the YouTube transcript wrapper
+- Layer 0 now resolves collection windows from named run profiles instead of hardcoded Python window rules
 
 Missing or incomplete:
 
@@ -147,18 +142,69 @@ From the implementation decisions:
 - future Layer 10 source-priority and watchlist guidance can influence Layer 1 query/collection policy
 - the policy for undated/unparseable documents is explicit rather than incidental
 
+### Status note
+
+The core manifest-driven behavior is now implemented for the active path. The remaining work here is about richer source selection and efficiency, not about whether Layer 1 obeys Layer 0.
+
 ### Key files
 
-- `config/run_defaults.yaml`
-- `config/source_strategy.yaml`
-- `config/sources.yaml`
-- `config/channels.yaml`
+- `config/policies/run_profiles.yaml`
+- `config/policies/run_defaults.yaml`
+- `config/policies/source_strategy.yaml`
+- `config/registries/sources.yaml`
+- `config/registries/channels.yaml`
 - `pipelines/layer_0_control/time_window_resolver.py`
 - `pipelines/layer_1_extraction/run_layer_1.py`
 
 ---
 
-## 2. Cross-Run Memory Feedback Loop Completion
+## 2. Run-Profile Control Plane and Config Ownership
+
+**Priority:** `Now`
+
+### What this feature is
+
+Use named run profiles as the primary control surface for:
+
+- collection horizon
+- source-plan policy
+- query theme set
+- YouTube fetch caps
+- forced-format vs auto-route editorial behavior
+
+### Current implementation
+
+Implemented:
+
+- config files are now split into `config/registries/` and `config/policies/`
+- Layer 0 resolves `config/policies/run_profiles.yaml`
+- `pipeline.py` and `run_layer_0.py` now support `--run-profile`
+- explicit roundup and deep-dive selectors resolve to named profiles
+- Layer 5 now respects `decision_mode` and `allowed_formats` from the manifest
+- explicit forced-format runs now produce format-specific `create_video` or `no_video`
+
+Missing or incomplete:
+
+- evergreen, comparison, and follow-up profiles are not yet defined
+- some standalone helper utilities still need cleanup and clearer docs
+
+### Why it matters now
+
+- this is the control-plane foundation for future format expansion
+- collection policy and editorial routing now share one manifest-driven source of truth
+- it removes another category of hidden downstream config drift
+
+### Key files
+
+- `config/policies/run_profiles.yaml`
+- `docs/reference/run_profile_control_plane.md`
+- `pipelines/layer_0_control/run_profile_resolver.py`
+- `pipelines/layer_0_control/run_layer_0.py`
+- `pipelines/layer_5_editorial_intelligence/run_layer_5.py`
+
+---
+
+## 3. Cross-Run Memory Feedback Loop Completion
 
 **Priority:** `Now`
 
@@ -236,7 +282,7 @@ Missing or incomplete:
 
 ---
 
-## 3. Publication Lifecycle and YouTube Analytics Ingestion
+## 4. Publication Lifecycle and YouTube Analytics Ingestion
 
 **Priority:** `Now`
 
@@ -330,7 +376,7 @@ From the implementation decisions:
 
 ---
 
-## 4. Repetition and Similarity Safety
+## 5. Repetition and Similarity Safety
 
 **Priority:** `Now`
 
@@ -401,7 +447,7 @@ From the implementation decisions:
 
 ---
 
-## 5. Multi-Format Expansion Beyond Roundup and Deep Dive
+## 6. Multi-Format Expansion Beyond Roundup and Deep Dive
 
 **Priority:** `Later`
 
@@ -473,7 +519,7 @@ Why:
 
 ### Key files
 
-- `config/format_config.yaml`
+- `config/policies/format_config.yaml`
 - `pipelines/layer_5_editorial_intelligence/*`
 - `pipelines/layer_6_research_packets/*`
 - `pipelines/layer_7_content_planning/*`
@@ -482,7 +528,7 @@ Why:
 
 ---
 
-## 6. Unified Async LLM Runtime, Provider Abstraction, and Observability
+## 7. Unified Async LLM Runtime, Provider Abstraction, and Observability
 
 **Priority:** `Now`
 
@@ -518,11 +564,13 @@ Implemented:
 - model/temperature profiles in `config/llm_config.py`
 - Layer 0 snapshots effective LLM runtime profiles into the run manifest
 - shared async runtime now centralizes AsyncOpenAI calls for active LLM modules in Layers 4, 5, 7, 8, and 9
-- per-call request/response logs now write to `output/llm_logs/{run_id}/...`
+- logs now write to `output/llm_logs/{run_id}/{layer}/{module}.jsonl`
+- each run now has a root `llm_log_summary.json`
 
 Still incomplete:
 
 - full multi-provider abstraction for the active async path
+- centralized timeout / retry policy
 - migrating remaining standalone/inactive LLM paths onto the same runtime
 
 ### Why it was deferred earlier
@@ -543,16 +591,20 @@ Still incomplete:
 - logs exist for every active LLM call path
 - the same runtime enforces config and logging consistently
 
+### Status note
+
+The shared runtime and the new layer/module log layout are now implemented. The remaining work here is resilience and future provider abstraction.
+
 ### Key files
 
 - `config/llm_config.py`
 - `llm/async_llm_runtime.py`
-- `llm/llm_logger.py`
+- `docs/reference/llm_log_layout.md`
 - active async LLM modules in Layers 4, 5, 7, 8, and 9
 
 ---
 
-## 7. Verification and Provenance Hardening
+## 8. Verification and Provenance Hardening
 
 **Priority:** `Next`
 
@@ -613,7 +665,7 @@ Missing or lighter than design:
 
 ---
 
-## 8. Compiled Run-State / Run-Graph Artifact
+## 9. Compiled Run-State / Run-Graph Artifact
 
 **Priority:** `Next`
 
@@ -669,7 +721,7 @@ Missing:
 
 ---
 
-## 9. Strategy-Driven ChatGPT Handoff System
+## 10. Strategy-Driven ChatGPT Handoff System
 
 **Priority:** `Next`
 
@@ -727,7 +779,7 @@ Missing:
 
 ---
 
-## 10. Output Contract and Run Completeness Enforcement
+## 11. Output Contract and Run Completeness Enforcement
 
 **Priority:** `Now`
 
@@ -759,7 +811,7 @@ Implemented:
 - individual layers have validation gates
 - the active output contract was aligned on 2026-05-12 to the real run-scoped layer outputs
 - `pipeline.py` now enforces each layer's minimum required artifacts and honors the layer's existing validation report
-- the runner can fall back to an active rebuilt contract when older manifests still carry stale contract paths
+- stale manifest contracts now fail clearly instead of falling back
 - handoff exporter now refuses missing Layer 3 handoff inputs
 
 Missing or incomplete:
@@ -787,9 +839,13 @@ From the implementation decisions:
 - contract enforcement is strong enough to prevent “looks complete but isn’t” states
 - optional later work can add threshold-style checks without replacing the current lightweight enforcement model
 
+### Status note
+
+The lightweight enforcement layer is now implemented for the active path. The remaining work here is broader shared policy, not the existence of completeness guardrails.
+
 ---
 
-## 11. Story Intelligence and Recurrence Upgrades
+## 12. Story Intelligence and Recurrence Upgrades
 
 **Priority:** `Next`
 
@@ -853,7 +909,7 @@ Missing:
 
 ---
 
-## 12. Manifest Authority and Config Ownership Cleanup
+## 13. Manifest Authority and Config Ownership Cleanup
 
 **Priority:** `Now`
 **Status:** Active runtime implementation completed on 2026-05-12. Remaining work is standalone/inactive utility cleanup plus adjacent LLM-runtime/logging work.
@@ -907,7 +963,7 @@ Missing or incomplete:
 
 - some standalone or inactive utilities still read config directly
 - Layer 0 authoring helpers still read config directly by design
-- unified provider abstraction and centralized LLM logging are still separate unfinished features
+- unified provider abstraction is still a separate unfinished feature
 
 ### Why it was deferred earlier
 
@@ -939,12 +995,13 @@ From the implementation decisions and current code shape:
 ### Key files
 
 - `pipelines/layer_0_control/run_manifest_builder.py`
-- `config/format_config.yaml`
-- `config/sources.yaml`
-- `config/source_strategy.yaml`
-- `config/channels.yaml`
-- `config/chatgpt_prompts.yaml`
-- `config/entity_topic_taxonomy.yaml`
+- `config/policies/run_profiles.yaml`
+- `config/policies/format_config.yaml`
+- `config/registries/sources.yaml`
+- `config/policies/source_strategy.yaml`
+- `config/registries/channels.yaml`
+- `config/policies/chatgpt_prompts.yaml`
+- `config/registries/entity_topic_taxonomy.yaml`
 - `config/llm_config.py`
 - `docs/reference/manifest_authority_and_config_ownership.md`
 
@@ -954,27 +1011,27 @@ From the implementation decisions and current code shape:
 
 ### Phase 1 — Core system completion
 
-1. Manifest-driven collection control and source orchestration
-2. Cross-run memory feedback loop completion
-3. Publication lifecycle and YouTube analytics ingestion
-4. Repetition and similarity safety
-5. Unified async LLM runtime, provider abstraction, and observability
-6. Output contract and run completeness enforcement
+1. Cross-run memory feedback loop completion
+2. Verification and provenance hardening
+3. Compiled run-state / run-graph artifact
+4. Strategy-driven ChatGPT handoff system
+5. Story intelligence and recurrence upgrades
 
 ### Phase 2 — Strengthen supported strategy path
 
-1. Verification and provenance hardening
-2. Compiled run-state / run-graph artifact
-3. Strategy-driven ChatGPT handoff system
-4. Story intelligence and recurrence upgrades
+1. Multi-format expansion beyond supported profiles
+2. richer Layer 1 source/channel selection
+3. future provider abstraction in the shared async LLM runtime
 
 ### Phase 3 — Expand strategic surface area
 
-1. Multi-format expansion beyond roundup and deep dive
+1. additional strategy families and multi-channel support
 
 ## Related docs
 
 - [System Audit — 2026-05-12](../audits/2026-05-12_system_audit.md)
 - [Run Dataflow and Run-State Recommendation](../reference/run_dataflow_and_run_state.md)
 - [Manifest Authority and Config Ownership](../reference/manifest_authority_and_config_ownership.md)
+- [Run Profile Control Plane](../reference/run_profile_control_plane.md)
+- [LLM Log Layout](../reference/llm_log_layout.md)
 - [Layer Output Map](../reference/layer_output_map.md)

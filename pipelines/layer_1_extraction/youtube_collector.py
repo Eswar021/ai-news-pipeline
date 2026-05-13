@@ -341,7 +341,7 @@ if __name__ == "__main__":
     mode.add_argument("--url",          help="Single YouTube video URL")
     mode.add_argument("--channel",      help="YouTube channel ID (UCxxxxxxxx)")
     mode.add_argument("--all-channels", action="store_true",
-                      help="Run all enabled channels from config/channels.yaml")
+                      help="Run all enabled channels from config/registries/channels.yaml")
 
     parser.add_argument("--name",  default="", help="Channel display name (used with --channel)")
     parser.add_argument("--days",  type=int, default=2,  help="Days back to search (default: 2)")
@@ -383,15 +383,15 @@ if __name__ == "__main__":
             print("No transcripts collected.")
 
     else:
-        # ── Mode 3: all channels from config/channels.yaml ──
+        # ── Mode 3: all channels from config/registries/channels.yaml ──
         import yaml
         from config.paths import CHANNELS_YAML
 
         cfg       = yaml.safe_load(CHANNELS_YAML.read_text())
         yt_cfg    = cfg["youtube"]
         channels  = yt_cfg["channels"]
-        days_back = args.days or yt_cfg.get("days_back", 2)
-        max_per   = args.max  or yt_cfg.get("max_per_duration", 3)
+        days_back = args.days or 2
+        max_per   = args.max  or 3
 
         print(f"Running all enabled channels (last {days_back} days, max {max_per}/bucket)...\n")
         all_docs = []
@@ -403,7 +403,7 @@ if __name__ == "__main__":
                 channel_id=ch["channel_id"],
                 channel_name=ch["name"],
                 days_back=days_back,
-                max_per_duration=ch.get("max_per_duration", max_per),
+                max_per_duration=max_per,
                 search_query=ch.get("search_query"),
             )
             all_docs.extend(docs)

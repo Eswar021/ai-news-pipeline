@@ -12,17 +12,23 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # ── Config ──
 CONFIG_DIR             = ROOT / "config"
-SOURCES_YAML           = CONFIG_DIR / "sources.yaml"
-CHANNELS_YAML          = CONFIG_DIR / "channels.yaml"
-CHANNEL_THESIS_YAML    = CONFIG_DIR / "channel_thesis.yaml"
-FORMAT_CONFIG_YAML     = CONFIG_DIR / "format_config.yaml"
-SCORING_CONFIG_YAML    = CONFIG_DIR / "scoring_config.yaml"
-QUALITY_RULES_YAML     = CONFIG_DIR / "quality_rules.yaml"
-AUDIENCE_PROFILES_YAML = CONFIG_DIR / "audience_profiles.yaml"
-RUN_DEFAULTS_YAML      = CONFIG_DIR / "run_defaults.yaml"
-SOURCE_STRATEGY_YAML   = CONFIG_DIR / "source_strategy.yaml"
-CHATGPT_PROMPTS_YAML   = CONFIG_DIR / "chatgpt_prompts.yaml"
-ENTITY_TOPIC_TAXONOMY_YAML = CONFIG_DIR / "entity_topic_taxonomy.yaml"
+REGISTRIES_DIR         = CONFIG_DIR / "registries"
+POLICIES_DIR           = CONFIG_DIR / "policies"
+
+SOURCES_YAML           = REGISTRIES_DIR / "sources.yaml"
+CHANNELS_YAML          = REGISTRIES_DIR / "channels.yaml"
+CHANNEL_THESIS_YAML    = REGISTRIES_DIR / "channel_thesis.yaml"
+AUDIENCE_PROFILES_YAML = REGISTRIES_DIR / "audience_profiles.yaml"
+ENTITY_TOPIC_TAXONOMY_YAML = REGISTRIES_DIR / "entity_topic_taxonomy.yaml"
+
+PIPELINE_CONFIG_YAML   = POLICIES_DIR / "pipeline_config.yaml"
+FORMAT_CONFIG_YAML     = POLICIES_DIR / "format_config.yaml"
+SCORING_CONFIG_YAML    = POLICIES_DIR / "scoring_config.yaml"
+QUALITY_RULES_YAML     = POLICIES_DIR / "quality_rules.yaml"
+RUN_DEFAULTS_YAML      = POLICIES_DIR / "run_defaults.yaml"
+RUN_PROFILES_YAML      = POLICIES_DIR / "run_profiles.yaml"
+SOURCE_STRATEGY_YAML   = POLICIES_DIR / "source_strategy.yaml"
+CHATGPT_PROMPTS_YAML   = POLICIES_DIR / "chatgpt_prompts.yaml"
 ENV_FILE               = ROOT / ".env"
 SECRETS_DIR            = ROOT / "secrets"
 
@@ -139,6 +145,8 @@ def ensure_all_dirs():
     dirs = [
         # Data pipeline dirs
         RUNS_DIR,
+        REGISTRIES_DIR,
+        POLICIES_DIR,
         RAW_DIR, RAW_PAYLOADS_DIR,
         CANONICAL_DIR, CANONICAL_CLEAN_TEXT,
         STORIES_DIR,

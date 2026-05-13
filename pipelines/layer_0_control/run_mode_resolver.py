@@ -23,14 +23,20 @@ VALID_FORMATS = {"auto", "roundup", "deep_dive", "evergreen", "comparison", "fol
 def resolve_run_mode(
     target_format: str,
     format_config_path: Path,
+    decision_mode: str | None = None,
+    allowed_formats: list[str] | None = None,
     user_requested_mode: Optional[str] = None,
     max_videos: int = 1,
 ) -> dict:
     """
     Determines the run mode and which formats are eligible.
 
-    For 'auto': includes all formats marked enabled=true in format_config.yaml.
-    For explicit format: validates it is enabled, returns only that format.
+    For run-profile-driven runs, the allowed format set comes from Layer 0's
+    selected run profile and is validated against format_config.yaml.
+
+    If no allowed_formats are provided:
+      - auto: include all enabled formats
+      - explicit format: validate it is enabled, return only that format
 
     Returns:
         dict with: run_mode, target_format, eligible_formats, max_videos,
@@ -51,7 +57,21 @@ def resolve_run_mode(
     if target_format not in VALID_FORMATS:
         raise ValueError(f"Unknown format '{target_format}'. Valid: {sorted(VALID_FORMATS)}")
 
-    if target_format == "auto":
+    if allowed_formats is not None:
+        eligible_formats = []
+        for fmt_name in allowed_formats:
+            if fmt_name not in formats:
+                raise ValueError(f"Format '{fmt_name}' is not defined in format_config.yaml")
+            if not formats[fmt_name].get("enabled", False):
+                raise ValueError(
+                    f"Format '{fmt_name}' is disabled in format_config.yaml. "
+                    "Layer 0 run profiles may only reference enabled formats."
+                )
+            eligible_formats.append(fmt_name)
+        if not eligible_formats:
+            raise ValueError("Selected run profile resolved no eligible formats.")
+        run_mode = decision_mode or _FORMAT_TO_MODE.get(target_format, "auto")
+    elif target_format == "auto":
         eligible_formats = [
             name for name, cfg in formats.items()
             if cfg.get("enabled", False)
@@ -73,6 +93,7 @@ def resolve_run_mode(
 
     return {
         "run_mode": run_mode,
+        "decision_mode": decision_mode or ("auto_route" if target_format == "auto" else "forced_format"),
         "target_format": target_format,
         "eligible_formats": eligible_formats,
         "max_videos": max_videos,

@@ -61,6 +61,37 @@ room to improve efficiency.
 
 ---
 
+### Decision: Run profiles are now the primary run-policy surface
+
+**Design doc said:** Layer 0 should determine collection scope, routing policy, and
+format behavior before downstream execution starts.
+
+**What we did:** Added `config/policies/run_profiles.yaml` and split config into:
+
+- `config/registries/` for what exists
+- `config/policies/` for how a run behaves
+
+Layer 0 now resolves one named run profile before building `run_manifest.json`.
+That profile controls:
+
+- target format
+- decision mode (`auto_route` vs `forced_format`)
+- allowed formats
+- collection windows
+- query theme set
+- YouTube fetch policy
+- memory windows
+
+**Why:** We had reached the point where `target_format`, `lookback_hours`, and Layer 5
+routing were only partially connected. Run profiles turn those disconnected knobs into
+one explicit run contract.
+
+**Impact:** Explicit roundup and deep-dive runs no longer behave like disguised auto
+runs. Layer 5 now respects the run profile instead of always arbitrating between
+roundup and deep dive.
+
+---
+
 ### Known gap: Memory policy is now real, but still only partially consumed
 
 **Design doc said:** `memory_context_planner.py` should produce policy flags
@@ -112,11 +143,20 @@ modules in Layers 4, 5, 7, 8, and 9 through it. The runtime now owns:
 - manifest-backed profile resolution
 - AsyncOpenAI client creation
 - model/temperature request shaping
-- structured per-call request/response logs in `output/llm_logs/{run_id}/`
+- structured request/response logs in `output/llm_logs/{run_id}/`
 
 **Why:** The previous state had the right model profiles in config, but every active
 module still instantiated its own client and silently bypassed logging. Centralizing
 the runtime keeps model selection, execution behavior, and observability tied together.
+
+**Implementation detail:** The log layout is now:
+
+- one folder per layer
+- one JSONL file per module
+- one root `llm_log_summary.json` per run
+
+This replaced the older one-file-per-call layout because it was too noisy to inspect
+or summarize across runs.
 
 ---
 
@@ -417,7 +457,7 @@ deduplication/, mapping/, clustering/, analysis/, output/, validation/).
 1. `document_loader.py` — load docs + build doc-to-span index
 2. `exact_duplicate_detector.py` — group by canonical_url + normalized title hash
 3. `eligibility_filter.py` — creator vs supporter vs signal classification
-4. `entity_topic_mapper.py` — keyword dictionary against config/entity_topic_taxonomy.yaml
+4. `entity_topic_mapper.py` — keyword dictionary against `config/registries/entity_topic_taxonomy.yaml`
 5. `event_type_classifier.py` — 12 event types, keyword rules + source group hard rules
 6. `story_clusterer.py` — entity+event merge (product/model overlap, not company) + URL-link match
 7. `cluster_confidence_scorer.py` — sentence-transformers all-MiniLM-L6-v2 for multi-source
@@ -654,7 +694,8 @@ format_routing_rules.yaml, novelty_rules.yaml, etc.)
 
 **What we did:** Key thresholds are constants inside each module (e.g.,
 `_DEEP_DIVE_MIN_SCORE = 80`, `_ROUNDUP_MIN_STORIES = 5`). Format parameters are
-read from the existing `config/format_config.yaml`.
+read from `config/policies/format_config.yaml`, and run-scoped routing behavior is
+now resolved from `config/policies/run_profiles.yaml` through the manifest.
 
 **Why:** The design's 7 config files are mostly just the threshold tables duplicated
 from the narrative. Inlining them keeps each module self-contained (same as Layer 4

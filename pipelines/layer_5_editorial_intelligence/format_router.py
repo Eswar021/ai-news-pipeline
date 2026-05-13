@@ -6,8 +6,8 @@ evidence safety, and novelty. Only routes to enabled formats
 (roundup, deep_dive — as defined in format_config.yaml).
 
 Routing rules:
-  deep_dive       if deep_dive_score >= 80 AND evidence safe for deep_dive
-  roundup_segment if roundup_score >= 65  AND evidence safe for roundup
+  deep_dive       if deep_dive_score >= configured threshold AND evidence safe for deep_dive
+  roundup_segment if roundup_score >= configured threshold  AND evidence safe for roundup
   monitor_only    if overall evidence blocked
   skip            if novelty_score < 45 (duplicate coverage)
 
@@ -32,8 +32,11 @@ _NOVELTY_SKIP_THRESHOLD = 45
 
 
 def route(candidate: dict, format_fit: dict, evidence_safety: dict,
-          novelty: dict) -> dict:
+          novelty: dict, allowed_formats: list[str] | None = None,
+          routing_rules: dict | None = None) -> dict:
     sid = candidate["story_id"]
+    requested_formats = list(allowed_formats or ["roundup", "deep_dive"])
+    routing_rules = routing_rules or {}
 
     novelty_score     = novelty.get("novelty_score", 90)
     overall_safe      = evidence_safety.get("overall_status") == "safe"
@@ -41,6 +44,8 @@ def route(candidate: dict, format_fit: dict, evidence_safety: dict,
     deep_dive_safe    = evidence_safety.get("deep_dive", {}).get("status") == "safe"
     roundup_score     = format_fit.get("roundup", {}).get("score", 0)
     deep_dive_score   = format_fit.get("deep_dive", {}).get("score", 0)
+    deep_dive_threshold = int(routing_rules.get("deep_dive_threshold", _DEEP_DIVE_MIN_SCORE))
+    roundup_threshold = int(routing_rules.get("roundup_threshold", _ROUNDUP_MIN_SCORE))
 
     # ── Skip for low novelty ──────────────────────────────────────────────────
     if novelty_score < _NOVELTY_SKIP_THRESHOLD:
@@ -51,6 +56,7 @@ def route(candidate: dict, format_fit: dict, evidence_safety: dict,
             "routing_confidence": 0.90,
             "routing_reasons":    [f"Novelty score {novelty_score} — already covered."],
             "allowed_formats":    [],
+            "profile_allowed_formats": requested_formats,
             "blocked_formats": [{
                 "format": "all",
                 "reason": "Already covered recently; novelty too low.",
@@ -66,48 +72,49 @@ def route(candidate: dict, format_fit: dict, evidence_safety: dict,
             "routing_confidence": 0.95,
             "routing_reasons":    ["All formats blocked by evidence safety gate."],
             "allowed_formats":    [],
+            "profile_allowed_formats": requested_formats,
             "blocked_formats": [{
                 "format": "all",
                 "reason": "Insufficient evidence for any format.",
             }],
         }
 
-    allowed_formats  = []
+    eligible_formats = []
     blocked_formats  = []
     routing_reasons  = []
 
     # ── Deep dive eligibility ─────────────────────────────────────────────────
-    if deep_dive_safe and deep_dive_score >= _DEEP_DIVE_MIN_SCORE:
-        allowed_formats.append("deep_dive")
+    if "deep_dive" in requested_formats and deep_dive_safe and deep_dive_score >= deep_dive_threshold:
+        eligible_formats.append("deep_dive")
         routing_reasons.append(
             f"Deep dive score {deep_dive_score} — strong evidence and viewer value."
         )
-    else:
+    elif "deep_dive" in requested_formats:
         reason = (
-            f"Deep dive score {deep_dive_score} below threshold {_DEEP_DIVE_MIN_SCORE}."
+            f"Deep dive score {deep_dive_score} below threshold {deep_dive_threshold}."
             if deep_dive_safe else "Evidence safety blocked deep dive."
         )
         blocked_formats.append({"format": "deep_dive", "reason": reason})
 
     # ── Roundup eligibility ───────────────────────────────────────────────────
-    if roundup_safe and roundup_score >= _ROUNDUP_MIN_SCORE:
-        allowed_formats.append("roundup_segment")
+    if "roundup" in requested_formats and roundup_safe and roundup_score >= roundup_threshold:
+        eligible_formats.append("roundup_segment")
         routing_reasons.append(
             f"Roundup score {roundup_score} — timely and audience-relevant."
         )
-    else:
+    elif "roundup" in requested_formats:
         reason = (
-            f"Roundup score {roundup_score} below threshold {_ROUNDUP_MIN_SCORE}."
+            f"Roundup score {roundup_score} below threshold {roundup_threshold}."
             if roundup_safe else "Evidence safety blocked roundup."
         )
         blocked_formats.append({"format": "roundup_segment", "reason": reason})
 
     # ── Pick recommended format ───────────────────────────────────────────────
-    if not allowed_formats:
+    if not eligible_formats:
         recommended_format = "monitor_only"
         secondary_format   = None
         confidence         = 0.80
-    elif "deep_dive" in allowed_formats and "roundup_segment" in allowed_formats:
+    elif "deep_dive" in eligible_formats and "roundup_segment" in eligible_formats:
         # Both eligible: recommend higher-scoring one; other is secondary
         if deep_dive_score >= roundup_score:
             recommended_format = "deep_dive"
@@ -116,7 +123,7 @@ def route(candidate: dict, format_fit: dict, evidence_safety: dict,
             recommended_format = "roundup_segment"
             secondary_format   = "deep_dive"
         confidence = round(max(deep_dive_score, roundup_score) / 100, 2)
-    elif "deep_dive" in allowed_formats:
+    elif "deep_dive" in eligible_formats:
         recommended_format = "deep_dive"
         secondary_format   = None
         confidence         = round(deep_dive_score / 100, 2)
@@ -131,15 +138,18 @@ def route(candidate: dict, format_fit: dict, evidence_safety: dict,
         "secondary_format":   secondary_format,
         "routing_confidence": confidence,
         "routing_reasons":    routing_reasons,
-        "allowed_formats":    allowed_formats,
+        "allowed_formats":    eligible_formats,
+        "profile_allowed_formats": requested_formats,
         "blocked_formats":    blocked_formats,
     }
 
 
 def route_all(candidates: list[dict], format_fit_scores: list[dict],
-              safety_decisions: list[dict], novelty_results: list[dict]) -> list[dict]:
+              safety_decisions: list[dict], novelty_results: list[dict],
+              allowed_formats: list[str] | None = None,
+              routing_rules: dict | None = None) -> list[dict]:
     return [
-        route(cand, ffs, sd, nv)
+        route(cand, ffs, sd, nv, allowed_formats=allowed_formats, routing_rules=routing_rules)
         for cand, ffs, sd, nv
         in zip(candidates, format_fit_scores, safety_decisions, novelty_results)
     ]

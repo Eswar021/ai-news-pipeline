@@ -14,6 +14,7 @@ from config.time_utils import now_project_iso
 _REQUIRED_TOP_LEVEL_KEYS = [
     "run_id",
     "run_request",
+    "run_profile",
     "channel_strategy",
     "format_strategy",
     "collection_strategy",
@@ -25,6 +26,7 @@ _REQUIRED_TOP_LEVEL_KEYS = [
 ]
 
 _VALID_FORMATS = {"roundup", "deep_dive", "evergreen", "comparison", "follow_up"}
+_VALID_DECISION_MODES = {"auto_route", "forced_format"}
 
 
 def validate_manifest(manifest: dict, manifest_path: Path) -> dict:
@@ -59,6 +61,20 @@ def validate_manifest(manifest: dict, manifest_path: Path) -> dict:
         return _finalize(manifest, manifest_path, errors, warnings)
 
     # 2. eligible_formats
+    run_profile = manifest.get("run_profile", {})
+    if run_profile.get("decision_mode") not in _VALID_DECISION_MODES:
+        errors.append(
+            f"run_profile.decision_mode must be one of {_VALID_DECISION_MODES}; "
+            f"got {run_profile.get('decision_mode')!r}"
+        )
+    if run_profile.get("target_format") == "auto" and run_profile.get("decision_mode") != "auto_route":
+        errors.append("run_profile target_format=auto requires decision_mode=auto_route")
+    if run_profile.get("target_format") != "auto" and run_profile.get("decision_mode") != "forced_format":
+        warnings.append({
+            "type": "run_profile_mode_mismatch",
+            "message": "Explicit target formats should normally use decision_mode=forced_format.",
+        })
+
     eligible = manifest.get("format_strategy", {}).get("eligible_formats", [])
     if not eligible:
         errors.append(
@@ -147,6 +163,8 @@ def validate_manifest(manifest: dict, manifest_path: Path) -> dict:
     runtime = resolved.get("runtime", {})
     if not runtime.get("timezone_name"):
         errors.append("resolved_config.runtime.timezone_name is missing or empty")
+    if runtime.get("run_profile_name") != run_profile.get("profile_name"):
+        errors.append("resolved_config.runtime.run_profile_name does not match run_profile.profile_name")
 
     # 7. Memory files (warn only — expected to be empty on first run)
     memory_paths = manifest.get("memory_paths", {})

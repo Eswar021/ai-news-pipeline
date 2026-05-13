@@ -96,10 +96,7 @@ def _build_youtube_channels_snapshot(channels_path: Path, youtube_enabled: bool)
     channels = yt_cfg.get("channels", []) or []
     enabled_channels = [ch for ch in channels if ch.get("enabled", True)] if youtube_enabled else []
     return {
-        "defaults": {
-            "days_back": yt_cfg.get("days_back", 7),
-            "max_per_duration": yt_cfg.get("max_per_duration", 3),
-        },
+        "defaults": {},
         "enabled_channels": enabled_channels,
         "channel_count": len(enabled_channels),
     }
@@ -131,7 +128,28 @@ def build_resolved_config_snapshots(
     chatgpt_prompts_path: Path,
     enabled_source_groups: list[str],
     source_group_details: dict,
+    run_profile: dict,
 ) -> dict:
+    youtube_snapshot = _build_youtube_channels_snapshot(
+        channels_path=channels_path,
+        youtube_enabled="youtube_podcast_transcripts" in enabled_source_groups,
+    )
+    youtube_policy = dict(run_profile.get("youtube", {}))
+    channel_overrides = youtube_policy.get("channel_overrides", {}) or {}
+    for channel in youtube_snapshot.get("enabled_channels", []):
+        effective_overrides = dict(channel_overrides.get(channel.get("channel_id", ""), {}))
+        if effective_overrides:
+            channel["policy_overrides"] = effective_overrides
+        effective_max = effective_overrides.get("max_per_duration", youtube_policy.get("max_per_duration"))
+        if effective_max is not None:
+            channel["effective_max_per_duration"] = int(effective_max)
+
+    youtube_snapshot["defaults"] = {
+        "channel_selection": youtube_policy.get("channel_selection", "all_enabled"),
+        "max_per_duration": youtube_policy.get("max_per_duration"),
+        "channel_overrides": channel_overrides,
+    }
+
     return {
         "source_registry": _build_source_registry_snapshot(
             sources_path=sources_path,
@@ -139,15 +157,15 @@ def build_resolved_config_snapshots(
             enabled_groups=enabled_source_groups,
             source_group_details=source_group_details,
         ),
-        "youtube_channels": _build_youtube_channels_snapshot(
-            channels_path=channels_path,
-            youtube_enabled="youtube_podcast_transcripts" in enabled_source_groups,
-        ),
+        "youtube_channels": youtube_snapshot,
         "entity_topic_taxonomy": _load_yaml(entity_topic_taxonomy_path),
         "chatgpt_handoff": _load_yaml(chatgpt_prompts_path),
         "llm": _build_llm_snapshot(),
         "runtime": {
             "timezone_name": get_project_timezone_name(),
             "run_defaults_snapshot": _load_yaml(run_defaults_path),
+            "run_profile_name": run_profile.get("profile_name"),
+            "decision_mode": run_profile.get("decision_mode"),
+            "allowed_formats": list(run_profile.get("allowed_formats", [])),
         },
     }

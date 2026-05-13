@@ -18,6 +18,7 @@ import re
 import time
 from functools import lru_cache
 from pathlib import Path
+from threading import Lock
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -26,6 +27,20 @@ from openai import AsyncOpenAI
 from config.paths import ENV_FILE, LLM_LOGS, ensure_all_dirs
 from config.time_utils import now_project_file_stamp, now_project_iso
 from pipelines.runtime_manifest import get_llm_profile
+
+
+_MODULE_TO_LAYER = {
+    "claim_extractor": "layer_4",
+    "viewer_value_analyzer": "layer_5",
+    "editorial_brief_builder": "layer_5",
+    "hook_planner": "layer_7",
+    "title_thumbnail_planner": "layer_7",
+    "roundup_script_writer": "layer_8",
+    "deep_dive_script_writer": "layer_8",
+    "sentence_support_verifier": "layer_9",
+}
+_SUMMARY_FILENAME = "llm_log_summary.json"
+_LOG_WRITE_LOCK = Lock()
 
 
 def _load_env() -> None:
@@ -42,6 +57,10 @@ def _log_dir_for_run(run_id: str | None) -> Path:
     log_dir = LLM_LOGS / _safe_label(run_id, "adhoc")
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
+
+
+def _layer_name_for_module(module_name: str) -> str:
+    return _MODULE_TO_LAYER.get(module_name, "layer_unknown")
 
 
 def _now_iso() -> str:
@@ -83,12 +102,69 @@ def _write_log(
     request_name: str | None,
     payload: dict,
 ) -> str:
-    timestamp = now_project_file_stamp()
+    log_root = _log_dir_for_run(run_id)
+    layer_name = _layer_name_for_module(module_name)
     module_part = _safe_label(module_name, "module")
-    request_part = _safe_label(request_name, "request")
-    filename = f"{timestamp}_{module_part}_{request_part}_{uuid4().hex[:8]}.json"
-    path = _log_dir_for_run(run_id) / filename
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    layer_dir = log_root / layer_name
+    layer_dir.mkdir(parents=True, exist_ok=True)
+    path = layer_dir / f"{module_part}.jsonl"
+    summary_path = log_root / _SUMMARY_FILENAME
+
+    log_entry = dict(payload)
+    log_entry["log_entry_id"] = f"{now_project_file_stamp()}_{uuid4().hex[:8]}"
+    log_entry["layer"] = layer_name
+    log_entry["log_file"] = str(path)
+
+    with _LOG_WRITE_LOCK:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+
+        summary = {
+            "run_id": run_id or "adhoc",
+            "updated_at": now_project_iso(),
+            "total_calls": 0,
+            "status_counts": {},
+            "layers": {},
+        }
+        if summary_path.exists():
+            try:
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        status = payload.get("status", "unknown")
+        summary["updated_at"] = now_project_iso()
+        summary["total_calls"] = int(summary.get("total_calls", 0)) + 1
+        status_counts = summary.setdefault("status_counts", {})
+        status_counts[status] = int(status_counts.get(status, 0)) + 1
+
+        layers = summary.setdefault("layers", {})
+        layer_summary = layers.setdefault(layer_name, {
+            "total_calls": 0,
+            "status_counts": {},
+            "modules": {},
+        })
+        layer_summary["total_calls"] = int(layer_summary.get("total_calls", 0)) + 1
+        layer_status_counts = layer_summary.setdefault("status_counts", {})
+        layer_status_counts[status] = int(layer_status_counts.get(status, 0)) + 1
+
+        modules = layer_summary.setdefault("modules", {})
+        module_summary = modules.setdefault(module_name, {
+            "total_calls": 0,
+            "status_counts": {},
+            "log_file": str(path),
+            "last_request_name": None,
+            "last_completed_at": None,
+        })
+        module_summary["total_calls"] = int(module_summary.get("total_calls", 0)) + 1
+        module_status_counts = module_summary.setdefault("status_counts", {})
+        module_status_counts[status] = int(module_status_counts.get(status, 0)) + 1
+        module_summary["log_file"] = str(path)
+        module_summary["last_request_name"] = request_name
+        module_summary["last_completed_at"] = payload.get("completed_at")
+
+        summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+
     return str(path)
 
 

@@ -13,13 +13,13 @@ def plan_source_scope(
     sources_path: Path,
     source_strategy_path: Path,
     topic_focus: str,
-    target_format: str = "auto",
+    source_plan_policy: dict,
 ) -> dict:
     """
     Determines which source groups Layer 1 should collect from.
 
     Cross-references:
-      - source_strategy.yaml: group definitions and format requirements
+      - source_strategy.yaml: group definitions and reusable query theme sets
       - sources.yaml: per-source enabled flags (a group is active if ≥1 source is enabled)
 
     Returns:
@@ -48,13 +48,8 @@ def plan_source_scope(
     }
 
     source_groups = strategy.get("source_groups", {})
-    format_reqs = strategy.get("format_source_requirements", {})
-
-    # Use format-specific requirements, fall back to "auto"
-    fmt_key = target_format if target_format in format_reqs else "auto"
-    requirements = format_reqs.get(fmt_key, format_reqs.get("auto", {}))
-
-    priority_order = requirements.get("priority_order", list(source_groups.keys()))
+    query_theme_sets = strategy.get("query_themes", {})
+    priority_order = source_plan_policy.get("priority_order", list(source_groups.keys()))
 
     # A group is enabled if at least one of its sources is enabled in sources.yaml
     enabled_groups = []
@@ -73,18 +68,21 @@ def plan_source_scope(
                 "active_source_ids": active_ids,
             }
 
-    required_groups = requirements.get("required_groups", [])
+    required_groups = source_plan_policy.get("required_groups", [])
     priority_source_groups = [g for g in enabled_groups if g in required_groups]
-
-    query_themes = strategy.get("query_themes", {}).get("default", [])
+    query_theme_set = source_plan_policy.get("query_theme_set", "default")
+    query_themes = list(query_theme_sets.get(query_theme_set) or query_theme_sets.get("default") or [])
+    if topic_focus and topic_focus.strip().lower() not in {"ai news", "artificial intelligence news"} and topic_focus not in query_themes:
+        query_themes.insert(0, topic_focus)
 
     return {
         "source_collection_plan": {
             "enabled_source_groups": enabled_groups,
             "priority_source_groups": priority_source_groups,
             "query_themes": query_themes,
-            "minimum_expected_documents": 30,
-            "maximum_expected_documents": 500,
+            "minimum_expected_documents": int(source_plan_policy.get("minimum_expected_documents", 30)),
+            "maximum_expected_documents": int(source_plan_policy.get("maximum_expected_documents", 500)),
+            "query_theme_set": query_theme_set,
         },
         "source_group_details": source_group_details,
     }

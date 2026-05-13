@@ -1,10 +1,11 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # YouTube Channel Registry
-# Used by youtube_collector.py when running in channel discovery mode
+# Used as the YouTube channel registry.
+# Layer 0 run profiles decide:
+# - collection windows
+# - fetch caps / max videos per duration bucket
+# - per-run channel overrides
 # ──────────────────────────────────────────────────────────────────────────────
-#
-# days_back:          How many days back to look for new videos (global default)
-# max_per_duration:   Max videos to fetch per duration bucket per channel
 #
 # Per channel:
 #   channel_id:         YouTube channel ID (UCxxxxxxxx)
@@ -12,13 +13,9 @@
 #   search_query:       Optional keyword filter within the channel.
 #                       Leave null for dedicated AI channels where all content is relevant.
 #                       Use a filter for general tech channels that post non-AI content too.
-#   max_per_duration:   Override the global default for this specific channel
 #   enabled:            Set false to skip without deleting
 
 youtube:
-  days_back: 7
-  max_per_duration: 3
-
   channels:
 
     # ── Core AI Labs ────────────────────────────────────────────────────────
@@ -46,7 +43,6 @@ youtube:
     - name: Lex Fridman
       channel_id: UCSHZKyawb77ixDdsGog4iWA
       search_query: "AI OR machine learning OR LLM OR OpenAI OR Anthropic OR robotics"
-      max_per_duration: 1         # long-form only, 1 is enough
       enabled: true
 
     - name: Yannic Kilcher

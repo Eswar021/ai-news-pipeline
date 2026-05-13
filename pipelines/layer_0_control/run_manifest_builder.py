@@ -11,11 +11,12 @@ from pathlib import Path
 from config.time_utils import now_project_iso
 
 
-_SCHEMA_VERSION = "1.1"
+_SCHEMA_VERSION = "1.2"
 
 
 def build_run_manifest(
     run_request: dict,
+    run_profile: dict,
     channel_strategy: dict,
     audience_strategy: dict,
     run_mode: dict,
@@ -49,6 +50,19 @@ def build_run_manifest(
 
         "run_request": run_request,
 
+        "run_profile": {
+            "profile_name": run_profile["profile_name"],
+            "description": run_profile["description"],
+            "target_format": run_profile["target_format"],
+            "decision_mode": run_profile["decision_mode"],
+            "allowed_formats": run_profile["allowed_formats"],
+            "lookback_hours": run_profile["lookback_hours"],
+            "depth": run_profile["depth"],
+            "max_videos": run_profile["max_videos"],
+            "operational_overrides": run_profile.get("operational_overrides", {}),
+            "resolution_notes": run_profile.get("resolution_notes", []),
+        },
+
         "channel_strategy": {
             "channel_thesis_id": channel_strategy["channel_thesis_id"],
             "channel_name": channel_strategy["channel_name"],
@@ -70,6 +84,7 @@ def build_run_manifest(
 
         "format_strategy": {
             "run_mode": run_mode["run_mode"],
+            "decision_mode": run_mode.get("decision_mode"),
             "eligible_formats": run_mode["eligible_formats"],
             "format_decision_stage": run_mode["format_decision_stage"],
             "format_requirements": format_strategy["format_requirements"],
@@ -82,6 +97,8 @@ def build_run_manifest(
             "enabled_source_groups": source_scope["source_collection_plan"]["enabled_source_groups"],
             "priority_source_groups": source_scope["source_collection_plan"]["priority_source_groups"],
             "query_themes": source_scope["source_collection_plan"]["query_themes"],
+            "query_theme_set": source_scope["source_collection_plan"].get("query_theme_set"),
+            "profile_name": run_profile["profile_name"],
             "collection_limits": {
                 "minimum_expected_documents": source_scope["source_collection_plan"]["minimum_expected_documents"],
                 "maximum_expected_documents": source_scope["source_collection_plan"]["maximum_expected_documents"],
@@ -117,6 +134,7 @@ def build_run_manifest(
         "run_id": run_id,
         "snapshotted_at": manifest["created_at"],
         "run_request": run_request,
+        "run_profile_raw": run_profile,
         "channel_strategy_raw": channel_strategy,
         "audience_strategy_raw": audience_strategy,
         "run_mode_raw": run_mode,

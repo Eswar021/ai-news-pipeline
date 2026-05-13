@@ -4,7 +4,14 @@ This document captures the architecture rule for configuration ownership in the 
 
 ## Implementation status
 
-As of 2026-05-12, the active supported runtime path is manifest-backed.
+As of 2026-05-13, the active supported runtime path is manifest-backed and run-profile-driven.
+
+The config directory is now intentionally split into:
+
+- `config/registries/` for source, channel, audience, and taxonomy registries
+- `config/policies/` for run behavior, strategy, and editorial policy
+
+See [run_profile_control_plane.md](./run_profile_control_plane.md).
 
 Layer 0 writes a `resolved_config` section into `run_manifest.json` with snapshots for:
 
@@ -13,6 +20,7 @@ Layer 0 writes a `resolved_config` section into `run_manifest.json` with snapsho
 - effective LLM profiles
 - entity/topic taxonomy
 - ChatGPT handoff prompt config
+- runtime run-profile metadata
 
 The active downstream runtime path now reads those snapshots in:
 
@@ -63,6 +71,7 @@ This includes:
 
 - channel thesis and audience profile
 - eligible formats and selected format requirements
+- selected run profile and decision mode
 - collection windows and source-group policy
 - resolved source registry subset for the run
 - resolved YouTube channel subset for the run
@@ -76,16 +85,21 @@ This includes:
 
 These files still exist and remain easy to edit:
 
-- `config/channel_thesis.yaml`
-- `config/audience_profiles.yaml`
-- `config/format_config.yaml`
-- `config/sources.yaml`
-- `config/source_strategy.yaml`
-- `config/channels.yaml`
-- `config/quality_rules.yaml`
-- `config/chatgpt_prompts.yaml`
-- `config/entity_topic_taxonomy.yaml`
+- `config/registries/channel_thesis.yaml`
+- `config/registries/audience_profiles.yaml`
+- `config/policies/format_config.yaml`
+- `config/registries/sources.yaml`
+- `config/policies/source_strategy.yaml`
+- `config/registries/channels.yaml`
+- `config/policies/quality_rules.yaml`
+- `config/policies/chatgpt_prompts.yaml`
+- `config/registries/entity_topic_taxonomy.yaml`
 - `config/llm_config.py`
+
+In the current layout those live under:
+
+- `config/registries/`
+- `config/policies/`
 
 But downstream runtime behavior should not depend on re-reading them directly once the run has started.
 
@@ -129,12 +143,14 @@ The active runtime path now follows the intended architecture.
 
 Manifest-driven already:
 
+- Layer 0 selected run profile and decision mode
 - Layer 1 collection windows
 - Layer 1 enabled source groups and query themes
+- Layer 1 query theme set and per-run YouTube fetch caps
 - Layer 1 resolved source registry subset
 - Layer 1 resolved YouTube channel subset
 - Layer 3 entity/topic taxonomy
-- Layer 5 format requirements
+- Layer 5 format requirements and format-routing scope
 - active LLM profile selection
 - ChatGPT handoff prompt config
 - memory policy and output contracts written by Layer 0

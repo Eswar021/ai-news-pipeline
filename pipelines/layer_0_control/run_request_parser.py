@@ -19,6 +19,7 @@ _MIN_LOOKBACK_HOURS = 1
 def parse_run_request(
     trigger_type: str = "manual",
     requested_at: Optional[str] = None,
+    run_profile: Optional[str] = None,
     target_format: str = "auto",
     lookback_hours: Optional[int] = None,
     topic_focus: Optional[str] = None,
@@ -30,7 +31,7 @@ def parse_run_request(
     Converts raw trigger parameters into a normalized RunRequest dict.
 
     Returns:
-        dict with keys: run_id, trigger_type, run_mode, target_format,
+        dict with keys: run_id, trigger_type, run_profile, run_mode, target_format,
         lookback_hours, topic_focus, depth, max_videos, requested_at
     """
     defaults = defaults or {}
@@ -68,6 +69,7 @@ def parse_run_request(
     return {
         "run_id": run_id,
         "trigger_type": trigger_type,
+        "run_profile": run_profile,
         "run_mode": "auto",
         "target_format": target_format,
         "lookback_hours": lookback_hours,
