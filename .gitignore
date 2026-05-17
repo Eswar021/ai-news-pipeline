@@ -35,12 +35,7 @@ ENV/
 .env.bak
 
 # ── Output Data (generated at runtime, not source code) ───────────────────────
-# output/layer_1_raw/
-# output/layer_2_processed/
-# output/layer_3_intelligence/
-# output/layer_4_content/
-output/chatgpt_handoffs/
-output/llm_logs/
+output/
 
 data/runs/
 

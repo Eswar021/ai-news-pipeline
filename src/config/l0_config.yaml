@@ -1,0 +1,45 @@
+layer_0:
+  channel:
+    channel_name: "ManiVerse - AI"
+    content_promise: "Clear, well-grounded AI news and research briefings for builders and operators."
+    allowed_topics:
+      - "AI agents"
+      - "LLM releases"
+      - "AI coding tools"
+      - "AI research"
+      - "AI product launches"
+      - "AI safety"
+    excluded_topics:
+      - "crypto"
+      - "memecoin"
+      - "sports"
+      - "celebrity"
+
+  run_profiles:
+    daily_48h_all_sources:
+      description: "Daily 48-hour collection across all enabled source groups."
+      lookback_hours: 48
+      enabled_source_groups:
+        - "ai_company_blogs"
+        - "tech_news_apis"
+        - "research_papers"
+        - "youtube_podcast_transcripts"
+        - "community_signals"
+      query_themes:
+        - "AI agents"
+        - "LLM releases"
+        - "AI coding tools"
+        - "AI research"
+        - "AI product launches"
+      collector_caps:
+        ai_company_blogs:
+          max_items_per_source: 4
+        tech_news_apis:
+          max_items_per_source: 8
+        research_papers:
+          max_items_per_category: 6
+        youtube_podcast_transcripts:
+          max_videos_per_channel: 1
+        community_signals:
+          max_items: 15
+          scan_depth: 60

@@ -1,0 +1,160 @@
+layer_1:
+  source_groups:
+    ai_company_blogs:
+      collector: "company_blogs"
+      enabled: true
+      request_timeout_seconds: 20
+      sources:
+        - id: "openai_news"
+          name: "OpenAI News"
+          enabled: true
+          mode: "rss"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          feed_url: "https://openai.com/news/rss/"
+        - id: "google_research_blog"
+          name: "Google Research Blog"
+          enabled: true
+          mode: "rss"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          feed_url: "https://research.google/blog/rss/"
+        - id: "aws_ml_blog"
+          name: "AWS Machine Learning Blog"
+          enabled: true
+          mode: "rss"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          feed_url: "https://aws.amazon.com/blogs/machine-learning/feed/"
+        - id: "huggingface_blog"
+          name: "Hugging Face Blog"
+          enabled: true
+          mode: "rss"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          feed_url: "https://huggingface.co/blog/feed.xml"
+
+    tech_news_apis:
+      collector: "tech_news"
+      enabled: true
+      request_timeout_seconds: 20
+      sources:
+        - id: "newsapi_ai"
+          name: "NewsAPI AI Search"
+          enabled: true
+          provider: "newsapi"
+          source_type: "tech_news_article"
+          trust_tier: 2
+          env_keys: ["NEWSAPI_API_KEY", "NewsAPI"]
+        - id: "newsdata_ai"
+          name: "Newsdata AI Search"
+          enabled: true
+          provider: "newsdata"
+          source_type: "tech_news_article"
+          trust_tier: 2
+          env_keys: ["NEWSDATA_API_KEY", "NEWSDATA_API"]
+        - id: "mediastack_ai"
+          name: "Mediastack AI Search"
+          enabled: true
+          provider: "mediastack"
+          source_type: "tech_news_article"
+          trust_tier: 2
+          env_keys: ["MEDIASTACK_API_KEY", "MEDIASTACK_API"]
+
+    research_papers:
+      collector: "research_papers"
+      enabled: true
+      request_timeout_seconds: 30
+      categories:
+        - id: "arxiv_cs_ai"
+          category: "cs.AI"
+          enabled: true
+        - id: "arxiv_cs_lg"
+          category: "cs.LG"
+          enabled: true
+        - id: "arxiv_cs_cl"
+          category: "cs.CL"
+          enabled: true
+        - id: "arxiv_cs_cv"
+          category: "cs.CV"
+          enabled: true
+
+    youtube_podcast_transcripts:
+      collector: "youtube_transcripts"
+      enabled: true
+      request_timeout_seconds: 20
+      env_keys: ["YOUTUBE_API_KEY"]
+      channels:
+        - id: "anthropic"
+          name: "Anthropic"
+          enabled: true
+          channel_id: "UCrDwWp7EBBv4NwvScIpBDOA"
+          query: null
+        - id: "openai"
+          name: "OpenAI"
+          enabled: true
+          channel_id: "UCXZCJLpYjx0bBFo8ct3jxkQ"
+          query: null
+        - id: "google_deepmind"
+          name: "Google DeepMind"
+          enabled: true
+          channel_id: "UCP7jMXSY2xbc3KCAE0MHQ-A"
+          query: null
+        - id: "meta_ai"
+          name: "Meta AI"
+          enabled: true
+          channel_id: "UCfTCjs-mn33x0os_Q35B6cg"
+          query: null
+        - id: "lex_fridman"
+          name: "Lex Fridman"
+          enabled: true
+          channel_id: "UCSHZKyawb77ixDdsGog4iWA"
+          query: "AI OR machine learning OR LLM OR OpenAI OR Anthropic OR robotics"
+        - id: "yannic_kilcher"
+          name: "Yannic Kilcher"
+          enabled: true
+          channel_id: "UCZHmQk67mSJgfCCTn7xBfew"
+          query: null
+        - id: "andrej_karpathy"
+          name: "Andrej Karpathy"
+          enabled: true
+          channel_id: "UCXUPKJO5MZQMU11T0fiEQ"
+          query: null
+        - id: "hugging_face"
+          name: "Hugging Face"
+          enabled: true
+          channel_id: "UCHlNU7kIZhRgSbhHvFoy72w"
+          query: null
+        - id: "microsoft_developer"
+          name: "Microsoft Developer"
+          enabled: true
+          channel_id: "UCsMica-v34Irf9KVTioWcRg"
+          query: "AI OR Copilot OR Azure AI OR Phi"
+        - id: "dwarkesh_podcast"
+          name: "Dwarkesh Podcast"
+          enabled: true
+          channel_id: "UCqr-7GDVTsdNBCeufvERYuw"
+          query: null
+        - id: "y_combinator"
+          name: "Y Combinator"
+          enabled: true
+          channel_id: "UCcefcZRL2oaA_uBNeo5UOWg"
+          query: "AI OR startup OR LLM OR agent"
+        - id: "a16z"
+          name: "a16z"
+          enabled: true
+          channel_id: "UC9cn0TuPq4dnbTY-CBsm8sg"
+          query: "AI OR machine learning OR LLM OR startup"
+
+    community_signals:
+      collector: "community_signals"
+      enabled: true
+      request_timeout_seconds: 15
+      sources:
+        - id: "hackernews_ai"
+          name: "Hacker News AI"
+          enabled: true
+          provider: "hackernews"
+          source_type: "community_signal"
+          trust_tier: 3
+          story_type: "top"
