@@ -8,6 +8,7 @@ Reads:
 Writes:
     output/{run_id}/run_manifest.json         → runtime contract consumed by L1
     output/{run_id}/summary.json              → manifest summary and counts
+    output/current_manifest.json              → latest-run convenience copy
 
 LLM: no
 
@@ -24,21 +25,21 @@ Usage:
 
 import argparse
 from copy import deepcopy
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta, timezone
 import json
 from pathlib import Path
 
-from src.config.settings import (
-    PROJECT_ROOT,
-    now_ist,
-    output_dir,
-    parse_run_date,
-    read_yaml,
-    run_window_end,
+import yaml
+
+from src.config.paths import (
+    CURRENT_MANIFEST_PATH,
+    L0_CONFIG_PATH,
+    L1_CONFIG_PATH,
+    OUTPUT_DIR,
 )
 
-_L0_CONFIG = PROJECT_ROOT / "src" / "config" / "l0_config.yaml"
-_L1_CONFIG = PROJECT_ROOT / "src" / "config" / "l1_config.yaml"
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manual") -> Path:
@@ -70,19 +71,21 @@ def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manu
     )
     summary = _build_summary(manifest)
 
-    out_dir = output_dir(manifest["run_id"])
+    out_dir = OUTPUT_DIR / manifest["run_id"]
     out_dir.mkdir(parents=True, exist_ok=True)
 
     manifest_path = out_dir / "run_manifest.json"
     summary_path = out_dir / "summary.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+    CURRENT_MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CURRENT_MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
     return manifest_path
 
 
 def _load_l0_config() -> dict:
-    raw = read_yaml(_L0_CONFIG)
+    raw = _read_yaml(L0_CONFIG_PATH)
     cfg = raw.get("layer_0")
     if not isinstance(cfg, dict):
         raise KeyError("l0_config.yaml must contain top-level key 'layer_0'")
@@ -90,7 +93,7 @@ def _load_l0_config() -> dict:
 
 
 def _load_l1_config() -> dict:
-    raw = read_yaml(_L1_CONFIG)
+    raw = _read_yaml(L1_CONFIG_PATH)
     cfg = raw.get("layer_1")
     if not isinstance(cfg, dict):
         raise KeyError("l1_config.yaml must contain top-level key 'layer_1'")
@@ -98,9 +101,9 @@ def _load_l1_config() -> dict:
 
 
 def _build_run_identity(run_profile: str, run_date: str | None) -> dict:
-    resolved_date = parse_run_date(run_date)
-    created_at = now_ist()
-    window_end = run_window_end(resolved_date)
+    resolved_date = _parse_run_date(run_date)
+    created_at = _now_ist()
+    window_end = _run_window_end(resolved_date)
     timestamp = created_at.strftime("%Y_%m_%d_%H%M%S")
     run_id = f"run_{timestamp}_{run_profile}"
     return {
@@ -244,9 +247,33 @@ def _build_summary(manifest: dict) -> dict:
         "validation": {
             "passed": True,
             "errors": [],
-            "warnings": [],
+        "warnings": [],
         },
     }
+
+
+def _read_yaml(path: Path) -> dict:
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"Config file must deserialize to a dict: {path}")
+    return raw
+
+
+def _now_ist() -> datetime:
+    return datetime.now(IST)
+
+
+def _parse_run_date(value: str | None) -> date:
+    return date.fromisoformat(value) if value else _now_ist().date()
+
+
+def _run_window_end(run_date: date) -> datetime:
+    current = _now_ist()
+    if run_date == current.date():
+        return current
+    return datetime.combine(run_date, time(23, 59, 59), tzinfo=IST)
 
 
 if __name__ == "__main__":

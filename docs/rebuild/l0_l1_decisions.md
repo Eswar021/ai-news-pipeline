@@ -20,9 +20,9 @@ keys only when those layers are implemented.
 ### 1. Use layer-wise config files only
 
 For the first rebuild slice, create only:
-- `src/config/settings.py`
 - `src/config/l0_config.yaml`
 - `src/config/l1_config.yaml`
+- `src/config/paths.py`
 
 Do not create:
 - `run_profiles.yaml`
@@ -42,6 +42,14 @@ Do not create:
 - collector settings
 - non-YouTube source registry
 - external YouTube source registry
+
+`src/config/paths.py` owns:
+- project root and output/config path constants
+- current-manifest path
+- layer-relevant file path constants only
+
+Keep `src/config/` declarative. Do not put manifest loading, yaml reading, or
+date/time helper logic in `paths.py`.
 
 ### 2. One authoritative publishing-channel identity
 
@@ -96,6 +104,7 @@ name that states exactly what it does.
 `L0` writes:
 - `output/{run_id}/run_manifest.json`
 - `output/{run_id}/summary.json`
+- `output/current_manifest.json`
 
 Do not add:
 - `run_config_snapshot.json`
@@ -103,6 +112,8 @@ Do not add:
 - future-layer keys
 
 The manifest is the only runtime contract downstream layers read.
+`output/current_manifest.json` is a convenience copy of the latest manifest, not
+a second source of truth.
 
 ### 6. Keep the first manifest narrow
 

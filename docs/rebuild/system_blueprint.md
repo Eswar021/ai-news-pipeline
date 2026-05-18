@@ -107,9 +107,15 @@ This means:
 - the config surface should stay small until real use cases force it to expand
 
 For the first active rebuild slice:
-- use only `src/config/settings.py`, `src/config/l0_config.yaml`, and `src/config/l1_config.yaml`
+- use `src/config/l0_config.yaml`, `src/config/l1_config.yaml`, and `src/config/paths.py`
 - do not recreate horizontal config files from the legacy system yet
 - follow `docs/rebuild/l0_l1_decisions.md` as the concrete `L0/L1` contract
+
+`src/config/paths.py` should stay narrow:
+- path constants only
+- no manifest loading
+- no yaml reading
+- no date/time helper logic
 
 ### L0 — Manifest
 Reads:
@@ -117,6 +123,7 @@ Reads:
 
 Writes:
 - `output/{run_id}/run_manifest.json`
+- `output/current_manifest.json`
 
 Purpose:
 - freeze all runtime decisions before any downstream execution

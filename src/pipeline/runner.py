@@ -20,6 +20,7 @@ Usage:
     python -m src.pipeline.runner 0 --run-profile daily_48h_all_sources
     python -m src.pipeline.runner 0 1 --run-profile daily_48h_all_sources
     python -m src.pipeline.runner 1 --run-id run_...
+    python -m src.pipeline.runner 1 --run-id current
 """
 
 import argparse

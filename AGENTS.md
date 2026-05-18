@@ -29,7 +29,7 @@ legacy code. When building new functionality:
 ```text
 src/
 ├── config/
-│   ├── settings.py
+│   ├── paths.py
 │   ├── l0_config.yaml
 │   ├── l1_config.yaml
 │   └── l<n>_config.yaml        # only when a later layer truly needs its own policy
@@ -56,7 +56,8 @@ Important:
 - do not prebuild every config file and every layer directory on day one
 - build the system incrementally, layer by layer
 - only add config for a layer when that layer is actually being implemented
-- for the first rebuild slice, use only `settings.py`, `l0_config.yaml`, and `l1_config.yaml`
+- for the first rebuild slice, keep `src/config/` declarative
+- `src/config/paths.py` should hold path constants only, not manifest/date/yaml helper logic
 
 ## Core Architecture Rules
 
@@ -88,6 +89,7 @@ Important:
 - authoring config lives in `src/config/`
 - runtime config lives only in `run_manifest.json`
 - no layer except L0 reads yaml directly
+- keep `src/config/` declarative; if a layer needs non-path helper logic, keep it in that layer's runner or layer-local modules
 
 ### 3A. Config is added only when needed
 - do not create config files for future layers just because we expect those layers to exist later
@@ -160,6 +162,7 @@ the next layer does not need to read backward.
 - should stay in one `runner.py` while it is still small
 - split only if the manifest logic becomes materially harder to read in one file
 - do not write a separate audit snapshot like `run_config_snapshot.json` unless a real operator need appears later
+- also write `output/current_manifest.json` as a latest-run convenience copy
 
 ### L1 — Collection
 - collect raw source records into one flat list

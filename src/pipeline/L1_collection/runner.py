@@ -18,14 +18,16 @@ Module execution order:
 
 Usage:
     python -m src.pipeline.L1_collection.runner --run-id run_...
+    python -m src.pipeline.L1_collection.runner --run-id current
 """
 
 import argparse
+from datetime import datetime, timedelta, timezone
 import json
 import time
 from pathlib import Path
 
-from src.config.settings import iso_now, load_manifest, output_dir
+from src.config.paths import CURRENT_MANIFEST_PATH, OUTPUT_DIR
 from src.pipeline.L1_collection.collectors import (
     company_blogs,
     community_signals,
@@ -35,13 +37,17 @@ from src.pipeline.L1_collection.collectors import (
 )
 
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
 def run(run_id: str) -> Path:
-    manifest = load_manifest(run_id)
+    manifest = _load_manifest(run_id)
+    run_id = manifest["run_id"]
     l1_cfg = manifest.get("layer_1")
     if not isinstance(l1_cfg, dict):
         raise KeyError(f"run_manifest.json for {run_id} has no valid 'layer_1' key")
 
-    out_dir = output_dir(run_id) / "L1"
+    out_dir = OUTPUT_DIR / run_id / "L1"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     started = time.time()
@@ -60,7 +66,7 @@ def run(run_id: str) -> Path:
 
     raw_payload = {
         "run_id": run_id,
-        "generated_at": iso_now(),
+        "generated_at": _iso_now(),
         "record_count": len(records),
         "records": records,
     }
@@ -101,7 +107,7 @@ def _build_summary(
     ]
     return {
         "run_id": run_id,
-        "generated_at": iso_now(),
+        "generated_at": _iso_now(),
         "status": "partial" if any(summary.get("status") != "ok" for summary in group_summaries.values()) else "ok",
         "enabled_source_groups": enabled_groups,
         "enabled_source_group_count": len(enabled_groups),
@@ -111,6 +117,29 @@ def _build_summary(
         "elapsed_seconds": round(elapsed_seconds, 2),
         "groups": group_summaries,
     }
+
+
+def _iso_now() -> str:
+    return datetime.now(IST).isoformat()
+
+
+def _load_manifest(run_ref: str) -> dict:
+    if run_ref == "current":
+        path = CURRENT_MANIFEST_PATH
+    else:
+        path = OUTPUT_DIR / run_ref / "run_manifest.json"
+
+    if not path.exists():
+        if run_ref == "current":
+            raise FileNotFoundError(
+                "current_manifest.json not found. Run L0 first:\n"
+                "  python -m src.pipeline.L0_manifest.runner --run-profile <name>"
+            )
+        raise FileNotFoundError(
+            f"run_manifest.json not found for {run_ref}. Run L0 first:\n"
+            "  python -m src.pipeline.L0_manifest.runner --run-profile <name>"
+        )
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
