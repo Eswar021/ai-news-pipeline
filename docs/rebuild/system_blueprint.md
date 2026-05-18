@@ -151,8 +151,9 @@ Writes:
 - `prepared_records.json`
 
 Purpose:
-- clean, normalize, dedup, reliability-tag, preserve provenance-ready text
+- clean, normalize, soft-dedup, and preserve provenance-ready text
 - keep record state, carrying forward enough upstream data for story building
+- do not create clusters here; keep the same record list shape and append only the fields that materially help `L3`
 
 ### L3 — Story Map
 Reads:

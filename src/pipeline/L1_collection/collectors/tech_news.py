@@ -7,7 +7,6 @@ from src.pipeline.L1_collection.common import build_record, clean_text, normaliz
 
 def collect(cfg: dict) -> dict:
     timeout = int(cfg.get("request_timeout_seconds", 20))
-    query = _build_query(cfg.get("query_themes", []))
     window = cfg["collection_window"]
     max_items_per_source = int(cfg.get("runtime", {}).get("max_items_per_source", 8))
 
@@ -19,6 +18,7 @@ def collect(cfg: dict) -> dict:
             continue
 
         api_key = resolve_env(source["env_keys"])
+        query = _build_query(cfg.get("query_themes", []), source["provider"])
         status = "ok"
         notes: list[str] = []
         fetched_count = 0
@@ -96,10 +96,16 @@ def collect(cfg: dict) -> dict:
     }
 
 
-def _build_query(themes: list[str]) -> str:
+def _build_query(themes: list[str], provider: str) -> str:
     if not themes:
         return "AI"
-    return " OR ".join(f'"{theme}"' if " " in theme else theme for theme in themes)
+    if provider == "newsapi":
+        return " OR ".join(f'"{theme}"' if " " in theme else theme for theme in themes)
+    if provider == "newsdata":
+        return "artificial intelligence"
+    if provider == "mediastack":
+        return "AI"
+    return "AI"
 
 
 def _fetch_articles(provider: str, api_key: str, query: str, limit: int, window: dict, timeout: int) -> list[dict]:

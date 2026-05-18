@@ -173,8 +173,10 @@ the next layer does not need to read backward.
 - do not introduce trust-tier-derived ideas like "primary docs" in the first slice unless they materially affect collection behavior
 
 ### L2 — Evidence Prep
-- clean, normalize, dedup, assign reliability, build provenance-ready records
+- clean, normalize, soft-dedup, and build provenance-ready records
 - preserve enough text for later factual grounding
+- keep record state and append only the fields that materially help story formation and later factual grounding
+- do not create clusters here; `L3` is the first story-shaping layer
 
 ### L3 — Story Map
 - cluster documents into stories

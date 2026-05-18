@@ -7,7 +7,11 @@ from email.utils import parsedate_to_datetime
 from html import unescape
 from html.parser import HTMLParser
 
+from dotenv import load_dotenv
 import requests
+
+
+load_dotenv()
 
 
 DEFAULT_HEADERS = {

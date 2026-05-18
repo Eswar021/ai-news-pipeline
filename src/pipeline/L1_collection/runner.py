@@ -43,6 +43,7 @@ IST = timezone(timedelta(hours=5, minutes=30))
 def run(run_id: str) -> Path:
     manifest = _load_manifest(run_id)
     run_id = manifest["run_id"]
+    print(f"[L1] Run: {run_id}")
     l1_cfg = manifest.get("layer_1")
     if not isinstance(l1_cfg, dict):
         raise KeyError(f"run_manifest.json for {run_id} has no valid 'layer_1' key")
@@ -54,15 +55,35 @@ def run(run_id: str) -> Path:
     records: list[dict] = []
     group_summaries: dict[str, dict] = {}
     enabled_groups = list(l1_cfg["enabled_source_groups"])
+    print(f"[L1] Enabled groups: {enabled_groups}")
 
     for group_name in enabled_groups:
         cfg = l1_cfg["collectors"][group_name]
+        window = cfg["collection_window"]
+        print(f"[L1] Collecting: {group_name}")
+        print(
+            f"  Window: {window['start']} -> {window['end']} "
+            f"({window['lookback_hours']}h)"
+        )
         result = _collect_group(group_name, cfg)
         for record in result["records"]:
             record["id"] = f"L1_{len(records) + 1:05d}"
             record["run_id"] = run_id
             records.append(record)
         group_summaries[group_name] = result["summary"]
+        group_summary = result["summary"]
+        print(
+            f"  -> status={group_summary.get('status')} "
+            f"fetched={group_summary.get('fetched_count', 0)} "
+            f"kept={group_summary.get('kept_count', 0)} "
+            f"filtered={group_summary.get('filtered_out_count', 0)}"
+        )
+        failed_sources = []
+        for source_name, source_summary in group_summary.get("sources", {}).items():
+            if source_summary.get("status") != "ok":
+                failed_sources.append(source_name)
+        if failed_sources:
+            print(f"  ! failed sources: {', '.join(failed_sources)}")
 
     raw_payload = {
         "run_id": run_id,
@@ -76,6 +97,8 @@ def run(run_id: str) -> Path:
     summary_path = out_dir / "summary.json"
     data_path.write_text(json.dumps(raw_payload, indent=2, ensure_ascii=False), encoding="utf-8")
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"[L1] Total kept records: {len(records)}")
+    print(f"[L1] Wrote: {data_path}")
     return data_path
 
 

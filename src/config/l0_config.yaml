@@ -17,7 +17,7 @@ layer_0:
 
   run_profiles:
     daily_48h_all_sources:
-      description: "Daily 48-hour collection across all enabled source groups."
+      description: "Strict 48-hour collection run across all enabled source groups."
       lookback_hours: 48
       enabled_source_groups:
         - "ai_company_blogs"
@@ -35,11 +35,39 @@ layer_0:
         ai_company_blogs:
           max_items_per_source: 4
         tech_news_apis:
-          max_items_per_source: 8
+          max_items_per_source: 10
         research_papers:
-          max_items_per_category: 6
+          max_items_per_category: 10
         youtube_podcast_transcripts:
-          max_videos_per_channel: 1
+          max_videos_per_channel: 3
         community_signals:
-          max_items: 15
-          scan_depth: 60
+          max_items: 20
+          scan_depth: 100
+
+    broad_7d_all_sources:
+      description: "Broader 7-day collection run across all enabled source groups."
+      lookback_hours: 168
+      enabled_source_groups:
+        - "ai_company_blogs"
+        - "tech_news_apis"
+        - "research_papers"
+        - "youtube_podcast_transcripts"
+        - "community_signals"
+      query_themes:
+        - "AI agents"
+        - "LLM releases"
+        - "AI coding tools"
+        - "AI research"
+        - "AI product launches"
+      collector_caps:
+        ai_company_blogs:
+          max_items_per_source: 4
+        tech_news_apis:
+          max_items_per_source: 10
+        research_papers:
+          max_items_per_category: 10
+        youtube_podcast_transcripts:
+          max_videos_per_channel: 3
+        community_signals:
+          max_items: 20
+          scan_depth: 100

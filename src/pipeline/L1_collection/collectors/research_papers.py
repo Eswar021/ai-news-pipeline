@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import xml.etree.ElementTree as ET
 from urllib.parse import urlencode
 
@@ -26,7 +27,7 @@ def collect(cfg: dict) -> dict:
         params = {
             "search_query": f"cat:{category['category']}",
             "start": 0,
-            "max_results": max_items_per_category * 3,
+            "max_results": max_items_per_category,
             "sortBy": "submittedDate",
             "sortOrder": "descending",
         }
@@ -34,8 +35,7 @@ def collect(cfg: dict) -> dict:
         kept_count = 0
         filtered_out_count = 0
         try:
-            xml_text = request_text(ARXIV_API_URL, timeout=timeout, params=params)
-            root = ET.fromstring(xml_text)
+            root = _fetch_root(params, timeout)
         except Exception as exc:
             status = "failed"
             notes.append(str(exc))
@@ -86,6 +86,8 @@ def collect(cfg: dict) -> dict:
             if kept_count >= max_items_per_category:
                 break
 
+        time.sleep(1.0)
+
         category_summaries[category["id"]] = {
             "status": status,
             "fetched_count": fetched_count,
@@ -105,3 +107,17 @@ def collect(cfg: dict) -> dict:
             "sources": category_summaries,
         },
     }
+
+
+def _fetch_root(params: dict, timeout: int):
+    last_exc = None
+    for attempt in range(3):
+        try:
+            xml_text = request_text(ARXIV_API_URL, timeout=timeout, params=params)
+            return ET.fromstring(xml_text)
+        except Exception as exc:
+            last_exc = exc
+            if attempt == 2:
+                break
+            time.sleep(2.0 * (attempt + 1))
+    raise last_exc

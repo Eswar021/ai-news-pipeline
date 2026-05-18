@@ -43,11 +43,13 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manual") -> Path:
+    print(f"[L0] Building manifest for profile: {run_profile}")
     l0_cfg = _load_l0_config()
     l1_cfg = _load_l1_config()
 
     run_identity = _build_run_identity(run_profile, run_date)
     profile = _resolve_profile(l0_cfg, run_profile)
+    print(f"[L0] Run ID: {run_identity['run_id']}")
 
     channel_cfg = dict(l0_cfg["channel"])
     query_themes = _filter_query_themes(
@@ -60,6 +62,10 @@ def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manu
     window = _resolve_collection_window(profile, created_at=run_identity["window_end"])
     layer1_resolution = _resolve_collectors(profile, l1_cfg, window, query_themes)
     layer1_resolution["query_themes"] = query_themes
+    print(
+        f"[L0] Source groups: {len(layer1_resolution['enabled_source_groups'])}  "
+        f"Themes: {len(query_themes)}  Window: {window['lookback_hours']}h"
+    )
 
     manifest = _build_manifest(
         run_identity=run_identity,
@@ -80,6 +86,7 @@ def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manu
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     CURRENT_MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
     CURRENT_MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"[L0] Wrote: {manifest_path}")
 
     return manifest_path
 
