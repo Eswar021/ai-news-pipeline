@@ -90,6 +90,38 @@ This means we prefer:
 Not:
 - a thin downstream artifact that forces later layers to join back to multiple old outputs
 
+## Format-Aware Production Path
+
+The pipeline should not split into separate full pipelines for every video type.
+
+Use this shape instead:
+- `L0-L4` are the shared evidence trunk
+- `L5` decides or receives the target video format
+- `L6-L7` may branch internally by format when the production work genuinely differs
+- `L8-L9` return to shared verification and memory behavior
+
+Examples of target formats:
+- `auto`
+- `roundup`
+- `deep_dive`
+
+Format-specific modules are allowed inside a layer when they make the work
+clearer, for example:
+- `L6_package/formats/roundup.py`
+- `L6_package/formats/deep_dive.py`
+- `L7_script/formats/roundup.py`
+- `L7_script/formats/deep_dive.py`
+
+But do not prebuild empty branches. Add these modules only when that layer is
+being implemented and the format difference is real.
+
+Keep the same layer contract:
+- one layer runner
+- one main upstream input artifact
+- one main output artifact
+- no backward reads
+- no separate 10-layer pipeline per format
+
 ## Layer Contracts
 
 ## Incremental Build Rule
@@ -188,26 +220,28 @@ Purpose:
 Reads:
 - manifest
 - `L4/fact_packets.json`
-- memory context if needed
 
 Writes:
-- `editorial_decision.json`
+- `selected_video_brief.json`
 
 Purpose:
-- decide whether to make a video, in what format, from which stories
-- keep enough story-state context in the decision output so packaging does not read backward
+- decide whether to make a video
+- decide or respect the target format, such as `auto`, `roundup`, or `deep_dive`
+- choose the story or story set that fits that format
+- carry selected L4 fact packets forward so packaging does not read backward
 
 ### L6 — Package
 Reads:
 - manifest
-- `L5/editorial_decision.json`
+- `L5/selected_video_brief.json`
 
 Writes:
 - `content_packet.json`
 
 Purpose:
-- build the compact packet the writer actually needs
+- build the compact format-specific packet the writer actually needs
 - transition from story state to production state
+- use format-specific code when the structure differs; do not hide structural differences only in prompts
 
 ### L7 — Script
 Reads:
@@ -218,8 +252,9 @@ Writes:
 - `script_package.json`
 
 Purpose:
-- generate spoken narration, metadata, and structured visual notes
+- generate format-specific spoken narration, metadata, and structured visual notes
 - keep production state, carrying forward all context needed for verification
+- keep narration separate from visual/editor notes
 
 ### L8 — Verify
 Reads:
@@ -302,6 +337,40 @@ The editorial layer should answer:
 
 It should not be a maze of near-duplicate score reports.
 
+### 4A. LLMs own meaning; code owns stable guardrails
+Do not hardcode daily story text, one-off company names, article titles, or
+current-run examples into code.
+
+Use LLMs for meaning:
+- story labels
+- viewer value
+- editorial angle
+- why the story matters now
+- blocked angles
+- whether the audience would care
+
+Use code for stable guardrails:
+- manifest-selected target format
+- source trust and source relationship
+- provenance requirements
+- evidence thresholds
+- selection caps and diversity limits
+- format contracts
+- segment roles and timing budgets
+
+The good pattern is:
+- LLM returns structured judgment with reasons
+- code applies deterministic guardrails to that judgment
+
+The bad pattern is:
+- keyword mazes pretending to understand meaning
+- title-specific if-statements for one run
+- special cases for today's stories that will age badly tomorrow
+
+If a run exposes a quality problem, generalize the fix through durable
+properties such as source type, evidence strength, content mismatch, format fit,
+or provenance quality.
+
 ### 5. Script vs visual directions must stay separate
 Narration is what gets verified.
 Visual notes are editor metadata.
@@ -337,6 +406,18 @@ src/
     ├── L8_verify/
     └── L9_memory/
 ```
+
+Format-specific code, when needed, should live inside the relevant layer rather
+than becoming a separate pipeline tree. For example:
+- `L5_editorial/formats/roundup.py`
+- `L5_editorial/formats/deep_dive.py`
+- `L6_package/formats/roundup.py`
+- `L6_package/formats/deep_dive.py`
+- `L7_script/formats/roundup.py`
+- `L7_script/formats/deep_dive.py`
+
+Only create these files when the layer is being implemented and the format
+really needs different logic.
 
 ## What The Legacy System Is Still Good For
 

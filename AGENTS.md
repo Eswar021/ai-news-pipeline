@@ -113,6 +113,14 @@ Important:
 - collection, normalization, joins, routing, and validation should be rule-based unless LLMs are truly necessary
 - do not create one LLM call per tiny fragment if a document-level call is sufficient
 
+### 6A. Use LLMs for meaning; use code for stable guardrails
+- do not hardcode daily story text, one-off company names, article titles, or current-run examples into code
+- LLMs should interpret meaning: story labels, viewer value, editorial angle, why a story matters, blocked angles, and script usefulness
+- code should enforce stable rules: manifest choices, source trust and relationship, provenance requirements, evidence thresholds, selection caps, diversity limits, format contracts, segment roles, and timing budgets
+- the good pattern is: LLM returns structured judgment with reasons, then code applies deterministic guardrails
+- the bad pattern is: keyword mazes, title-specific if-statements, or one-run fixes pretending to understand the story
+- when a current run exposes a quality problem, generalize it through durable properties such as source type, evidence strength, content mismatch, format fit, or provenance quality
+
 ### 7. No premature abstractions
 - no plugin-style layer registries
 - no dynamic dispatch systems
@@ -154,6 +162,15 @@ There are four primary state shapes in the rebuild:
 When the pipeline moves from one state shape to another, it is correct to
 restructure the top-level object. Keep the new object self-contained enough that
 the next layer does not need to read backward.
+
+### Format-aware path after L4
+- `L0-L4` are the shared evidence trunk for every video type
+- `L5` decides or receives the target video format, such as `auto`, `roundup`, or `deep_dive`
+- from `L5` onward, layers may branch internally by format when the work genuinely differs
+- do not create separate full 10-layer pipelines per video type
+- keep one layer contract and one main artifact per layer, even when internal format modules exist
+- use format-specific code for stable structure and format-specific prompts for meaning and narration
+- add format-specific modules only when the implemented layer needs them; do not prebuild empty branches
 
 ### L0 — Manifest
 - snapshot all config into one run manifest
@@ -197,18 +214,21 @@ the next layer does not need to read backward.
 
 ### L5 — Editorial
 - decide whether to make a video
-- decide which format
-- decide which story or story set
-- produce one selected brief
+- decide or respect the target format, such as `auto`, `roundup`, or `deep_dive`
+- choose the story or story set that fits that format
+- produce one `selected_video_brief.json`
+- keep selected L4 fact packets carried forward so L6 does not read backward
 
 ### L6 — Package
-- assemble the selected brief into a compact research/content packet
+- assemble the selected brief into a format-specific research/content packet
 - this layer can merge planning context that used to be spread across multiple layers
 - output should move from story state to production state
+- do not rely on prompt changes alone when the format needs different structure
 
 ### L7 — Script
-- generate narration and metadata
+- generate format-specific narration and metadata from the L6 package
 - keep spoken narration separate from visual/editor notes
+- keep roundup, deep-dive, and future script shapes explicit when their structure genuinely differs
 
 ### L8 — Verify
 - verify script support and policy compliance
