@@ -1,8 +1,22 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 import requests
 
-from src.pipeline.L1_collection.common import build_record, clean_text, normalize_content, resolve_env, within_window
+from src.pipeline.L1_collection.common import (
+    build_record,
+    clean_text,
+    extract_article_text,
+    normalize_content,
+    request_text,
+    resolve_env,
+)
+
+
+NON_ARTICLE_HOSTS = {
+    "pypi.org",
+}
 
 
 def collect(cfg: dict) -> dict:
@@ -22,7 +36,7 @@ def collect(cfg: dict) -> dict:
         status = "ok"
         notes: list[str] = []
         fetched_count = 0
-        kept_count = 0
+        collected_count = 0
         filtered_out_count = 0
         source_records: list[dict] = []
         try:
@@ -34,20 +48,29 @@ def collect(cfg: dict) -> dict:
             source_summaries[source["id"]] = {
                 "status": status,
                 "fetched_count": 0,
-                "kept_count": 0,
+                "collected_count": 0,
                 "filtered_out_count": 0,
                 "notes": notes,
             }
             continue
 
         for article in raw_articles:
-            published_at = article.get("published_at", "")
-            if not within_window(published_at, window["start"], window["end"]):
+            url = article.get("url", "")
+            if not _is_article_candidate(url):
                 filtered_out_count += 1
+                notes.append(f"Filtered non-article URL: {url}")
                 continue
 
+            article_body = ""
+            if url:
+                try:
+                    article_html = request_text(url, timeout=timeout)
+                    article_body = extract_article_text(article_html)
+                except Exception as exc:
+                    notes.append(f"Article fetch failed for {url}: {exc}")
+
             content, content_status = normalize_content(
-                article.get("content", ""),
+                article_body or article.get("content", ""),
                 fallback=article.get("description", "") or article.get("title", ""),
             )
             source_records.append(
@@ -56,10 +79,10 @@ def collect(cfg: dict) -> dict:
                     source_group=cfg["source_group"],
                     source_type=source.get("source_type", "tech_news_article"),
                     title=article.get("title", ""),
-                    url=article.get("url", ""),
-                    published_at=published_at,
+                    url=url,
+                    published_at=article.get("published_at", ""),
                     content=content,
-                    metadata={
+                    extra_fields={
                         "collector": "tech_news",
                         "provider": source["provider"],
                         "source_name": article.get("source_name", ""),
@@ -70,15 +93,15 @@ def collect(cfg: dict) -> dict:
                     },
                 )
             )
-            kept_count += 1
-            if kept_count >= max_items_per_source:
+            collected_count += 1
+            if collected_count >= max_items_per_source:
                 break
 
         records.extend(source_records)
         source_summaries[source["id"]] = {
             "status": status,
             "fetched_count": fetched_count,
-            "kept_count": kept_count,
+            "collected_count": collected_count,
             "filtered_out_count": filtered_out_count,
             "notes": notes,
         }
@@ -89,7 +112,7 @@ def collect(cfg: dict) -> dict:
             "collector": "tech_news",
             "status": "partial" if any(item["status"] != "ok" for item in source_summaries.values()) else "ok",
             "fetched_count": sum(item["fetched_count"] for item in source_summaries.values()),
-            "kept_count": len(records),
+            "collected_count": len(records),
             "filtered_out_count": sum(item["filtered_out_count"] for item in source_summaries.values()),
             "sources": source_summaries,
         },
@@ -203,3 +226,15 @@ def _fetch_mediastack(api_key: str, query: str, limit: int, timeout: int) -> lis
         }
         for item in data.get("data", [])
     ]
+
+
+def _is_article_candidate(url: str) -> bool:
+    if not url:
+        return False
+    parsed = urlparse(url)
+    host = (parsed.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if host in NON_ARTICLE_HOSTS:
+        return False
+    return parsed.scheme in {"http", "https"} and bool(host)

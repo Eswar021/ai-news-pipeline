@@ -168,18 +168,25 @@ the next layer does not need to read backward.
 - collect raw source records into one flat list
 - no editorial decision here
 - is expected to be multi-module because collectors naturally separate by source or source family
-- write only kept downstream records to the main data file
-- if a collector fetches first and filters later, the summary should report both fetched and kept counts clearly
+- write collected raw records to the main data file
+- keep common fields flat on the record itself; avoid hiding collector/source fields in a nested `metadata` dict
+- L1 may apply source-scope filtering that is intrinsic to collection, but manifest-window exclusion and downstream keep/drop decisions belong in L2
+- if a collector fetches first and filters during collection, the summary should report both fetched and collected counts clearly
 - do not introduce trust-tier-derived ideas like "primary docs" in the first slice unless they materially affect collection behavior
 
 ### L2 — Evidence Prep
 - clean, normalize, soft-dedup, and build provenance-ready records
 - preserve enough text for later factual grounding
-- keep record state and append only the fields that materially help story formation and later factual grounding
+- keep record state and output only the cleaned records that should continue downstream
+- keep exclusion visibility in `summary.json` instead of carrying excluded records forward in the main `L2` data file
 - do not create clusters here; `L3` is the first story-shaping layer
 
 ### L3 — Story Map
 - cluster documents into stories
+- `L2` owns duplicate removal; do not re-create exact-match dedup in `L3`
+- use strict semantic embedding grouping for clear same-story coverage, not plain keyword grouping
+- if LLM labels are used, apply them after clustering to describe and rank story objects, not as hard per-record merge gates
+- story labels should capture entity, product/project, action, story type, and editorial value rather than loose keyword tags
 - rank stories
 - keep this layer about story identity, not script writing
 - output should move from record state to story state

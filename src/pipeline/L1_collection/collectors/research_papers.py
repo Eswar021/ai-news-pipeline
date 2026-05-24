@@ -4,14 +4,13 @@ import time
 import xml.etree.ElementTree as ET
 from urllib.parse import urlencode
 
-from src.pipeline.L1_collection.common import build_record, request_text, within_window
+from src.pipeline.L1_collection.common import build_record, request_text
 
 ARXIV_API_URL = "http://export.arxiv.org/api/query"
 NS = {"atom": "http://www.w3.org/2005/Atom"}
 
 
 def collect(cfg: dict) -> dict:
-    window = cfg["collection_window"]
     timeout = int(cfg.get("request_timeout_seconds", 30))
     max_items_per_category = int(cfg.get("runtime", {}).get("max_items_per_category", 6))
 
@@ -32,7 +31,7 @@ def collect(cfg: dict) -> dict:
             "sortOrder": "descending",
         }
         fetched_count = 0
-        kept_count = 0
+        collected_count = 0
         filtered_out_count = 0
         try:
             root = _fetch_root(params, timeout)
@@ -42,7 +41,7 @@ def collect(cfg: dict) -> dict:
             category_summaries[category["id"]] = {
                 "status": status,
                 "fetched_count": 0,
-                "kept_count": 0,
+                "collected_count": 0,
                 "filtered_out_count": 0,
                 "notes": notes,
             }
@@ -51,10 +50,6 @@ def collect(cfg: dict) -> dict:
         for entry in root.findall("atom:entry", NS):
             fetched_count += 1
             published_at = entry.findtext("atom:published", "", NS).strip()
-            if not within_window(published_at, window["start"], window["end"]):
-                filtered_out_count += 1
-                continue
-
             title = entry.findtext("atom:title", "", NS).strip().replace("\n", " ")
             abstract = entry.findtext("atom:summary", "", NS).strip().replace("\n", " ")
             authors = [
@@ -73,17 +68,16 @@ def collect(cfg: dict) -> dict:
                     url=url,
                     published_at=published_at,
                     content=abstract,
-                    metadata={
+                    extra_fields={
                         "collector": "research_papers",
                         "category": category["category"],
                         "authors": authors,
                         "trust_tier": 1.5,
-                        "content_status": "partial",
                     },
                 )
             )
-            kept_count += 1
-            if kept_count >= max_items_per_category:
+            collected_count += 1
+            if collected_count >= max_items_per_category:
                 break
 
         time.sleep(1.0)
@@ -91,7 +85,7 @@ def collect(cfg: dict) -> dict:
         category_summaries[category["id"]] = {
             "status": status,
             "fetched_count": fetched_count,
-            "kept_count": kept_count,
+            "collected_count": collected_count,
             "filtered_out_count": filtered_out_count,
             "notes": notes,
         }
@@ -102,7 +96,7 @@ def collect(cfg: dict) -> dict:
             "collector": "research_papers",
             "status": "partial" if any(item["status"] != "ok" for item in category_summaries.values()) else "ok",
             "fetched_count": sum(item["fetched_count"] for item in category_summaries.values()),
-            "kept_count": len(records),
+            "collected_count": len(records),
             "filtered_out_count": sum(item["filtered_out_count"] for item in category_summaries.values()),
             "sources": category_summaries,
         },

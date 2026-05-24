@@ -5,7 +5,7 @@ from datetime import datetime
 import requests
 from youtube_transcript_api import YouTubeTranscriptApi
 
-from src.pipeline.L1_collection.common import build_record, clean_text, resolve_env, within_window
+from src.pipeline.L1_collection.common import build_record, clean_text, resolve_env
 
 SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 LANG_PREF = ["en", "te", "hi", "ta", "kn", "ml", "bn", "mr", "gu", "pa"]
@@ -28,7 +28,7 @@ def collect(cfg: dict) -> dict:
 
         status = "ok"
         fetched_count = 0
-        kept_count = 0
+        collected_count = 0
         filtered_out_count = 0
         notes: list[str] = []
         try:
@@ -40,16 +40,13 @@ def collect(cfg: dict) -> dict:
             channel_summaries[channel["id"]] = {
                 "status": status,
                 "fetched_count": 0,
-                "kept_count": 0,
+                "collected_count": 0,
                 "filtered_out_count": 0,
                 "notes": notes,
             }
             continue
 
         for video in videos:
-            if not within_window(video.get("published_at", ""), window["start"], window["end"]):
-                filtered_out_count += 1
-                continue
             try:
                 transcript_text = _fetch_transcript(video["video_id"])
             except Exception as exc:
@@ -66,22 +63,21 @@ def collect(cfg: dict) -> dict:
                     url=f"https://www.youtube.com/watch?v={video['video_id']}",
                     published_at=video["published_at"],
                     content=transcript_text,
-                    metadata={
+                    extra_fields={
                         "collector": "youtube_transcripts",
                         "channel_name": channel["name"],
                         "channel_id": channel["channel_id"],
                         "video_id": video["video_id"],
                         "trust_tier": 2,
-                        "content_status": "full",
                     },
                 )
             )
-            kept_count += 1
+            collected_count += 1
 
         channel_summaries[channel["id"]] = {
             "status": status,
             "fetched_count": fetched_count,
-            "kept_count": kept_count,
+            "collected_count": collected_count,
             "filtered_out_count": filtered_out_count,
             "notes": notes,
         }
@@ -92,7 +88,7 @@ def collect(cfg: dict) -> dict:
             "collector": "youtube_transcripts",
             "status": "partial" if any(item["status"] != "ok" for item in channel_summaries.values()) else "ok",
             "fetched_count": sum(item["fetched_count"] for item in channel_summaries.values()),
-            "kept_count": len(records),
+            "collected_count": len(records),
             "filtered_out_count": sum(item["filtered_out_count"] for item in channel_summaries.values()),
             "sources": channel_summaries,
         },

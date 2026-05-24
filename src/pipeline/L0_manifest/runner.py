@@ -4,6 +4,9 @@ L0 Manifest — resolve layer-wise config into one run_manifest.json for the run
 Reads:
     src/config/l0_config.yaml                 → layer_0 config
     src/config/l1_config.yaml                 → layer_1 authoring config
+    src/config/l3_config.yaml                 → layer_3 authoring config
+    src/config/l4_config.yaml                 → layer_4 authoring config
+    src/config/l5_config.yaml                 → layer_5 authoring config
 
 Writes:
     output/{run_id}/run_manifest.json         → runtime contract consumed by L1
@@ -35,6 +38,9 @@ from src.config.paths import (
     CURRENT_MANIFEST_PATH,
     L0_CONFIG_PATH,
     L1_CONFIG_PATH,
+    L3_CONFIG_PATH,
+    L4_CONFIG_PATH,
+    L5_CONFIG_PATH,
     OUTPUT_DIR,
 )
 
@@ -46,6 +52,9 @@ def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manu
     print(f"[L0] Building manifest for profile: {run_profile}")
     l0_cfg = _load_l0_config()
     l1_cfg = _load_l1_config()
+    l3_cfg = _load_l3_config()
+    l4_cfg = _load_l4_config()
+    l5_cfg = _load_l5_config()
 
     run_identity = _build_run_identity(run_profile, run_date)
     profile = _resolve_profile(l0_cfg, run_profile)
@@ -60,7 +69,7 @@ def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manu
         raise RuntimeError("All query themes were filtered out by excluded topics")
 
     window = _resolve_collection_window(profile, created_at=run_identity["window_end"])
-    layer1_resolution = _resolve_collectors(profile, l1_cfg, window, query_themes)
+    layer1_resolution = _resolve_collectors(profile, l1_cfg, window, query_themes, channel_cfg)
     layer1_resolution["query_themes"] = query_themes
     print(
         f"[L0] Source groups: {len(layer1_resolution['enabled_source_groups'])}  "
@@ -74,6 +83,9 @@ def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manu
         channel_cfg=channel_cfg,
         window=window,
         layer1_resolution=layer1_resolution,
+        layer3_cfg=l3_cfg,
+        layer4_cfg=l4_cfg,
+        layer5_cfg=l5_cfg,
     )
     summary = _build_summary(manifest)
 
@@ -104,6 +116,30 @@ def _load_l1_config() -> dict:
     cfg = raw.get("layer_1")
     if not isinstance(cfg, dict):
         raise KeyError("l1_config.yaml must contain top-level key 'layer_1'")
+    return cfg
+
+
+def _load_l4_config() -> dict:
+    raw = _read_yaml(L4_CONFIG_PATH)
+    cfg = raw.get("layer_4")
+    if not isinstance(cfg, dict):
+        raise KeyError("l4_config.yaml must contain top-level key 'layer_4'")
+    return cfg
+
+
+def _load_l5_config() -> dict:
+    raw = _read_yaml(L5_CONFIG_PATH)
+    cfg = raw.get("layer_5")
+    if not isinstance(cfg, dict):
+        raise KeyError("l5_config.yaml must contain top-level key 'layer_5'")
+    return cfg
+
+
+def _load_l3_config() -> dict:
+    raw = _read_yaml(L3_CONFIG_PATH)
+    cfg = raw.get("layer_3")
+    if not isinstance(cfg, dict):
+        raise KeyError("l3_config.yaml must contain top-level key 'layer_3'")
     return cfg
 
 
@@ -152,7 +188,13 @@ def _resolve_collection_window(profile: dict, created_at) -> dict:
     }
 
 
-def _resolve_collectors(profile: dict, l1_cfg: dict, window: dict, query_themes: list[str]) -> dict:
+def _resolve_collectors(
+    profile: dict,
+    l1_cfg: dict,
+    window: dict,
+    query_themes: list[str],
+    channel_cfg: dict,
+) -> dict:
     groups = l1_cfg.get("source_groups")
     if not isinstance(groups, dict):
         raise KeyError("layer_1.source_groups missing or invalid")
@@ -172,6 +214,7 @@ def _resolve_collectors(profile: dict, l1_cfg: dict, window: dict, query_themes:
         collector_cfg["source_group"] = group_name
         collector_cfg["collection_window"] = deepcopy(window)
         collector_cfg["query_themes"] = list(query_themes)
+        collector_cfg["allowed_topics"] = list(channel_cfg.get("allowed_topics", []))
         collector_cfg["runtime"] = deepcopy(caps.get(group_name, {}))
 
         enabled_count = _count_enabled_members(collector_cfg)
@@ -207,6 +250,9 @@ def _build_manifest(
     channel_cfg: dict,
     window: dict,
     layer1_resolution: dict,
+    layer3_cfg: dict,
+    layer4_cfg: dict,
+    layer5_cfg: dict,
 ) -> dict:
     return {
         "schema_version": "v1",
@@ -225,6 +271,9 @@ def _build_manifest(
             "query_themes": layer1_resolution["query_themes"],
             "collectors": layer1_resolution["collectors"],
         },
+        "layer_3": dict(layer3_cfg),
+        "layer_4": dict(layer4_cfg),
+        "layer_5": dict(layer5_cfg),
     }
 
 

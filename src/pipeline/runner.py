@@ -10,21 +10,39 @@ Writes:
     output/{run_id}/L1/summary.json         → when L1 runs
     output/{run_id}/L2/prepared_records.json → when L2 runs
     output/{run_id}/L2/summary.json          → when L2 runs
+    output/{run_id}/L3/stories.json          → when L3 runs
+    output/{run_id}/L3/summary.json          → when L3 runs
+    output/{run_id}/L3/llm_calls.jsonl       → when L3 fingerprinting is enabled
+    output/{run_id}/L4/fact_packets.json     → when L4 runs
+    output/{run_id}/L4/summary.json          → when L4 runs
+    output/{run_id}/L4/llm_calls.jsonl       → when L4 runs
+    output/{run_id}/L5/selected_video_brief.json → when L5 runs
+    output/{run_id}/L5/summary.json          → when L5 runs
+    output/{run_id}/L5/llm_calls.jsonl       → when L5 runs
 
-LLM: no
+LLM: yes for L3 story fingerprinting, L4 fact extraction, and L5 editorial judgment
 
 Module execution order:
     1. parse requested layers
     2. run L0 if requested
     3. run L1 if requested
     4. run L2 if requested
+    5. run L3 if requested
+    6. run L4 if requested
+    7. run L5 if requested
 
 Usage:
     python -m src.pipeline.runner 0 --run-profile daily_48h_all_sources
     python -m src.pipeline.runner 0 1 --run-profile daily_48h_all_sources
     python -m src.pipeline.runner 0 1 2 --run-profile daily_48h_all_sources
+    python -m src.pipeline.runner 0 1 2 3 --run-profile daily_48h_all_sources
+    python -m src.pipeline.runner 0 1 2 3 4 --run-profile daily_48h_all_sources
+    python -m src.pipeline.runner 0 1 2 3 4 5 --run-profile daily_48h_all_sources
     python -m src.pipeline.runner 1
     python -m src.pipeline.runner 2
+    python -m src.pipeline.runner 3
+    python -m src.pipeline.runner 4
+    python -m src.pipeline.runner 5
     python -m src.pipeline.runner 1 --run-id run_...
     python -m src.pipeline.runner 1 --run-id current
 """
@@ -35,6 +53,9 @@ import time
 from src.pipeline.L0_manifest.runner import run as run_l0
 from src.pipeline.L1_collection.runner import run as run_l1
 from src.pipeline.L2_evidence_prep.runner import run as run_l2
+from src.pipeline.L3_story_map.runner import run as run_l3
+from src.pipeline.L4_fact_packet.runner import run as run_l4
+from src.pipeline.L5_editorial.runner import run as run_l5
 
 
 def main() -> None:
@@ -46,7 +67,7 @@ def main() -> None:
     parser.add_argument("--trigger", default="manual")
     args = parser.parse_args()
 
-    requested = [0, 1, 2] if args.layers == ["all"] else sorted({int(v) for v in args.layers})
+    requested = [0, 1, 2, 3, 4, 5] if args.layers == ["all"] else sorted({int(v) for v in args.layers})
     run_id = args.run_id
     started = time.time()
 
@@ -83,6 +104,24 @@ def main() -> None:
         print("[runner] Layer 2")
         run_l2(run_ref=run_id)
         print(f"[runner] Layer 2 done in {time.time() - layer_started:.1f}s")
+
+    if 3 in requested:
+        layer_started = time.time()
+        print("[runner] Layer 3")
+        run_l3(run_ref=run_id)
+        print(f"[runner] Layer 3 done in {time.time() - layer_started:.1f}s")
+
+    if 4 in requested:
+        layer_started = time.time()
+        print("[runner] Layer 4")
+        run_l4(run_ref=run_id)
+        print(f"[runner] Layer 4 done in {time.time() - layer_started:.1f}s")
+
+    if 5 in requested:
+        layer_started = time.time()
+        print("[runner] Layer 5")
+        run_l5(run_ref=run_id)
+        print(f"[runner] Layer 5 done in {time.time() - layer_started:.1f}s")
 
     print(f"[runner] Complete in {time.time() - started:.1f}s")
 

@@ -139,8 +139,9 @@ Writes:
 
 Purpose:
 - collect source records only
-- write only kept downstream records to the main data file
-- make fetch-versus-kept counts explicit in the summary when collectors must filter after fetch
+- write collected raw records to the main data file
+- keep manifest-window exclusion and downstream keep/drop decisions in `L2`
+- make fetch-versus-collected counts explicit in the summary when collectors must filter after fetch
 
 ### L2 — Evidence Prep
 Reads:
@@ -152,8 +153,8 @@ Writes:
 
 Purpose:
 - clean, normalize, soft-dedup, and preserve provenance-ready text
-- keep record state, carrying forward enough upstream data for story building
-- do not create clusters here; keep the same record list shape and append only the fields that materially help `L3`
+- keep record state, carrying forward only the cleaned records that should reach story building
+- do not create clusters here; `L2` should filter and normalize, then hand `L3` a clean record list
 
 ### L3 — Story Map
 Reads:
@@ -164,7 +165,10 @@ Writes:
 - `stories.json`
 
 Purpose:
-- group records into ranked story objects
+- group records into ranked story objects using strict semantic embedding clustering for clear same-story coverage
+- keep exact duplicate removal in `L2`; do not re-create exact-match dedup in `L3`
+- optionally use LLM-generated story labels after clustering, not as hard per-record merge gates
+- story labels should describe the concrete entity/product/action/story type so ranking and later script planning understand the story
 - transition from record state to story state
 - each story should carry the record context needed by the next layer
 
@@ -312,13 +316,10 @@ revision. Approved, revisable, and failed are different states.
 ```text
 src/
 ├── config/
-│   ├── settings.py
-│   ├── run_profiles.yaml
-│   ├── sources.yaml
-│   ├── channels.yaml
-│   ├── format_rules.yaml
-│   ├── prompt_config.yaml
-│   └── layer_<n>.yaml
+│   ├── paths.py
+│   ├── l0_config.yaml
+│   ├── l1_config.yaml
+│   └── l<n>_config.yaml
 ├── llm/
 │   ├── client.py
 │   ├── prompt_loader.py

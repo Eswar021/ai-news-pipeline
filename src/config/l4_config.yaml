@@ -1,0 +1,8 @@
+layer_4:
+  top_story_limit: 12
+  max_records_per_story: 6
+  overflow_char_limit: 12000
+  max_facts_per_story: 12
+  claim_extractor_model: "gpt-5-nano"
+  claim_extractor_prompt_version: "v1"
+  fact_packet_worker_count: 10

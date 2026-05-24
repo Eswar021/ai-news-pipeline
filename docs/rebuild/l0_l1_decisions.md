@@ -161,16 +161,28 @@ Collectors must not read yaml directly.
 
 No backward joins. No reopening config files.
 
-### 9. Main data file contains only kept downstream records
+### 9. Main data file contains collected raw records
 
-If a collector fetches 20 items and only 13 are within the manifest window:
-- `raw_records.json` contains only the 13 kept records
-- `summary.json` must report both:
-  - fetched count
-  - kept count
+`L1/raw_records.json` should contain the records the collectors actually
+collected from the enabled source groups.
 
-This keeps the main data file honest while still preserving operator
-visibility.
+It should not be the place where manifest-window exclusion or downstream
+story-map keep/drop decisions happen. Those belong in `L2`.
+
+Common collector/source details should stay flat on the record itself, for
+example:
+- `collector`
+- `source_name`
+- `trust_tier`
+- `provider`
+- `summary`
+
+Do not hide these under a nested `metadata` dict in the rebuild.
+
+`summary.json` must still report:
+- fetched count
+- collected count
+- any collector-side filtered count
 
 ### 10. Fetch-then-filter is allowed, but it must be visible
 
@@ -180,6 +192,7 @@ Some will not.
 So for the rebuild:
 - fetch-then-filter is acceptable when the source demands it
 - but the summary must make this explicit
+- manifest-window filtering should happen in `L2`, not inside `L1`
 
 Per collector or source group, the summary should make it easy to see:
 - fetched count
@@ -205,7 +218,7 @@ API plan-limit placeholders for factual evidence.
 
 The `L1` summary should distinguish:
 - source groups enabled by the manifest
-- source groups that actually produced kept downstream records
+- source groups that actually produced collected records
 
 Both are useful. They are not the same metric.
 

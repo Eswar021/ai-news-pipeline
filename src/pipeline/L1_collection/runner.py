@@ -5,8 +5,8 @@ Reads:
     output/{run_id}/run_manifest.json         → layer_1 collector config
 
 Writes:
-    output/{run_id}/L1/raw_records.json       → kept downstream records only
-    output/{run_id}/L1/summary.json           → fetched, kept, filtered counts per group
+    output/{run_id}/L1/raw_records.json       → collected raw records
+    output/{run_id}/L1/summary.json           → fetched, collected, filtered counts per group
 
 LLM: no
 
@@ -67,15 +67,14 @@ def run(run_id: str) -> Path:
         )
         result = _collect_group(group_name, cfg)
         for record in result["records"]:
-            record["id"] = f"L1_{len(records) + 1:05d}"
-            record["run_id"] = run_id
+            record["record_id"] = f"L1_{len(records) + 1:05d}"
             records.append(record)
         group_summaries[group_name] = result["summary"]
         group_summary = result["summary"]
         print(
             f"  -> status={group_summary.get('status')} "
             f"fetched={group_summary.get('fetched_count', 0)} "
-            f"kept={group_summary.get('kept_count', 0)} "
+            f"collected={group_summary.get('collected_count', 0)} "
             f"filtered={group_summary.get('filtered_out_count', 0)}"
         )
         failed_sources = []
@@ -97,7 +96,7 @@ def run(run_id: str) -> Path:
     summary_path = out_dir / "summary.json"
     data_path.write_text(json.dumps(raw_payload, indent=2, ensure_ascii=False), encoding="utf-8")
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"[L1] Total kept records: {len(records)}")
+    print(f"[L1] Total collected records: {len(records)}")
     print(f"[L1] Wrote: {data_path}")
     return data_path
 
@@ -126,7 +125,7 @@ def _build_summary(
     groups_with_records = [
         group_name
         for group_name, summary in group_summaries.items()
-        if summary.get("kept_count", 0) > 0
+        if summary.get("collected_count", 0) > 0
     ]
     return {
         "run_id": run_id,

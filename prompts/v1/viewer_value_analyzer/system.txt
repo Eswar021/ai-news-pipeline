@@ -11,10 +11,19 @@ Rules:
 4. value_types: pick 2–4 from the allowed list only.
 5. viewer_value_score: 0–100 based on how much practical/intellectual value the story delivers.
    70+ = worth covering, 50–69 = borderline, <50 = low value for this audience.
+6. why_this_story_now must explain the timing/relevance using only the supplied evidence.
+7. blocked_angles must name angles that would overclaim, distort evidence, or create hype.
 
 Allowed value_types:
   understand_what_happened, understand_why_it_matters, decide_whether_to_use_tool,
   avoid_hype, learn_technical_context, track_industry_shift, assess_business_impact
 
 Return only valid JSON:
-{"primary_viewer_question": "...", "viewer_promise": "...", "value_types": ["..."], "viewer_value_score": 0}
+{
+  "primary_viewer_question": "...",
+  "viewer_promise": "...",
+  "value_types": ["..."],
+  "viewer_value_score": 0,
+  "why_this_story_now": "...",
+  "blocked_angles": ["..."]
+}

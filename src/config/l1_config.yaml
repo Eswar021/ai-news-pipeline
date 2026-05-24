@@ -11,7 +11,25 @@ layer_1:
           mode: "rss"
           source_type: "official_company_blog"
           trust_tier: 1
-          feed_url: "https://openai.com/news/rss/"
+          feed_url: "https://openai.com/news/rss.xml"
+        - id: "anthropic_news"
+          name: "Anthropic News"
+          enabled: true
+          mode: "anthropic_listing"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          listing_url: "https://www.anthropic.com/news"
+          base_url: "https://www.anthropic.com"
+          allowed_path_prefixes: ["/news/", "/research/", "/index/"]
+        - id: "anthropic_engineering"
+          name: "Anthropic Engineering"
+          enabled: true
+          mode: "anthropic_listing"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          listing_url: "https://www.anthropic.com/engineering"
+          base_url: "https://www.anthropic.com"
+          allowed_path_prefixes: ["/engineering/", "/news/", "/research/", "/index/"]
         - id: "google_research_blog"
           name: "Google Research Blog"
           enabled: true
@@ -19,6 +37,33 @@ layer_1:
           source_type: "official_company_blog"
           trust_tier: 1
           feed_url: "https://research.google/blog/rss/"
+        - id: "google_deepmind_blog"
+          name: "Google DeepMind Blog"
+          enabled: true
+          mode: "generic_listing"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          listing_url: "https://deepmind.google/blog/"
+          base_url: "https://deepmind.google"
+          allowed_path_prefixes: ["/blog/", "/en/blog/"]
+        - id: "meta_ai_blog"
+          name: "Meta AI Blog"
+          enabled: true
+          mode: "generic_listing"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          listing_url: "https://ai.meta.com/blog"
+          base_url: "https://ai.meta.com"
+          allowed_path_prefixes: ["/blog/"]
+        - id: "microsoft_ai_news"
+          name: "Microsoft AI News"
+          enabled: true
+          mode: "generic_listing"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          listing_url: "https://microsoft.ai/news/"
+          base_url: "https://microsoft.ai"
+          allowed_path_prefixes: ["/news/"]
         - id: "aws_ml_blog"
           name: "AWS Machine Learning Blog"
           enabled: true
@@ -26,6 +71,15 @@ layer_1:
           source_type: "official_company_blog"
           trust_tier: 1
           feed_url: "https://aws.amazon.com/blogs/machine-learning/feed/"
+        - id: "nvidia_blog"
+          name: "NVIDIA Blog"
+          enabled: true
+          mode: "generic_listing"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          listing_url: "https://blogs.nvidia.com/"
+          base_url: "https://blogs.nvidia.com"
+          allowed_path_prefixes: ["/blog/"]
         - id: "huggingface_blog"
           name: "Hugging Face Blog"
           enabled: true
@@ -130,6 +184,11 @@ layer_1:
           enabled: true
           channel_id: "UCsMica-v34Irf9KVTioWcRg"
           query: "AI OR Copilot OR Azure AI OR Phi"
+        - id: "google_cloud_tech"
+          name: "Google Cloud Tech"
+          enabled: true
+          channel_id: "UCJS9pqu9BzkAMNTmzNMNhvg"
+          query: "AI OR Vertex AI OR Gemini OR machine learning"
         - id: "dwarkesh_podcast"
           name: "Dwarkesh Podcast"
           enabled: true
@@ -139,12 +198,12 @@ layer_1:
           name: "Y Combinator"
           enabled: true
           channel_id: "UCcefcZRL2oaA_uBNeo5UOWg"
-          query: "AI OR startup OR LLM OR agent"
+          query: "AI OR LLM OR agent OR coding"
         - id: "a16z"
           name: "a16z"
           enabled: true
           channel_id: "UC9cn0TuPq4dnbTY-CBsm8sg"
-          query: "AI OR machine learning OR LLM OR startup"
+          query: "AI OR machine learning OR LLM OR agent"
 
     community_signals:
       collector: "community_signals"
@@ -158,3 +217,12 @@ layer_1:
           source_type: "community_signal"
           trust_tier: 3
           story_type: "top"
+        - id: "github_trending_ai"
+          name: "GitHub Trending AI"
+          enabled: true
+          provider: "github"
+          source_type: "community_signal"
+          trust_tier: 3
+          env_keys: ["GITHUB_TOKEN"]
+          max_items: 10
+          min_stars: 50

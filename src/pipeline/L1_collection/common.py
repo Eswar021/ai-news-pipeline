@@ -15,8 +15,12 @@ load_dotenv()
 
 
 DEFAULT_HEADERS = {
-    "User-Agent": "ManiVerse-AI/1.0 (+https://example.invalid)",
-    "Accept": "*/*",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
 }
 
@@ -76,6 +80,30 @@ def extract_article_text(html: str) -> str:
     return strip_html(html)
 
 
+def extract_published_at_from_html(html: str) -> str:
+    patterns = [
+        r'<meta[^>]+property=["\']article:published_time["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+name=["\']article:published_time["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+name=["\']publish-date["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+property=["\']og:published_time["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<time[^>]+datetime=["\']([^"\']+)["\']',
+        r'"datePublished"\s*:\s*"([^"]+)"',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, html, re.IGNORECASE)
+        if match:
+            return clean_text(match.group(1))
+
+    text = strip_html(html)
+    match = re.search(
+        r"\b(?:Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|September|Oct|October|Nov|November|Dec|December)\s+\d{1,2},\s+\d{4}\b",
+        text,
+    )
+    if match:
+        return clean_text(match.group(0))
+    return ""
+
+
 def request_text(url: str, timeout: int, params: dict | None = None) -> str:
     response = requests.get(url, params=params, headers=DEFAULT_HEADERS, timeout=timeout)
     response.raise_for_status()
@@ -97,6 +125,8 @@ def parse_datetime(value: str | None) -> datetime | None:
         "%Y-%m-%dT%H:%M:%S%z",
         "%Y-%m-%dT%H:%M:%S.%f%z",
         "%Y-%m-%d",
+        "%b %d, %Y",
+        "%B %d, %Y",
     ):
         try:
             parsed = datetime.strptime(raw, fmt)
@@ -149,9 +179,9 @@ def build_record(
     url: str,
     published_at: str,
     content: str,
-    metadata: dict,
+    extra_fields: dict | None = None,
 ) -> dict:
-    return {
+    record = {
         "source": source,
         "source_group": source_group,
         "source_type": source_type,
@@ -159,5 +189,12 @@ def build_record(
         "url": url,
         "published_at": published_at,
         "content": clean_text(content),
-        "metadata": metadata,
     }
+    for key, value in (extra_fields or {}).items():
+        if isinstance(value, str):
+            record[key] = clean_text(value)
+        elif isinstance(value, list):
+            record[key] = [clean_text(item) if isinstance(item, str) else item for item in value]
+        else:
+            record[key] = value
+    return record

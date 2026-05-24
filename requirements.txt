@@ -12,3 +12,6 @@ openai
 
 # ── Data handling ──
 # (stdlib: json, xml, hashlib, urllib — no extra deps)
+
+# ── Local semantic clustering ──
+sentence-transformers
