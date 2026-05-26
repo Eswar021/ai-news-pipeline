@@ -161,7 +161,16 @@ def _load_manifest(run_ref: str) -> dict:
             f"run_manifest.json not found for {run_ref}. Run L0 first:\n"
             "  python -m src.pipeline.L0_manifest.runner --run-profile <name>"
         )
-    return json.loads(path.read_text(encoding="utf-8"))
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if run_ref == "current":
+        run_id = manifest.get("run_id")
+        if not run_id:
+            raise KeyError("output/current_manifest.json is missing run_id")
+        run_manifest_path = OUTPUT_DIR / run_id / "run_manifest.json"
+        if not run_manifest_path.exists():
+            raise FileNotFoundError(f"Run manifest not found: {run_manifest_path}")
+        manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
+    return manifest
 
 
 if __name__ == "__main__":

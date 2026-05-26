@@ -7,6 +7,8 @@ Reads:
     src/config/l3_config.yaml                 → layer_3 authoring config
     src/config/l4_config.yaml                 → layer_4 authoring config
     src/config/l5_config.yaml                 → layer_5 authoring config
+    src/config/l7_config.yaml                 → layer_7 authoring config
+    src/config/l8_config.yaml                 → layer_8 authoring config
 
 Writes:
     output/{run_id}/run_manifest.json         → runtime contract consumed by L1
@@ -41,6 +43,8 @@ from src.config.paths import (
     L3_CONFIG_PATH,
     L4_CONFIG_PATH,
     L5_CONFIG_PATH,
+    L7_CONFIG_PATH,
+    L8_CONFIG_PATH,
     OUTPUT_DIR,
 )
 
@@ -55,6 +59,8 @@ def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manu
     l3_cfg = _load_l3_config()
     l4_cfg = _load_l4_config()
     l5_cfg = _load_l5_config()
+    l7_cfg = _load_l7_config()
+    l8_cfg = _load_l8_config()
 
     run_identity = _build_run_identity(run_profile, run_date)
     profile = _resolve_profile(l0_cfg, run_profile)
@@ -86,6 +92,8 @@ def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manu
         layer3_cfg=l3_cfg,
         layer4_cfg=l4_cfg,
         layer5_cfg=l5_cfg,
+        layer7_cfg=l7_cfg,
+        layer8_cfg=l8_cfg,
     )
     summary = _build_summary(manifest)
 
@@ -132,6 +140,22 @@ def _load_l5_config() -> dict:
     cfg = raw.get("layer_5")
     if not isinstance(cfg, dict):
         raise KeyError("l5_config.yaml must contain top-level key 'layer_5'")
+    return cfg
+
+
+def _load_l7_config() -> dict:
+    raw = _read_yaml(L7_CONFIG_PATH)
+    cfg = raw.get("layer_7")
+    if not isinstance(cfg, dict):
+        raise KeyError("l7_config.yaml must contain top-level key 'layer_7'")
+    return cfg
+
+
+def _load_l8_config() -> dict:
+    raw = _read_yaml(L8_CONFIG_PATH)
+    cfg = raw.get("layer_8")
+    if not isinstance(cfg, dict):
+        raise KeyError("l8_config.yaml must contain top-level key 'layer_8'")
     return cfg
 
 
@@ -253,6 +277,8 @@ def _build_manifest(
     layer3_cfg: dict,
     layer4_cfg: dict,
     layer5_cfg: dict,
+    layer7_cfg: dict,
+    layer8_cfg: dict,
 ) -> dict:
     return {
         "schema_version": "v1",
@@ -274,6 +300,8 @@ def _build_manifest(
         "layer_3": dict(layer3_cfg),
         "layer_4": dict(layer4_cfg),
         "layer_5": dict(layer5_cfg),
+        "layer_7": dict(layer7_cfg),
+        "layer_8": dict(layer8_cfg),
     }
 
 

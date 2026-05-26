@@ -2,20 +2,36 @@ You are writing one section of spoken narration for a roundup video.
 
 Rules:
 1. Return spoken narration only. Do not mention visual cues, on-screen text, overlays, or camera directions.
-2. REQUIRED CLAIMS must be reflected in the narration unless the section explicitly allows analysis-only narration.
-3. OPTIONAL CLAIMS may be used only if they strengthen clarity without adding hype.
-4. CAUTIOUS CLAIMS must use qualifying language.
-5. If ANALYSIS ALLOWED = no, every substantive factual sentence must stay tightly grounded in the provided claim list.
-6. If ANALYSIS ALLOWED = yes, you may include a small number of synthesis sentences, but they must:
+2. REQUIRED FACTS must be reflected in the narration unless the section explicitly allows analysis-only narration.
+3. OPTIONAL FACTS may be used only if they strengthen clarity without adding hype.
+4. CAUTIOUS FACTS must use qualifying language.
+5. Aim for the provided word budget. Do not write a short summary when the section asks for a full segment.
+6. For story sections, use a clear mini-arc: what changed, why it matters for builders/operators, and what caveat or practical test the viewer should remember.
+7. Do not list every technical name when a simpler grouping is enough; compress long names into readable speech.
+8. Make the narration feel made for YouTube: crisp opening sentence, clear transitions, and one memorable practical takeaway per story.
+9. Avoid dry meta language such as "this episode offers", "this section aims", "the packet notes", "the facts indicate", or "according to the provided evidence".
+10. Do not begin story sections with "Today we cover". Start with the change or tension.
+11. Treat section titles, story titles, chapter titles, and guidance as context only. They are not evidence. Do not repeat a title's factual claim unless the same claim appears in a provided fact_text.
+12. If the title says something stronger than the fact list supports, soften the wording to match the facts exactly.
+13. For research results, use strong verbs like "proved", "disproved", "resolved", "replaced", or "outperformed" only when that exact result is explicitly present in fact_text.
+14. Follow section.takeaway_rule exactly. If it says watch/monitor language only, do not tell viewers to deploy, integrate, validate today, start using, change workflows, or apply governance unless those exact ideas appear in fact_text.
+15. Do not add generic builder/operator advice. Practical guidance must be traceable to fact_text, not just viewer_value, guidance, or the story topic.
+16. For caution-only or research-watch sections, the ending should be a careful "what to watch next" caveat, not an action plan.
+17. If ANALYSIS ALLOWED = no, every substantive factual sentence must stay tightly grounded in the provided fact list.
+   - Do not add extra assumptions, mechanisms, constraints, implications, or interpretations after a fact.
+   - Do not add phrases like "under standard assumptions", "positions this as", "suggesting a route", or similar interpretive glue unless that meaning is explicitly present in a provided fact.
+   - Do not infer research maturity, deployment readiness, production readiness, generalizability, integration burden, or real-world adoption unless explicitly present in a provided fact.
+   - If a clause cannot be traced to a provided fact_text, omit the clause.
+18. If ANALYSIS ALLOWED = yes, you may include a small number of synthesis sentences, but they must:
    - avoid new named entities
    - avoid new numbers or rankings
    - avoid certainty or prediction language
-   - stay as genuine takeaways from the provided claims
-7. analysis_sentences must list the exact narration sentences that are editorial synthesis rather than direct factual narration.
+   - stay as genuine takeaways from the provided facts
+19. analysis_sentences must list the exact narration sentences that are editorial synthesis rather than direct factual narration.
 
 Return ONLY valid JSON:
 {
   "narration_text": "<spoken narration for this section only, plain text, no markdown>",
-  "used_claim_ids": ["claim_id_1", "claim_id_2"],
+  "used_fact_ids": ["fact_id_1", "fact_id_2"],
   "analysis_sentences": ["exact sentence 1", "exact sentence 2"]
 }

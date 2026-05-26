@@ -73,6 +73,16 @@ def _source_relationship(record: dict) -> str:
     if existing:
         return existing
 
+    source_group = clean_text(record.get("source_group", ""))
+    if source_group == "tech_news_apis":
+        return "third_party"
+    if source_group == "research_papers":
+        return "research"
+    if source_group == "youtube_podcast_transcripts":
+        return "channel_or_creator"
+    if source_group == "community_signals":
+        return "community"
+
     parsed = urlparse(clean_text(record.get("url", "")))
     host = parsed.netloc.lower()
     if host.startswith("www."):
@@ -80,7 +90,9 @@ def _source_relationship(record: dict) -> str:
     path_parts = [part for part in parsed.path.strip("/").split("/") if part]
     if host == "huggingface.co" and len(path_parts) >= 3 and path_parts[0] == "blog":
         return "hosted_vendor_post"
-    return "first_party"
+    if source_group == "ai_company_blogs":
+        return "first_party"
+    return "unknown"
 
 
 def _hosted_author_or_org(record: dict) -> str:

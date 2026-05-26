@@ -17,6 +17,8 @@ ALLOWED_VALUE_TYPES = {
     "track_industry_shift",
     "assess_business_impact",
 }
+ALLOWED_AUDIENCE_FITS = {"high", "medium", "low"}
+ALLOWED_ROUNDUP_SEGMENT_FITS = {"essential", "useful", "niche", "weak"}
 
 
 def add_viewer_values(
@@ -103,9 +105,10 @@ def _build_user_prompt(candidate: dict) -> str:
         "cautious_facts": cautious_facts,
     }
     return (
-        "Evaluate this story for a developer/professional AI news YouTube audience.\n"
+        "Evaluate this story as one possible segment in a multi-story AI news roundup.\n"
         "Return JSON with exactly these keys: primary_viewer_question, viewer_promise, "
-        "value_types, viewer_value_score, why_this_story_now, blocked_angles.\n\n"
+        "audience_fit, roundup_segment_fit, fit_reasons, value_types, "
+        "viewer_value_score, why_this_story_now, blocked_angles.\n\n"
         f"Story packet:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
     )
 
@@ -132,6 +135,21 @@ def _validate_viewer_value(response: dict) -> dict:
     if invalid_types:
         raise ValueError(f"viewer_value_analyzer response has invalid value_types: {invalid_types}")
 
+    audience_fit = clean_text(response.get("audience_fit", ""))
+    if audience_fit not in ALLOWED_AUDIENCE_FITS:
+        raise ValueError("viewer_value_analyzer response has invalid audience_fit")
+
+    roundup_segment_fit = clean_text(response.get("roundup_segment_fit", ""))
+    if roundup_segment_fit not in ALLOWED_ROUNDUP_SEGMENT_FITS:
+        raise ValueError("viewer_value_analyzer response has invalid roundup_segment_fit")
+
+    fit_reasons = response.get("fit_reasons", [])
+    if not isinstance(fit_reasons, list) or not fit_reasons:
+        raise ValueError("viewer_value_analyzer response must include non-empty fit_reasons")
+    cleaned_fit_reasons = [clean_text(reason) for reason in fit_reasons if clean_text(reason)]
+    if not cleaned_fit_reasons:
+        raise ValueError("viewer_value_analyzer response must include non-empty fit_reasons")
+
     blocked_angles = response.get("blocked_angles", [])
     if not isinstance(blocked_angles, list):
         raise ValueError("viewer_value_analyzer response blocked_angles must be a list")
@@ -139,6 +157,9 @@ def _validate_viewer_value(response: dict) -> dict:
     return {
         "primary_viewer_question": clean_text(response["primary_viewer_question"]),
         "viewer_promise": clean_text(response["viewer_promise"]),
+        "audience_fit": audience_fit,
+        "roundup_segment_fit": roundup_segment_fit,
+        "fit_reasons": cleaned_fit_reasons,
         "value_types": cleaned_value_types,
         "viewer_value_score": score,
         "why_this_story_now": clean_text(response["why_this_story_now"]),

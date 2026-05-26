@@ -46,7 +46,7 @@ def _score_story(story: dict) -> dict[str, int]:
     youtube_count = groups.get("youtube_podcast_transcripts", 0)
     community_count = groups.get("community_signals", 0)
 
-    authority = min(official_count * 12 + news_count * 7 + research_count * 5 + community_count * 4 + youtube_count * 3, 30)
+    authority = min(official_count * 9 + news_count * 8 + research_count * 6 + community_count * 4 + youtube_count * 4, 30)
     corroboration = min(max(len(records) - 1, 0) * 4, 16)
     diversity = min(max(len({record.get("source_group", "") for record in records}) - 1, 0) * 4, 12)
     recency = _recency_score(story["time_range"]["last_seen_at"])
@@ -54,7 +54,8 @@ def _score_story(story: dict) -> dict[str, int]:
         sum(_community_traction(record) for record in records),
         15,
     )
-    official_boost = 0 if _is_minor_official_story(story) else (6 if official_count and news_count else (4 if official_count else 0))
+    official_boost = 0 if _is_minor_official_story(story) else (4 if official_count and news_count else (2 if official_count else 0))
+    outside_perspective = _outside_perspective_score(story, news_count, research_count, youtube_count)
     research_penalty = 0
     if story["story_type_hint"] == "research_paper" and len(records) == 1:
         research_penalty = -8
@@ -88,6 +89,7 @@ def _score_story(story: dict) -> dict[str, int]:
         "recency": recency,
         "traction": traction,
         "official_boost": official_boost,
+        "outside_perspective": outside_perspective,
         "research_penalty": research_penalty,
         "editorial_value": editorial_value_score,
         "story_shape_penalty": story_shape_penalty,
@@ -144,6 +146,22 @@ def _event_without_concrete_news(story: dict) -> bool:
     if products or {"launch", "partner", "benchmark"} & set(actions):
         return False
     return "live update" in title or "conference" in title or "computex" in title
+
+
+def _outside_perspective_score(story: dict, news_count: int, research_count: int, youtube_count: int) -> int:
+    identity = story.get("story_identity") or {}
+    if identity.get("is_noise") or identity.get("editorial_value") == "low":
+        return 0
+    score = 0
+    if news_count:
+        score += 3
+    if research_count and story.get("story_type_hint") != "research_paper":
+        score += 2
+    elif research_count and identity.get("editorial_value") == "high":
+        score += 1
+    if youtube_count and identity.get("editorial_value") == "high":
+        score += 1
+    return min(score, 4)
 
 
 def _community_traction(record: dict) -> int:

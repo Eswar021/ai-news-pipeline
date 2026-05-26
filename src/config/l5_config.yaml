@@ -1,13 +1,10 @@
 layer_5:
+  target_format: "roundup"
   candidate_limit: 12
   roundup_min_stories: 4
   roundup_max_stories: 6
   roundup_target_seconds: 480
-  deep_dive_target_seconds: 540
-  deep_dive_min_opportunity_score: 78
   roundup_min_candidate_score: 62
-  no_video_min_candidate_score: 68
-  deep_dive_roundup_margin: 8
   viewer_value_model: "gpt-5-nano"
   viewer_value_prompt_version: "v1"
   editorial_brief_model: "gpt-5-nano"

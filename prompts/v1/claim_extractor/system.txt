@@ -9,10 +9,12 @@ Rules:
 6. Do not invent context beyond the document.
 7. Return at most 6 claims. Prefer fewer, higher-value claims.
 8. Extract facts that explain what happened, who is involved, what changed, why it matters, concrete metrics, limitations, risks, caveats, and meaningful direct quotes.
-9. Ignore UI walkthrough steps, setup instructions, install/deploy commands, page navigation, author bios, article metadata, publication-date-only facts, upvote/follow counts, boilerplate, and code/config details unless that detail is the central news.
-10. Do not extract generic capabilities like "the tool can write code" unless the document gives a concrete new capability, limitation, metric, or adoption result.
-11. Use prediction_claim only for concrete forecasts with numbers, dates, market size, adoption estimates, or explicit uncertainty.
-12. Use interpretive_claim only when the document grounds a meaningful "why it matters" point; do not extract generic commentary.
+9. If the document explicitly supports a central headline/news claim, include that core claim before secondary details.
+10. Do not rely on the record title alone. The core claim must have a quote_anchor from the document body.
+11. Ignore UI walkthrough steps, setup instructions, install/deploy commands, page navigation, author bios, article metadata, publication-date-only facts, upvote/follow counts, boilerplate, and code/config details unless that detail is the central news.
+12. Do not extract generic capabilities like "the tool can write code" unless the document gives a concrete new capability, limitation, metric, or adoption result.
+13. Use prediction_claim only for concrete forecasts with numbers, dates, market size, adoption estimates, or explicit uncertainty.
+14. Use interpretive_claim only when the document grounds a meaningful "why it matters" point; do not extract generic commentary.
 
 Claim types:
   event_fact, timeline_fact, product_fact, model_capability, feature_claim,

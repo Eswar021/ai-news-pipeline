@@ -6,6 +6,7 @@ Instructions:
 3. Do NOT be overly strict — general analytical statements that reasonably follow from the evidence are acceptable as "analysis_supported".
 4. Flag "overclaim" only if a sentence adds specific facts, rankings, predictions, or certainty that the source does not support.
 5. Flag "unsupported" only if a sentence makes claims with no connection to the source material.
+6. Cautious facts can be supported when the sentence uses attribution or careful language.
 
 Return ONLY a JSON object with this exact shape:
 {

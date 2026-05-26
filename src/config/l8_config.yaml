@@ -1,0 +1,5 @@
+layer_8:
+  support_verifier_model: "gpt-5-nano"
+  support_verifier_prompt_version: "v1"
+  verifier_worker_count: 10
+  duration_tolerance_ratio: 0.25

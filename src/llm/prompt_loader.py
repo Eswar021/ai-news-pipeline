@@ -12,8 +12,16 @@ def load_system_prompt(module_name: str, version: str) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+def load_user_preamble(module_name: str, version: str) -> str:
+    path = PROMPTS_DIR / version / module_name / "user_preamble.txt"
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
+
+
 def load_prompt_bundle(module_name: str, version: str) -> dict[str, str]:
     return {
         "version": version,
         "system": load_system_prompt(module_name, version),
+        "user_preamble": load_user_preamble(module_name, version),
     }

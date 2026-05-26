@@ -362,6 +362,7 @@ def _build_prepared_record(
         "published_at": published_at_iso,
         "content": normalized_content,
         "content_status": content_status,
+        "source_relationship": _source_relationship(record),
     }
 
     optional_keys = [
@@ -390,7 +391,6 @@ def _build_prepared_record(
         "content_integrity_reason",
         "content_title_overlap",
         "content_title_coverage",
-        "source_relationship",
         "hosted_author_or_org",
     ]
     for key in optional_keys:
@@ -404,6 +404,25 @@ def _build_prepared_record(
         prepared[key] = value
 
     return prepared
+
+
+def _source_relationship(record: dict) -> str:
+    existing = clean_text(record.get("source_relationship", ""))
+    if existing:
+        return existing
+
+    source_group = clean_text(record.get("source_group", ""))
+    if source_group == "ai_company_blogs":
+        return "first_party"
+    if source_group == "tech_news_apis":
+        return "third_party"
+    if source_group == "research_papers":
+        return "research"
+    if source_group == "youtube_podcast_transcripts":
+        return "channel_or_creator"
+    if source_group == "community_signals":
+        return "community"
+    return "unknown"
 
 
 def _build_record_key(*, source: str, url: str, title: str, published_at: str) -> str:
@@ -732,7 +751,16 @@ def _load_manifest(run_ref: str) -> dict:
             f"run_manifest.json not found for {run_ref}. Run L0 first:\n"
             "  python -m src.pipeline.L0_manifest.runner --run-profile <name>"
         )
-    return json.loads(path.read_text(encoding="utf-8"))
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if run_ref == "current":
+        run_id = manifest.get("run_id")
+        if not run_id:
+            raise KeyError("output/current_manifest.json is missing run_id")
+        run_manifest_path = OUTPUT_DIR / run_id / "run_manifest.json"
+        if not run_manifest_path.exists():
+            raise FileNotFoundError(f"Run manifest not found: {run_manifest_path}")
+        manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
+    return manifest
 
 
 def _load_l1_records(run_id: str) -> dict:

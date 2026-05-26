@@ -1,5 +1,5 @@
 """
-L5 Editorial — decide which video to make from grounded L4 fact packets.
+L5 Editorial — build a roundup-first video brief from grounded L4 fact packets.
 
 Reads:
     output/{run_id}/run_manifest.json
@@ -25,7 +25,7 @@ from src.config.paths import CURRENT_MANIFEST_PATH, OUTPUT_DIR
 from src.llm.prompt_loader import load_prompt_bundle
 from src.pipeline.L5_editorial.brief_builder import build_selected_video
 from src.pipeline.L5_editorial.candidate_builder import build_candidates, compact_candidate_evaluation
-from src.pipeline.L5_editorial.decision import choose_video, evaluate_candidates, mark_selected
+from src.pipeline.L5_editorial.formats.roundup import choose_roundup, evaluate_candidates, mark_selected
 from src.pipeline.L5_editorial.viewer_value import add_viewer_values
 
 
@@ -37,9 +37,11 @@ def run(run_ref: str) -> Path:
     layer5_cfg = manifest.get("layer_5")
     if not isinstance(layer5_cfg, dict):
         raise KeyError("run_manifest.json is missing layer_5 config. Re-run layer 0 after adding L5.")
+    target_format = _resolve_target_format(layer5_cfg)
 
     run_id = manifest["run_id"]
     print(f"[L5] Run: {run_id}")
+    print(f"[L5] Target format: {target_format}")
     fact_packets_payload = _load_l4_fact_packets(run_id)
     fact_packets = fact_packets_payload["fact_packets"]
     print(f"[L5] Input fact packets: {len(fact_packets)}")
@@ -61,7 +63,7 @@ def run(run_ref: str) -> Path:
     )
 
     evaluations = evaluate_candidates(candidates, layer5_cfg)
-    decision_result = choose_video(evaluations, layer5_cfg)
+    decision_result = choose_roundup(evaluations, layer5_cfg)
     selected_story_ids = set(decision_result["selected_story_ids"])
     evaluations = mark_selected(
         evaluations,
@@ -118,6 +120,22 @@ def _serialize_decision(decision_result: dict) -> dict:
     }
 
 
+def _resolve_target_format(layer5_cfg: dict) -> str:
+    target_format = layer5_cfg.get("target_format")
+    if not isinstance(target_format, str) or not target_format.strip():
+        raise KeyError(
+            "run_manifest.json is missing layer_5.target_format. "
+            "Re-run layer 0 after updating L5 config."
+        )
+    target_format = target_format.strip()
+    if target_format != "roundup":
+        raise NotImplementedError(
+            f"Layer 5 target_format '{target_format}' is not implemented yet. "
+            "Only 'roundup' is active in the current rebuild."
+        )
+    return target_format
+
+
 def _build_evidence_boundaries(selected_packets: list[dict], evaluations: list[dict], selected_video: dict) -> dict:
     safe_fact_ids: list[str] = []
     cautious_fact_ids: list[str] = []
@@ -166,10 +184,23 @@ def _build_summary(run_id: str, payload: dict, evaluations: list[dict], llm_call
         if evaluation.get("selected")
     )
     source_relationship_mix = Counter()
+    audience_fit_mix = Counter(
+        (evaluation.get("viewer_value") or {}).get("audience_fit", "unknown")
+        for evaluation in evaluations
+    )
+    roundup_fit_mix = Counter(
+        (evaluation.get("viewer_value") or {}).get("roundup_segment_fit", "unknown")
+        for evaluation in evaluations
+    )
+    selected_audience_fit_mix = Counter()
+    selected_roundup_fit_mix = Counter()
     for evaluation in evaluations:
         if not evaluation.get("selected"):
             continue
         source_relationship_mix.update(evaluation.get("source_relationship_counts", {}))
+        viewer_value = evaluation.get("viewer_value") or {}
+        selected_audience_fit_mix.update([viewer_value.get("audience_fit", "unknown")])
+        selected_roundup_fit_mix.update([viewer_value.get("roundup_segment_fit", "unknown")])
     selected_count = payload["decision"]["selected_story_count"]
     return {
         "run_id": run_id,
@@ -183,6 +214,10 @@ def _build_summary(run_id: str, payload: dict, evaluations: list[dict], llm_call
         "readiness_mix": dict(readiness_mix),
         "selected_role_mix": dict(role_mix),
         "selected_source_relationship_mix": dict(source_relationship_mix),
+        "audience_fit_mix": dict(audience_fit_mix),
+        "roundup_segment_fit_mix": dict(roundup_fit_mix),
+        "selected_audience_fit_mix": dict(selected_audience_fit_mix),
+        "selected_roundup_segment_fit_mix": dict(selected_roundup_fit_mix),
         "llm_call_count": _count_jsonl_lines(llm_calls_path),
     }
 
@@ -214,7 +249,16 @@ def _load_manifest(run_ref: str) -> dict:
 
     if not path.exists():
         raise FileNotFoundError(f"run_manifest.json not found for {run_ref}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if run_ref == "current":
+        run_id = manifest.get("run_id")
+        if not run_id:
+            raise KeyError("output/current_manifest.json is missing run_id")
+        run_manifest_path = OUTPUT_DIR / run_id / "run_manifest.json"
+        if not run_manifest_path.exists():
+            raise FileNotFoundError(f"Run manifest not found: {run_manifest_path}")
+        manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
+    return manifest
 
 
 def _load_l4_fact_packets(run_id: str) -> dict:

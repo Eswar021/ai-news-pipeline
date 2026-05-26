@@ -19,8 +19,19 @@ Writes:
     output/{run_id}/L5/selected_video_brief.json → when L5 runs
     output/{run_id}/L5/summary.json          → when L5 runs
     output/{run_id}/L5/llm_calls.jsonl       → when L5 runs
+    output/{run_id}/L6/content_packet.json   → when L6 runs
+    output/{run_id}/L6/summary.json          → when L6 runs
+    output/{run_id}/L7/script_package.json   → when L7 runs
+    output/{run_id}/L7/summary.json          → when L7 runs
+    output/{run_id}/L7/llm_calls.jsonl       → when L7 runs
+    output/{run_id}/L8/verification_package.json → when L8 runs
+    output/{run_id}/L8/summary.json          → when L8 runs
+    output/{run_id}/L8/llm_calls.jsonl       → when L8 runs
+    output/{run_id}/L9/memory_update.json    → when L9 runs
+    output/{run_id}/L9/summary.json          → when L9 runs
+    output/memory/rebuild_memory.json        → when L9 runs
 
-LLM: yes for L3 story fingerprinting, L4 fact extraction, and L5 editorial judgment
+LLM: yes for L3 story fingerprinting, L4 fact extraction, L5 editorial judgment, L7 script writing, and L8 support verification
 
 Module execution order:
     1. parse requested layers
@@ -30,6 +41,10 @@ Module execution order:
     5. run L3 if requested
     6. run L4 if requested
     7. run L5 if requested
+    8. run L6 if requested
+    9. run L7 if requested
+    10. run L8 if requested
+    11. run L9 if requested
 
 Usage:
     python -m src.pipeline.runner 0 --run-profile daily_48h_all_sources
@@ -38,11 +53,19 @@ Usage:
     python -m src.pipeline.runner 0 1 2 3 --run-profile daily_48h_all_sources
     python -m src.pipeline.runner 0 1 2 3 4 --run-profile daily_48h_all_sources
     python -m src.pipeline.runner 0 1 2 3 4 5 --run-profile daily_48h_all_sources
+    python -m src.pipeline.runner 0 1 2 3 4 5 6 --run-profile daily_48h_all_sources
+    python -m src.pipeline.runner 0 1 2 3 4 5 6 7 --run-profile daily_48h_all_sources
+    python -m src.pipeline.runner 0 1 2 3 4 5 6 7 8 --run-profile daily_48h_all_sources
+    python -m src.pipeline.runner 0 1 2 3 4 5 6 7 8 9 --run-profile daily_48h_all_sources
     python -m src.pipeline.runner 1
     python -m src.pipeline.runner 2
     python -m src.pipeline.runner 3
     python -m src.pipeline.runner 4
     python -m src.pipeline.runner 5
+    python -m src.pipeline.runner 6
+    python -m src.pipeline.runner 7
+    python -m src.pipeline.runner 8
+    python -m src.pipeline.runner 9
     python -m src.pipeline.runner 1 --run-id run_...
     python -m src.pipeline.runner 1 --run-id current
 """
@@ -56,6 +79,10 @@ from src.pipeline.L2_evidence_prep.runner import run as run_l2
 from src.pipeline.L3_story_map.runner import run as run_l3
 from src.pipeline.L4_fact_packet.runner import run as run_l4
 from src.pipeline.L5_editorial.runner import run as run_l5
+from src.pipeline.L6_package.runner import run as run_l6
+from src.pipeline.L7_script.runner import run as run_l7
+from src.pipeline.L8_verify.runner import run as run_l8
+from src.pipeline.L9_memory.runner import run as run_l9
 
 
 def main() -> None:
@@ -67,7 +94,7 @@ def main() -> None:
     parser.add_argument("--trigger", default="manual")
     args = parser.parse_args()
 
-    requested = [0, 1, 2, 3, 4, 5] if args.layers == ["all"] else sorted({int(v) for v in args.layers})
+    requested = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] if args.layers == ["all"] else sorted({int(v) for v in args.layers})
     run_id = args.run_id
     started = time.time()
 
@@ -122,6 +149,30 @@ def main() -> None:
         print("[runner] Layer 5")
         run_l5(run_ref=run_id)
         print(f"[runner] Layer 5 done in {time.time() - layer_started:.1f}s")
+
+    if 6 in requested:
+        layer_started = time.time()
+        print("[runner] Layer 6")
+        run_l6(run_ref=run_id)
+        print(f"[runner] Layer 6 done in {time.time() - layer_started:.1f}s")
+
+    if 7 in requested:
+        layer_started = time.time()
+        print("[runner] Layer 7")
+        run_l7(run_ref=run_id)
+        print(f"[runner] Layer 7 done in {time.time() - layer_started:.1f}s")
+
+    if 8 in requested:
+        layer_started = time.time()
+        print("[runner] Layer 8")
+        run_l8(run_ref=run_id)
+        print(f"[runner] Layer 8 done in {time.time() - layer_started:.1f}s")
+
+    if 9 in requested:
+        layer_started = time.time()
+        print("[runner] Layer 9")
+        run_l9(run_ref=run_id)
+        print(f"[runner] Layer 9 done in {time.time() - layer_started:.1f}s")
 
     print(f"[runner] Complete in {time.time() - started:.1f}s")
 

@@ -136,8 +136,12 @@ def _classify_fact(fact: dict) -> dict:
     noncommunity = [record for record in support_records if record["source_group"] != "community_signals"]
     corroborated_noncommunity = _is_corroborated_noncommunity(noncommunity)
     community_only = bool(support_groups) and support_groups == {"community_signals"}
+    needs_corroboration = _needs_corroboration(fact, support_records)
 
-    if official_direct:
+    if needs_corroboration and not corroborated_noncommunity:
+        status = "cautious"
+        confidence = "medium" if noncommunity else "low"
+    elif official_direct:
         status = "safe"
         confidence = "high"
     elif direct_support >= 1 and corroborated_noncommunity:
@@ -162,6 +166,21 @@ def _classify_fact(fact: dict) -> dict:
     if status == "discarded":
         result["discard_reason"] = "insufficient_support"
     return result
+
+
+def _needs_corroboration(fact: dict, support_records: list[dict]) -> bool:
+    fact_type = fact.get("fact_type", "")
+    if fact_type in {"prediction_claim", "interpretive_claim"}:
+        return True
+    if fact_type not in {"benchmark_claim", "business_claim", "statistic_claim"}:
+        return False
+
+    source_relationships = {
+        record.get("source_relationship", "")
+        for record in support_records
+        if record.get("source_group") == "ai_company_blogs"
+    }
+    return bool(source_relationships & {"first_party", "hosted_vendor_post"})
 
 
 def _is_corroborated_noncommunity(noncommunity_support_records: list[dict]) -> bool:

@@ -1,0 +1,7 @@
+layer_7:
+  script_writer_model: "gpt-5-nano"
+  script_writer_prompt_version: "v1"
+  script_worker_count: 10
+  words_per_minute: 145
+  title_thumbnail_model: "gpt-5-mini"
+  title_thumbnail_prompt_version: "v1"

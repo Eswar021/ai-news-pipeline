@@ -41,12 +41,15 @@ def compact_candidate_evaluation(candidate: dict) -> dict:
         "editorial_value",
         "source_groups",
         "source_relationship_counts",
+        "fact_type_counts",
         "evidence_counts",
         "viewer_value",
         "score_components",
         "opportunity_score",
-        "deep_dive_eligible",
         "roundup_eligible",
+        "roundup_perspective_eligible",
+        "roundup_perspective_type",
+        "selection_path",
         "segment_role",
         "target_seconds",
         "role_reason",
@@ -87,6 +90,7 @@ def _build_candidate(packet: dict) -> dict:
         "source_groups": list(packet.get("source_groups", [])),
         "source_group_counts": source_group_counts,
         "source_relationship_counts": dict(source_relationship_counts),
+        "fact_type_counts": dict(fact_type_counts),
         "hosted_vendor_record_count": source_relationship_counts.get("hosted_vendor_post", 0),
         "community_only": community_only,
         "safe_fact_count": safe_count,
@@ -110,8 +114,10 @@ def _build_candidate(packet: dict) -> dict:
         "viewer_value": {},
         "score_components": {},
         "opportunity_score": 0.0,
-        "deep_dive_eligible": False,
         "roundup_eligible": False,
+        "roundup_perspective_eligible": False,
+        "roundup_perspective_type": "",
+        "selection_path": "",
         "segment_role": "",
         "target_seconds": 0,
         "role_reason": "",
@@ -133,6 +139,16 @@ def _source_relationship(record: dict) -> str:
     if existing:
         return existing
 
+    source_group = clean_text(record.get("source_group", ""))
+    if source_group == "tech_news_apis":
+        return "third_party"
+    if source_group == "research_papers":
+        return "research"
+    if source_group == "youtube_podcast_transcripts":
+        return "channel_or_creator"
+    if source_group == "community_signals":
+        return "community"
+
     url = clean_text(record.get("url", ""))
     parsed = urlparse(url)
     host = parsed.netloc.lower()
@@ -141,4 +157,6 @@ def _source_relationship(record: dict) -> str:
     path_parts = [part for part in parsed.path.strip("/").split("/") if part]
     if host == "huggingface.co" and len(path_parts) >= 3 and path_parts[0] == "blog":
         return "hosted_vendor_post"
-    return "first_party"
+    if source_group == "ai_company_blogs":
+        return "first_party"
+    return "unknown"

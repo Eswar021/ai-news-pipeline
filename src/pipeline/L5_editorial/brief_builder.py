@@ -50,10 +50,11 @@ def _build_user_prompt(decision_result: dict) -> str:
         "selected_stories": selected,
     }
     return (
-        "Build editorial direction for the selected video. Do not write the script, title, or thumbnail.\n"
+        "Build editorial direction for the selected AI news roundup. Do not write the script, title, or thumbnail.\n"
         "Return JSON with exactly these keys: viewer_promise, editorial_angle, thesis_or_theme, "
         "opening_hook_direction, tone, story_order, blocked_angles.\n"
         "story_order must list only selected story_id values and include role, target_seconds, and guidance. "
+        "Copy story_id values exactly; never shorten, rewrite, or regenerate them. "
         "Use each story's proposed_role and proposed_target_seconds exactly.\n\n"
         f"Selection:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
     )
@@ -67,6 +68,9 @@ def _compact_selected_item(candidate: dict) -> dict:
         "proposed_role": candidate.get("segment_role", ""),
         "proposed_target_seconds": candidate.get("target_seconds", 0),
         "role_reason": candidate.get("role_reason", ""),
+        "selection_path": candidate.get("selection_path", ""),
+        "source_groups": candidate.get("source_groups", []),
+        "source_relationship_counts": candidate.get("source_relationship_counts", {}),
         "viewer_value": candidate["viewer_value"],
         "opportunity_score": candidate["opportunity_score"],
         "readiness": candidate["readiness"],
@@ -92,7 +96,8 @@ def _validate_selected_video(response: dict, decision_result: dict) -> dict:
         if not isinstance(item, dict):
             raise ValueError("editorial_brief_builder story_order entries must be objects")
         story_id = clean_text(item.get("story_id", ""))
-        if story_id not in selected_ids:
+        story_id = _resolve_selected_story_id(story_id, selected_ids)
+        if not story_id:
             raise ValueError(f"editorial_brief_builder used unselected story_id: {story_id}")
         selected_item = selected_by_id[story_id]
         cleaned_order.append(
@@ -119,3 +124,17 @@ def _validate_selected_video(response: dict, decision_result: dict) -> dict:
         "story_order": cleaned_order,
         "blocked_angles": [clean_text(angle) for angle in blocked_angles if clean_text(angle)],
     }
+
+
+def _resolve_selected_story_id(story_id: str, selected_ids: set[str]) -> str:
+    if story_id in selected_ids:
+        return story_id
+    if not story_id:
+        return ""
+    if len(story_id) < 45:
+        return ""
+
+    matches = [selected_id for selected_id in selected_ids if selected_id.startswith(story_id)]
+    if len(matches) == 1:
+        return matches[0]
+    return ""
