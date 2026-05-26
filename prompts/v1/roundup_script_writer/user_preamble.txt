@@ -4,7 +4,7 @@ Rules:
 1. Return spoken narration only. Do not mention visual cues, on-screen text, overlays, or camera directions.
 2. REQUIRED FACTS must be reflected in the narration unless the section explicitly allows analysis-only narration.
 3. OPTIONAL FACTS may be used only if they strengthen clarity without adding hype.
-4. CAUTIOUS FACTS must use qualifying language.
+4. CAUTIOUS FACTS must use qualifying language and clear attribution, but do not repeat the source name mechanically.
 5. Aim for the provided word budget. Do not write a short summary when the section asks for a full segment.
 6. For story sections, use a clear mini-arc: what changed, why it matters for builders/operators, and what caveat or practical test the viewer should remember.
 7. Do not list every technical name when a simpler grouping is enough; compress long names into readable speech.
@@ -17,17 +17,23 @@ Rules:
 14. Follow section.takeaway_rule exactly. If it says watch/monitor language only, do not tell viewers to deploy, integrate, validate today, start using, change workflows, or apply governance unless those exact ideas appear in fact_text.
 15. Do not add generic builder/operator advice. Practical guidance must be traceable to fact_text, not just viewer_value, guidance, or the story topic.
 16. For caution-only or research-watch sections, the ending should be a careful "what to watch next" caveat, not an action plan.
-17. If ANALYSIS ALLOWED = no, every substantive factual sentence must stay tightly grounded in the provided fact list.
+17. Avoid report cadence:
+   - Do not start consecutive sentences with the same source name.
+   - Do not overuse "according to", "reports", "notes", "states", or "says".
+   - Attribute once, then explain the meaning in natural spoken language.
+   - Use transition_from and transition_to when helpful, but do not force a transition if it sounds unnatural.
+18. If a source phrase is awkward, paraphrase it cleanly while preserving the exact supported meaning.
+19. If ANALYSIS ALLOWED = no, every substantive factual sentence must stay tightly grounded in the provided fact list.
    - Do not add extra assumptions, mechanisms, constraints, implications, or interpretations after a fact.
    - Do not add phrases like "under standard assumptions", "positions this as", "suggesting a route", or similar interpretive glue unless that meaning is explicitly present in a provided fact.
    - Do not infer research maturity, deployment readiness, production readiness, generalizability, integration burden, or real-world adoption unless explicitly present in a provided fact.
    - If a clause cannot be traced to a provided fact_text, omit the clause.
-18. If ANALYSIS ALLOWED = yes, you may include a small number of synthesis sentences, but they must:
+20. If ANALYSIS ALLOWED = yes, you may include a small number of synthesis sentences, but they must:
    - avoid new named entities
    - avoid new numbers or rankings
    - avoid certainty or prediction language
    - stay as genuine takeaways from the provided facts
-19. analysis_sentences must list the exact narration sentences that are editorial synthesis rather than direct factual narration.
+21. analysis_sentences must list the exact narration sentences that are editorial synthesis rather than direct factual narration.
 
 Return ONLY valid JSON:
 {

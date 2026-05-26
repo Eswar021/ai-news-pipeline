@@ -1081,13 +1081,32 @@ def main():
     parser = argparse.ArgumentParser(description="Generate ChatGPT handoff files")
     parser.add_argument("--run-id", dest="run_id")
     parser.add_argument(
+        "--profile",
+        help=(
+            "Rebuild export profile: auto, story_map, fact_packet, editorial_brief, "
+            "content_packet, script_review, publish_review"
+        ),
+    )
+    parser.add_argument(
         "--level",
         choices=["after_layer_3", "after_layer_4", "after_layer_6"],
-        help="Handoff level (auto-detected if omitted)",
+        help="Legacy handoff level, or rebuild alias for story_map/fact_packet/content_packet",
     )
     args = parser.parse_args()
 
     run_id = args.run_id
+    if _should_use_rebuild_export(run_id, args.profile):
+        from src.chatgpt_exporter import export as export_rebuild
+
+        profile = args.profile or args.level or "auto"
+        result = export_rebuild(run_ref=run_id or "current", profile=profile)
+        print(f"[chatgpt_exporter] Wrote: {result['out_dir']}")
+        print(f"  Profile      : {result['profile']}")
+        print(f"  Instructions : {result['instructions_path']}")
+        print(f"  Payload      : {result['payload_path']}")
+        print(f"  Manifest     : {result['manifest_path']}")
+        return
+
     if not run_id:
         for rp in sorted(RUNS_DIR.glob("*/layer_3/ranked_stories.json"),
                          key=lambda p: p.stat().st_mtime, reverse=True):
@@ -1099,6 +1118,17 @@ def main():
         print(f"[export] Auto-discovered run: {run_id}")
 
     export(run_id, args.level)
+
+
+def _should_use_rebuild_export(run_id: str | None, profile: str | None) -> bool:
+    if profile:
+        return True
+    output_dir = Path(__file__).resolve().parent / "output"
+    if run_id == "current":
+        return (output_dir / "current_manifest.json").exists()
+    if run_id:
+        return (output_dir / run_id / "run_manifest.json").exists()
+    return (output_dir / "current_manifest.json").exists()
 
 
 if __name__ == "__main__":

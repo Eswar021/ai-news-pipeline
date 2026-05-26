@@ -60,8 +60,31 @@ def clean_text(value: str | None) -> str:
     if not value:
         return ""
     text = unescape(value)
+    text = repair_mojibake(text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def repair_mojibake(value: str) -> str:
+    best = value
+    best_score = _mojibake_score(best)
+    for encoding in ("cp1252", "latin1"):
+        try:
+            candidate = value.encode(encoding).decode("utf-8")
+        except UnicodeError:
+            continue
+        candidate_score = _mojibake_score(candidate)
+        if candidate_score < best_score:
+            best = candidate
+            best_score = candidate_score
+    return best
+
+
+def _mojibake_score(value: str) -> int:
+    markers = ("\u00c2", "\u00c3", "\u00e2", "\ufffd")
+    score = sum(value.count(marker) for marker in markers)
+    score += sum(1 for char in value if 0x80 <= ord(char) <= 0x9F)
+    return score
 
 
 def strip_html(value: str | None) -> str:
@@ -117,7 +140,8 @@ def parse_datetime(value: str | None) -> datetime | None:
     if not raw:
         return None
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
     except ValueError:
         pass
     for fmt in (

@@ -1,77 +1,82 @@
 # ChatGPT Handoff Strategy
 
-This is the current, code-accurate reference for ChatGPT handoff generation.
+This note describes the rebuilt pipeline handoff exporter.
 
-## Purpose
+The exporter is a helper tool, not a pipeline layer. It does not change `L0-L9`
+contracts and it does not write into layer folders.
 
-The pipeline stops at a chosen point, exports structured artifacts, and lets ChatGPT do the final writing work where narrative judgment matters most.
+## Commands
 
-The exporter is [chatgpt_export.py](../../chatgpt_export.py).
+```bash
+python3 -m src.chatgpt_exporter --run-id current
+python3 -m src.chatgpt_exporter --run-id current --profile script_review
+python3 chatgpt_export.py --run-id current --profile publish_review
+```
 
-## Output files
+The root `chatgpt_export.py` command delegates to the rebuild exporter when the
+run exists under `output/`. Legacy `data/runs/` exports remain reference-only.
 
-Each export run writes three files to `output/chatgpt_handoffs/{run_id}/`:
+## Output
 
-- `01_instructions.md`
-- `02_stories.md`
-- `03_dump.md`
+Each export writes:
 
-The exporter requires a completed Layer 3 handoff minimum.
+```text
+output/chatgpt_handoffs/{run_id}/{profile}/01_instructions.md
+output/chatgpt_handoffs/{run_id}/{profile}/02_payload.md
+output/chatgpt_handoffs/{run_id}/{profile}/03_manifest_context.md
+```
 
-If a run does not have `layer_3/ranked_stories.json`, the exporter now stops with a clear error instead of generating an empty story handoff.
+Use:
+- `01_instructions.md` first
+- `02_payload.md` second
+- `03_manifest_context.md` only when ChatGPT needs full run/config context
 
-## What drives the handoff
+## Profiles
 
-### Shared config
+`auto` picks the highest completed rebuild artifact in this order:
 
-- Layer 0 snapshots the shared handoff prompt config from `config/chatgpt_prompts.yaml` into `run_manifest.json` under `resolved_config.chatgpt_handoff`.
+1. `publish_review` from `L8/verification_package.json`
+2. `script_review` from `L7/script_package.json`
+3. `content_packet` from `L6/content_packet.json`
+4. `editorial_brief` from `L5/selected_video_brief.json`
+5. `fact_packet` from `L4/fact_packets.json`
+6. `story_map` from `L3/stories.json`
 
-### Dynamic run inputs
+Explicit profiles:
 
-- `data/runs/{run_id}/run_manifest.json`
-- Layer 3 ranked stories and story map
-- Layer 4 fact sheets and verified claims when present
-- Layer 5 selected brief when present
-- Layer 6 research packet when present
-- Layer 7 script writer brief when present
-- Layer 8 generated script when present
+- `story_map`: review story candidates after clustering/ranking
+- `fact_packet`: review grounded facts and evidence strength
+- `editorial_brief`: review selected story set and video angle
+- `content_packet`: hand off production packet before script generation
+- `script_review`: review generated script package
+- `publish_review`: review verified final publish package
 
-## How the exporter decides the active format
+Legacy aliases are accepted where useful:
+- `after_layer_3` -> `story_map`
+- `after_layer_4` -> `fact_packet`
+- `after_layer_6` -> `content_packet`
 
-The exporter resolves the actual selected format from downstream artifacts, not just from Layer 0 eligibility.
+## Prompt Source
 
-Current resolution order:
+Exporter prompt text lives in:
 
-1. Layer 8 `generated_script.json`
-2. Layer 7 `script_writer_brief.json`
-3. Layer 6 `research_packet.json`
-4. Layer 5 `selected_video_brief.json`
-5. Run-manifest declared target or eligibility default
+```text
+prompts/v1/chatgpt_exporter/
+```
 
-This matters for `auto` runs, where the manifest may list multiple eligible formats but the pipeline later selects one concrete format.
+The exporter combines:
+- `base.md`
+- the selected profile prompt
+- dynamic manifest/run context
+- the selected layer artifact
+- available layer summaries
 
-## Memory behavior
+## Design Rules
 
-`01_instructions.md` may include a repetition-avoidance section, but only published-video history should be used for that.
-
-Current rule:
-
-- raw run memory can exist for prepared runs
-- published-memory guidance in the handoff only comes from records that have `timestamps.published_at`
-
-This prevents unpublished drafts from being treated like channel history.
-
-## Current strategy split
-
-Right now the exporter has:
-
-- shared prompt content from config
-- code-defined format-specific blocks for `roundup` and `deep_dive`
-
-If more strategies become active later, the clean next step is to make those strategy blocks config-driven too.
-
-## Related docs
-
-- [System Audit — 2026-05-12](../audits/2026-05-12_system_audit.md)
-- [Layer Output Map](../reference/layer_output_map.md)
-- [System Completion Feature Map](../roadmaps/system_completion_feature_map.md)
+- Read `run_manifest.json` and the selected profile artifact.
+- Include manifest context so ChatGPT sees run profile, source groups, channel,
+  target format, model/prompt choices, timing, and caps.
+- Do not make ChatGPT infer pipeline configuration from old files.
+- Do not add unsupported facts in prompts.
+- Preserve caution labels and evidence boundaries.
+- Keep this as an export helper, not a new pipeline layer.

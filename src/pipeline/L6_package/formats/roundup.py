@@ -38,6 +38,10 @@ LOW_SCRIPT_VALUE_PHRASES = (
     "availability –",
     "available in the ",
     "aws region",
+    "button labeled",
+    "download button",
+    "download page",
+    "click download",
     "to begin using",
     "you must execute",
     "designate your account",
@@ -46,6 +50,8 @@ LOW_SCRIPT_VALUE_PHRASES = (
     "prerequisite",
     "setup",
     "install",
+    "users can try",
+    "available for download",
 )
 
 

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 from statistics import mean
 
+from src.pipeline.L1_collection.common import clean_text
 
 MAX_ROUNDUP_PER_ORG = 2
 MAX_ROUNDUP_PER_PRODUCT = 1
-DIVERSITY_EXCEPTION_MARGIN = 8.0
+MAX_ROUNDUP_PER_EVENT_FAMILY = 2
 MIN_PERSPECTIVE_VIEWER_SCORE = 60
 MIN_PERSPECTIVE_USABLE_FACTS = 5
 MIN_PERSPECTIVE_VALUABLE_FACTS = 2
@@ -151,6 +153,9 @@ def _evaluate_candidate(candidate: dict, layer5_cfg: dict) -> dict:
         "roundup_eligible": eligible,
         "roundup_perspective_eligible": perspective_eligible,
         "roundup_perspective_type": perspective_type,
+        "roundup_org_key": _org_key(candidate),
+        "roundup_product_key": _product_key(candidate),
+        "roundup_event_family_key": _event_family_key(candidate),
         "selection_path": "",
         "rejection_reasons": _rejection_reasons(candidate, eligible=eligible, perspective_eligible=perspective_eligible),
     }
@@ -278,6 +283,7 @@ def _select_balanced_roundup(roundup_candidates: list[dict], *, max_roundup: int
     selected_ids: set[str] = set()
     org_counts: dict[str, int] = {}
     product_counts: dict[str, int] = {}
+    event_counts: dict[str, int] = {}
 
     for perspective_type in ("third_party_news", "research"):
         candidate = _best_perspective_candidate(roundup_candidates, perspective_type=perspective_type)
@@ -288,13 +294,14 @@ def _select_balanced_roundup(roundup_candidates: list[dict], *, max_roundup: int
             selected_ids,
             org_counts,
             product_counts,
+            event_counts,
             candidate,
             selection_path=f"{perspective_type}_slot",
         )
         if len(selected) >= max_roundup:
             return selected
 
-    for candidate in roundup_candidates:
+    for candidate in (item for item in roundup_candidates if item.get("roundup_eligible")):
         if len(selected) >= max_roundup:
             break
         _try_add_candidate(
@@ -302,6 +309,7 @@ def _select_balanced_roundup(roundup_candidates: list[dict], *, max_roundup: int
             selected_ids,
             org_counts,
             product_counts,
+            event_counts,
             candidate,
             selection_path="score_fill",
         )
@@ -319,6 +327,7 @@ def _select_balanced_roundup(roundup_candidates: list[dict], *, max_roundup: int
             selected_ids,
             org_counts,
             product_counts,
+            event_counts,
             candidate,
             selection_path="minimum_fill",
         )
@@ -338,13 +347,17 @@ def _fill_with_approved_drafts_if_needed(
     selected_ids = {item["story_id"] for item in selected}
     org_counts: dict[str, int] = {}
     product_counts: dict[str, int] = {}
+    event_counts: dict[str, int] = {}
     for item in selected:
         org_key = _org_key(item)
         product_key = _product_key(item)
+        event_key = _event_family_key(item)
         if org_key:
             org_counts[org_key] = org_counts.get(org_key, 0) + 1
         if product_key:
             product_counts[product_key] = product_counts.get(product_key, 0) + 1
+        if event_key:
+            event_counts[event_key] = event_counts.get(event_key, 0) + 1
 
     emergency_candidates = [
         item
@@ -361,6 +374,7 @@ def _fill_with_approved_drafts_if_needed(
             selected_ids,
             org_counts,
             product_counts,
+            event_counts,
             candidate,
             selection_path="memory_minimum_fill",
         )
@@ -372,6 +386,7 @@ def _try_add_candidate(
     selected_ids: set[str],
     org_counts: dict[str, int],
     product_counts: dict[str, int],
+    event_counts: dict[str, int],
     candidate: dict,
     *,
     selection_path: str,
@@ -381,9 +396,11 @@ def _try_add_candidate(
 
     org_key = _org_key(candidate)
     product_key = _product_key(candidate)
+    event_key = _event_family_key(candidate)
     over_org = bool(org_key and org_counts.get(org_key, 0) >= MAX_ROUNDUP_PER_ORG)
     over_product = bool(product_key and product_counts.get(product_key, 0) >= MAX_ROUNDUP_PER_PRODUCT)
-    if (over_org or over_product) and not _beats_selected_floor(candidate, selected):
+    over_event = bool(event_key and event_counts.get(event_key, 0) >= MAX_ROUNDUP_PER_EVENT_FAMILY)
+    if over_org or over_product or over_event:
         return False
 
     _add_candidate(
@@ -391,6 +408,7 @@ def _try_add_candidate(
         selected_ids,
         org_counts,
         product_counts,
+        event_counts,
         candidate,
         selection_path=selection_path,
     )
@@ -402,6 +420,7 @@ def _add_candidate(
     selected_ids: set[str],
     org_counts: dict[str, int],
     product_counts: dict[str, int],
+    event_counts: dict[str, int],
     candidate: dict,
     *,
     selection_path: str,
@@ -410,10 +429,13 @@ def _add_candidate(
     selected_ids.add(candidate["story_id"])
     org_key = _org_key(candidate)
     product_key = _product_key(candidate)
+    event_key = _event_family_key(candidate)
     if org_key:
         org_counts[org_key] = org_counts.get(org_key, 0) + 1
     if product_key:
         product_counts[product_key] = product_counts.get(product_key, 0) + 1
+    if event_key:
+        event_counts[event_key] = event_counts.get(event_key, 0) + 1
 
 
 def _assign_roundup_roles(selected: list[dict], *, target_seconds: int) -> list[dict]:
@@ -597,7 +619,10 @@ def _perspective_fit_score(candidate: dict) -> float:
 def _matches_selected_family(candidate: dict, selected: object) -> bool:
     candidate_org = _org_key(candidate)
     candidate_product = _product_key(candidate)
+    candidate_event = _event_family_key(candidate)
     for selected_candidate in selected:
+        if candidate_event and candidate_event == _event_family_key(selected_candidate):
+            return True
         if candidate_product and candidate_product == _product_key(selected_candidate):
             return True
         if candidate_org and candidate_org == _org_key(selected_candidate):
@@ -605,22 +630,91 @@ def _matches_selected_family(candidate: dict, selected: object) -> bool:
     return False
 
 
-def _beats_selected_floor(candidate: dict, selected: list[dict]) -> bool:
-    if not selected:
-        return True
-    selected_floor = min(item["opportunity_score"] for item in selected)
-    return candidate["opportunity_score"] >= selected_floor + DIVERSITY_EXCEPTION_MARGIN
-
-
 def _org_key(candidate: dict) -> str:
     identity = candidate.get("story_identity") or {}
-    return str(identity.get("owning_org") or "").strip().lower()
+    value = str(identity.get("owning_org") or "").strip().lower()
+    if value in {"", "unknown", "n/a", "none", "null"}:
+        return ""
+    return value
 
 
 def _product_key(candidate: dict) -> str:
     identity = candidate.get("story_identity") or {}
-    value = identity.get("product_or_project") or identity.get("canonical_story_key") or ""
-    return str(value).strip().lower()
+    primary = _normalized_family_key(identity.get("primary_entity", ""))
+    if primary and primary not in _org_only_keys():
+        return primary
+    product = _normalized_family_key(identity.get("product_or_project", ""))
+    if product:
+        return product
+    return _normalized_family_key(identity.get("canonical_story_key", ""))
+
+
+def _event_family_key(candidate: dict) -> str:
+    identity = candidate.get("story_identity") or {}
+    org = _org_key(candidate) or _normalized_family_key(identity.get("owning_org", ""))
+    text = " ".join(
+        clean_text(value)
+        for value in (
+            candidate.get("story_title", ""),
+            identity.get("product_or_project", ""),
+            identity.get("one_sentence_story", ""),
+        )
+        if clean_text(value)
+    ).lower()
+
+    io_match = re.search(r"\b(?:google\s+)?i/?o\s*(20\d{2})\b", text)
+    if io_match:
+        return f"{org or 'unknown'}:io:{io_match.group(1)}"
+
+    for event_name in ("gtc", "computex", "wwdc", "re:invent"):
+        if re.search(rf"\b{re.escape(event_name)}\b", text):
+            year_match = re.search(r"\b(20\d{2})\b", text)
+            year = year_match.group(1) if year_match else "unknown_year"
+            return f"{org or 'unknown'}:{event_name}:{year}"
+    return ""
+
+
+def _normalized_family_key(value: object) -> str:
+    raw = clean_text(str(value or "")).lower()
+    if not raw or raw in {"unknown", "n/a", "none", "null"}:
+        return ""
+    first_part = re.split(r"[;|,/()]", raw, maxsplit=1)[0]
+    first_part = first_part.replace("_", " ")
+    tokens = []
+    stopwords = {
+        "a",
+        "an",
+        "and",
+        "api",
+        "app",
+        "desktop",
+        "for",
+        "in",
+        "of",
+        "on",
+        "the",
+        "with",
+    }
+    for token in re.findall(r"[a-z0-9]+", first_part):
+        if token in stopwords:
+            continue
+        if re.fullmatch(r"\d+(?:\.\d+)?", token):
+            continue
+        tokens.append(token)
+    return " ".join(tokens[:3]).strip()
+
+
+def _org_only_keys() -> set[str]:
+    return {
+        "amazon",
+        "anthropic",
+        "aws",
+        "google",
+        "meta",
+        "microsoft",
+        "nvidia",
+        "openai",
+    }
 
 
 def _no_video(reason: str) -> dict:

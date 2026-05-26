@@ -71,8 +71,10 @@ Usage:
 """
 
 import argparse
+import json
 import time
 
+from src.config.paths import CURRENT_MANIFEST_PATH, OUTPUT_DIR
 from src.pipeline.L0_manifest.runner import run as run_l0
 from src.pipeline.L1_collection.runner import run as run_l1
 from src.pipeline.L2_evidence_prep.runner import run as run_l2
@@ -171,10 +173,34 @@ def main() -> None:
     if 9 in requested:
         layer_started = time.time()
         print("[runner] Layer 9")
-        run_l9(run_ref=run_id)
-        print(f"[runner] Layer 9 done in {time.time() - layer_started:.1f}s")
+        if 8 in requested and not _l8_ready_for_l9(run_id):
+            print("[runner] Layer 9 skipped: Layer 8 did not approve this run.")
+        else:
+            run_l9(run_ref=run_id)
+            print(f"[runner] Layer 9 done in {time.time() - layer_started:.1f}s")
 
     print(f"[runner] Complete in {time.time() - started:.1f}s")
+
+
+def _l8_ready_for_l9(run_ref: str) -> bool:
+    run_id = _resolve_run_id(run_ref)
+    summary_path = OUTPUT_DIR / run_id / "L8" / "summary.json"
+    if not summary_path.exists():
+        return False
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    return summary.get("status") == "approved" and summary.get("ready_for_layer_9") is True
+
+
+def _resolve_run_id(run_ref: str) -> str:
+    if run_ref != "current":
+        return run_ref
+    if not CURRENT_MANIFEST_PATH.exists():
+        raise FileNotFoundError(f"Current manifest not found: {CURRENT_MANIFEST_PATH}")
+    manifest = json.loads(CURRENT_MANIFEST_PATH.read_text(encoding="utf-8"))
+    run_id = manifest.get("run_id")
+    if not run_id:
+        raise KeyError("output/current_manifest.json is missing run_id")
+    return run_id
 
 
 if __name__ == "__main__":

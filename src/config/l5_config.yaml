@@ -1,9 +1,9 @@
 layer_5:
   target_format: "roundup"
-  candidate_limit: 12
-  roundup_min_stories: 4
-  roundup_max_stories: 6
-  roundup_target_seconds: 480
+  candidate_limit: 20
+  roundup_min_stories: 5
+  roundup_max_stories: 8
+  roundup_target_seconds: 720
   roundup_min_candidate_score: 62
   viewer_value_model: "gpt-5-nano"
   viewer_value_prompt_version: "v1"

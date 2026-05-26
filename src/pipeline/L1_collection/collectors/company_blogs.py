@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from html.parser import HTMLParser
+import json
 import re
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 import xml.etree.ElementTree as ET
 
 from src.pipeline.L1_collection.common import (
@@ -39,6 +40,7 @@ LISTING_EXACT_PATHS = {
     "/news",
     "/en/news",
 }
+FULL_ARTICLE_CONTENT_SOURCES = {"article_body", "markdown_article_body"}
 
 
 def collect(cfg: dict) -> dict:
@@ -84,26 +86,47 @@ def collect(cfg: dict) -> dict:
             article_html = ""
             resolved_title = entry["title"]
             article_published_at = entry.get("published_at", "")
-            try:
-                article_html = _fetch_article_html(entry["url"], timeout, source["id"])
-                resolved_title = _resolve_article_title(entry["title"], article_html, source["id"])
-                article_body = _extract_source_article_text(article_html, source["id"])
-                article_page_date = extract_published_at_from_html(article_html)
-                if source["id"] == "google_deepmind_blog":
-                    article_published_at = article_page_date or article_published_at
-                elif not article_published_at:
-                    article_published_at = article_page_date
-            except Exception:
-                notes.append(f"Article fetch failed for {entry['url']}")
+            if not entry.get("skip_article_fetch"):
+                try:
+                    article_html = _fetch_article_html(entry["url"], timeout, source["id"])
+                    resolved_title = _resolve_article_title(entry["title"], article_html, source["id"])
+                    article_body = _extract_source_article_text(article_html, source["id"])
+                    article_page_date = extract_published_at_from_html(article_html)
+                    if source["id"] == "google_deepmind_blog":
+                        article_published_at = article_page_date or article_published_at
+                    elif not article_published_at:
+                        article_published_at = article_page_date
+                except Exception:
+                    notes.append(f"Article fetch failed for {entry['url']}")
 
-            content = article_body or clean_text(entry.get("summary", ""))
-            content_source = "article_body" if article_body else "entry_summary"
+            entry_content = clean_text(entry.get("content", ""))
+            content = article_body or entry_content or clean_text(entry.get("summary", ""))
+            content_source = "article_body" if article_body else entry.get("content_source", "entry_summary")
             integrity = _content_integrity(resolved_title, content, content_source)
             source_relationship = _source_relationship(source["id"], entry["url"])
+            if entry.get("fetch_note"):
+                notes.append(entry["fetch_note"])
             if integrity["status"] != "ok":
                 notes.append(
                     f"Content integrity {integrity['status']}: {resolved_title} ({entry['url']})"
                 )
+            extra_fields = {
+                "collector": "company_blogs",
+                "source_name": source["name"],
+                "trust_tier": source.get("trust_tier"),
+                "summary": clean_text(entry.get("summary", "")),
+                "mode": source.get("mode", "rss"),
+                "content_source": content_source,
+                "content_integrity_status": integrity["status"],
+                "content_integrity_reason": integrity["reason"],
+                "content_title_overlap": integrity["title_overlap"],
+                "content_title_coverage": integrity["title_coverage"],
+                **source_relationship,
+            }
+            if entry.get("article_markdown_url"):
+                extra_fields["article_markdown_url"] = entry["article_markdown_url"]
+            if entry.get("categories"):
+                extra_fields["categories"] = entry["categories"]
             record = build_record(
                 source=source["id"],
                 source_group=cfg["source_group"],
@@ -112,19 +135,7 @@ def collect(cfg: dict) -> dict:
                 url=entry["url"],
                 published_at=article_published_at,
                 content=content,
-                extra_fields={
-                    "collector": "company_blogs",
-                    "source_name": source["name"],
-                    "trust_tier": source.get("trust_tier"),
-                    "summary": clean_text(entry.get("summary", "")),
-                    "mode": source.get("mode", "rss"),
-                    "content_source": content_source,
-                    "content_integrity_status": integrity["status"],
-                    "content_integrity_reason": integrity["reason"],
-                    "content_title_overlap": integrity["title_overlap"],
-                    "content_title_coverage": integrity["title_coverage"],
-                    **source_relationship,
-                },
+                extra_fields=extra_fields,
             )
             source_records.append(record)
             collected_count += 1
@@ -204,7 +215,7 @@ def _trim_openai_article_text(text: str) -> str:
 
 
 def _content_integrity(title: str, content: str, content_source: str) -> dict:
-    if content_source != "article_body":
+    if content_source not in FULL_ARTICLE_CONTENT_SOURCES:
         return {
             "status": "summary_only",
             "reason": "article_body_missing",
@@ -213,7 +224,8 @@ def _content_integrity(title: str, content: str, content_source: str) -> dict:
         }
 
     cleaned_content = clean_text(content)
-    if len(cleaned_content) < 700:
+    minimum_body_length = 300 if content_source == "markdown_article_body" else 700
+    if len(cleaned_content) < minimum_body_length:
         status = "wrong_article" if _lead_title_mismatch(title, cleaned_content) else "too_short"
         return {
             "status": status,
@@ -358,6 +370,16 @@ def _fetch_entries(source: dict, timeout: int) -> list[dict]:
         base_url = source["base_url"]
         prefixes = source.get("allowed_path_prefixes") or ["/blog/"]
         return _parse_generic_listing_entries(html, base_url=base_url, allowed_prefixes=prefixes)
+    if mode == "spa_bundle_listing":
+        html = request_text(source["listing_url"], timeout=timeout)
+        base_url = source["base_url"]
+        prefixes = source.get("allowed_path_prefixes") or ["/blog/"]
+        return _parse_spa_bundle_entries(
+            html,
+            base_url=base_url,
+            allowed_prefixes=prefixes,
+            timeout=timeout,
+        )
     raise ValueError(f"Unsupported company blog mode: {mode}")
 
 
@@ -394,6 +416,368 @@ def _first_text(element, tag_name: str) -> str:
         if child.tag.endswith(tag_name):
             return clean_text(child.text or "")
     return ""
+
+
+def _parse_spa_bundle_entries(html: str, base_url: str, allowed_prefixes: list[str], timeout: int) -> list[dict]:
+    bundle_urls = _extract_same_site_script_urls(html, base_url)
+    entries: list[dict] = []
+    for bundle_url in bundle_urls:
+        bundle_text = request_text(bundle_url, timeout=timeout)
+        entries.extend(_parse_blog_entries_from_bundle(bundle_text, base_url, allowed_prefixes))
+
+    seen = set()
+    unique_entries: list[dict] = []
+    for entry in entries:
+        if entry["url"] in seen:
+            continue
+        seen.add(entry["url"])
+        unique_entries.append(entry)
+    return _hydrate_spa_markdown_entries(unique_entries, base_url, timeout)
+
+
+def _extract_same_site_script_urls(html: str, base_url: str) -> list[str]:
+    base_host = urlparse(base_url).netloc.lower()
+    urls: list[str] = []
+    for raw_src in re.findall(r'<script[^>]+src=["\']([^"\']+\.js)["\']', html, flags=re.IGNORECASE):
+        script_url = urljoin(base_url, raw_src)
+        if urlparse(script_url).netloc.lower() == base_host:
+            urls.append(script_url)
+    return list(dict.fromkeys(urls))
+
+
+def _parse_blog_entries_from_bundle(bundle_text: str, base_url: str, allowed_prefixes: list[str]) -> list[dict]:
+    entries: list[dict] = []
+    allowed = tuple(allowed_prefixes)
+
+    latest_pattern = re.compile(
+        r'articleSlug:"(?P<slug>[^"]+)",date:"(?P<date>[^"]+)",title:"(?P<title>[^"]+)"'
+    )
+    for match in latest_pattern.finditer(bundle_text):
+        link = f"/blog/{_decode_js_string(match.group('slug'))}"
+        if not link.startswith(allowed):
+            continue
+        title = _decode_js_string(match.group("title"))
+        entries.append(
+            {
+                "title": title,
+                "url": urljoin(base_url, link),
+                "published_at": _decode_js_string(match.group("date")),
+                "summary": _bundle_summary(title, "", match.group("date")),
+                "content": _bundle_content(title, "", match.group("date"), bundle_text),
+                "content_source": "site_bundle_summary",
+                "skip_article_fetch": True,
+                "slug": _decode_js_string(match.group("slug")),
+            }
+        )
+
+    blog_card_pattern = re.compile(
+        r'title:"(?P<title>[^"]+)",date:"(?P<date>[^"]+)",tags:\[(?P<tags>[^\]]*)\],'
+        r'link_text:"Read blog",link:"(?P<link>/blog/[^"]+)"'
+    )
+    for match in blog_card_pattern.finditer(bundle_text):
+        link = _decode_js_string(match.group("link"))
+        if not link.startswith(allowed):
+            continue
+        title = _decode_js_string(match.group("title"))
+        tags = _decode_tag_list(match.group("tags"))
+        date = _decode_js_string(match.group("date"))
+        entries.append(
+            {
+                "title": title,
+                "url": urljoin(base_url, link),
+                "published_at": date,
+                "summary": _bundle_summary(title, ", ".join(tags), date),
+                "content": _bundle_content(title, ", ".join(tags), date, bundle_text),
+                "content_source": "site_bundle_summary",
+                "skip_article_fetch": True,
+                "slug": link.rstrip("/").rsplit("/", 1)[-1],
+            }
+        )
+
+    for slug in _extract_blog_slugs_from_bundle(bundle_text):
+        link = f"/blog/{slug}"
+        if not link.startswith(allowed):
+            continue
+        entries.append(
+            {
+                "title": slug.replace("-", " ").title(),
+                "url": urljoin(base_url, link),
+                "published_at": "",
+                "summary": "",
+                "content": "",
+                "content_source": "site_bundle_summary",
+                "skip_article_fetch": True,
+                "slug": slug,
+            }
+        )
+
+    return entries
+
+
+def _extract_blog_slugs_from_bundle(bundle_text: str) -> list[str]:
+    match = re.search(r"BLOG_POST_SLUGS\s*=\s*\[(?P<slugs>[^\]]+)\]", bundle_text)
+    if not match:
+        return []
+    slugs = []
+    for raw_slug in re.findall(r'"((?:\\.|[^"\\])*)"', match.group("slugs")):
+        slugs.append(_decode_js_string(raw_slug))
+    return list(dict.fromkeys(slugs))
+
+
+def _hydrate_spa_markdown_entries(entries: list[dict], base_url: str, timeout: int) -> list[dict]:
+    hydrated = []
+    for entry in entries:
+        slug = clean_text(entry.get("slug", "")) or _slug_from_blog_url(entry["url"])
+        if not slug:
+            hydrated.append(entry)
+            continue
+
+        markdown_url = urljoin(base_url, f"/assets/blog-posts/{slug}.md")
+        try:
+            markdown_text = request_text(markdown_url, timeout=timeout)
+            article = _parse_markdown_article(markdown_text)
+        except Exception as exc:
+            fallback = dict(entry)
+            fallback["fetch_note"] = f"Markdown article fetch failed for {entry['url']}: {exc}"
+            hydrated.append(fallback)
+            continue
+
+        title = _first_non_empty(article.get("title"), entry.get("title"))
+        published_at = _first_non_empty(
+            article.get("date"),
+            article.get("published_at"),
+            article.get("published"),
+            entry.get("published_at"),
+        )
+        summary = _first_non_empty(
+            article.get("description"),
+            article.get("summary"),
+            article.get("excerpt"),
+            entry.get("summary"),
+        )
+        content = _markdown_article_content(
+            title=title,
+            summary=summary,
+            body=article.get("body", ""),
+            published_at=published_at,
+        )
+
+        record = dict(entry)
+        record.update(
+            {
+                "title": title,
+                "published_at": published_at,
+                "summary": summary or entry.get("summary", ""),
+                "content": content,
+                "content_source": "markdown_article_body",
+                "article_markdown_url": markdown_url,
+                "skip_article_fetch": True,
+            }
+        )
+        categories = _first_non_empty(article.get("categories"), article.get("tags"))
+        if categories:
+            record["categories"] = categories if isinstance(categories, list) else [categories]
+        hydrated.append(record)
+    return hydrated
+
+
+def _slug_from_blog_url(url: str) -> str:
+    path = urlparse(url).path.rstrip("/")
+    if "/blog/" not in path:
+        return ""
+    return clean_text(path.rsplit("/", 1)[-1])
+
+
+def _parse_markdown_article(markdown_text: str) -> dict:
+    metadata: dict[str, str | list[str]] = {}
+    body = markdown_text
+    match = re.match(r"\A---\s*\n(?P<meta>.*?)\n---\s*\n?(?P<body>.*)\Z", markdown_text, re.DOTALL)
+    if match:
+        metadata = _parse_frontmatter(match.group("meta"))
+        body = match.group("body")
+
+    parsed = dict(metadata)
+    parsed["body"] = _markdown_to_text(body)
+    return parsed
+
+
+def _parse_frontmatter(frontmatter: str) -> dict:
+    values: dict[str, str | list[str]] = {}
+    active_list_key = ""
+    for raw_line in frontmatter.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if active_list_key and stripped.startswith("- "):
+            item = _clean_frontmatter_value(stripped[2:])
+            if item:
+                values.setdefault(active_list_key, [])
+                if isinstance(values[active_list_key], list):
+                    values[active_list_key].append(item)
+            continue
+
+        if ":" not in stripped:
+            active_list_key = ""
+            continue
+
+        key, raw_value = stripped.split(":", 1)
+        key = _normalize_frontmatter_key(key)
+        value = raw_value.strip()
+        if not value:
+            values[key] = []
+            active_list_key = key
+            continue
+
+        parsed_value = _parse_frontmatter_value(value)
+        values[key] = parsed_value
+        active_list_key = key if isinstance(parsed_value, list) else ""
+    return values
+
+
+def _parse_frontmatter_value(value: str) -> str | list[str]:
+    cleaned = value.strip()
+    if cleaned.startswith("[") and cleaned.endswith("]"):
+        try:
+            parsed = json.loads(cleaned.replace("'", '"'))
+            if isinstance(parsed, list):
+                return [clean_text(str(item)) for item in parsed if clean_text(str(item))]
+        except Exception:
+            return [
+                _clean_frontmatter_value(item)
+                for item in cleaned.strip("[]").split(",")
+                if _clean_frontmatter_value(item)
+            ]
+    return _clean_frontmatter_value(cleaned)
+
+
+def _clean_frontmatter_value(value: str) -> str:
+    return clean_text(value.strip().strip('"').strip("'"))
+
+
+def _normalize_frontmatter_key(key: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", key.strip().lower()).strip("_")
+    aliases = {
+        "publishedat": "published_at",
+        "published_date": "published_at",
+        "publish_date": "published_at",
+        "description": "description",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _markdown_to_text(markdown_text: str) -> str:
+    text = re.sub(r"```.*?```", " ", markdown_text, flags=re.DOTALL)
+    text = re.sub(r"!\[[^\]]*]\([^)]+\)", " ", text)
+    text = re.sub(r"\[([^\]]+)]\([^)]+\)", r"\1", text)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"\[\^[^\]]+]", "", text)
+
+    lines = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("|"):
+            continue
+        line = re.sub(r"^#{1,6}\s*", "", line)
+        line = re.sub(r"^[-*+]\s+", "", line)
+        line = re.sub(r"^\d+\.\s+", "", line)
+        line = re.sub(r"^>\s*", "", line)
+        lines.append(line)
+    return clean_text(strip_html(" ".join(lines)))
+
+
+def _markdown_article_content(title: str, summary: str, body: str, published_at: str) -> str:
+    cleaned_title = clean_text(title)
+    cleaned_body = clean_text(body)
+    cleaned_summary = clean_text(summary)
+
+    if cleaned_title and cleaned_body.lower().startswith(cleaned_title.lower()):
+        article_text = cleaned_body
+    else:
+        article_text = clean_text(". ".join(part for part in (cleaned_title, cleaned_body) if part))
+
+    if len(article_text) < 700 and cleaned_summary and cleaned_summary.lower() not in article_text.lower():
+        article_text = clean_text(". ".join(part for part in (cleaned_title, cleaned_summary, cleaned_body) if part))
+
+    if published_at:
+        article_text = clean_text(f"{article_text} Published: {published_at}")
+    return article_text
+
+
+def _first_non_empty(*values):
+    for value in values:
+        if isinstance(value, list):
+            cleaned_items = [clean_text(str(item)) for item in value if clean_text(str(item))]
+            if cleaned_items:
+                return cleaned_items
+            continue
+        cleaned = clean_text(str(value)) if value is not None else ""
+        if cleaned:
+            return cleaned
+    return ""
+
+
+def _bundle_summary(title: str, tags: str, published_at: str) -> str:
+    parts = [
+        title,
+        f"Tags: {tags}" if tags else "",
+        f"Published: {published_at}" if published_at else "",
+    ]
+    return clean_text(". ".join(part for part in parts if part))
+
+
+def _bundle_content(title: str, tags: str, published_at: str, bundle_text: str) -> str:
+    description = _bundle_description_for_title(title, bundle_text)
+    parts = [
+        title,
+        description,
+        f"Tags: {tags}" if tags else "",
+        f"Published: {published_at}" if published_at else "",
+    ]
+    return clean_text(". ".join(part for part in parts if part))
+
+
+def _bundle_description_for_title(title: str, bundle_text: str) -> str:
+    variants = _description_title_variants(title)
+    for variant in variants:
+        pattern = re.compile(
+            rf'title:"{re.escape(variant)}",description:"(?P<description>(?:\\.|[^"\\])*)"',
+        )
+        match = pattern.search(bundle_text)
+        if match:
+            return clean_text(_decode_js_string(match.group("description")))
+    return ""
+
+
+def _description_title_variants(title: str) -> list[str]:
+    variants = [title]
+    for prefix in ("Introducing Google ", "Google "):
+        if title.startswith(prefix):
+            variants.append(title[len(prefix):])
+    if title == "Google Antigravity CLI":
+        variants.append("Antigravity CLI")
+    if title == "Google Antigravity SDK":
+        variants.append("Antigravity SDK")
+    if title.startswith("Introducing Google Antigravity 2.0"):
+        variants.append("Antigravity 2.0")
+    return list(dict.fromkeys(variants))
+
+
+def _decode_tag_list(raw_tags: str) -> list[str]:
+    tags = []
+    for raw in re.findall(r'"((?:\\.|[^"\\])*)"', raw_tags):
+        tags.append(_decode_js_string(raw))
+    return tags
+
+
+def _decode_js_string(value: str) -> str:
+    try:
+        return json.loads(f'"{value}"')
+    except Exception:
+        return value.replace('\\"', '"')
 
 
 class _AnthropicListingParser(HTMLParser):

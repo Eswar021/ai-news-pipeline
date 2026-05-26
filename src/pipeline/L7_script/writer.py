@@ -10,6 +10,7 @@ from src.pipeline.L1_collection.common import clean_text
 
 
 MAX_SECTION_WRITE_ATTEMPTS = 3
+NEAR_MINIMUM_WORD_RATIO = 0.9
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 WATCH_ONLY_BLOCKED_PHRASES = (
     "start validating",
@@ -31,10 +32,21 @@ WATCH_ONLY_BLOCKED_PHRASES = (
 )
 CAUTIOUS_QUALIFIERS = (
     "according to",
+    "attributed",
+    "a paper",
+    "an arxiv",
     "reported",
     "reports",
+    "notes",
+    "noted",
+    "cautions",
+    "cautioned",
+    "frames",
+    "framed",
     "the paper",
+    "the report",
     "the authors",
+    "the researchers",
     "the source",
     "the study",
     "appears",
@@ -59,6 +71,45 @@ UNSUPPORTED_PERFORMANCE_PHRASES = (
     "zero accuracy loss",
     "guaranteed performance",
     "guaranteed improvements",
+)
+VAGUE_WATCH_ENDING_PHRASES = (
+    "watch evolving",
+    "watch how",
+    "watch whether",
+    "watch for",
+    "monitor impact",
+    "monitor how",
+    "monitor whether",
+    "what to watch next",
+)
+ATTRIBUTION_LEADERS = (
+    "according to",
+    "reported by",
+    "the report",
+    "the paper",
+    "the study",
+    "the source",
+    "the article",
+)
+ATTRIBUTION_VERBS = (
+    "reports",
+    "reported",
+    "notes",
+    "noted",
+    "states",
+    "stated",
+    "says",
+    "said",
+    "describes",
+    "described",
+    "frames",
+    "framed",
+    "claims",
+    "claimed",
+)
+NON_BLOCKING_REWRITE_REASON_PREFIXES = (
+    "report-like repeated attribution cadence",
+    "vague watch/monitor ending without grounded fact",
 )
 
 
@@ -153,9 +204,18 @@ def _write_section(
             )
 
     if last_result:
+        rewrite_reasons = list(last_result.get("rewrite_reasons", []))
+        if _only_non_blocking_rewrite_reasons(rewrite_reasons, last_result):
+            last_result["style_warnings"] = rewrite_reasons
+            last_result.pop("rewrite_reasons", None)
+            print(
+                f"[L7] Accepting section with style warnings — {section['section_id']} "
+                f"warnings={rewrite_reasons}"
+            )
+            return last_result
         raise ValueError(
             f"{section['section_id']} failed section quality checks after rewrite: "
-            f"{last_result.get('rewrite_reasons', [])}"
+            f"{rewrite_reasons}"
         )
     raise RuntimeError(f"L7 failed to write section: {section['section_id']}")
 
@@ -325,6 +385,12 @@ def _rewrite_reasons(result: dict, section: dict) -> list[str]:
     unsupported_performance = _unsupported_performance_phrases(result.get("narration_text", ""), section)
     if unsupported_performance:
         reasons.append(f"unsupported performance qualifier: {unsupported_performance}")
+    vague_watch_endings = _vague_watch_endings(result.get("narration_text", ""), section)
+    if vague_watch_endings:
+        reasons.append(f"vague watch/monitor ending without grounded fact: {vague_watch_endings}")
+    report_cadence = _report_cadence_markers(result.get("narration_text", ""), section)
+    if report_cadence:
+        reasons.append(f"report-like repeated attribution cadence: {report_cadence}")
     return reasons
 
 
@@ -337,7 +403,8 @@ def _retry_feedback(result: dict | None) -> str:
         f"Revision note: {reason_text}. "
         "Rewrite the section with useful spoken explanation, not filler. "
         "Use every required fact again, add optional facts only when they improve clarity, "
-        "follow section.takeaway_rule exactly, and keep the same evidence and cautious-language rules.\n"
+        "follow section.takeaway_rule exactly, vary attribution naturally, and keep the same evidence "
+        "and cautious-language rules.\n"
     )
 
 
@@ -346,6 +413,28 @@ def _watch_only_blocked_phrases(result: dict, section: dict) -> list[str]:
         return []
     lower = clean_text(result.get("narration_text", "")).lower()
     return [phrase for phrase in WATCH_ONLY_BLOCKED_PHRASES if phrase in lower]
+
+
+def _only_non_blocking_rewrite_reasons(reasons: list[str], result: dict) -> bool:
+    if not reasons:
+        return False
+    for reason in reasons:
+        if reason.startswith("too short"):
+            if not _near_minimum_word_count(result):
+                return False
+            continue
+        if any(reason.startswith(prefix) for prefix in NON_BLOCKING_REWRITE_REASON_PREFIXES):
+            continue
+        return False
+    return True
+
+
+def _near_minimum_word_count(result: dict) -> bool:
+    minimum_words = int(result.get("minimum_word_count", 0) or 0)
+    word_count = int(result.get("word_count", 0) or 0)
+    if minimum_words <= 0:
+        return True
+    return word_count >= minimum_words * NEAR_MINIMUM_WORD_RATIO
 
 
 def _validated_analysis_sentences(narration: str, values: list) -> list[str]:
@@ -381,10 +470,6 @@ def _polish_narration(narration: str, section: dict) -> str:
         "\"We chose OpenAI because we weren't looking for a demo. We were looking for enterprise infrastructure,\" Purinton says.": (
             "Purinton says AdventHealth chose OpenAI because it was looking for enterprise infrastructure rather than a demo."
         ),
-        "ABA marks a shift in how we judge benchmarks:": "The paper presents ABA as a benchmark-auditing approach:",
-        "aba marks a shift in how we judge benchmarks:": "the paper presents ABA as a benchmark-auditing approach:",
-        "What to watch next: monitor audit impact on benchmark reliability, with source attribution.": "",
-        "what to watch next: monitor audit impact on benchmark reliability, with source attribution.": "",
     }
     polished = narration
     for old, new in replacements.items():
@@ -444,7 +529,11 @@ def _caution_section_missing_qualifier(text: str, section: dict) -> bool:
     if not section.get("required_cautious_fact_ids"):
         return False
     normalized = _normalize_sentence(text)
-    return not any(qualifier in normalized for qualifier in CAUTIOUS_QUALIFIERS)
+    if any(qualifier in normalized for qualifier in CAUTIOUS_QUALIFIERS):
+        return False
+    if any(source_name in normalized for source_name in _section_source_names(section)):
+        return False
+    return True
 
 
 def _unsupported_performance_phrases(text: str, section: dict) -> list[str]:
@@ -459,6 +548,96 @@ def _unsupported_performance_phrases(text: str, section: dict) -> list[str]:
         for phrase in UNSUPPORTED_PERFORMANCE_PHRASES
         if phrase in narration and phrase not in fact_text
     ]
+
+
+def _vague_watch_endings(text: str, section: dict) -> list[str]:
+    if section.get("section_type") != "story":
+        return []
+    markers = []
+    for sentence in _split_sentences(text):
+        normalized = _normalize_sentence(sentence)
+        if any(phrase in normalized for phrase in VAGUE_WATCH_ENDING_PHRASES):
+            markers.append(sentence[:120])
+    return markers[:3]
+
+
+def _report_cadence_markers(text: str, section: dict) -> list[str]:
+    if section.get("section_type") != "story":
+        return []
+    sentences = _split_sentences(text)
+    if len(sentences) < 3:
+        return []
+
+    source_names = _section_source_names(section)
+    normalized_sentences = [_normalize_sentence(sentence) for sentence in sentences]
+    attribution_starts = [
+        index
+        for index, sentence in enumerate(normalized_sentences)
+        if _starts_like_attribution(sentence, source_names)
+    ]
+    source_starts = [
+        (index, _starting_source_name(sentence, source_names))
+        for index, sentence in enumerate(normalized_sentences)
+    ]
+    source_starts = [(index, source) for index, source in source_starts if source]
+
+    allowed_attribution_starts = max(2, len(sentences) // 3)
+    if section.get("required_cautious_fact_ids"):
+        allowed_attribution_starts += 1
+
+    markers = []
+    if len(attribution_starts) > allowed_attribution_starts:
+        markers.append(f"{len(attribution_starts)} attribution-led sentences")
+
+    for (left_index, left_source), (right_index, right_source) in zip(source_starts, source_starts[1:]):
+        if right_index == left_index + 1 and right_source == left_source:
+            markers.append(f"consecutive sentences start with {right_source}")
+            break
+
+    source_start_limit = max(2, len(sentences) // 4 + 1)
+    for source in source_names:
+        start_count = sum(1 for sentence in normalized_sentences if sentence.startswith(f"{source} "))
+        if start_count > source_start_limit:
+            markers.append(f"{start_count} sentences start with {source}")
+            break
+
+    return markers[:3]
+
+
+def _section_source_names(section: dict) -> list[str]:
+    names = []
+    for fact in section.get("facts", []):
+        for support in fact.get("support_records", []):
+            name = _normalized_source_name(support.get("source_name", ""))
+            if name:
+                names.append(name)
+    return _dedupe(names)
+
+
+def _normalized_source_name(value: str) -> str:
+    name = _normalize_sentence(value)
+    if not name or name in {"unknown", "n/a", "none", "null"}:
+        return ""
+    if len(name) < 4:
+        return ""
+    return name
+
+
+def _starts_like_attribution(sentence: str, source_names: list[str]) -> bool:
+    if any(sentence.startswith(f"{leader} ") for leader in ATTRIBUTION_LEADERS):
+        return True
+    if any(sentence.startswith(f"{verb} ") for verb in ATTRIBUTION_VERBS):
+        return True
+    if any(sentence.startswith(f"{source} ") for source in source_names):
+        return True
+    return bool(re.match(r"^(a|an|the) [a-z0-9 -]+ (report|paper|study|article) ", sentence))
+
+
+def _starting_source_name(sentence: str, source_names: list[str]) -> str:
+    for source in sorted(source_names, key=len, reverse=True):
+        if sentence.startswith(f"{source} "):
+            return source
+    return ""
 
 
 def _split_sentences(text: str) -> list[str]:

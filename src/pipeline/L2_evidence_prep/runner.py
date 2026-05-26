@@ -162,6 +162,29 @@ GENERAL_DEV_PATTERNS = [
     r"\bpython package\b",
     r"\bweb framework\b",
 ]
+FINANCE_NOISE_PATTERNS = [
+    r"\b[A-Z]{1,6}\)\s+(?:soars|jumps|rises|falls|drops|plunges)\b",
+    r"\bshares?\s+(?:soar|jump|rise|fall|drop|plunge)\b",
+    r"\bstock\s+(?:soars|jumps|rises|falls|drops|plunges)\b",
+    r"\bprofits?\s+seen\s+growing\b",
+    r"\bprice\s+target\b",
+]
+PROMO_OR_DEAL_PATTERNS = [
+    r"\bapply before\b",
+    r"\bapplications close\b",
+    r"\bearly bird\b",
+    r"\bsave up to\b",
+    r"\bpasses?\s+before\b",
+    r"\bticket rates?\b",
+    r"\bmemorial day sales?\b",
+    r"\blast[- ]minute deals?\b",
+    r"\banniversary sale\b",
+]
+LOW_CONTEXT_CONSUMER_PATTERNS = [
+    r"\bfavorite .* deals?\b",
+    r"\bwebsite imagery\b",
+    r"\bsolar power \(on earth\)\b",
+]
 
 
 def run(run_ref: str) -> Path:
@@ -559,6 +582,12 @@ def _topic_exclusion_reason(record: dict, title: str, content: str, canonical_ur
     text = _topic_text(record, title, content, canonical_url)
     if _is_crypto_noise(text):
         return "off_topic_crypto"
+    if source_group == "tech_news_apis" and _is_finance_noise(title, text):
+        return "off_topic_finance"
+    if source_group == "tech_news_apis" and _is_promotional_or_deal_noise(title, text):
+        return "promotional_or_deal"
+    if source_group == "tech_news_apis" and _is_low_context_consumer_noise(title, text):
+        return "off_topic_consumer_or_generic_news"
     if source_group in {"tech_news_apis", "youtube_podcast_transcripts"} and _is_generic_software_release(title, text):
         return "generic_software_release"
     if source_group in {"youtube_podcast_transcripts", "community_signals"} and _is_general_dev_noise(title, text):
@@ -624,7 +653,26 @@ def _is_general_dev_noise(title: str, text: str) -> bool:
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in GENERAL_DEV_PATTERNS)
 
 
+def _is_finance_noise(title: str, text: str) -> bool:
+    if _has_ai_relevance(title):
+        return False
+    return any(re.search(pattern, title, re.IGNORECASE) for pattern in FINANCE_NOISE_PATTERNS)
+
+
+def _is_promotional_or_deal_noise(title: str, text: str) -> bool:
+    if _has_ai_relevance(title):
+        return False
+    return any(re.search(pattern, title, re.IGNORECASE) for pattern in PROMO_OR_DEAL_PATTERNS)
+
+
+def _is_low_context_consumer_noise(title: str, text: str) -> bool:
+    if _has_ai_relevance(title):
+        return False
+    return any(re.search(pattern, title, re.IGNORECASE) for pattern in LOW_CONTEXT_CONSUMER_PATTERNS)
+
+
 def _has_ai_relevance(text: str) -> bool:
+    text = clean_text(text).lower()
     for term in AI_RELEVANCE_TERMS:
         if len(term) <= 4 and re.search(rf"\b{re.escape(term)}\b", text):
             return True

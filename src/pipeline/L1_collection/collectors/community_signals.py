@@ -182,8 +182,12 @@ def _collect_github(cfg: dict, source: dict, timeout: int) -> dict:
 
     seen_repos: set[str] = set()
     try:
-        for theme in cfg.get("query_themes", []):
-            repos = _search_github_repos(api_key, theme, timeout, min_stars, window_start)
+        relevance = _build_relevance_profile(
+            [*source.get("search_queries", []), *cfg.get("query_themes", [])],
+            list(cfg.get("allowed_topics", [])),
+        )
+        for query in _github_search_queries(cfg, source):
+            repos = _search_github_repos(api_key, query, timeout, min_stars, window_start)
             fetched_count += len(repos)
             for repo in repos:
                 full_name = repo.get("full_name", "")
@@ -204,6 +208,11 @@ def _collect_github(cfg: dict, source: dict, timeout: int) -> dict:
                 content = "\n\n".join(part for part in [description, topic_text, readme_text] if part)
                 if not content:
                     content = clean_text(repo.get("name", ""))
+                if not _matches_relevance_text(" ".join([full_name, description, topic_text]), relevance):
+                    filtered_out_count += 1
+                    if len(notes) < 10:
+                        notes.append(f"Filtered low-relevance GitHub repo: {full_name}")
+                    continue
 
                 records.append(
                     build_record(
@@ -250,6 +259,23 @@ def _collect_github(cfg: dict, source: dict, timeout: int) -> dict:
             "notes": notes,
         },
     }
+
+
+def _github_search_queries(cfg: dict, source: dict) -> list[str]:
+    queries = [
+        *source.get("search_queries", []),
+        *cfg.get("query_themes", []),
+    ]
+    seen = set()
+    kept = []
+    for query in queries:
+        cleaned = clean_text(query)
+        key = cleaned.lower()
+        if not cleaned or key in seen:
+            continue
+        seen.add(key)
+        kept.append(cleaned)
+    return kept
 
 
 def _search_github_repos(api_key: str, theme: str, timeout: int, min_stars: int, window_start: str) -> list[dict]:
@@ -313,6 +339,11 @@ def _is_relevant(item: dict, relevance: dict[str, set[str]]) -> bool:
             clean_text(item.get("url", "")).lower(),
         ]
     )
+    return _matches_relevance_text(haystack, relevance)
+
+
+def _matches_relevance_text(text: str, relevance: dict[str, set[str]]) -> bool:
+    haystack = clean_text(text).lower()
     phrase_hits = sum(1 for phrase in relevance["phrases"] if _contains_term(haystack, phrase))
     token_hits = {
         token

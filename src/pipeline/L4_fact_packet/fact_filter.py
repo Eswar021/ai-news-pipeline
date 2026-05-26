@@ -59,6 +59,10 @@ LOW_VALUE_PATTERNS = [
     r"\bpage shows\b",
     r"\bcard shows\b",
     r"\bsection shows\b",
+    r"\bbutton labeled\b",
+    r"\bdownload button\b",
+    r"\bdownload page\b",
+    r"\bclick download\b",
     r"\bjensen huang spoke at\b",
     r"\bcan write code\b",
     r"\bai can help search, suggest, and verify\b",
@@ -67,6 +71,8 @@ LOW_VALUE_PATTERNS = [
     r"\bcan also revise generated tokens\b",
     r"\bto begin using\b",
     r"\bcomplete the following steps\b",
+    r"\busers? can try\b",
+    r"\bavailable for download\b",
 ]
 
 KEEP_TYPES = {

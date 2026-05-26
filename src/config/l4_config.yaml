@@ -1,5 +1,5 @@
 layer_4:
-  top_story_limit: 12
+  top_story_limit: 30
   max_records_per_story: 6
   overflow_char_limit: 12000
   max_facts_per_story: 12

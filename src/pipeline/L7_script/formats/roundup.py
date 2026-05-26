@@ -32,7 +32,7 @@ def _intro_section(video: dict, segments: list[dict], words_per_minute: int) -> 
     titles = [segment["story_title"] for segment in segments]
     target_seconds = int(video.get("intro_seconds", 35))
     lead_title = segments[0]["story_title"] if segments else ""
-    supporting_titles = [segment["story_title"] for segment in segments[1:4]]
+    supporting_titles = [segment["story_title"] for segment in segments[1:]]
     return {
         "section_id": "section_00_intro",
         "section_type": "intro",
@@ -59,8 +59,8 @@ def _intro_section(video: dict, segments: list[dict], words_per_minute: int) -> 
             "supporting_story_titles": supporting_titles,
             "segment_titles": titles,
             "section_goal": (
-                "Open with a concrete viewer-facing tension, preview the lead and a few supporting "
-                "stories, then promise practical takeaways without sounding like a report abstract."
+                "Open with a concrete viewer-facing tension, preview the lead and the episode's story mix, "
+                "then promise practical takeaways without mechanically listing every story or sounding like a report abstract."
             ),
         },
     }
@@ -249,17 +249,21 @@ def _evidence_mode(segment: dict, required_facts: list[dict], optional_facts: li
 def _takeaway_rule(evidence_mode: str) -> str:
     if evidence_mode == "caution_only":
         return (
-            "Takeaway must be watch/monitor language only. Attribute every core claim to the source. "
+            "Takeaway must be an attributed fact-based caveat. Make the source attribution clear, "
+            "but do not start every sentence with the source name. "
+            "Do not end with vague phrases like 'watch evolving results' or 'monitor impact'. "
             "Do not tell viewers to deploy, integrate, validate today, start using, or change workflows."
         )
     if evidence_mode == "research_watch":
         return (
-            "Takeaway must explain what to watch next or what evidence would matter. "
+            "Takeaway must name a concrete evidence gap or research caveat grounded in fact_text. "
+            "Do not end with vague phrases like 'watch evolving results' or 'monitor impact'. "
             "Avoid deployment, production, integration, governance, or operator advice unless those exact ideas appear in fact_text."
         )
     if evidence_mode == "limited_release":
         return (
-            "Takeaway must mention availability limits and what to monitor next. "
+            "Takeaway must mention availability limits and a concrete caveat grounded in fact_text. "
+            "Do not end with vague phrases like 'watch evolving results' or 'monitor impact'. "
             "Do not tell viewers to start validating, deploy, integrate, or change workflows unless fact_text explicitly supports broad availability."
         )
     return (

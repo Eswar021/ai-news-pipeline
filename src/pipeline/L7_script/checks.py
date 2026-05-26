@@ -20,6 +20,7 @@ VISUAL_DIRECTION_MARKERS = (
 )
 
 MIN_TOTAL_DURATION_RATIO = 0.78
+MIN_SECTION_WORD_RATIO = 0.9
 
 
 def build_full_script(section_scripts: list[dict]) -> dict:
@@ -98,13 +99,19 @@ def check_script_package(package: dict, content_packet: dict) -> dict:
             )
         minimum_words = int(section.get("minimum_word_count", 0) or 0)
         if section.get("section_type") == "story" and minimum_words and section.get("word_count", 0) < minimum_words:
-            errors.append(
-                f"{section['section_id']} is too short: "
+            message = (
+                f"{section['section_id']} is below section target: "
                 f"{section.get('word_count', 0)} words, minimum {minimum_words}"
             )
+            if section.get("word_count", 0) >= minimum_words * MIN_SECTION_WORD_RATIO:
+                warnings.append(message)
+            else:
+                errors.append(message)
         markers = _visual_markers_in_narration(section.get("narration_text", ""))
         if markers:
             errors.append(f"{section['section_id']} narration contains visual/editor directions: {markers}")
+        for warning in section.get("style_warnings", []):
+            warnings.append(f"{section['section_id']} style warning: {warning}")
 
     usage = package.get("evidence_usage", {})
     if usage.get("omitted_required_fact_ids"):

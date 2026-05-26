@@ -46,6 +46,36 @@ layer_1:
           listing_url: "https://deepmind.google/blog/"
           base_url: "https://deepmind.google"
           allowed_path_prefixes: ["/blog/", "/en/blog/"]
+        - id: "antigravity_blog"
+          name: "Google Antigravity Blog"
+          enabled: true
+          mode: "spa_bundle_listing"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          listing_url: "https://www.antigravity.google/blog"
+          base_url: "https://www.antigravity.google"
+          allowed_path_prefixes: ["/blog/"]
+        - id: "google_ai_blog"
+          name: "Google AI Blog"
+          enabled: true
+          mode: "rss"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          feed_url: "https://blog.google/innovation-and-ai/technology/ai/rss/"
+        - id: "google_developer_tools_blog"
+          name: "Google Developer Tools Blog"
+          enabled: true
+          mode: "rss"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          feed_url: "https://blog.google/innovation-and-ai/technology/developers-tools/rss/"
+        - id: "google_developers_blog"
+          name: "Google Developers Blog"
+          enabled: true
+          mode: "rss"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          feed_url: "https://developers.googleblog.com/feeds/posts/default?alt=rss"
         - id: "meta_ai_blog"
           name: "Meta AI Blog"
           enabled: true
@@ -87,6 +117,38 @@ layer_1:
           source_type: "official_company_blog"
           trust_tier: 1
           feed_url: "https://huggingface.co/blog/feed.xml"
+        - id: "openai_developer_blog"
+          name: "OpenAI Developer Blog"
+          enabled: true
+          mode: "generic_listing"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          listing_url: "https://developers.openai.com/blog/"
+          base_url: "https://developers.openai.com"
+          allowed_path_prefixes: ["/blog/"]
+        - id: "openai_codex_changelog"
+          name: "OpenAI Codex Changelog"
+          enabled: true
+          mode: "rss"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          feed_url: "https://developers.openai.com/codex/changelog/rss.xml"
+        - id: "claude_blog"
+          name: "Claude Blog"
+          enabled: true
+          mode: "generic_listing"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          listing_url: "https://claude.com/blog"
+          base_url: "https://claude.com"
+          allowed_path_prefixes: ["/blog/"]
+        - id: "nvidia_technical_blog"
+          name: "NVIDIA Technical Blog"
+          enabled: true
+          mode: "rss"
+          source_type: "official_company_blog"
+          trust_tier: 1
+          feed_url: "https://developer.nvidia.com/blog/feed/"
 
     tech_news_apis:
       collector: "tech_news"
@@ -114,6 +176,62 @@ layer_1:
           source_type: "tech_news_article"
           trust_tier: 2
           env_keys: ["MEDIASTACK_API_KEY", "MEDIASTACK_API"]
+        - id: "techcrunch_ai"
+          name: "TechCrunch AI"
+          enabled: true
+          provider: "rss_feed"
+          source_type: "tech_news_article"
+          trust_tier: 2
+          source_relationship: "third_party"
+          feed_url: "https://techcrunch.com/category/artificial-intelligence/feed/"
+          relevance_filter: true
+        - id: "the_verge_ai"
+          name: "The Verge"
+          enabled: true
+          provider: "rss_feed"
+          source_type: "tech_news_article"
+          trust_tier: 2
+          source_relationship: "third_party"
+          feed_url: "https://www.theverge.com/rss/index.xml"
+          relevance_filter: true
+          search_terms: ["AI", "artificial intelligence", "OpenAI", "Anthropic", "Gemini", "Claude", "LLM", "AI agent", "agentic", "Antigravity"]
+        - id: "venturebeat_ai"
+          name: "VentureBeat AI"
+          enabled: true
+          provider: "rss_feed"
+          source_type: "tech_news_article"
+          trust_tier: 2
+          source_relationship: "third_party"
+          feed_url: "https://venturebeat.com/category/ai/feed/"
+          relevance_filter: true
+        - id: "mit_technology_review_ai"
+          name: "MIT Technology Review"
+          enabled: true
+          provider: "rss_feed"
+          source_type: "tech_news_article"
+          trust_tier: 2
+          source_relationship: "third_party"
+          feed_url: "https://www.technologyreview.com/feed/"
+          relevance_filter: true
+          search_terms: ["AI", "artificial intelligence", "OpenAI", "Anthropic", "Gemini", "Claude", "LLM", "AI agent", "agentic", "Antigravity", "machine learning"]
+        - id: "latent_space"
+          name: "Latent Space"
+          enabled: true
+          provider: "rss_feed"
+          source_type: "tech_news_article"
+          trust_tier: 2
+          source_relationship: "third_party"
+          feed_url: "https://www.latent.space/feed"
+          relevance_filter: true
+        - id: "import_ai"
+          name: "Import AI"
+          enabled: true
+          provider: "rss_feed"
+          source_type: "tech_news_article"
+          trust_tier: 2
+          source_relationship: "third_party"
+          feed_url: "https://jack-clark.net/feed/"
+          relevance_filter: true
 
     research_papers:
       collector: "research_papers"
@@ -125,13 +243,13 @@ layer_1:
           enabled: true
         - id: "arxiv_cs_lg"
           category: "cs.LG"
-          enabled: true
+          enabled: false
         - id: "arxiv_cs_cl"
           category: "cs.CL"
-          enabled: true
+          enabled: false
         - id: "arxiv_cs_cv"
           category: "cs.CV"
-          enabled: true
+          enabled: false
 
     youtube_podcast_transcripts:
       collector: "youtube_transcripts"
@@ -226,3 +344,12 @@ layer_1:
           env_keys: ["GITHUB_TOKEN"]
           max_items: 10
           min_stars: 50
+          search_queries:
+            - "hermes agent"
+            - "openclaw"
+            - "ai agent"
+            - "agent framework"
+            - "mcp"
+            - "coding agent"
+            - "local ai agent"
+            - "antigravity"
