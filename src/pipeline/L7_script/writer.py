@@ -29,6 +29,29 @@ WATCH_ONLY_BLOCKED_PHRASES = (
     "use it today",
     "start using",
 )
+CAUTIOUS_QUALIFIERS = (
+    "according to",
+    "reported",
+    "reports",
+    "the paper",
+    "the authors",
+    "the source",
+    "the study",
+    "appears",
+    "may",
+    "could",
+    "suggests",
+)
+FIRST_PERSON_SOURCE_PHRASES = (
+    "we release",
+    "we introduce",
+    "we present",
+    "we propose",
+    "our paper",
+    "our method",
+    "our benchmark",
+    "our framework",
+)
 UNSUPPORTED_PERFORMANCE_PHRASES = (
     "without sacrificing accuracy",
     "without compromising accuracy",
@@ -290,6 +313,11 @@ def _rewrite_reasons(result: dict, section: dict) -> list[str]:
     repeated_phrases = _repeated_key_phrases(result.get("narration_text", ""))
     if repeated_phrases:
         reasons.append(f"repeated key phrasing: {repeated_phrases}")
+    first_person_source = _first_person_source_phrases(result.get("narration_text", ""), section)
+    if first_person_source:
+        reasons.append(f"first-person source voice in narration: {first_person_source}")
+    if _caution_section_missing_qualifier(result.get("narration_text", ""), section):
+        reasons.append("caution-only section missing source attribution or qualifier language")
     unsupported_performance = _unsupported_performance_phrases(result.get("narration_text", ""), section)
     if unsupported_performance:
         reasons.append(f"unsupported performance qualifier: {unsupported_performance}")
@@ -339,6 +367,14 @@ def _polish_narration(narration: str, section: dict) -> str:
         "report notes the release": "the paper notes the release",
         "Change is here: ": "",
         "change is here: ": "",
+        "To push transparency, we release": "The paper says the authors release",
+        "to push transparency, we release": "the paper says the authors release",
+        "We release the agentic tool": "The authors say they release the agentic tool",
+        "we release the agentic tool": "the authors say they release the agentic tool",
+        "ABA marks a shift in how we judge benchmarks:": "The paper presents ABA as a benchmark-auditing approach:",
+        "aba marks a shift in how we judge benchmarks:": "the paper presents ABA as a benchmark-auditing approach:",
+        "What to watch next: monitor audit impact on benchmark reliability, with source attribution.": "",
+        "what to watch next: monitor audit impact on benchmark reliability, with source attribution.": "",
     }
     polished = narration
     for old, new in replacements.items():
@@ -376,6 +412,20 @@ def _repeated_key_phrases(text: str) -> list[str]:
     ]
     repeated = [phrase for phrase in phrases if normalized.count(phrase) > 1]
     return repeated[:3]
+
+
+def _first_person_source_phrases(text: str, section: dict) -> list[str]:
+    if section.get("section_type") != "story":
+        return []
+    normalized = _normalize_sentence(text)
+    return [phrase for phrase in FIRST_PERSON_SOURCE_PHRASES if phrase in normalized]
+
+
+def _caution_section_missing_qualifier(text: str, section: dict) -> bool:
+    if not section.get("required_cautious_fact_ids"):
+        return False
+    normalized = _normalize_sentence(text)
+    return not any(qualifier in normalized for qualifier in CAUTIOUS_QUALIFIERS)
 
 
 def _unsupported_performance_phrases(text: str, section: dict) -> list[str]:
