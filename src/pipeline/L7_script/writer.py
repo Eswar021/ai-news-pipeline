@@ -29,6 +29,14 @@ WATCH_ONLY_BLOCKED_PHRASES = (
     "use it today",
     "start using",
 )
+UNSUPPORTED_PERFORMANCE_PHRASES = (
+    "without sacrificing accuracy",
+    "without compromising accuracy",
+    "with no accuracy loss",
+    "zero accuracy loss",
+    "guaranteed performance",
+    "guaranteed improvements",
+)
 
 
 def write_sections(
@@ -282,6 +290,9 @@ def _rewrite_reasons(result: dict, section: dict) -> list[str]:
     repeated_phrases = _repeated_key_phrases(result.get("narration_text", ""))
     if repeated_phrases:
         reasons.append(f"repeated key phrasing: {repeated_phrases}")
+    unsupported_performance = _unsupported_performance_phrases(result.get("narration_text", ""), section)
+    if unsupported_performance:
+        reasons.append(f"unsupported performance qualifier: {unsupported_performance}")
     return reasons
 
 
@@ -365,6 +376,20 @@ def _repeated_key_phrases(text: str) -> list[str]:
     ]
     repeated = [phrase for phrase in phrases if normalized.count(phrase) > 1]
     return repeated[:3]
+
+
+def _unsupported_performance_phrases(text: str, section: dict) -> list[str]:
+    if section.get("section_type") != "story":
+        return []
+    narration = _normalize_sentence(text)
+    fact_text = _normalize_sentence(
+        " ".join(clean_text(fact.get("fact_text", "")) for fact in section.get("facts", []))
+    )
+    return [
+        phrase
+        for phrase in UNSUPPORTED_PERFORMANCE_PHRASES
+        if phrase in narration and phrase not in fact_text
+    ]
 
 
 def _split_sentences(text: str) -> list[str]:
