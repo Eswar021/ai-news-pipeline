@@ -21,13 +21,13 @@ VALUABLE_FACT_TYPES = {
 }
 
 
-def build_candidates(fact_packets: list[dict], layer5_cfg: dict) -> list[dict]:
+def build_candidates(fact_packets: list[dict], layer5_cfg: dict, *, memory_context: dict | None = None) -> list[dict]:
     limit = int(layer5_cfg["candidate_limit"])
     ranked_packets = sorted(fact_packets, key=lambda packet: int(packet.get("rank", 999999)))
 
     candidates: list[dict] = []
     for packet in ranked_packets[:limit]:
-        candidates.append(_build_candidate(packet))
+        candidates.append(_build_candidate(packet, memory_context or {}))
     return candidates
 
 
@@ -43,6 +43,7 @@ def compact_candidate_evaluation(candidate: dict) -> dict:
         "source_relationship_counts",
         "fact_type_counts",
         "evidence_counts",
+        "memory_overlap",
         "viewer_value",
         "score_components",
         "opportunity_score",
@@ -59,7 +60,7 @@ def compact_candidate_evaluation(candidate: dict) -> dict:
     return {key: candidate.get(key) for key in keys}
 
 
-def _build_candidate(packet: dict) -> dict:
+def _build_candidate(packet: dict, memory_context: dict) -> dict:
     identity = packet.get("story_identity") or {}
     evidence_summary = packet.get("evidence_summary") or {}
     source_group_counts = _source_group_counts(packet)
@@ -75,6 +76,7 @@ def _build_candidate(packet: dict) -> dict:
     community_only = bool(selected_records) and all(
         record.get("source_group") == "community_signals" for record in selected_records
     )
+    memory_overlap = _memory_overlap(packet, memory_context)
 
     return {
         "story_id": packet["story_id"],
@@ -93,6 +95,7 @@ def _build_candidate(packet: dict) -> dict:
         "fact_type_counts": dict(fact_type_counts),
         "hosted_vendor_record_count": source_relationship_counts.get("hosted_vendor_post", 0),
         "community_only": community_only,
+        "memory_overlap": memory_overlap,
         "safe_fact_count": safe_count,
         "cautious_fact_count": cautious_count,
         "usable_fact_count": safe_count + cautious_count,
@@ -160,3 +163,26 @@ def _source_relationship(record: dict) -> str:
     if source_group == "ai_company_blogs":
         return "first_party"
     return "unknown"
+
+
+def _memory_overlap(packet: dict, memory_context: dict) -> dict:
+    story_id = packet.get("story_id", "")
+    covered_by_id = {
+        item.get("story_id"): item
+        for item in memory_context.get("covered_stories", [])
+        if item.get("story_id")
+    }
+    match = covered_by_id.get(story_id)
+    if not match:
+        return {
+            "has_overlap": False,
+            "memory_status": "",
+            "latest_run_id": "",
+            "reason": "",
+        }
+    return {
+        "has_overlap": True,
+        "memory_status": match.get("memory_status", ""),
+        "latest_run_id": match.get("latest_run_id", ""),
+        "reason": "same_story_id_in_rebuild_memory",
+    }

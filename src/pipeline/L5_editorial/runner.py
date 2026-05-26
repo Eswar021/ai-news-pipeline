@@ -51,7 +51,11 @@ def run(run_ref: str) -> Path:
     llm_calls_path = out_dir / "llm_calls.jsonl"
     llm_calls_path.write_text("", encoding="utf-8")
 
-    candidates = build_candidates(fact_packets, layer5_cfg)
+    candidates = build_candidates(
+        fact_packets,
+        layer5_cfg,
+        memory_context=manifest.get("memory_context", {}),
+    )
     print(f"[L5] Editorial candidates: {len(candidates)}")
 
     viewer_prompt = load_prompt_bundle("viewer_value_analyzer", layer5_cfg["viewer_value_prompt_version"])
@@ -194,7 +198,10 @@ def _build_summary(run_id: str, payload: dict, evaluations: list[dict], llm_call
     )
     selected_audience_fit_mix = Counter()
     selected_roundup_fit_mix = Counter()
+    memory_overlap_count = 0
     for evaluation in evaluations:
+        if evaluation.get("memory_overlap", {}).get("has_overlap"):
+            memory_overlap_count += 1
         if not evaluation.get("selected"):
             continue
         source_relationship_mix.update(evaluation.get("source_relationship_counts", {}))
@@ -218,6 +225,7 @@ def _build_summary(run_id: str, payload: dict, evaluations: list[dict], llm_call
         "roundup_segment_fit_mix": dict(roundup_fit_mix),
         "selected_audience_fit_mix": dict(selected_audience_fit_mix),
         "selected_roundup_segment_fit_mix": dict(selected_roundup_fit_mix),
+        "memory_overlap_count": memory_overlap_count,
         "llm_call_count": _count_jsonl_lines(llm_calls_path),
     }
 

@@ -186,6 +186,10 @@ def _script_signal_score(candidate: dict) -> float:
         score -= 4
     if candidate["is_noise"]:
         score -= 40
+    if candidate.get("memory_overlap", {}).get("memory_status") == "approved_not_published":
+        score -= 4
+    elif candidate.get("memory_overlap", {}).get("memory_status") == "published":
+        score -= 12
     score += _viewer_fit_signal(candidate)
     return min(max(score, -30), 18)
 
@@ -210,6 +214,11 @@ def _risk_penalty(candidate: dict) -> float:
         penalty += 10
     if candidate["is_noise"]:
         penalty += 40
+    memory_status = candidate.get("memory_overlap", {}).get("memory_status", "")
+    if memory_status == "approved_not_published":
+        penalty += 12
+    elif memory_status == "published":
+        penalty += 35
     viewer_value = candidate.get("viewer_value", {})
     if viewer_value.get("audience_fit") == "low":
         penalty += 12
@@ -228,6 +237,8 @@ def _structurally_eligible(candidate: dict) -> bool:
     if candidate["community_only"]:
         return False
     if candidate["editorial_value"] == "low" or candidate["is_noise"]:
+        return False
+    if candidate.get("memory_overlap", {}).get("memory_status") == "published":
         return False
     viewer_value = candidate.get("viewer_value", {})
     if viewer_value.get("audience_fit") == "low" or viewer_value.get("roundup_segment_fit") == "weak":
@@ -408,6 +419,11 @@ def _rejection_reasons(candidate: dict, *, eligible: bool, perspective_eligible:
         reasons.append("low_editorial_value")
     if candidate["is_noise"]:
         reasons.append("marked_noise")
+    memory_status = candidate.get("memory_overlap", {}).get("memory_status", "")
+    if memory_status == "published":
+        reasons.append("already_published_memory")
+    elif memory_status == "approved_not_published":
+        reasons.append("already_approved_draft_memory")
     if candidate.get("viewer_value", {}).get("audience_fit") == "low":
         reasons.append("low_audience_fit")
     if candidate.get("viewer_value", {}).get("roundup_segment_fit") in {"niche", "weak"}:

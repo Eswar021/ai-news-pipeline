@@ -46,6 +46,7 @@ from src.config.paths import (
     L7_CONFIG_PATH,
     L8_CONFIG_PATH,
     OUTPUT_DIR,
+    REBUILD_MEMORY_PATH,
 )
 
 
@@ -82,6 +83,8 @@ def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manu
         f"Themes: {len(query_themes)}  Window: {window['lookback_hours']}h"
     )
 
+    memory_context = _build_memory_context()
+
     manifest = _build_manifest(
         run_identity=run_identity,
         profile_name=run_profile,
@@ -94,6 +97,7 @@ def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manu
         layer5_cfg=l5_cfg,
         layer7_cfg=l7_cfg,
         layer8_cfg=l8_cfg,
+        memory_context=memory_context,
     )
     summary = _build_summary(manifest)
 
@@ -279,6 +283,7 @@ def _build_manifest(
     layer5_cfg: dict,
     layer7_cfg: dict,
     layer8_cfg: dict,
+    memory_context: dict,
 ) -> dict:
     return {
         "schema_version": "v1",
@@ -286,6 +291,7 @@ def _build_manifest(
         "run_date": run_identity["run_date"],
         "created_at": run_identity["created_at"],
         "status": "ready_for_layer_1",
+        "memory_context": memory_context,
         "layer_0": {
             "run_profile": profile_name,
             "trigger_type": trigger_type,
@@ -328,11 +334,68 @@ def _build_summary(manifest: dict) -> dict:
         "enabled_source_count": enabled_source_count,
         "enabled_youtube_channel_count": enabled_youtube_channel_count,
         "query_theme_count": len(manifest["layer_1"]["query_themes"]),
+        "memory_context_available": bool(manifest.get("memory_context", {}).get("available")),
+        "memory_video_count": manifest.get("memory_context", {}).get("stats", {}).get("video_count", 0),
+        "memory_story_count": len(manifest.get("memory_context", {}).get("covered_stories", [])),
         "validation": {
             "passed": True,
             "errors": [],
         "warnings": [],
         },
+    }
+
+
+def _build_memory_context() -> dict:
+    if not REBUILD_MEMORY_PATH.exists():
+        return {
+            "available": False,
+            "memory_path": str(REBUILD_MEMORY_PATH),
+            "stats": {},
+            "approved_not_published_run_ids": [],
+            "covered_stories": [],
+            "recent_title_angles": [],
+            "source_urls": [],
+        }
+
+    memory = json.loads(REBUILD_MEMORY_PATH.read_text(encoding="utf-8"))
+    required = ["videos_by_run_id", "stories_by_story_id", "source_urls", "recent_title_angles", "stats"]
+    missing = [key for key in required if key not in memory]
+    if missing:
+        raise KeyError(f"Rebuild memory store missing required keys: {missing}")
+
+    videos = memory.get("videos_by_run_id", {})
+    approved_not_published_run_ids = [
+        run_id
+        for run_id, video in videos.items()
+        if video.get("memory_status") == "approved_not_published"
+    ]
+    covered_stories = [
+        {
+            "story_id": story_id,
+            "story_title": story.get("story_title", ""),
+            "memory_status": story.get("memory_status", ""),
+            "latest_run_id": story.get("latest_run_id", ""),
+            "selected_format": story.get("selected_format", ""),
+        }
+        for story_id, story in memory.get("stories_by_story_id", {}).items()
+    ]
+    recent_title_angles = [
+        {
+            "run_id": item.get("run_id", ""),
+            "memory_status": item.get("memory_status", ""),
+            "title": item.get("title", ""),
+            "selected_format": item.get("selected_format", ""),
+        }
+        for item in memory.get("recent_title_angles", [])[-30:]
+    ]
+    return {
+        "available": True,
+        "memory_path": str(REBUILD_MEMORY_PATH),
+        "stats": dict(memory.get("stats", {})),
+        "approved_not_published_run_ids": approved_not_published_run_ids[-20:],
+        "covered_stories": covered_stories[-80:],
+        "recent_title_angles": recent_title_angles,
+        "source_urls": list(memory.get("source_urls", {}).keys())[-100:],
     }
 
 

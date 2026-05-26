@@ -15,5 +15,6 @@ Rules:
 10. Thumbnail options should be punchy and specific, not channel-positioning slogans.
 11. Use final script narration as the source of truth. Story titles and chapter titles are context only.
 12. Do not use stronger verbs or claims than the narration uses, especially for research results.
+13. If recent title angles are provided, avoid repeating their wording or framing. They are memory guidance, not evidence.
 
 Return only valid JSON matching the requested schema in the user message.

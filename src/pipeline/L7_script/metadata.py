@@ -105,6 +105,7 @@ def _build_title_prompt(package_draft: dict, content_packet: dict, manifest: dic
         "channel_name": channel["channel_name"],
         "content_promise": channel.get("content_promise", ""),
         "video": package_draft["video"],
+        "recent_title_angles_to_avoid": _recent_title_angles(manifest),
         "story_sections": story_sections,
         "script_preview": package_draft["full_script"]["narration_text"][:2500],
         "blocked_angles": package_draft["video"].get("blocked_angles", []),
@@ -127,11 +128,22 @@ def _build_title_prompt(package_draft: dict, content_packet: dict, manifest: dic
         "Use the shared theme, source mix, and practical viewer promise before single-story hooks. "
         "Prefer concrete stakes over generic phrases like 'evidence-first' unless the title also names what viewers get. "
         "Thumbnail text should be specific enough to be clickable, not a generic channel slogan. "
+        "Avoid repeating recent title angles listed in the payload; use them as soft memory, not as evidence. "
         "Use the final script narration as the evidence for title wording; story/chapter titles are context only. "
         "Do not use stronger wording than the narration uses. "
         "Do not write final publishing copy, do not add unsupported claims, and do not use facts outside the payload.\n\n"
         f"Metadata payload:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
     )
+
+
+def _recent_title_angles(manifest: dict) -> list[str]:
+    memory_context = manifest.get("memory_context", {})
+    titles = []
+    for item in memory_context.get("recent_title_angles", [])[-20:]:
+        title = clean_text(item.get("title", ""))
+        if title:
+            titles.append(title)
+    return titles
 
 
 def _validate_title_response(response: dict) -> dict:

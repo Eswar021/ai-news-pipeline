@@ -103,6 +103,7 @@ def _build_user_prompt(candidate: dict) -> str:
         "sources": sources,
         "safe_facts": safe_facts,
         "cautious_facts": cautious_facts,
+        "memory_overlap": candidate.get("memory_overlap", {}),
     }
     return (
         "Evaluate this story as one possible segment in a multi-story AI news roundup.\n"
