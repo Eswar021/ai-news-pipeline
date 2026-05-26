@@ -168,6 +168,8 @@ def _build_video(content_packet: dict, manifest: dict) -> dict:
     video = dict(content_packet["video"])
     video["channel_name"] = manifest["layer_0"]["channel"]["channel_name"]
     video["content_promise"] = manifest["layer_0"]["channel"].get("content_promise", "")
+    video["script_style"] = manifest.get("layer_7", {}).get("script_style", "")
+    video["script_style_description"] = manifest.get("layer_7", {}).get("script_style_description", "")
     return video
 
 
@@ -212,6 +214,7 @@ def _build_summary(
         "status": package["status"],
         "package_type": package["package_type"],
         "selected_format": package.get("video", {}).get("selected_format", ""),
+        "script_style": package.get("video", {}).get("script_style", ""),
         "section_count": len(package.get("section_scripts", [])),
         "story_section_count": section_type_mix.get("story", 0),
         "role_mix": dict(role_mix),

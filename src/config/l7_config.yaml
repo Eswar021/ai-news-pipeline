@@ -1,7 +1,15 @@
 layer_7:
   script_writer_model: "gpt-5-mini"
-  script_writer_prompt_version: "v1"
   script_worker_count: 10
   words_per_minute: 145
   title_thumbnail_model: "gpt-5-nano"
-  title_thumbnail_prompt_version: "v1"
+  default_script_style: "general_youtube"
+  script_styles:
+    technical_briefing:
+      description: "Evidence-first builder/operator briefing style."
+      script_writer_prompt_version: "v1"
+      title_thumbnail_prompt_version: "v1"
+    general_youtube:
+      description: "General-audience AI news style with simple explanations and conversational narration."
+      script_writer_prompt_version: "v1_general_youtube"
+      title_thumbnail_prompt_version: "v1_general_youtube"

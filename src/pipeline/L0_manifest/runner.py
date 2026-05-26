@@ -26,6 +26,7 @@ Module execution order:
 Usage:
     python -m src.pipeline.L0_manifest.runner --run-profile daily_48h_all_sources
     python -m src.pipeline.L0_manifest.runner --run-profile daily_48h_all_sources --date YYYY-MM-DD
+    python -m src.pipeline.L0_manifest.runner --run-profile daily_48h_all_sources --script-style general_youtube
 """
 
 import argparse
@@ -53,19 +54,26 @@ from src.config.paths import (
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
-def run(run_profile: str, run_date: str | None = None, trigger_type: str = "manual") -> Path:
+def run(
+    run_profile: str,
+    run_date: str | None = None,
+    trigger_type: str = "manual",
+    script_style: str | None = None,
+) -> Path:
     print(f"[L0] Building manifest for profile: {run_profile}")
     l0_cfg = _load_l0_config()
     l1_cfg = _load_l1_config()
     l3_cfg = _load_l3_config()
     l4_cfg = _load_l4_config()
     l5_cfg = _load_l5_config()
-    l7_cfg = _load_l7_config()
+    l7_authoring_cfg = _load_l7_config()
     l8_cfg = _load_l8_config()
 
     run_identity = _build_run_identity(run_profile, run_date)
     profile = _resolve_profile(l0_cfg, run_profile)
+    l7_cfg = _resolve_layer7_config(l7_authoring_cfg, profile=profile, script_style=script_style)
     print(f"[L0] Run ID: {run_identity['run_id']}")
+    print(f"[L0] Script style: {l7_cfg['script_style']}")
 
     channel_cfg = dict(l0_cfg["channel"])
     query_themes = _filter_query_themes(
@@ -261,6 +269,54 @@ def _resolve_collectors(
     }
 
 
+def _resolve_layer7_config(
+    authoring_cfg: dict,
+    *,
+    profile: dict,
+    script_style: str | None,
+) -> dict:
+    required_base = [
+        "script_writer_model",
+        "script_worker_count",
+        "words_per_minute",
+        "title_thumbnail_model",
+        "default_script_style",
+        "script_styles",
+    ]
+    missing_base = [key for key in required_base if key not in authoring_cfg]
+    if missing_base:
+        raise KeyError(f"l7_config.yaml layer_7 missing required keys: {missing_base}")
+
+    styles = authoring_cfg["script_styles"]
+    if not isinstance(styles, dict) or not styles:
+        raise KeyError("l7_config.yaml layer_7.script_styles must be a non-empty mapping")
+
+    selected_style = script_style or profile.get("script_style") or authoring_cfg["default_script_style"]
+    if selected_style not in styles:
+        available = ", ".join(sorted(styles))
+        raise KeyError(f"Unknown script style '{selected_style}'. Available styles: {available}")
+
+    style_cfg = styles[selected_style]
+    if not isinstance(style_cfg, dict):
+        raise KeyError(f"layer_7.script_styles.{selected_style} must be a mapping")
+    required_style = ["script_writer_prompt_version", "title_thumbnail_prompt_version"]
+    missing_style = [key for key in required_style if key not in style_cfg]
+    if missing_style:
+        raise KeyError(f"layer_7.script_styles.{selected_style} missing keys: {missing_style}")
+
+    return {
+        "script_writer_model": authoring_cfg["script_writer_model"],
+        "script_worker_count": authoring_cfg["script_worker_count"],
+        "words_per_minute": authoring_cfg["words_per_minute"],
+        "title_thumbnail_model": authoring_cfg["title_thumbnail_model"],
+        "script_style": selected_style,
+        "script_style_description": style_cfg.get("description", ""),
+        "available_script_styles": sorted(styles),
+        "script_writer_prompt_version": style_cfg["script_writer_prompt_version"],
+        "title_thumbnail_prompt_version": style_cfg["title_thumbnail_prompt_version"],
+    }
+
+
 def _count_enabled_members(group_cfg: dict) -> int:
     if "sources" in group_cfg:
         return sum(1 for item in group_cfg["sources"] if item.get("enabled", True))
@@ -337,10 +393,11 @@ def _build_summary(manifest: dict) -> dict:
         "memory_context_available": bool(manifest.get("memory_context", {}).get("available")),
         "memory_video_count": manifest.get("memory_context", {}).get("stats", {}).get("video_count", 0),
         "memory_story_count": len(manifest.get("memory_context", {}).get("covered_stories", [])),
+        "script_style": manifest.get("layer_7", {}).get("script_style", ""),
         "validation": {
             "passed": True,
             "errors": [],
-        "warnings": [],
+            "warnings": [],
         },
     }
 
@@ -428,6 +485,7 @@ if __name__ == "__main__":
     parser.add_argument("--run-profile", required=True)
     parser.add_argument("--date", default=None)
     parser.add_argument("--trigger", default="manual")
+    parser.add_argument("--script-style", default=None)
     args = parser.parse_args()
-    path = run(args.run_profile, args.date, args.trigger)
+    path = run(args.run_profile, args.date, args.trigger, args.script_style)
     print(path)

@@ -57,6 +57,7 @@ Usage:
     python -m src.pipeline.runner 0 1 2 3 4 5 6 7 --run-profile daily_48h_all_sources
     python -m src.pipeline.runner 0 1 2 3 4 5 6 7 8 --run-profile daily_48h_all_sources
     python -m src.pipeline.runner 0 1 2 3 4 5 6 7 8 9 --run-profile daily_48h_all_sources
+    python -m src.pipeline.runner 0 1 2 3 4 5 6 7 --run-profile broad_7d_all_sources --script-style general_youtube
     python -m src.pipeline.runner 1
     python -m src.pipeline.runner 2
     python -m src.pipeline.runner 3
@@ -94,6 +95,11 @@ def main() -> None:
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--date", default=None)
     parser.add_argument("--trigger", default="manual")
+    parser.add_argument(
+        "--script-style",
+        default=None,
+        help="Optional L7 script style override, resolved by L0 into run_manifest.json.",
+    )
     args = parser.parse_args()
 
     requested = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] if args.layers == ["all"] else sorted({int(v) for v in args.layers})
@@ -118,6 +124,7 @@ def main() -> None:
             run_profile=args.run_profile,
             run_date=args.date,
             trigger_type=args.trigger,
+            script_style=args.script_style,
         )
         run_id = manifest_path.parent.name
         print(f"[runner] Layer 0 done in {time.time() - layer_started:.1f}s")

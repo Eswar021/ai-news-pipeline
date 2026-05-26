@@ -232,6 +232,8 @@ def _build_user_prompt(
         "channel_name": channel["channel_name"],
         "content_promise": channel.get("content_promise", ""),
         "allowed_topics": channel.get("allowed_topics", []),
+        "script_style": manifest.get("layer_7", {}).get("script_style", ""),
+        "script_style_description": manifest.get("layer_7", {}).get("script_style_description", ""),
         "section": section,
         "required_json_schema": {
             "narration_text": "natural spoken narration only, no visual/editor notes",
