@@ -41,13 +41,23 @@ def choose_roundup(evaluations: list[dict], layer5_cfg: dict) -> dict:
     max_roundup = int(layer5_cfg["roundup_max_stories"])
     min_roundup = int(layer5_cfg["roundup_min_stories"])
     roundup_candidates = [
-        item for item in evaluations if item["roundup_eligible"] or item["roundup_perspective_eligible"]
+        item
+        for item in evaluations
+        if (item["roundup_eligible"] or item["roundup_perspective_eligible"])
+        and not _memory_repeat_status(item)
     ]
     selected = _select_balanced_roundup(
         roundup_candidates,
         max_roundup=max_roundup,
         min_roundup=min_roundup,
     )
+    if len(selected) < min_roundup:
+        selected = _fill_with_approved_drafts_if_needed(
+            selected,
+            evaluations,
+            max_roundup=max_roundup,
+            min_roundup=min_roundup,
+        )
 
     if len(selected) < min_roundup:
         return _no_video(
@@ -91,7 +101,16 @@ def mark_selected(
         if not selected and not reasons:
             reasons = ["not_selected_for_roundup"]
         selectable = item.get("roundup_eligible") or item.get("roundup_perspective_eligible")
-        if not selected and selectable and _matches_selected_family(item, selected_by_id.values()):
+        if not selected and _memory_repeat_status(item) == "approved_not_published":
+            reasons = ["already_approved_draft_memory"]
+        elif not selected and _memory_repeat_status(item) == "published":
+            reasons = ["already_published_memory"]
+        if (
+            not selected
+            and selectable
+            and not _memory_repeat_status(item)
+            and _matches_selected_family(item, selected_by_id.values())
+        ):
             reasons = ["roundup_diversity_guardrail"]
 
         selected_details = selected_by_id.get(item["story_id"], {})
@@ -306,6 +325,48 @@ def _select_balanced_roundup(roundup_candidates: list[dict], *, max_roundup: int
     return selected[:max_roundup]
 
 
+def _fill_with_approved_drafts_if_needed(
+    selected: list[dict],
+    evaluations: list[dict],
+    *,
+    max_roundup: int,
+    min_roundup: int,
+) -> list[dict]:
+    if len(selected) >= min_roundup:
+        return selected
+
+    selected_ids = {item["story_id"] for item in selected}
+    org_counts: dict[str, int] = {}
+    product_counts: dict[str, int] = {}
+    for item in selected:
+        org_key = _org_key(item)
+        product_key = _product_key(item)
+        if org_key:
+            org_counts[org_key] = org_counts.get(org_key, 0) + 1
+        if product_key:
+            product_counts[product_key] = product_counts.get(product_key, 0) + 1
+
+    emergency_candidates = [
+        item
+        for item in evaluations
+        if item["story_id"] not in selected_ids
+        and _memory_repeat_status(item) == "approved_not_published"
+        and (item.get("roundup_eligible") or item.get("roundup_perspective_eligible"))
+    ]
+    for candidate in emergency_candidates:
+        if len(selected) >= min_roundup or len(selected) >= max_roundup:
+            break
+        _add_candidate(
+            selected,
+            selected_ids,
+            org_counts,
+            product_counts,
+            candidate,
+            selection_path="memory_minimum_fill",
+        )
+    return selected
+
+
 def _try_add_candidate(
     selected: list[dict],
     selected_ids: set[str],
@@ -431,6 +492,10 @@ def _rejection_reasons(candidate: dict, *, eligible: bool, perspective_eligible:
     if not reasons:
         reasons.append("below_roundup_threshold")
     return reasons
+
+
+def _memory_repeat_status(candidate: dict) -> str:
+    return str(candidate.get("memory_overlap", {}).get("memory_status", "")).strip().lower()
 
 
 def _best_perspective_candidate(candidates: list[dict], *, perspective_type: str) -> dict | None:

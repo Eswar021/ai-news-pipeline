@@ -206,7 +206,7 @@ def _section_rule(section: dict) -> str:
 
 
 def _validate_section_response(response: dict, section: dict, layer7_cfg: dict) -> dict:
-    narration = clean_text(response.get("narration_text", ""))
+    narration = _polish_narration(clean_text(response.get("narration_text", "")), section)
     if not narration:
         raise ValueError(f"roundup_script_writer response missing narration_text for {section['section_id']}")
 
@@ -275,6 +275,12 @@ def _rewrite_reasons(result: dict, section: dict) -> list[str]:
     blocked_phrases = _watch_only_blocked_phrases(result, section)
     if blocked_phrases:
         reasons.append(f"watch-only section used unsupported action language: {blocked_phrases}")
+    repeated_sentences = _repeated_sentence_markers(result.get("narration_text", ""))
+    if repeated_sentences:
+        reasons.append(f"repeated narration sentence or idea: {repeated_sentences}")
+    repeated_phrases = _repeated_key_phrases(result.get("narration_text", ""))
+    if repeated_phrases:
+        reasons.append(f"repeated key phrasing: {repeated_phrases}")
     return reasons
 
 
@@ -311,6 +317,53 @@ def _validated_analysis_sentences(narration: str, values: list) -> list[str]:
         if normalized in narration_lookup:
             kept.append(narration_lookup[normalized])
     return _dedupe(kept)
+
+
+def _polish_narration(narration: str, section: dict) -> str:
+    if not narration:
+        return narration
+    replacements = {
+        "Report notes the release": "The paper notes the release",
+        "report notes the release": "the paper notes the release",
+        "Change is here: ": "",
+        "change is here: ": "",
+    }
+    polished = narration
+    for old, new in replacements.items():
+        polished = polished.replace(old, new)
+
+    if section.get("section_type") == "story":
+        title = clean_text(section.get("title", ""))
+        prefix = f"{title}. {title}. "
+        if title and polished.startswith(prefix):
+            polished = f"{title}. {polished[len(prefix):]}"
+    return clean_text(polished)
+
+
+def _repeated_sentence_markers(text: str) -> list[str]:
+    sentences = [_normalize_sentence(sentence) for sentence in _split_sentences(text)]
+    seen = set()
+    repeated = []
+    for sentence in sentences:
+        if len(sentence.split()) < 7:
+            continue
+        if sentence in seen:
+            repeated.append(sentence[:90])
+        seen.add(sentence)
+    return repeated[:3]
+
+
+def _repeated_key_phrases(text: str) -> list[str]:
+    normalized = _normalize_sentence(text)
+    phrases = [
+        "structured summaries",
+        "surface relevant clinical details",
+        "draft initial rationales",
+        "production-ready retrieval-augmented generation",
+        "traditional ten blue links",
+    ]
+    repeated = [phrase for phrase in phrases if normalized.count(phrase) > 1]
+    return repeated[:3]
 
 
 def _split_sentences(text: str) -> list[str]:
