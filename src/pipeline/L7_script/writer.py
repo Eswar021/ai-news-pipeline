@@ -221,7 +221,8 @@ def _section_rule(section: dict) -> str:
             f"Required cautious fact IDs need qualifying language: {cautious}. "
             "Optional facts may be used only if they improve clarity and fit the word budget. "
             "Start from the viewer-facing change, not with 'today we cover' or 'this section'. "
-            "End with one takeaway or caveat that follows from fact_text, not generic advice."
+            "End with one takeaway or caveat that follows from fact_text, not generic advice. "
+            "Do not use multi-sentence direct quotes; paraphrase them or quote only a short phrase."
         )
     if section_type == "intro":
         return (
@@ -318,6 +319,9 @@ def _rewrite_reasons(result: dict, section: dict) -> list[str]:
         reasons.append(f"first-person source voice in narration: {first_person_source}")
     if _caution_section_missing_qualifier(result.get("narration_text", ""), section):
         reasons.append("caution-only section missing source attribution or qualifier language")
+    multi_sentence_quotes = _multi_sentence_quote_markers(result.get("narration_text", ""))
+    if multi_sentence_quotes:
+        reasons.append(f"multi-sentence direct quote should be paraphrased: {multi_sentence_quotes}")
     unsupported_performance = _unsupported_performance_phrases(result.get("narration_text", ""), section)
     if unsupported_performance:
         reasons.append(f"unsupported performance qualifier: {unsupported_performance}")
@@ -371,6 +375,12 @@ def _polish_narration(narration: str, section: dict) -> str:
         "to push transparency, we release": "the paper says the authors release",
         "We release the agentic tool": "The authors say they release the agentic tool",
         "we release the agentic tool": "the authors say they release the agentic tool",
+        "\"We chose OpenAI because we weren’t looking for a demo. We were looking for enterprise infrastructure,\" Purinton says.": (
+            "Purinton says AdventHealth chose OpenAI because it was looking for enterprise infrastructure rather than a demo."
+        ),
+        "\"We chose OpenAI because we weren't looking for a demo. We were looking for enterprise infrastructure,\" Purinton says.": (
+            "Purinton says AdventHealth chose OpenAI because it was looking for enterprise infrastructure rather than a demo."
+        ),
         "ABA marks a shift in how we judge benchmarks:": "The paper presents ABA as a benchmark-auditing approach:",
         "aba marks a shift in how we judge benchmarks:": "the paper presents ABA as a benchmark-auditing approach:",
         "What to watch next: monitor audit impact on benchmark reliability, with source attribution.": "",
@@ -412,6 +422,15 @@ def _repeated_key_phrases(text: str) -> list[str]:
     ]
     repeated = [phrase for phrase in phrases if normalized.count(phrase) > 1]
     return repeated[:3]
+
+
+def _multi_sentence_quote_markers(text: str) -> list[str]:
+    matches = []
+    for match in re.finditer(r"\"[^\"]*[.!?]\s+[^\"]*[.!?][^\"]*\"", text):
+        quote = clean_text(match.group(0))
+        if quote:
+            matches.append(quote[:120])
+    return matches[:3]
 
 
 def _first_person_source_phrases(text: str, section: dict) -> list[str]:
