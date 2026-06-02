@@ -28,9 +28,11 @@ def add_viewer_values(
     system_prompt: str,
     log_path: Path,
 ) -> list[dict]:
-    worker_count = int(layer5_cfg["editorial_worker_count"])
+    worker_count = _viewer_value_worker_count(layer5_cfg)
     if worker_count < 1:
-        raise ValueError("layer_5.editorial_worker_count must be at least 1")
+        raise ValueError("layer_5.viewer_value_worker_count must be at least 1")
+
+    print(f"[L5] Viewer-value workers: {worker_count}")
 
     if worker_count == 1:
         return [
@@ -62,6 +64,15 @@ def add_viewer_values(
     if any(candidate is None for candidate in ordered):
         raise RuntimeError("L5 viewer value analysis finished with missing candidate outputs")
     return [candidate for candidate in ordered if candidate is not None]
+
+
+def _viewer_value_worker_count(layer5_cfg: dict) -> int:
+    if "viewer_value_worker_count" not in layer5_cfg:
+        raise KeyError(
+            "run_manifest.json layer_5 missing viewer_value_worker_count. "
+            "Rerun Layer 0 after updating L5 config."
+        )
+    return int(layer5_cfg["viewer_value_worker_count"])
 
 
 def _analyze_candidate(candidate: dict, *, layer5_cfg: dict, system_prompt: str, log_path: Path) -> dict:

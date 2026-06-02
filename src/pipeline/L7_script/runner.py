@@ -54,7 +54,7 @@ def run(run_ref: str) -> Path:
 
     if not content_packet.get("ready_for_layer_7", False):
         package = _build_no_video_package(run_id, content_packet)
-        summary = _build_summary(package, llm_calls_path, content_packet)
+        summary = _build_summary(package, llm_calls_path, content_packet, layer7_cfg=layer7_cfg)
         return _write_outputs(out_dir, package, summary)
 
     if selected_format != "roundup":
@@ -113,7 +113,7 @@ def run(run_ref: str) -> Path:
     if not checks["passed"]:
         raise ValueError(f"L7 script package checks failed: {checks['errors']}")
 
-    summary = _build_summary(package, llm_calls_path, content_packet, checks)
+    summary = _build_summary(package, llm_calls_path, content_packet, checks, layer7_cfg=layer7_cfg)
     print(
         f"[L7] Script words: {full_script['total_word_count']}  "
         f"estimated={full_script['estimated_duration_seconds']}s  "
@@ -204,6 +204,7 @@ def _build_summary(
     llm_calls_path: Path,
     content_packet: dict,
     checks: dict | None = None,
+    layer7_cfg: dict | None = None,
 ) -> dict:
     role_mix = Counter(section.get("role", "") for section in package.get("section_scripts", []) if section.get("role"))
     section_type_mix = Counter(section.get("section_type", "") for section in package.get("section_scripts", []))
@@ -229,7 +230,22 @@ def _build_summary(
         "omitted_required_fact_count": len(evidence_usage.get("omitted_required_fact_ids", [])),
         "input_segment_count": len(content_packet.get("segment_plan", [])),
         "llm_call_count": _count_lines(llm_calls_path),
+        "llm_runtime": _llm_runtime_summary(layer7_cfg),
         "checks": checks or {"passed": package["status"] == "no_video", "errors": [], "warnings": []},
+    }
+
+
+def _llm_runtime_summary(layer7_cfg: dict | None) -> dict:
+    if not layer7_cfg:
+        return {}
+    return {
+        "script_writer_model": layer7_cfg["script_writer_model"],
+        "script_writer_prompt_version": layer7_cfg["script_writer_prompt_version"],
+        "script_worker_count": layer7_cfg["script_worker_count"],
+        "title_thumbnail_model": layer7_cfg["title_thumbnail_model"],
+        "title_thumbnail_prompt_version": layer7_cfg["title_thumbnail_prompt_version"],
+        "parallelized_steps": ["roundup_script_writer"],
+        "serial_steps": ["title_thumbnail_planner"],
     }
 
 

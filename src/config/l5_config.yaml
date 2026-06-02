@@ -6,7 +6,15 @@ layer_5:
   roundup_target_seconds: 720
   roundup_min_candidate_score: 62
   viewer_value_model: "gpt-5-nano"
-  viewer_value_prompt_version: "v1"
+  viewer_value_worker_count: 10
   editorial_brief_model: "gpt-5-nano"
-  editorial_brief_prompt_version: "v1"
-  editorial_worker_count: 10
+  default_editorial_style: "general_youtube"
+  editorial_styles:
+    technical_briefing:
+      description: "Evidence-first builder/operator editorial judgment."
+      viewer_value_prompt_version: "v1"
+      editorial_brief_prompt_version: "v1"
+    general_youtube:
+      description: "General-audience AI news judgment with plain-English viewer value."
+      viewer_value_prompt_version: "v1_general_youtube"
+      editorial_brief_prompt_version: "v1_general_youtube"

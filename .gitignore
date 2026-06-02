@@ -29,6 +29,7 @@ MANIFEST
 
 # ── Virtual Environments ───────────────────────────────────────────────────────
 .venv/
+.venv-voiceover/
 venv/
 env/
 ENV/

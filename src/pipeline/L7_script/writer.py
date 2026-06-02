@@ -111,6 +111,7 @@ NON_BLOCKING_REWRITE_REASON_PREFIXES = (
     "report-like repeated attribution cadence",
     "vague watch/monitor ending without grounded fact",
 )
+INTERNAL_FACT_ID_RE = re.compile(r"\bfact_[a-z0-9_]+\b", re.IGNORECASE)
 
 
 def write_sections(
@@ -124,6 +125,8 @@ def write_sections(
     worker_count = int(layer7_cfg["script_worker_count"])
     if worker_count < 1:
         raise ValueError("layer_7.script_worker_count must be at least 1")
+
+    print(f"[L7] Script-section workers: {worker_count}")
 
     if worker_count == 1:
         return [
@@ -381,6 +384,9 @@ def _rewrite_reasons(result: dict, section: dict) -> list[str]:
         reasons.append(f"first-person source voice in narration: {first_person_source}")
     if _caution_section_missing_qualifier(result.get("narration_text", ""), section):
         reasons.append("caution-only section missing source attribution or qualifier language")
+    internal_fact_ids = _internal_fact_ids_in_narration(result.get("narration_text", ""))
+    if internal_fact_ids:
+        reasons.append(f"internal fact IDs leaked into narration: {internal_fact_ids}")
     multi_sentence_quotes = _multi_sentence_quote_markers(result.get("narration_text", ""))
     if multi_sentence_quotes:
         reasons.append(f"multi-sentence direct quote should be paraphrased: {multi_sentence_quotes}")
@@ -415,6 +421,10 @@ def _watch_only_blocked_phrases(result: dict, section: dict) -> list[str]:
         return []
     lower = clean_text(result.get("narration_text", "")).lower()
     return [phrase for phrase in WATCH_ONLY_BLOCKED_PHRASES if phrase in lower]
+
+
+def _internal_fact_ids_in_narration(text: str) -> list[str]:
+    return _dedupe(INTERNAL_FACT_ID_RE.findall(text))[:5]
 
 
 def _only_non_blocking_rewrite_reasons(reasons: list[str], result: dict) -> bool:

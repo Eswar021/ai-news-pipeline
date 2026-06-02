@@ -35,6 +35,8 @@ def verify_sentence_support(
     if worker_count < 1:
         raise ValueError("layer_8.verifier_worker_count must be at least 1")
 
+    print(f"[L8] Support-verifier workers: {worker_count}")
+
     verified_by_sentence_id = {}
     if worker_count == 1:
         for section_id, sentences in story_sections.items():

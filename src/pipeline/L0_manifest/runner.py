@@ -65,13 +65,14 @@ def run(
     l1_cfg = _load_l1_config()
     l3_cfg = _load_l3_config()
     l4_cfg = _load_l4_config()
-    l5_cfg = _load_l5_config()
+    l5_authoring_cfg = _load_l5_config()
     l7_authoring_cfg = _load_l7_config()
     l8_cfg = _load_l8_config()
 
     run_identity = _build_run_identity(run_profile, run_date)
     profile = _resolve_profile(l0_cfg, run_profile)
     l7_cfg = _resolve_layer7_config(l7_authoring_cfg, profile=profile, script_style=script_style)
+    l5_cfg = _resolve_layer5_config(l5_authoring_cfg, editorial_style=l7_cfg["script_style"])
     print(f"[L0] Run ID: {run_identity['run_id']}")
     print(f"[L0] Script style: {l7_cfg['script_style']}")
 
@@ -317,6 +318,59 @@ def _resolve_layer7_config(
     }
 
 
+def _resolve_layer5_config(authoring_cfg: dict, *, editorial_style: str) -> dict:
+    required_base = [
+        "target_format",
+        "candidate_limit",
+        "roundup_min_stories",
+        "roundup_max_stories",
+        "roundup_target_seconds",
+        "roundup_min_candidate_score",
+        "viewer_value_model",
+        "viewer_value_worker_count",
+        "editorial_brief_model",
+        "default_editorial_style",
+        "editorial_styles",
+    ]
+    missing_base = [key for key in required_base if key not in authoring_cfg]
+    if missing_base:
+        raise KeyError(f"l5_config.yaml layer_5 missing required keys: {missing_base}")
+
+    styles = authoring_cfg["editorial_styles"]
+    if not isinstance(styles, dict) or not styles:
+        raise KeyError("l5_config.yaml layer_5.editorial_styles must be a non-empty mapping")
+
+    selected_style = editorial_style or authoring_cfg["default_editorial_style"]
+    if selected_style not in styles:
+        available = ", ".join(sorted(styles))
+        raise KeyError(f"Unknown L5 editorial style '{selected_style}'. Available styles: {available}")
+
+    style_cfg = styles[selected_style]
+    if not isinstance(style_cfg, dict):
+        raise KeyError(f"layer_5.editorial_styles.{selected_style} must be a mapping")
+    required_style = ["viewer_value_prompt_version", "editorial_brief_prompt_version"]
+    missing_style = [key for key in required_style if key not in style_cfg]
+    if missing_style:
+        raise KeyError(f"layer_5.editorial_styles.{selected_style} missing keys: {missing_style}")
+
+    return {
+        "target_format": authoring_cfg["target_format"],
+        "candidate_limit": authoring_cfg["candidate_limit"],
+        "roundup_min_stories": authoring_cfg["roundup_min_stories"],
+        "roundup_max_stories": authoring_cfg["roundup_max_stories"],
+        "roundup_target_seconds": authoring_cfg["roundup_target_seconds"],
+        "roundup_min_candidate_score": authoring_cfg["roundup_min_candidate_score"],
+        "viewer_value_model": authoring_cfg["viewer_value_model"],
+        "viewer_value_prompt_version": style_cfg["viewer_value_prompt_version"],
+        "viewer_value_worker_count": authoring_cfg["viewer_value_worker_count"],
+        "editorial_brief_model": authoring_cfg["editorial_brief_model"],
+        "editorial_brief_prompt_version": style_cfg["editorial_brief_prompt_version"],
+        "editorial_style": selected_style,
+        "editorial_style_description": style_cfg.get("description", ""),
+        "available_editorial_styles": sorted(styles),
+    }
+
+
 def _count_enabled_members(group_cfg: dict) -> int:
     if "sources" in group_cfg:
         return sum(1 for item in group_cfg["sources"] if item.get("enabled", True))
@@ -394,11 +448,27 @@ def _build_summary(manifest: dict) -> dict:
         "memory_video_count": manifest.get("memory_context", {}).get("stats", {}).get("video_count", 0),
         "memory_story_count": len(manifest.get("memory_context", {}).get("covered_stories", [])),
         "script_style": manifest.get("layer_7", {}).get("script_style", ""),
+        "llm_parallelism": _build_llm_parallelism_summary(manifest),
         "validation": {
             "passed": True,
             "errors": [],
             "warnings": [],
         },
+    }
+
+
+def _build_llm_parallelism_summary(manifest: dict) -> dict:
+    layer3 = manifest.get("layer_3", {})
+    layer4 = manifest.get("layer_4", {})
+    layer5 = manifest.get("layer_5", {})
+    layer7 = manifest.get("layer_7", {})
+    layer8 = manifest.get("layer_8", {})
+    return {
+        "layer_3_story_label_worker_count": layer3.get("story_label_worker_count", 0),
+        "layer_4_fact_packet_worker_count": layer4.get("fact_packet_worker_count", 0),
+        "layer_5_viewer_value_worker_count": layer5.get("viewer_value_worker_count", 0),
+        "layer_7_script_worker_count": layer7.get("script_worker_count", 0),
+        "layer_8_verifier_worker_count": layer8.get("verifier_worker_count", 0),
     }
 
 

@@ -15,11 +15,13 @@ import argparse
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import re
 
 from src.config.paths import CURRENT_MANIFEST_PATH, OUTPUT_DIR
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
+INTERNAL_FACT_ID_RE = re.compile(r"\bfact_[a-z0-9_]+\b", re.IGNORECASE)
 
 
 def main() -> None:
@@ -51,65 +53,111 @@ def build_publish_handoff(run_ref: str) -> Path:
 def _build_markdown(manifest: dict, verification: dict, final_publish: dict) -> str:
     metadata = final_publish.get("youtube_metadata", {})
     video = final_publish.get("video", {})
+    issues = _quality_issues(final_publish)
+    status_line = "Do not publish yet - rerun the script step first." if issues else "Ready for human review."
+    title_options = metadata.get("title_options", [])
+    thumbnail_options = metadata.get("thumbnail_text_options", [])
+    chapters = metadata.get("chapters", [])
+    source_urls = metadata.get("source_urls", [])
+    story_chapters = [
+        chapter.get("title", "")
+        for chapter in chapters
+        if chapter.get("title") not in {"Intro", "Closing"}
+    ]
+    first_title = _title_text(title_options[0]) if title_options else ""
     lines = [
-        f"# Publish Handoff — {manifest['run_id']}",
+        f"# Publishing Preview - {manifest['run_id']}",
         "",
-        f"Generated: {_iso_now()}",
-        f"L8 status: {verification.get('status')}",
-        f"Memory status: approved_not_published",
-        f"Channel: {video.get('channel_name') or manifest['layer_0']['channel']['channel_name']}",
-        f"Format: {final_publish.get('selected_format', video.get('selected_format', ''))}",
+        "This is the human review file before upload. It is meant to be easy to read, not a pipeline report.",
         "",
-        "## Video Direction",
+        "## Quick Check",
         "",
-        f"Viewer promise: {video.get('viewer_promise', '')}",
+        f"- Review status: {status_line}",
+        f"- Pipeline status: L8 {verification.get('status')}",
+        "- Publish status: not uploaded yet",
+        f"- Channel: {video.get('channel_name') or manifest['layer_0']['channel']['channel_name']}",
+        f"- Format: {final_publish.get('selected_format', video.get('selected_format', ''))}",
+        f"- Generated: {_iso_now()}",
         "",
-        f"Editorial angle: {video.get('editorial_angle', '')}",
-        "",
-        f"Theme: {video.get('thesis_or_theme', '')}",
-        "",
-        "## Title Options",
+        "## Before You Upload",
         "",
     ]
-    title_options = metadata.get("title_options", [])
+    if issues:
+        lines.extend(f"- {issue}" for issue in issues)
+        lines.extend(
+            [
+                "- Suggested next step: rerun `python3 -m src.pipeline.runner 7 8 --run-id current` after the code fix, then rebuild this preview.",
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "- Read the script once out loud.",
+                "- Pick one title and one thumbnail line.",
+                "- Confirm the source links are the ones you want in the description.",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "## What This Video Is",
+            "",
+            _plain_video_summary(story_chapters),
+            "",
+            f"Viewer promise: {_plain_text(video.get('viewer_promise', ''))}",
+            "",
+            f"Tone: {_plain_text(video.get('tone', ''))}",
+            "",
+        ]
+    )
+
+    if first_title:
+        lines.extend(["## Suggested First Title", "", first_title, ""])
+
+    lines.extend(["## Other Title Options", ""])
     if title_options:
         for index, item in enumerate(title_options, start=1):
-            if isinstance(item, dict):
-                title = item.get("title", "")
-                risk = item.get("accuracy_risk", "")
-                click = item.get("click_potential", "")
-                reason = item.get("why_it_works", "")
-                lines.append(f"{index}. {title}  ")
-                lines.append(f"   Accuracy risk: {risk} | Click potential: {click}  ")
-                if reason:
-                    lines.append(f"   Why: {reason}")
-            else:
-                lines.append(f"{index}. {item}")
+            title = _title_text(item)
+            if not title:
+                continue
+            details = _title_details(item)
+            lines.append(f"{index}. {title}")
+            if details:
+                lines.append(f"   {details}")
     else:
         lines.append("No title options available.")
 
-    lines.extend(["", "## Thumbnail Text Options", ""])
-    for item in metadata.get("thumbnail_text_options", []):
-        lines.append(f"- {item}")
+    lines.extend(["", "## Thumbnail Text Ideas", ""])
+    if thumbnail_options:
+        for item in thumbnail_options:
+            lines.append(f"- {_thumbnail_text(item)}")
+    else:
+        lines.append("No thumbnail text options available.")
 
-    lines.extend(["", "## Description Draft", "", "```text", metadata.get("description_draft", ""), "```"])
+    lines.extend(["", "## YouTube Description", "", "```text", metadata.get("description_draft", ""), "```"])
 
     lines.extend(["", "## Chapters", ""])
-    for chapter in metadata.get("chapters", []):
+    for chapter in chapters:
         lines.append(f"- {chapter.get('timestamp', '')} {chapter.get('title', '')}")
 
+    lines.extend(["", "## Script To Record", ""])
+    if issues:
+        lines.append("Warning: fix the issues above before recording or uploading this script.")
+        lines.append("")
+    lines.append(final_publish.get("narration_text", ""))
+
     lines.extend(["", "## Sources", ""])
-    for url in metadata.get("source_urls", []):
+    for url in source_urls:
         lines.append(f"- {url}")
 
-    lines.extend(["", "## Tags", ""])
+    lines.extend(["", "## Tags To Copy", ""])
     lines.append(", ".join(metadata.get("tags", [])))
-
-    lines.extend(["", "## Full Script", "", final_publish.get("narration_text", "")])
 
     visual_notes = final_publish.get("visual_notes", [])
     if visual_notes:
-        lines.extend(["", "## Visual / Editor Notes", ""])
+        lines.extend(["", "## Simple Editor Notes", ""])
         for note in visual_notes:
             if isinstance(note, dict):
                 section = note.get("section_id", "")
@@ -121,22 +169,73 @@ def _build_markdown(manifest: dict, verification: dict, final_publish: dict) -> 
     boundaries = final_publish.get("evidence_boundaries", {})
     blocked_angles = boundaries.get("blocked_angles", []) or video.get("blocked_angles", [])
     if blocked_angles:
-        lines.extend(["", "## Blocked Angles", ""])
+        lines.extend(["", "## Avoid Saying These Things", ""])
         for angle in blocked_angles:
             lines.append(f"- {angle}")
 
     lines.extend(
         [
             "",
-            "## Publishing Status",
+            "## After Upload",
             "",
-            "- This package is approved by L8.",
-            "- It is not marked as published.",
-            "- After upload, a later publish sync should record final title, YouTube video id, and published timestamp.",
+            "- This run is stored as approved_not_published.",
+            "- After upload, run the later publish sync with the final title, YouTube video id, and published timestamp.",
             "",
         ]
     )
     return "\n".join(lines)
+
+
+def _quality_issues(final_publish: dict) -> list[str]:
+    issues = []
+    narration = final_publish.get("narration_text", "")
+    leaked = sorted(set(INTERNAL_FACT_ID_RE.findall(narration)))
+    if leaked:
+        issues.append(
+            "Internal fact IDs appear in the spoken script. They should never be read aloud. "
+            f"Examples: {', '.join(leaked[:3])}"
+        )
+    return issues
+
+
+def _plain_video_summary(story_chapters: list[str]) -> str:
+    if not story_chapters:
+        return "This is an AI news roundup."
+    if len(story_chapters) == 1:
+        return f"This is a short AI news video about {story_chapters[0]}."
+    visible = ", ".join(story_chapters[:5])
+    if len(story_chapters) > 5:
+        visible += f", and {story_chapters[-1]}"
+    return f"This is a {len(story_chapters)}-story AI news roundup covering {visible}."
+
+
+def _title_text(item) -> str:
+    if isinstance(item, dict):
+        return _plain_text(item.get("title", ""))
+    return _plain_text(str(item or ""))
+
+
+def _title_details(item) -> str:
+    if not isinstance(item, dict):
+        return ""
+    parts = []
+    if item.get("accuracy_risk"):
+        parts.append(f"risk: {item['accuracy_risk']}")
+    if item.get("click_potential"):
+        parts.append(f"click: {item['click_potential']}")
+    if item.get("why_it_works"):
+        parts.append(_plain_text(item["why_it_works"]))
+    return " | ".join(parts)
+
+
+def _thumbnail_text(item) -> str:
+    if isinstance(item, dict):
+        return _plain_text(item.get("text", ""))
+    return _plain_text(str(item or ""))
+
+
+def _plain_text(value: str) -> str:
+    return " ".join(str(value or "").split())
 
 
 def _load_manifest(run_ref: str) -> dict:

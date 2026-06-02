@@ -83,6 +83,13 @@ def run(run_ref: str) -> Path:
         "generated_at": _iso_now(),
         "status": "ok",
         "fact_packet_worker_count": worker_count,
+        "llm_runtime": {
+            "claim_extractor_model": layer4_cfg["claim_extractor_model"],
+            "claim_extractor_prompt_version": layer4_cfg["claim_extractor_prompt_version"],
+            "fact_packet_worker_count": worker_count,
+            "parallelized_steps": ["fact_packet_story_processing"],
+            "serial_steps": ["per_story_record_chunk_extraction"],
+        },
         "stories_processed": len(fact_packets),
         "selected_supporting_records": totals["selected_supporting_records"],
         "extracted_facts": totals["extracted_facts"],

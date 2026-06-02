@@ -37,6 +37,7 @@ def run(run_ref: str) -> Path:
     layer5_cfg = manifest.get("layer_5")
     if not isinstance(layer5_cfg, dict):
         raise KeyError("run_manifest.json is missing layer_5 config. Re-run layer 0 after adding L5.")
+    _validate_layer5_config(layer5_cfg)
     target_format = _resolve_target_format(layer5_cfg)
 
     run_id = manifest["run_id"]
@@ -96,7 +97,7 @@ def run(run_ref: str) -> Path:
         "candidate_evaluations": [compact_candidate_evaluation(evaluation) for evaluation in evaluations],
         "evidence_boundaries": _build_evidence_boundaries(selected_packets, evaluations, selected_video),
     }
-    summary = _build_summary(run_id, payload, evaluations, llm_calls_path)
+    summary = _build_summary(run_id, payload, evaluations, llm_calls_path, layer5_cfg)
 
     data_path = out_dir / "selected_video_brief.json"
     summary_path = out_dir / "summary.json"
@@ -140,6 +141,28 @@ def _resolve_target_format(layer5_cfg: dict) -> str:
     return target_format
 
 
+def _validate_layer5_config(layer5_cfg: dict) -> None:
+    required = [
+        "target_format",
+        "candidate_limit",
+        "roundup_min_stories",
+        "roundup_max_stories",
+        "roundup_target_seconds",
+        "roundup_min_candidate_score",
+        "viewer_value_model",
+        "viewer_value_prompt_version",
+        "viewer_value_worker_count",
+        "editorial_brief_model",
+        "editorial_brief_prompt_version",
+    ]
+    missing = [key for key in required if key not in layer5_cfg]
+    if missing:
+        raise KeyError(
+            "run_manifest.json has stale or incomplete layer_5 config. "
+            f"Missing: {', '.join(missing)}. Re-run layer 0."
+        )
+
+
 def _build_evidence_boundaries(selected_packets: list[dict], evaluations: list[dict], selected_video: dict) -> dict:
     safe_fact_ids: list[str] = []
     cautious_fact_ids: list[str] = []
@@ -180,7 +203,13 @@ def _build_evidence_boundaries(selected_packets: list[dict], evaluations: list[d
     }
 
 
-def _build_summary(run_id: str, payload: dict, evaluations: list[dict], llm_calls_path: Path) -> dict:
+def _build_summary(
+    run_id: str,
+    payload: dict,
+    evaluations: list[dict],
+    llm_calls_path: Path,
+    layer5_cfg: dict,
+) -> dict:
     readiness_mix = Counter(evaluation.get("readiness", "unknown") for evaluation in evaluations)
     role_mix = Counter(
         evaluation.get("segment_role", "unselected")
@@ -227,6 +256,15 @@ def _build_summary(run_id: str, payload: dict, evaluations: list[dict], llm_call
         "selected_roundup_segment_fit_mix": dict(selected_roundup_fit_mix),
         "memory_overlap_count": memory_overlap_count,
         "llm_call_count": _count_jsonl_lines(llm_calls_path),
+        "llm_runtime": {
+            "viewer_value_model": layer5_cfg["viewer_value_model"],
+            "viewer_value_prompt_version": layer5_cfg["viewer_value_prompt_version"],
+            "viewer_value_worker_count": layer5_cfg["viewer_value_worker_count"],
+            "editorial_brief_model": layer5_cfg["editorial_brief_model"],
+            "editorial_brief_prompt_version": layer5_cfg["editorial_brief_prompt_version"],
+            "parallelized_steps": ["viewer_value_analyzer"],
+            "serial_steps": ["editorial_brief_builder"],
+        },
     }
 
 

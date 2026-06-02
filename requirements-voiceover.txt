@@ -1,0 +1,6 @@
+# Local voiceover runtime.
+#
+# Kokoro 0.9.x currently supports Python >=3.10,<3.13, so use a
+# Python 3.10, 3.11, or 3.12 virtual environment for this file.
+kokoro>=0.9.4
+soundfile

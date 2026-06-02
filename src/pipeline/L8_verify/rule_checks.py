@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import re
 
 from src.pipeline.L1_collection.common import clean_text
 
@@ -39,6 +40,7 @@ VISUAL_DIRECTION_MARKERS = (
     "visual direction",
     "editor note",
 )
+INTERNAL_FACT_ID_RE = re.compile(r"\bfact_[a-z0-9_]+\b", re.IGNORECASE)
 
 
 def run_rule_checks(script_package: dict, sentence_map: list[dict], layer8_cfg: dict) -> dict:
@@ -52,6 +54,7 @@ def run_rule_checks(script_package: dict, sentence_map: list[dict], layer8_cfg: 
     checks.append(_metadata_check(script_package))
     checks.append(_source_url_check(script_package))
     checks.append(_visual_direction_check(script_package))
+    checks.append(_internal_fact_id_leak_check(script_package))
     checks.append(_sentence_map_check(sentence_map))
 
     status_counts = Counter(check["status"] for check in checks)
@@ -195,6 +198,17 @@ def _visual_direction_check(script_package: dict) -> dict:
     return _check("visual_direction_leak", "passed", "Narration contains no visual/editor direction markers")
 
 
+def _internal_fact_id_leak_check(script_package: dict) -> dict:
+    matches = []
+    for section in script_package.get("section_scripts", []):
+        fact_ids = _dedupe(INTERNAL_FACT_ID_RE.findall(section.get("narration_text", "")))
+        if fact_ids:
+            matches.append({"section_id": section.get("section_id", ""), "fact_ids": fact_ids[:5]})
+    if matches:
+        return _check("internal_fact_id_leak", "failed", "Narration contains internal fact IDs", matches)
+    return _check("internal_fact_id_leak", "passed", "Narration contains no internal fact IDs")
+
+
 def _sentence_map_check(sentence_map: list[dict]) -> dict:
     if not sentence_map:
         return _check("sentence_map", "failed", "No sentences found in script")
@@ -211,3 +225,14 @@ def _check(name: str, status: str, detail: str, items: list | None = None) -> di
         "detail": detail,
         "items": items or [],
     }
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen = set()
+    kept = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        kept.append(value)
+    return kept

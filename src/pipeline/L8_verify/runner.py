@@ -84,7 +84,7 @@ def run(run_ref: str) -> Path:
         "final_publish_package": decision["final_publish_package"],
         "layer9_handoff": decision["layer9_handoff"],
     }
-    summary = _build_summary(package, llm_calls_path)
+    summary = _build_summary(package, llm_calls_path, layer8_cfg)
     package_path = out_dir / "verification_package.json"
     summary_path = out_dir / "summary.json"
     package_path.write_text(json.dumps(package, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -99,7 +99,7 @@ def run(run_ref: str) -> Path:
     return package_path
 
 
-def _build_summary(package: dict, llm_calls_path: Path) -> dict:
+def _build_summary(package: dict, llm_calls_path: Path, layer8_cfg: dict) -> dict:
     support_status_counts = Counter(
         item.get("support_status", "unknown") for item in package.get("sentence_verifications", [])
     )
@@ -118,6 +118,13 @@ def _build_summary(package: dict, llm_calls_path: Path) -> dict:
         "blocking_issue_count": package.get("decision", {}).get("blocking_issue_count", 0),
         "revision_issue_count": package.get("decision", {}).get("revision_issue_count", 0),
         "llm_call_count": _count_lines(llm_calls_path),
+        "llm_runtime": {
+            "support_verifier_model": layer8_cfg["support_verifier_model"],
+            "support_verifier_prompt_version": layer8_cfg["support_verifier_prompt_version"],
+            "verifier_worker_count": layer8_cfg["verifier_worker_count"],
+            "parallelized_steps": ["sentence_support_verifier_by_story_section"],
+            "serial_steps": [],
+        },
     }
 
 

@@ -79,6 +79,7 @@ def run(run_ref: str) -> Path:
         prepared["record_count"],
         ranked_stories,
         cluster_stats,
+        layer3_cfg=layer3_cfg,
         llm_story_label_count=llm_story_label_count,
         story_label_worker_count=(
             int(layer3_cfg["story_label_worker_count"])
@@ -106,6 +107,7 @@ def _build_summary(
     stories: list[dict],
     cluster_stats: dict[str, int],
     *,
+    layer3_cfg: dict,
     llm_story_label_count: int,
     story_label_worker_count: int,
 ) -> dict:
@@ -125,6 +127,14 @@ def _build_summary(
         "story_count": len(stories),
         "llm_story_label_count": llm_story_label_count,
         "story_label_worker_count": story_label_worker_count,
+        "llm_runtime": {
+            "use_llm_story_labels": bool(layer3_cfg.get("use_llm_story_labels", False)),
+            "story_label_model": layer3_cfg.get("story_label_model", ""),
+            "story_label_prompt_version": layer3_cfg.get("story_label_prompt_version", ""),
+            "story_label_worker_count": story_label_worker_count,
+            "parallelized_steps": ["story_label"] if layer3_cfg.get("use_llm_story_labels", False) else [],
+            "serial_steps": [],
+        },
         "single_record_story_count": sum(1 for story in stories if story["record_count"] == 1),
         "multi_record_story_count": sum(1 for story in stories if story["record_count"] > 1),
         "exact_match_merge_count": cluster_stats["exact_match_edges"],

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import re
 
 
 VISUAL_DIRECTION_MARKERS = (
@@ -21,6 +22,7 @@ VISUAL_DIRECTION_MARKERS = (
 
 MIN_TOTAL_DURATION_RATIO = 0.78
 MIN_SECTION_WORD_RATIO = 0.9
+INTERNAL_FACT_ID_RE = re.compile(r"\bfact_[a-z0-9_]+\b", re.IGNORECASE)
 
 
 def build_full_script(section_scripts: list[dict]) -> dict:
@@ -110,6 +112,9 @@ def check_script_package(package: dict, content_packet: dict) -> dict:
         markers = _visual_markers_in_narration(section.get("narration_text", ""))
         if markers:
             errors.append(f"{section['section_id']} narration contains visual/editor directions: {markers}")
+        leaked_fact_ids = _internal_fact_ids_in_narration(section.get("narration_text", ""))
+        if leaked_fact_ids:
+            errors.append(f"{section['section_id']} narration contains internal fact IDs: {leaked_fact_ids}")
         for warning in section.get("style_warnings", []):
             warnings.append(f"{section['section_id']} style warning: {warning}")
 
@@ -140,6 +145,10 @@ def check_script_package(package: dict, content_packet: dict) -> dict:
 def _visual_markers_in_narration(text: str) -> list[str]:
     lower = text.lower()
     return [marker for marker in VISUAL_DIRECTION_MARKERS if marker in lower]
+
+
+def _internal_fact_ids_in_narration(text: str) -> list[str]:
+    return _dedupe(INTERNAL_FACT_ID_RE.findall(text))[:5]
 
 
 def _build_fact_index(content_packet: dict) -> dict:

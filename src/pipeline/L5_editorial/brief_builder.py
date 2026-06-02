@@ -89,16 +89,20 @@ def _validate_selected_video(response: dict, decision_result: dict) -> dict:
     if not isinstance(story_order, list) or not story_order:
         raise ValueError("editorial_brief_builder response must include non-empty story_order")
 
-    selected_ids = set(decision_result["selected_story_ids"])
+    selected_story_ids = list(decision_result["selected_story_ids"])
+    selected_ids = set(selected_story_ids)
     selected_by_id = {item["story_id"]: item for item in decision_result["selected_evaluations"]}
     cleaned_order = []
-    for item in story_order:
+    for index, item in enumerate(story_order):
         if not isinstance(item, dict):
             raise ValueError("editorial_brief_builder story_order entries must be objects")
         story_id = clean_text(item.get("story_id", ""))
-        story_id = _resolve_selected_story_id(story_id, selected_ids)
+        story_id = _resolve_selected_story_id(story_id, selected_story_ids, index=index)
         if not story_id:
-            raise ValueError(f"editorial_brief_builder used unselected story_id: {story_id}")
+            raise ValueError(
+                "editorial_brief_builder used an unselected or unresolvable story_id: "
+                f"{clean_text(item.get('story_id', ''))!r}"
+            )
         selected_item = selected_by_id[story_id]
         cleaned_order.append(
             {
@@ -126,15 +130,31 @@ def _validate_selected_video(response: dict, decision_result: dict) -> dict:
     }
 
 
-def _resolve_selected_story_id(story_id: str, selected_ids: set[str]) -> str:
+def _resolve_selected_story_id(story_id: str, selected_story_ids: list[str], *, index: int) -> str:
+    selected_ids = set(selected_story_ids)
     if story_id in selected_ids:
         return story_id
+    normalized_story_id = _normalize_story_id(story_id)
+    if normalized_story_id:
+        normalized_matches = [
+            selected_id
+            for selected_id in selected_story_ids
+            if _normalize_story_id(selected_id) == normalized_story_id
+        ]
+        if len(normalized_matches) == 1:
+            return normalized_matches[0]
     if not story_id:
+        if 0 <= index < len(selected_story_ids):
+            return selected_story_ids[index]
         return ""
     if len(story_id) < 45:
         return ""
 
-    matches = [selected_id for selected_id in selected_ids if selected_id.startswith(story_id)]
+    matches = [selected_id for selected_id in selected_story_ids if selected_id.startswith(story_id)]
     if len(matches) == 1:
         return matches[0]
     return ""
+
+
+def _normalize_story_id(story_id: str) -> str:
+    return "".join(char for char in story_id.lower() if char.isalnum())

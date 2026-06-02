@@ -1,7 +1,7 @@
 layer_0:
   channel:
     channel_name: "ManiVerse - AI"
-    content_promise: "Clear, well-grounded AI news and research briefings for builders and operators."
+    content_promise: "Clear AI news explained in plain English, without hype or unnecessary jargon."
     allowed_topics:
       - "AI agents"
       - "LLM releases"
