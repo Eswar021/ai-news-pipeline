@@ -6,6 +6,8 @@ repository. Treat it as the standing engineering contract for future work.
 Before planning or building new pipeline code, read:
 - `docs/rebuild/system_blueprint.md`
 - `docs/rebuild/l0_l1_decisions.md`
+- `docs/rebuild/pipeline_v2_application_architecture.md` when working in
+  `src/pipeline_v2/`
 
 The current `pipelines/`, `config/`, `memory/`, and historical `data/runs/`
 trees are the legacy system. They are useful for reference, but they are not
@@ -23,6 +25,78 @@ legacy code. When building new functionality:
 - do not copy old complexity forward by default
 - do not import new code from legacy `pipelines/`
 - prefer rewriting a clean direct version over adapting a tangled old module
+
+## Active Pipeline Versions
+
+There are now two rebuild pipeline tracks:
+
+- `src/pipeline/` is the stable v1 rebuild runtime. Keep it working and do not
+  reorganize it for v2 unless the user explicitly asks.
+- `src/pipeline_v2/` is the experimental application-oriented rewrite. New
+  modularization work should happen here.
+
+When changing v2:
+- treat v1 as the working reference implementation
+- reuse v1 code when it is useful, but adapt it to the v2 contract
+- do not make v2 import runtime modules from `src.pipeline.*` after a component
+  has been migrated
+- keep v2 changes isolated from v1 unless a bug fix is intentionally shared
+
+## Pipeline v2 Application Rules
+
+Pipeline v2 is grouped by functionality, not by layer number. Each major
+function should behave like a small application with one explicit trigger.
+
+Target v2 shape:
+
+```text
+src/pipeline_v2/
+├── runner.py
+├── apps/
+│   ├── news_collection/
+│   ├── evidence_prep/
+│   ├── story_mapping/
+│   ├── fact_packet/
+│   ├── editorial_selection/
+│   ├── content_packaging/
+│   ├── script_generation/
+│   ├── verification/
+│   └── memory_update/
+└── shared/
+```
+
+Each app should expose a core entrypoint like:
+
+```python
+def run(input_json: dict) -> dict:
+    ...
+```
+
+Core app rules:
+- accept only JSON/dict input at the application boundary
+- return one JSON/dict result containing the main data and summary
+- keep file reads, file writes, CLI parsing, and run-folder paths in adapters or
+  orchestration code, not in the app core
+- own app-local config, contracts, utils, prompts, and collectors when they are
+  specific to that function
+- use `shared/` only for genuinely universal helpers and contracts
+- keep behavior config-driven through the input/config contract
+- do not hardcode daily story names, one-off company names, article titles,
+  current-run examples, thresholds, model names, prompt versions, source caps,
+  or editorial rules in application code
+- if a value affects behavior, pass it through config or the app input envelope
+- fail loudly when required config, prompts, inputs, or schema fields are
+  missing
+
+Reuse policy for v2:
+- do not regenerate the whole system from scratch just because the folder shape
+  is changing
+- copy or move existing v1 modules into the relevant v2 app when the logic is
+  still valid
+- refactor copied code only as needed to remove global filesystem/config
+  dependencies and satisfy the JSON/dict app contract
+- prefer small, reviewable migrations such as `news_collection` first, then
+  `evidence_prep`, then later apps
 
 ## Target Project Shape
 

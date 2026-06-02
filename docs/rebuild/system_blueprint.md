@@ -6,6 +6,9 @@ content system. It is intentionally simpler than the current legacy pipeline.
 For the first active rebuild slice, also read:
 - `docs/rebuild/l0_l1_decisions.md`
 
+For `src/pipeline_v2/` work, also read:
+- `docs/rebuild/pipeline_v2_application_architecture.md`
+
 ## Why We Are Rebuilding
 
 The current system has valuable ideas:
@@ -54,6 +57,19 @@ L9  Memory
 This is the target end-state pipeline, not a requirement to build everything at
 once. The rebuild should grow sequentially. If only `L0-L2` exist, then only
 those layers and their configs should exist in the active rebuild.
+
+## Pipeline v2 Note
+
+`src/pipeline/` remains the stable v1 rebuild runtime.
+
+`src/pipeline_v2/` is the experimental functional-application rewrite. It may
+reuse v1 code, but its final organization should be grouped by functionality
+rather than by layer number. Each v2 app should expose a JSON/dict boundary such
+as `run(input_json: dict) -> dict`, keep file I/O in adapters, and keep behavior
+config-driven rather than hardcoded in app code.
+
+The detailed v2 contract lives in
+`docs/rebuild/pipeline_v2_application_architecture.md`.
 
 ## State Transition Model
 
