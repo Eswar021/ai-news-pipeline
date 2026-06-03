@@ -12,19 +12,20 @@ Pipeline v2 should be grouped by functionality:
 
 ```text
 src/pipeline_v2/
-|-- runner.py
 |-- apps/
 |   |-- news_collection/
 |   |-- evidence_prep/
 |   |-- story_mapping/
-|   |-- fact_packet/
-|   |-- editorial_selection/
-|   |-- content_packaging/
+|   |-- video_packaging/
 |   |-- script_generation/
 |   |-- verification/
 |   `-- memory_update/
+|-- voiceover/
 `-- shared/
 ```
+
+There is intentionally no central `src/pipeline_v2/runner.py` yet. For now,
+run individual apps through `output_v2/v2_apps_workbench.ipynb`.
 
 Each app should expose:
 
@@ -35,7 +36,34 @@ def run(input_json: dict) -> dict:
 
 The app core should accept a JSON/dict input and return a JSON/dict output.
 File I/O, CLI parsing, run-folder paths, and current-manifest loading belong in
-runner or adapter code, not inside the app core.
+notebooks under `output_v2/` or future adapter code, not inside the app core.
+
+Currently migrated apps:
+
+- `apps/news_collection`
+- `apps/evidence_prep`
+- `apps/story_mapping`
+- `apps/video_packaging`
+- `apps/script_generation`
+
+App-like media modules:
+
+- `voiceover`
+
+`voiceover` is intentionally parallel to `apps/` because its core output is
+audio files. It still accepts a JSON/dict input and returns a JSON/dict result,
+but it is allowed to write WAV/package artifacts under a caller-provided
+`output_v2` directory.
+
+The v2 voiceover module currently supports `kokoro_local` for lightweight local
+draft audio and `chatterbox_local` for more expressive local narration.
+Chatterbox settings such as device, exaggeration, CFG weight, optional reference
+audio, and Hugging Face cache directory are passed through the input config.
+The workbench stores model downloads under `output_v2/model_cache/` so large
+runtime assets stay out of source control.
+
+If a migration decision is unclear, ask before adding orchestration, output
+paths, central runners, compatibility shims, or deleting copied folders.
 
 ## Migration Rule
 

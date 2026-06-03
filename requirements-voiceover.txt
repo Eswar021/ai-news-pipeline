@@ -3,4 +3,9 @@
 # Kokoro 0.9.x currently supports Python >=3.10,<3.13, so use a
 # Python 3.10, 3.11, or 3.12 virtual environment for this file.
 kokoro>=0.9.4
+chatterbox-tts==0.1.7
+f5-tts==1.1.20
+transformers>=5.2.0
+torchaudio==2.6.0
 soundfile
+pydantic>=2,<3

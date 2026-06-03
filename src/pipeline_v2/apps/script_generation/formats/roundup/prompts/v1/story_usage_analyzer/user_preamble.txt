@@ -1,0 +1,10 @@
+Analyze this selected story for script use.
+
+Rules:
+1. Keep the card compact and useful for a later script writer.
+2. Make the best_angle audience-facing, not source-facing.
+3. key_beats should be concrete narration beats, not generic advice.
+4. nuance_or_caveat should help the script stay grounded without sounding defensive.
+5. transition_hint should explain how to move into or out of this story naturally.
+6. avoid_in_script should name weak phrasing, hype traps, or confusing angles to avoid.
+7. source_record_keys must only include source keys from this story.

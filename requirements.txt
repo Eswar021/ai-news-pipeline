@@ -4,6 +4,7 @@ pyyaml
 requests
 google-auth
 google-auth-oauthlib
+pydantic>=2,<3
 
 # ── LLM (existing) ──
 langchain-openai

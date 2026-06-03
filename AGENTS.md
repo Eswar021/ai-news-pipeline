@@ -51,7 +51,6 @@ Target v2 shape:
 
 ```text
 src/pipeline_v2/
-├── runner.py
 ├── apps/
 │   ├── news_collection/
 │   ├── evidence_prep/
@@ -64,6 +63,19 @@ src/pipeline_v2/
 │   └── memory_update/
 └── shared/
 ```
+
+For now, do not add a central `src/pipeline_v2/runner.py`. Individual v2 apps
+are exercised through `output_v2/v2_apps_workbench.ipynb` while the app
+contracts stabilize.
+
+V2 clarification rule:
+- do not assume new orchestration, runner, notebook, output folder, config
+  location, or deletion behavior when the user has not specified it
+- if a v2 decision changes how an app is invoked, where app outputs are written,
+  whether an old copied folder is removed, or whether config is app-local, ask
+  the user before implementing
+- prefer one short clarification over building temporary compatibility code the
+  user did not ask for
 
 Each app should expose a core entrypoint like:
 

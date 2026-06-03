@@ -57,6 +57,7 @@ Thumbs.db
 # ── Jupyter Notebooks ─────────────────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
+!output_v2/*.ipynb
 
 # ── Testing & Coverage ────────────────────────────────────────────────────────
 .pytest_cache/

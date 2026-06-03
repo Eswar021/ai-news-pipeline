@@ -30,7 +30,6 @@ should be callable in memory with a dictionary.
 
 ```text
 src/pipeline_v2/
-|-- runner.py
 |-- apps/
 |   |-- news_collection/
 |   |   |-- app.py
@@ -40,9 +39,7 @@ src/pipeline_v2/
 |   |   `-- collectors/
 |   |-- evidence_prep/
 |   |-- story_mapping/
-|   |-- fact_packet/
-|   |-- editorial_selection/
-|   |-- content_packaging/
+|   |-- video_packaging/
 |   |-- script_generation/
 |   |-- verification/
 |   `-- memory_update/
@@ -52,8 +49,28 @@ src/pipeline_v2/
     `-- run_context.py
 ```
 
+There is intentionally no central `src/pipeline_v2/runner.py` yet. During the
+early v2 migration, use notebooks under `output_v2/` to build app inputs, call
+individual apps, and write notebook-run outputs.
+
 Create subfolders only when the app is actively being migrated. Do not prebuild
 empty applications.
+
+## Clarification Rule
+
+For v2, ask before implementing any unclear orchestration or boundary choice.
+
+Do not assume:
+
+- a central runner should exist
+- an app should write files directly
+- notebook outputs should use a specific folder shape
+- config should be shared or app-local
+- old copied layer folders should be kept, deleted, or shimmed
+- a compatibility adapter should be added for downstream layers
+
+If the user has not specified one of those choices, stop and clarify before
+writing code.
 
 ## Application Contract
 
@@ -106,8 +123,8 @@ Core app code should not:
 
 Those responsibilities belong in:
 
-- `src/pipeline_v2/runner.py`
-- app-specific adapters, if needed
+- notebooks under `output_v2/` during the early app migration
+- app-specific adapters, if needed later
 - small shared I/O helpers used only outside the app core
 
 This keeps each app testable with plain Python dictionaries.
@@ -121,7 +138,7 @@ If a value changes behavior, it belongs in one of these places:
 - the app input envelope under `config`
 - an app-local config object resolved into that envelope
 - a prompt file selected by config
-- a runner/orchestrator config snapshot passed into the app
+- a notebook-built config snapshot passed into the app
 
 Do not hardcode:
 
@@ -171,7 +188,7 @@ When migrating a function:
 4. Move app-specific helpers into the app folder.
 5. Keep only genuinely universal helpers in `shared/`.
 6. Convert the core entrypoint to `run(input_json: dict) -> dict`.
-7. Keep file I/O in adapters and runner code.
+7. Keep file I/O in notebooks or future adapter code.
 8. Add validation for required config and input keys.
 
 The goal is not a cosmetic folder shuffle. The goal is a cleaner callable
@@ -185,17 +202,15 @@ Initial mapping from v1 layers to v2 apps:
 L1_collection      -> apps/news_collection
 L2_evidence_prep   -> apps/evidence_prep
 L3_story_map       -> apps/story_mapping
-L4_fact_packet     -> apps/fact_packet
-L5_editorial       -> apps/editorial_selection
-L6_package         -> apps/content_packaging
+L4/L5/L6 package   -> apps/video_packaging
 L7_script          -> apps/script_generation
 L8_verify          -> apps/verification
 L9_memory          -> apps/memory_update
 ```
 
 `L0_manifest` should become orchestration/config snapshot logic rather than a
-business app. It can remain part of the runner/control plane until the v2
-runtime contract is clearer.
+business app. During the notebook-first phase, keep that logic outside app
+cores until the v2 runtime contract is clearer.
 
 ## Migration Order
 
@@ -204,15 +219,14 @@ Migrate one function at a time:
 1. `news_collection`
 2. `evidence_prep`
 3. `story_mapping`
-4. `fact_packet`
-5. `editorial_selection`
-6. `content_packaging`
-7. `script_generation`
-8. `verification`
-9. `memory_update`
+4. `video_packaging`
+5. `script_generation`
+6. `verification`
+7. `memory_update`
 
 After each migration, the app should be runnable with an in-memory dict and,
-where practical, through the v2 runner adapter.
+where practical during this phase, through the shared `output_v2/` workbench
+notebook.
 
 ## Success Criteria
 
