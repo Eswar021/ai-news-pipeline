@@ -21,12 +21,13 @@ src/pipeline_v2/
 |   |-- metadata_creator/
 |   |-- verification/
 |   `-- memory_update/
+|-- handoffs/
 |-- voiceover/
 `-- shared/
 ```
 
 There is intentionally no central `src/pipeline_v2/runner.py` yet. For now,
-run individual apps through `notebooks/v2_apps_workbench.ipynb`.
+run the app sequence through `notebooks/v2_apps_workbench.ipynb`.
 
 Each app should expose:
 

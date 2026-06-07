@@ -59,7 +59,16 @@ def _build_markdown(manifest: dict[str, Any], verification: dict[str, Any], fina
     metadata = final_publish.get("youtube_metadata", {})
     video = final_publish.get("video", {})
     issues = _quality_issues(final_publish)
-    status_line = "Do not publish yet - rerun the script/verification steps first." if issues else "Ready for human review."
+    verification_status = clean_text(verification.get("status"))
+    if verification_status != "approved":
+        status_line = (
+            f"Draft/unapproved package ({verification_status or 'unknown status'}). "
+            "Use for human review only; do not publish until verification approves it."
+        )
+    elif issues:
+        status_line = "Do not publish yet - rerun the script/verification steps first."
+    else:
+        status_line = "Ready for human review."
     title_options = metadata.get("title_options", [])
     thumbnail_options = metadata.get("thumbnail_text_options", [])
     chapters = metadata.get("chapters", [])
@@ -90,6 +99,15 @@ def _build_markdown(manifest: dict[str, Any], verification: dict[str, Any], fina
     if issues:
         lines.extend(f"- {issue}" for issue in issues)
         lines.extend(["- Suggested next step: regenerate or revise the script, then rebuild this preview.", ""])
+    elif verification_status != "approved":
+        lines.extend(
+            [
+                "- This is a draft handoff because the v2 verification app has not approved it yet.",
+                "- Use it to review script, title, thumbnail, description, sources, and voiceover readiness.",
+                "- Do not upload from this handoff until a verification step approves the publish package.",
+                "",
+            ]
+        )
     else:
         lines.extend(
             [
