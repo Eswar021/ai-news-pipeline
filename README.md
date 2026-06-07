@@ -104,22 +104,26 @@ src/
 ├── config/              # stable rebuild config
 ├── llm/                 # stable rebuild LLM helpers
 ├── pipeline/            # stable v1 rebuild runtime
-├── pipeline_v2/         # application-oriented v2 rewrite
+├── pipeline_v2/         # application-oriented v2 rewrite: apps + voiceover
 ├── chatgpt_exporter.py  # stable v1 handoff exporter
 └── voiceover/           # stable voiceover reference implementation
 
 prompts/                 # shared stable v1 prompt files
 output/                  # generated v1 outputs, git-ignored
 output_v2/               # generated v2 workbench outputs, git-ignored
+secrets/                 # local secrets, git-ignored except README
 docs/rebuild/            # current rebuild architecture notes
 ```
 
 ## Cleanup Notes
 
-The legacy root `pipelines/`, `config/`, `llm/`, and `schemas/` trees, old root
-pipeline wrappers, and old system design documents have been removed. If older
-behavior is needed for reference, use git history rather than reintroducing
-legacy imports into new code.
+The legacy root `pipelines/`, `config/`, `llm/`, and `schemas/` trees,
+historical `data/` outputs, old root pipeline wrappers, and old system design
+documents have been removed. If older behavior is needed for reference, use git
+history rather than reintroducing legacy imports into new code.
 
 Root `prompts/` is still intentionally kept because stable `src` modules load
 shared prompt files from there.
+
+Root `client_secret_*.json` files should not exist in source control. Keep
+OAuth client and token files under `secrets/`, which is ignored by git.

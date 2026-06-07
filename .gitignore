@@ -5,6 +5,7 @@
 secrets/*.json
 secrets/*.token
 secrets/*.pickle
+client_secret_*.json
 
 # ── Python ─────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -38,7 +39,7 @@ ENV/
 # ── Output Data (generated at runtime, not source code) ───────────────────────
 output/
 
-data/runs/
+data/
 
 local_tests/
 

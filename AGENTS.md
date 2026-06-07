@@ -10,9 +10,9 @@ Before planning or building new pipeline code, read:
   `src/pipeline_v2/`
 
 The retired root `pipelines/`, `config/`, `llm/`, and `schemas/` trees have
-been removed. The root `memory/` and historical `data/runs/` trees are legacy
-system artifacts. They are useful for reference, but they are not the target
-architecture for new work.
+been removed. Historical `data/` outputs have been removed from the working
+tree and are ignored. The root `memory/` tree is a legacy system artifact; it
+is useful for reference, but it is not the target architecture for new work.
 
 ## Rebuild Goal
 
@@ -372,9 +372,8 @@ Legacy folders include:
 - removed root `config/` tree
 - removed root `llm/` tree
 - removed root `schemas/` tree
+- removed historical `data/` outputs
 - `memory/`
-- historical `data/runs/`
-- `data/`
 
 Use them for:
 - understanding domain requirements

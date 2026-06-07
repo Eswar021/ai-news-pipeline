@@ -3,8 +3,8 @@
 `src/pipeline_v2/` is the experimental application-oriented rewrite of the
 rebuild pipeline.
 
-The current files were copied from `src/pipeline/` as a working snapshot. That
-snapshot is not the final v2 architecture.
+The earlier copied numbered-layer snapshot has been removed. The current v2
+tree is centered on standalone apps plus the app-like voiceover module.
 
 ## Target Direction
 
@@ -65,7 +65,7 @@ The workbench stores model downloads under `output_v2/model_cache/` so large
 runtime assets stay out of source control.
 
 If a migration decision is unclear, ask before adding orchestration, output
-paths, central runners, compatibility shims, or deleting copied folders.
+paths, central runners, compatibility shims, or deleting app folders.
 
 ## Migration Rule
 
