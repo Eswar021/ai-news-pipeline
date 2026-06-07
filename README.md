@@ -105,9 +105,9 @@ src/
 ├── config/              # stable rebuild config
 ├── llm/                 # stable rebuild LLM helpers
 ├── pipeline/            # stable v1 rebuild runtime
+├── prompts/             # shared stable v1 prompt files
 ├── pipeline_v2/         # application-oriented v2 rewrite: apps + voiceover
 
-prompts/                 # shared stable v1 prompt files
 output/                  # generated v1 outputs, git-ignored
 output_v2/               # generated v2 workbench outputs, git-ignored
 notebooks/               # source-controlled operator notebooks
@@ -122,8 +122,8 @@ historical `data/` outputs, old root pipeline wrappers, and old system design
 documents have been removed. If older behavior is needed for reference, use git
 history rather than reintroducing legacy imports into new code.
 
-Root `prompts/` is still intentionally kept because stable `src` modules load
-shared prompt files from there.
+Stable v1 prompt files now live under `src/prompts/`. Pipeline v2 modules keep
+their prompts app-local instead of depending on shared stable v1 prompt files.
 
 Root `client_secret_*.json` files should not exist in source control. Keep
 OAuth client and token files under `secrets/`, which is ignored by git.

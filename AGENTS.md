@@ -127,6 +127,7 @@ src/
 │   ├── client.py
 │   ├── prompt_loader.py
 │   └── logger.py
+├── prompts/                    # stable v1 prompt files
 └── pipeline/
     ├── runner.py
     ├── L0_manifest/

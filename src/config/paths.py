@@ -5,7 +5,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = PROJECT_ROOT / "src"
 CONFIG_DIR = SRC_DIR / "config"
 OUTPUT_DIR = PROJECT_ROOT / "output"
-PROMPTS_DIR = PROJECT_ROOT / "prompts"
+PROMPTS_DIR = SRC_DIR / "prompts"
 MEMORY_DIR = OUTPUT_DIR / "memory"
 
 L0_CONFIG_PATH = CONFIG_DIR / "l0_config.yaml"
