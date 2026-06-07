@@ -26,7 +26,7 @@ The v2 app workbench is currently the orchestration surface while contracts
 stabilize:
 
 ```text
-output_v2/v2_apps_workbench.ipynb
+notebooks/v2_apps_workbench.ipynb
 ```
 
 ## Current v2 Flow
@@ -76,8 +76,9 @@ Run v2 voiceover from a prepared input JSON:
 Export a stable v1 ChatGPT handoff:
 
 ```bash
-python3 -m src.chatgpt_exporter --run-id current
-python3 -m src.chatgpt_exporter --run-id current --profile script_review
+python3 -m src.pipeline_v2.handoffs.chatgpt_exporter.cli --run-id current
+python3 -m src.pipeline_v2.handoffs.chatgpt_exporter.cli --run-id current --profile script_review
+python3 -m src.pipeline_v2.handoffs.publish_handoff.cli --run-id current
 ```
 
 ## Key Docs
@@ -105,12 +106,12 @@ src/
 ├── llm/                 # stable rebuild LLM helpers
 ├── pipeline/            # stable v1 rebuild runtime
 ├── pipeline_v2/         # application-oriented v2 rewrite: apps + voiceover
-├── chatgpt_exporter.py  # stable v1 handoff exporter
 └── voiceover/           # stable voiceover reference implementation
 
 prompts/                 # shared stable v1 prompt files
 output/                  # generated v1 outputs, git-ignored
 output_v2/               # generated v2 workbench outputs, git-ignored
+notebooks/               # source-controlled operator notebooks
 secrets/                 # local secrets, git-ignored except README
 docs/rebuild/            # current rebuild architecture notes
 ```
@@ -127,3 +128,7 @@ shared prompt files from there.
 
 Root `client_secret_*.json` files should not exist in source control. Keep
 OAuth client and token files under `secrets/`, which is ignored by git.
+
+ChatGPT and publishing handoffs now live under `src/pipeline_v2/handoffs/` and
+own their app-local prompts/contracts instead of depending on stable v1 runtime
+modules.

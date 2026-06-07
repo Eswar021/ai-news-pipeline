@@ -40,6 +40,7 @@ ENV/
 output/
 
 data/
+output_v2/
 
 local_tests/
 
@@ -58,7 +59,9 @@ Thumbs.db
 # ── Jupyter Notebooks ─────────────────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
-!output_v2/*.ipynb
+!notebooks/
+!notebooks/*.ipynb
+!notebooks/**/*.ipynb
 
 # ── Testing & Coverage ────────────────────────────────────────────────────────
 .pytest_cache/

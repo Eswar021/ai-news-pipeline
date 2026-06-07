@@ -8,13 +8,13 @@ contracts and it does not write into layer folders.
 ## Commands
 
 ```bash
-python3 -m src.chatgpt_exporter --run-id current
-python3 -m src.chatgpt_exporter --run-id current --profile script_review
-python3 -m src.chatgpt_exporter --run-id current --profile publish_review
+python3 -m src.pipeline_v2.handoffs.chatgpt_exporter.cli --run-id current
+python3 -m src.pipeline_v2.handoffs.chatgpt_exporter.cli --run-id current --profile script_review
+python3 -m src.pipeline_v2.handoffs.chatgpt_exporter.cli --run-id current --profile publish_review
 ```
 
-The old root `chatgpt_export.py` wrapper has been removed with the retired root
-pipeline. Use `python3 -m src.chatgpt_exporter` directly.
+The old root `chatgpt_export.py` wrapper and `src.chatgpt_exporter` helper have
+been removed. Use the standalone v2 handoff module directly.
 
 ## Output
 
@@ -61,7 +61,7 @@ Legacy aliases are accepted where useful:
 Exporter prompt text lives in:
 
 ```text
-prompts/v1/chatgpt_exporter/
+src/pipeline_v2/handoffs/chatgpt_exporter/prompts/v1/chatgpt_exporter/
 ```
 
 The exporter combines:

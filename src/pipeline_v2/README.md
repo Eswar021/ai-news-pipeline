@@ -26,7 +26,7 @@ src/pipeline_v2/
 ```
 
 There is intentionally no central `src/pipeline_v2/runner.py` yet. For now,
-run individual apps through `output_v2/v2_apps_workbench.ipynb`.
+run individual apps through `notebooks/v2_apps_workbench.ipynb`.
 
 Each app should expose:
 
@@ -37,7 +37,7 @@ def run(input_json: dict) -> dict:
 
 The app core should accept a JSON/dict input and return a JSON/dict output.
 File I/O, CLI parsing, run-folder paths, and current-manifest loading belong in
-notebooks under `output_v2/` or future adapter code, not inside the app core.
+notebooks under `notebooks/` or future adapter code, not inside the app core.
 
 Currently migrated apps:
 
@@ -51,6 +51,11 @@ Currently migrated apps:
 App-like media modules:
 
 - `voiceover`
+
+Standalone handoff utilities:
+
+- `handoffs/chatgpt_exporter`
+- `handoffs/publish_handoff`
 
 `voiceover` is intentionally parallel to `apps/` because its core output is
 audio files. It still accepts a JSON/dict input and returns a JSON/dict result,

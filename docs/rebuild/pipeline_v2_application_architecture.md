@@ -51,7 +51,7 @@ src/pipeline_v2/
 ```
 
 There is intentionally no central `src/pipeline_v2/runner.py` yet. During the
-early v2 migration, use notebooks under `output_v2/` to build app inputs, call
+early v2 migration, use notebooks under `notebooks/` to build app inputs, call
 individual apps, and write notebook-run outputs.
 
 Create subfolders only when the app is actively being migrated. Do not prebuild
@@ -124,7 +124,7 @@ Core app code should not:
 
 Those responsibilities belong in:
 
-- notebooks under `output_v2/` during the early app migration
+- notebooks under `notebooks/` during the early app migration
 - app-specific adapters, if needed later
 - small shared I/O helpers used only outside the app core
 
@@ -228,7 +228,7 @@ Migrate one function at a time:
 8. `memory_update`
 
 After each migration, the app should be runnable with an in-memory dict and,
-where practical during this phase, through the shared `output_v2/` workbench
+where practical during this phase, through the shared `notebooks/` workbench
 notebook.
 
 ## Success Criteria

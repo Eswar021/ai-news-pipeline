@@ -10,9 +10,9 @@ Before planning or building new pipeline code, read:
   `src/pipeline_v2/`
 
 The retired root `pipelines/`, `config/`, `llm/`, and `schemas/` trees have
-been removed. Historical `data/` outputs have been removed from the working
-tree and are ignored. The root `memory/` tree is a legacy system artifact; it
-is useful for reference, but it is not the target architecture for new work.
+been removed. Historical `data/` outputs and the root `memory/` tree have also
+been removed from the working tree. They are not the target architecture for
+new work.
 
 ## Rebuild Goal
 
@@ -67,7 +67,7 @@ src/pipeline_v2/
 ```
 
 For now, do not add a central `src/pipeline_v2/runner.py`. Individual v2 apps
-are exercised through `output_v2/v2_apps_workbench.ipynb` while the app
+are exercised through `notebooks/v2_apps_workbench.ipynb` while the app
 contracts stabilize.
 
 V2 clarification rule:
@@ -373,7 +373,7 @@ Legacy folders include:
 - removed root `llm/` tree
 - removed root `schemas/` tree
 - removed historical `data/` outputs
-- `memory/`
+- removed root `memory/` tree
 
 Use them for:
 - understanding domain requirements

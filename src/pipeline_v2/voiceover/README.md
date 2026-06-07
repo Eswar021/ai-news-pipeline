@@ -32,7 +32,7 @@ settings. For quick audio checks, generate a 1-2 sentence preview first.
 
 ## Notebook Usage
 
-In `output_v2/v2_apps_workbench.ipynb`, change:
+In `notebooks/v2_apps_workbench.ipynb`, change:
 
 ```python
 VOICEOVER_PROVIDER = "chatterbox_local"
