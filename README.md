@@ -106,7 +106,6 @@ src/
 ├── llm/                 # stable rebuild LLM helpers
 ├── pipeline/            # stable v1 rebuild runtime
 ├── pipeline_v2/         # application-oriented v2 rewrite: apps + voiceover
-└── voiceover/           # stable voiceover reference implementation
 
 prompts/                 # shared stable v1 prompt files
 output/                  # generated v1 outputs, git-ignored

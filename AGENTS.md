@@ -63,6 +63,8 @@ src/pipeline_v2/
 │   ├── metadata_creator/
 │   ├── verification/
 │   └── memory_update/
+├── handoffs/
+├── voiceover/
 └── shared/
 ```
 
