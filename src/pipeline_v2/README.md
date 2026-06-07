@@ -18,6 +18,7 @@ src/pipeline_v2/
 |   |-- story_mapping/
 |   |-- video_packaging/
 |   |-- script_generation/
+|   |-- metadata_creator/
 |   |-- verification/
 |   `-- memory_update/
 |-- voiceover/
@@ -45,6 +46,7 @@ Currently migrated apps:
 - `apps/story_mapping`
 - `apps/video_packaging`
 - `apps/script_generation`
+- `apps/metadata_creator`
 
 App-like media modules:
 

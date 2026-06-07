@@ -41,6 +41,7 @@ src/pipeline_v2/
 |   |-- story_mapping/
 |   |-- video_packaging/
 |   |-- script_generation/
+|   |-- metadata_creator/
 |   |-- verification/
 |   `-- memory_update/
 `-- shared/
@@ -204,6 +205,7 @@ L2_evidence_prep   -> apps/evidence_prep
 L3_story_map       -> apps/story_mapping
 L4/L5/L6 package   -> apps/video_packaging
 L7_script          -> apps/script_generation
+L7 metadata        -> apps/metadata_creator
 L8_verify          -> apps/verification
 L9_memory          -> apps/memory_update
 ```
@@ -221,8 +223,9 @@ Migrate one function at a time:
 3. `story_mapping`
 4. `video_packaging`
 5. `script_generation`
-6. `verification`
-7. `memory_update`
+6. `metadata_creator`
+7. `verification`
+8. `memory_update`
 
 After each migration, the app should be runnable with an in-memory dict and,
 where practical during this phase, through the shared `output_v2/` workbench

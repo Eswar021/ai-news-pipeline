@@ -3,6 +3,7 @@ evidence_prep/
 story_mapping/
 video_packaging/
 script_generation/
+metadata_creator/
 voiceover/
 voiceover_inputs/
 model_cache/

@@ -268,7 +268,9 @@ Writes:
 - `script_package.json`
 
 Purpose:
-- generate format-specific spoken narration, metadata, and structured visual notes
+- generate format-specific spoken narration and structured visual notes
+- in pipeline v2, YouTube publishing metadata is separated into
+  `apps/metadata_creator` after script generation
 - keep production state, carrying forward all context needed for verification
 - keep narration separate from visual/editor notes
 

@@ -59,6 +59,7 @@ src/pipeline_v2/
 │   ├── editorial_selection/
 │   ├── content_packaging/
 │   ├── script_generation/
+│   ├── metadata_creator/
 │   ├── verification/
 │   └── memory_update/
 └── shared/
@@ -312,7 +313,9 @@ the next layer does not need to read backward.
 - do not rely on prompt changes alone when the format needs different structure
 
 ### L7 — Script
-- generate format-specific narration and metadata from the L6 package
+- generate format-specific narration from the L6 package
+- in v2, YouTube publishing metadata belongs in `apps/metadata_creator`
+  after `apps/script_generation`, not inside script generation
 - keep spoken narration separate from visual/editor notes
 - keep roundup, deep-dive, and future script shapes explicit when their structure genuinely differs
 

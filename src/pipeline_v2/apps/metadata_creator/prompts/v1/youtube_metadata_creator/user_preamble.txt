@@ -1,0 +1,10 @@
+Generate a full YouTube metadata draft for this completed roundup script.
+
+Return:
+- title options
+- thumbnail text options
+- blocked title angles
+- a short description intro
+- suggested tags
+
+Do not generate chapters or source URLs. Those are built deterministically by code.
