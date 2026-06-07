@@ -15,7 +15,7 @@ Writes:
 Usage:
     python3 -m src.chatgpt_exporter --run-id current
     python3 -m src.chatgpt_exporter --run-id current --profile script_review
-    python3 chatgpt_export.py --run-id current --profile publish_review
+    python3 -m src.chatgpt_exporter --run-id current --profile publish_review
 """
 
 from __future__ import annotations

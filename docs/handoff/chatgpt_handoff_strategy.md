@@ -10,11 +10,11 @@ contracts and it does not write into layer folders.
 ```bash
 python3 -m src.chatgpt_exporter --run-id current
 python3 -m src.chatgpt_exporter --run-id current --profile script_review
-python3 chatgpt_export.py --run-id current --profile publish_review
+python3 -m src.chatgpt_exporter --run-id current --profile publish_review
 ```
 
-The root `chatgpt_export.py` command delegates to the rebuild exporter when the
-run exists under `output/`. Legacy `data/runs/` exports remain reference-only.
+The old root `chatgpt_export.py` wrapper has been removed with the retired root
+pipeline. Use `python3 -m src.chatgpt_exporter` directly.
 
 ## Output
 

@@ -1,0 +1,57 @@
+flowchart LR
+  subgraph control["Control Plane"]
+    manifest["Run Profiles & Manifest<br/>stable v1 runner"]
+    workbench["v2 Workbench<br/>notebook orchestration"]
+  end
+
+  subgraph ingestion["Collection"]
+    collectors["App: news_collection<br/>RSS, APIs, arXiv, GitHub, YouTube"]
+    raw["Raw Records<br/>JSON/dict contract"]
+  end
+
+  subgraph story_state["Evidence & Story State"]
+    prep["App: evidence_prep<br/>normalization + provenance"]
+    cluster["App: story_mapping<br/>sentence-transformers clustering"]
+    labels["Structured LLM Labels<br/>Pydantic + LangChain"]
+    ranked["Ranked Stories<br/>full source records carried forward"]
+  end
+
+  subgraph production_state["Production State"]
+    packet["App: video_packaging<br/>roundup selection + timing"]
+    writer["App: script_generation<br/>full-script LLM writer"]
+    revise["Reflection Pass<br/>flow, clarity, engagement"]
+    meta["App: metadata_creator<br/>titles, chapters, tags, sources"]
+  end
+
+  subgraph media_quality["Media & Quality"]
+    tts["Voiceover Module<br/>Kokoro, Chatterbox, F5, Dia"]
+    verify["L8 Verification<br/>support + policy checks"]
+    memory["L9 Memory<br/>approved-run updates"]
+  end
+
+  subgraph artifacts["Artifacts"]
+    outputs["Portfolio / Publishing Outputs<br/>script, metadata, sources, WAV"]
+  end
+
+  manifest --> collectors
+  workbench --> collectors
+  collectors --> raw --> prep --> cluster --> labels --> ranked
+  ranked --> packet --> writer --> revise --> meta
+  revise --> tts
+  revise --> verify
+  meta --> verify
+  tts --> outputs
+  verify --> outputs
+  outputs --> memory
+
+  classDef controlNode fill:#f8fafc,stroke:#64748b,color:#0f172a;
+  classDef dataNode fill:#eff6ff,stroke:#2563eb,color:#172554;
+  classDef aiNode fill:#fef3c7,stroke:#d97706,color:#451a03;
+  classDef qualityNode fill:#ecfdf5,stroke:#059669,color:#052e16;
+  classDef outputNode fill:#f5f3ff,stroke:#7c3aed,color:#2e1065;
+
+  class manifest,workbench controlNode;
+  class collectors,raw,prep,cluster,ranked dataNode;
+  class labels,packet,writer,revise,meta,tts aiNode;
+  class verify,memory qualityNode;
+  class outputs outputNode;

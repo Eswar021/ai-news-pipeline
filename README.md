@@ -1,322 +1,125 @@
-# AI News Pipeline 🤖📰
+# AI Content Creation Pipeline
 
-> An end-to-end AI pipeline that collects news & research from multiple sources, processes and clusters them, runs LLM-powered intelligence analysis, and auto-generates YouTube video scripts.
+This repository is being rebuilt into a cleaner AI content production system for
+collecting AI news, mapping stories, producing YouTube scripts, creating
+metadata, and generating voiceover audio.
 
----
+The old root `pipelines/` runtime has been retired. Current development happens
+under `src/`.
 
-## 📋 Table of Contents
+## Active Tracks
 
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-  - [Environment Variables](#environment-variables)
-  - [LLM Profiles](#llm-profiles)
-  - [News Sources](#news-sources)
-- [Running the Pipeline](#running-the-pipeline)
-  - [Run All Layers (Full Pipeline)](#run-all-layers-full-pipeline)
-  - [Run Individual Layers](#run-individual-layers)
-- [Output](#output)
-- [Design Docs](#design-docs)
+There are two active pipeline tracks:
 
----
+- `src/pipeline/`: stable v1 rebuild runtime. Keep this working.
+- `src/pipeline_v2/`: experimental application-oriented rewrite. New modular
+  app work happens here.
 
-## Overview
-
-The **AI News Pipeline** is a fully modular, 4-layer content automation system. It ingests raw news and research data from a wide range of sources — news APIs, arXiv, Hacker News, GitHub, YouTube — and passes it through progressively deeper AI processing stages to produce polished, ready-to-use YouTube video scripts.
-
-**End-to-end flow:**
-
-```
-[Sources] → Layer 1: Extract → Layer 2: Process → Layer 3: Intelligence → Layer 4: Content
-```
-
----
-
-## Architecture
-
-| Layer | Module | Role |
-|-------|--------|------|
-| **Layer 1** | `pipelines/layer_1_extraction/` | Collect raw data from all sources |
-| **Layer 2** | `pipelines/layer_2_processing/` | Normalize, deduplicate, cluster & rank |
-| **Layer 3** | `pipelines/layer_3_intelligence/` | AI summarization, claim extraction, context enrichment |
-| **Layer 4** | `pipelines/layer_4_content/` | Script planning, writing & output packaging |
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        AI News Pipeline                          │
-│                                                                   │
-│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌──────┐│
-│  │  Layer 1    │ → │  Layer 2    │ → │  Layer 3    │ → │  L4  ││
-│  │ Extraction  │   │ Processing  │   │Intelligence │   │Script││
-│  └─────────────┘   └─────────────┘   └─────────────┘   └──────┘│
-│                                                                   │
-│  Sources: NewsAPI · NewsData · MediaStack · ArXiv               │
-│           Hacker News · GitHub · YouTube · Company Blogs        │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Project Structure
-
-```
-ai-news-pipeline/
-│
-├── .env.example                  # Template for secrets (copy to .env)
-├── requirements.txt              # Python dependencies
-│
-├── config/
-│   ├── llm_config.py             # LLM profiles & active profile switcher
-│   ├── paths.py                  # Centralized path management
-│   ├── sources.yaml              # News source configurations
-│   └── channels.yaml            # YouTube channel configurations
-│
-├── llm/
-│   ├── llm_client.py             # Unified LLM client (OpenAI / Gemini / LM Studio)
-│   └── llm_logger.py             # Structured JSON logging for all LLM calls
-│
-├── prompts/
-│   └── v1/                       # Versioned prompt templates
-│
-├── pipelines/
-│   ├── layer_1_extraction/       # Data collection agents
-│   │   ├── run_extraction.py     ← Entry point for Layer 1
-│   │   ├── arxiv_collector.py
-│   │   ├── hackernews_collector.py
-│   │   ├── newsapi_collector.py
-│   │   ├── newsdata_collector.py
-│   │   ├── mediastack_collector.py
-│   │   ├── github_collector.py
-│   │   └── youtube_collector.py
-│   │
-│   ├── layer_2_processing/       # Normalization & ranking
-│   │   ├── run_processing.py     ← Entry point for Layer 2
-│   │   ├── normalizer.py
-│   │   ├── deduplicator.py
-│   │   ├── clusterer.py
-│   │   └── ranker.py
-│   │
-│   ├── layer_3_intelligence/     # LLM-powered analysis
-│   │   ├── run_intelligence.py   ← Entry point for Layer 3
-│   │   ├── topic_selector.py
-│   │   ├── summarizer.py
-│   │   ├── claim_extractor.py
-│   │   ├── context_builder.py
-│   │   └── context_enricher.py
-│   │
-│   └── layer_4_content/          # Script generation
-│       ├── run_content.py        ← Entry point for Layer 4
-│       ├── script_planner.py
-│       ├── script_writer.py
-│       └── output_packager.py
-│
-├── output/                       # Runtime outputs (git-ignored)
-│   ├── layer_1_raw/
-│   ├── layer_2_processed/
-│   ├── layer_3_intelligence/
-│   ├── layer_4_content/
-│   └── llm_logs/
-│
-└── docs/
-    └── system_design_docs/       # Layer-wise technical design documents
-        ├── master_system_design.md
-        ├── layer_1.md
-        ├── layer_2.md
-        ├── layer_3.md
-        └── layer_4.md
-```
-
----
-
-## Prerequisites
-
-- **Python 3.10+**
-- At least one active API key from the list below
-- (Optional) [LM Studio](https://lmstudio.ai/) for fully local/offline LLM usage
-
----
-
-## Installation
-
-**1. Clone the repository**
-
-```bash
-git clone https://github.com/YOUR_USERNAME/ai-news-pipeline.git
-cd ai-news-pipeline
-```
-
-**2. Create and activate a virtual environment**
-
-```bash
-python -m venv .venv
-
-# macOS / Linux
-source .venv/bin/activate
-
-# Windows
-.venv\Scripts\activate
-```
-
-**3. Install dependencies**
-
-```bash
-pip install -r requirements.txt
-```
-
-**4. Set up environment variables**
-
-```bash
-cp .env.example .env
-```
-
-Open `.env` and fill in your API keys (see [Configuration](#configuration) below).
-
-**5. Create output directories**
-
-```bash
-python config/paths.py
-```
-
----
-
-## Configuration
-
-### Environment Variables
-
-Copy `.env.example` to `.env` and fill in the keys for the sources you want to use.  
-You only need keys for the sources you plan to activate.
-
-```ini
-# ── News APIs ─────────────────────────────────────────────────────
-NEWSDATA_API=your_newsdata_api_key
-MEDIASTACK_API=your_mediastack_api_key
-NewsAPI=your_newsapi_key
-
-# ── YouTube Data API ──────────────────────────────────────────────
-YOUTUBE_API_KEY=your_youtube_api_key
-
-# ── LLM: Google Gemini ────────────────────────────────────────────
-GOOGLE_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-flash-lite
-
-# ── LLM: OpenAI ───────────────────────────────────────────────────
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_MODEL=gpt-4o
-
-# ── LLM: Local (LM Studio) ────────────────────────────────────────
-LMSTUDIO_BASE_URL=http://localhost:1234/v1
-LMSTUDIO_MODEL=your_local_model_name
-LMSTUDIO_API_KEY=lm-studio
-```
-
-> **Never commit your real `.env` file.** It is listed in `.gitignore`.
-
----
-
-### LLM Profiles
-
-LLM behaviour is controlled centrally in `config/llm_config.py`.
-
-**Switch all agents globally** by changing one line:
+Pipeline v2 apps expose direct JSON/dict boundaries:
 
 ```python
-# config/llm_config.py
-ACTIVE_PROFILE = "dev"        # cheap & fast — for testing
-# ACTIVE_PROFILE = "production" # GPT-4o quality
-# ACTIVE_PROFILE = "gemini"    # Gemini Flash — good free tier
-# ACTIVE_PROFILE = "local"     # Fully offline via LM Studio
+def run(input_json: dict) -> dict:
+    ...
 ```
 
-**Override specific modules** without changing the global default:
+The v2 app workbench is currently the orchestration surface while contracts
+stabilize:
 
-```python
-MODULE_OVERRIDES = {
-    "script_writer": "production",   # use GPT-4o only for final script
-    "summarizer": "gemini",          # use Gemini for summaries
-}
+```text
+output_v2/v2_apps_workbench.ipynb
 ```
 
-Available profiles:
+## Current v2 Flow
 
-| Profile | Provider | Model | Use Case |
-|---------|----------|-------|----------|
-| `dev` | OpenAI | gpt-5-nano | Development & testing |
-| `production` | OpenAI | gpt-4o | Final content generation |
-| `gemini` | Google | gemini-2.5-flash-lite | Free-tier alternative |
-| `gemini_pro` | Google | gemini-2.5-pro | Heavy reasoning tasks |
-| `local` | LM Studio | *(your local model)* | Fully offline, zero cost |
+The current v2 flow is functionality-first, not layer-number-first:
 
----
+```text
+news_collection
+  -> evidence_prep
+  -> story_mapping
+  -> video_packaging
+  -> script_generation/formats/roundup
+  -> metadata_creator
+  -> voiceover
+```
 
-### News Sources
+The core apps do not write files. The notebook owns JSON output writing under
+`output_v2/`. The v2 voiceover module is the exception because audio generation
+must produce WAV files.
 
-Active sources are configured in `config/sources.yaml`.  
-YouTube channels are configured in `config/channels.yaml`.
+## Useful Commands
 
----
-
-## Running the Pipeline
-
-### Run All Layers (Full Pipeline)
-
-Run each layer in sequence:
+Run the stable v1 rebuild pipeline:
 
 ```bash
-# Layer 1 — Collect raw data from all sources
-python pipelines/layer_1_extraction/run_extraction.py
-
-# Layer 2 — Normalize, deduplicate, cluster & rank
-python pipelines/layer_2_processing/run_processing.py
-
-# Layer 3 — AI intelligence analysis
-python pipelines/layer_3_intelligence/run_intelligence.py
-
-# Layer 4 — Generate final video scripts
-python pipelines/layer_4_content/run_content.py
+python -m src.pipeline.runner 0 1 2 3 4 5 6 7 8 9 --run-profile daily_48h_all_sources
 ```
 
-### Run Individual Layers
-
-Each layer can be run independently as long as the previous layer's output exists:
+Compile the active v2 apps:
 
 ```bash
-# Example: re-run only the content generation step
-python pipelines/layer_4_content/run_content.py
+python3 -B -m compileall src/pipeline_v2/apps
 ```
 
----
+Compile the v2 voiceover module with its Python 3.12 environment:
 
-## Output
+```bash
+.venv-voiceover/bin/python -B -m compileall src/pipeline_v2/voiceover
+```
 
-All generated files land in the `output/` directory (git-ignored):
+Run v2 voiceover from a prepared input JSON:
 
-| Path | Contents |
-|------|----------|
-| `output/layer_1_raw/` | Raw JSON from each source (arxiv, newsapi, etc.) |
-| `output/layer_2_processed/` | Normalized documents, clusters, rankings |
-| `output/layer_3_intelligence/` | Summaries, claim extracts, context packets |
-| `output/layer_4_content/scripts/` | **Final video scripts** (JSON + Markdown) |
-| `output/llm_logs/` | Structured JSON logs of every LLM call |
+```bash
+.venv-voiceover/bin/python -m src.pipeline_v2.voiceover.cli --input-json output_v2/voiceover_inputs/example.json
+```
 
----
+Export a stable v1 ChatGPT handoff:
 
-## Design Docs
+```bash
+python3 -m src.chatgpt_exporter --run-id current
+python3 -m src.chatgpt_exporter --run-id current --profile script_review
+```
 
-Detailed technical design documents for each layer are in `docs/system_design_docs/`:
+## Key Docs
 
-| Document | Description |
-|----------|-------------|
-| [master_system_design.md](docs/system_design_docs/master_system_design.md) | Full system overview & data flow |
-| [layer_1.md](docs/system_design_docs/layer_1.md) | Extraction layer design |
-| [layer_2.md](docs/system_design_docs/layer_2.md) | Processing layer design |
-| [layer_3.md](docs/system_design_docs/layer_3.md) | Intelligence layer design |
-| [layer_4.md](docs/system_design_docs/layer_4.md) | Content generation layer design |
+Start here before changing architecture:
 
----
+- `AGENTS.md`
+- `docs/rebuild/system_blueprint.md`
+- `docs/rebuild/l0_l1_decisions.md`
+- `docs/rebuild/pipeline_v2_application_architecture.md`
+- `src/pipeline_v2/README.md`
+- `src/pipeline_v2/voiceover/README.md`
 
-## License
+Current architecture diagrams:
 
-MIT
+- `docs/architecture_showcase.mmd`
+- `docs/architecture_showcase_technical.mmd`
+- `docs/architecture_showcase.svg`
+
+## Project Shape
+
+```text
+src/
+├── config/              # stable rebuild config
+├── llm/                 # stable rebuild LLM helpers
+├── pipeline/            # stable v1 rebuild runtime
+├── pipeline_v2/         # application-oriented v2 rewrite
+├── chatgpt_exporter.py  # stable v1 handoff exporter
+└── voiceover/           # stable voiceover reference implementation
+
+prompts/                 # shared stable v1 prompt files
+output/                  # generated v1 outputs, git-ignored
+output_v2/               # generated v2 workbench outputs, git-ignored
+docs/rebuild/            # current rebuild architecture notes
+```
+
+## Cleanup Notes
+
+The legacy root `pipelines/`, `config/`, `llm/`, and `schemas/` trees, old root
+pipeline wrappers, and old system design documents have been removed. If older
+behavior is needed for reference, use git history rather than reintroducing
+legacy imports into new code.
+
+Root `prompts/` is still intentionally kept because stable `src` modules load
+shared prompt files from there.

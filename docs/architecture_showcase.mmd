@@ -1,0 +1,49 @@
+flowchart LR
+  subgraph ingestion["Ingestion"]
+    sources["Source Ecosystem<br/>Blogs, APIs, arXiv, GitHub, YouTube"]
+    collection["News Collection<br/>Python collectors"]
+  end
+
+  subgraph processing["Mapping & Processing"]
+    evidence["Evidence Prep<br/>Clean, normalize, dedupe"]
+    stories["Story Mapping<br/>Embeddings + LLM labels"]
+  end
+
+  subgraph production["AI Production"]
+    packaging["Video Packaging<br/>Format, selection, timing"]
+    script["Script Generation<br/>LLM writer + reflection"]
+    metadata["Metadata Creator<br/>Titles, description, tags"]
+    voiceover["Voiceover<br/>Local TTS models"]
+  end
+
+  subgraph qa["Quality & Memory"]
+    verify["Support Verification<br/>Source-grounded checks"]
+    memory["Memory Update<br/>Approved-run learning"]
+  end
+
+  subgraph deliverables["Deliverables"]
+    package["Publishing Package<br/>Script, sources, metadata, audio"]
+    workbench["Workbench & Run Artifacts<br/>JSON, notebooks, WAV"]
+  end
+
+  sources --> collection --> evidence --> stories --> packaging --> script
+  packaging --> metadata
+  script --> metadata
+  script --> voiceover
+  script --> verify
+  metadata --> verify
+  verify --> package
+  voiceover --> package
+  package --> workbench
+  package --> memory
+
+  classDef stage fill:#f8fafc,stroke:#cbd5e1,color:#0f172a;
+  classDef data fill:#eff6ff,stroke:#2563eb,color:#172554;
+  classDef ai fill:#fef3c7,stroke:#d97706,color:#451a03;
+  classDef quality fill:#ecfdf5,stroke:#059669,color:#052e16;
+  classDef output fill:#f5f3ff,stroke:#7c3aed,color:#2e1065;
+
+  class sources,collection,evidence,stories data;
+  class packaging,script,metadata,voiceover ai;
+  class verify,memory quality;
+  class package,workbench output;

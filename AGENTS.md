@@ -9,9 +9,10 @@ Before planning or building new pipeline code, read:
 - `docs/rebuild/pipeline_v2_application_architecture.md` when working in
   `src/pipeline_v2/`
 
-The current `pipelines/`, `config/`, `memory/`, and historical `data/runs/`
-trees are the legacy system. They are useful for reference, but they are not
-the target architecture for new work.
+The retired root `pipelines/`, `config/`, `llm/`, and `schemas/` trees have
+been removed. The root `memory/` and historical `data/runs/` trees are legacy
+system artifacts. They are useful for reference, but they are not the target
+architecture for new work.
 
 ## Rebuild Goal
 
@@ -367,8 +368,10 @@ dependency.
 ## Legacy System Policy
 
 Legacy folders include:
-- `pipelines/`
-- `config/`
+- removed root `pipelines/` tree
+- removed root `config/` tree
+- removed root `llm/` tree
+- removed root `schemas/` tree
 - `memory/`
 - historical `data/runs/`
 - `data/`
