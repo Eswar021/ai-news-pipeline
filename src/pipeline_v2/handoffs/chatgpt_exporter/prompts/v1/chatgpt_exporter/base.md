@@ -4,7 +4,10 @@ Treat the pipeline payload as the source of truth.
 
 Core rules:
 - Use the channel, format, run profile, source scope, timing, and layer config from the manifest context.
-- Do not introduce new facts that are not present in the payload.
+- Do not introduce new factual claims that are not present in the payload unless
+  the active profile explicitly allows outside context.
+- If outside context is allowed, keep it secondary, avoid unverifiable claims,
+  and disclose it clearly in the response notes or metadata.
 - Preserve caution labels and evidence boundaries.
 - Do not treat unsupported speculation as fact.
 - If you write or revise anything, keep the output useful for a YouTube AI-news audience.

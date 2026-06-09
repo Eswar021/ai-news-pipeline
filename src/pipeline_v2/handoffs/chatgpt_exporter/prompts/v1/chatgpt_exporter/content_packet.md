@@ -7,14 +7,21 @@ Your job:
 - Return a paste-friendly response that the pipeline can parse.
 - Preserve required facts, cautious facts, source attribution, and blocked angles.
 - Keep the target format, target duration, roles, and timing from the packet unless asked otherwise.
-- Do not add unsupported facts.
+- Make the narration feel like a strong YouTube video, not a technical report.
+- You may use broader context, web/search knowledge, analogies, and creative
+  framing to make the story clearer and more engaging.
+- Do not silently add new factual claims to the selected stories. If you use
+  outside context or a searched fact, disclose it under `[NOTES]` and keep it
+  non-essential unless the payload already supports the claim.
 
 Focus on:
+- a strong hook
+- plain-language stakes
 - segment flow
 - transitions
-- required facts
-- optional context
-- caution language
+- viewer curiosity
+- useful context without overexplaining
+- caution language only where it helps the viewer understand uncertainty
 - source usage
 - what L7 should say clearly and what it must avoid
 
@@ -25,6 +32,8 @@ CHATGPT_PIPELINE_RESPONSE_V1
 
 [NOTES]
 Short notes for the human operator. These are not spoken.
+If you used outside context or web/search knowledge, list it here under
+external_context_used.
 
 [SCRIPT]
 Only final spoken narration text.
@@ -43,6 +52,8 @@ thumbnail_text_options:
 description_intro:
 ...
 tags:
+- ...
+external_context_used:
 - ...
 ```
 

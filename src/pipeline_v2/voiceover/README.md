@@ -32,14 +32,33 @@ settings. For quick audio checks, generate a 1-2 sentence preview first.
 
 ## Notebook Usage
 
-In `notebooks/v2_apps_workbench.ipynb`, change:
+For the ChatGPT-assisted production path, use:
 
-```python
-VOICEOVER_PROVIDER = "chatterbox_local"
-VOICEOVER_STYLE = "general_youtube"
+```text
+notebooks/v2_chatgpt_voiceover_workbench.ipynb
 ```
 
-Supported values:
+The notebook resumes from an App 4 `video_packaging` run, exports a ChatGPT
+content-packet handoff, parses the returned `[SCRIPT]` block, and then runs
+voiceover from `input.script_text`.
+
+Voiceover settings come from:
+
+```text
+src/pipeline_v2/config/workbench.yaml
+```
+
+Change the `voiceover` section there:
+
+```yaml
+voiceover:
+  provider: chatterbox_local
+  style: dramatic_news
+  voice: null
+  speed: 0.96
+```
+
+Supported provider values:
 
 ```text
 kokoro_local
@@ -50,15 +69,19 @@ dia_transformers
 
 For F5-TTS, also set:
 
-```python
-VOICEOVER_F5_REF_AUDIO_PATH = Path("path/to/reference.wav")
-VOICEOVER_F5_REF_TEXT = "Exact or close transcript of the reference audio."
+```yaml
+f5_tts:
+  ref_audio_path: "path/to/reference.wav"
+  ref_text: "Exact or close transcript of the reference audio."
 ```
 
-Then run the `Voiceover Test` section. The notebook writes outputs under:
+The voiceover cell reloads `workbench.yaml` every time it runs. After changing
+provider, style, voice, speed, or provider-specific settings, rerun the
+voiceover cell to produce a new audio variant. The notebook writes outputs
+under:
 
 ```text
-output_v2/voiceover/{RUN_ID}/
+output_v2/voiceover/{RUN_ID}_{provider}_{style}_{voice}_{speed}_chatgpt_script/
 ```
 
 The notebook prints the planned chunk count before synthesis. If the count is
