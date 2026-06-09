@@ -119,6 +119,8 @@ def generate_roundup_script(
             "enabled": bool(script_cfg.get("reflection", {}).get("enabled", True)),
             "iterations": reflection_state["iterations"],
             "revision_count": reflection_state["revision_count"],
+            "max_revision_passes": reflection_state["max_revision_passes"],
+            "revision_limit_reached": reflection_state["revision_limit_reached"],
             "final_score": reflection_state["final_score"],
         },
     }
@@ -221,10 +223,14 @@ def run_reflection_loop(
             "final_script": initial_script,
             "iterations": [],
             "revision_count": 0,
+            "max_revision_passes": 0,
+            "revision_limit_reached": False,
             "final_score": None,
         }
 
     max_revision_passes = int(reflection_cfg.get("max_revision_passes", 1))
+    if max_revision_passes < 0 or max_revision_passes > 3:
+        raise ValueError("reflection.max_revision_passes must be between 0 and 3")
     target_score = int(reflection_cfg.get("target_score", 8))
     current = initial_script
     iterations: list[dict[str, Any]] = []
@@ -269,11 +275,20 @@ def run_reflection_loop(
             revision_index=revision_count,
         )
 
-    final_score = iterations[-1]["reflection"]["overall_score"] if iterations else None
+    last_reflection = iterations[-1]["reflection"] if iterations else {}
+    final_score = last_reflection.get("overall_score") if last_reflection else None
+    revision_limit_reached = bool(
+        iterations
+        and revision_count >= max_revision_passes
+        and bool(last_reflection.get("should_revise", False))
+        and int(last_reflection.get("overall_score", 0) or 0) < target_score
+    )
     return {
         "final_script": current,
         "iterations": iterations,
         "revision_count": revision_count,
+        "max_revision_passes": max_revision_passes,
+        "revision_limit_reached": revision_limit_reached,
         "final_score": final_score,
     }
 

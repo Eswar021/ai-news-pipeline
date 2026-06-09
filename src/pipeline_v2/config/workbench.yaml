@@ -1,0 +1,131 @@
+default_run_profile: daily_48h_all_sources
+
+profiles:
+  daily_48h_all_sources:
+    evidence_prep:
+      max_research_papers: 12
+      filter_policy: {}
+
+    story_mapping:
+      embedding_model: all-MiniLM-L6-v2
+      use_llm_story_labels: true
+      clustering:
+        max_pair_hours: null
+        semantic_primary_threshold: 0.80
+        semantic_supported_threshold: 0.78
+        semantic_title_anchor_threshold: 0.74
+        semantic_merge_groups:
+          - ai_company_blogs
+          - tech_news_apis
+          - youtube_podcast_transcripts
+      story_label:
+        provider: openai
+        model: gpt-4o-mini
+        prompt_version: v1
+        worker_count: 10
+        temperature: 0.15
+        max_records_per_story: 6
+
+    video_packaging:
+      target_format: roundup
+      roundup:
+        candidate_limit: 20
+        min_stories: 3
+        max_stories: 7
+        target_duration_seconds: 480
+        intro_seconds: 35
+        closing_seconds: 20
+        role_weights:
+          lead: 1.35
+          major: 1.05
+          brief: 0.75
+        max_per_entity: 2
+        max_per_product: 1
+        max_per_event_family: 2
+        allowed_priority_buckets:
+          - high
+          - medium
+        exclude_noise: true
+        exclude_tutorials: true
+
+    script_generation:
+      provider: openai
+      model: gpt-4o
+      prompt_version: v1
+      temperature: 0.4
+      words_per_minute: 150
+      duration_tolerance_seconds: 45
+      worker_count: 1
+      script_style:
+        audience: AI-curious professionals
+        tone: clear, energetic, grounded
+        avoid:
+          - dry technical reporting
+          - overhype
+          - fake certainty
+          - source-by-source summaries
+      source_policy:
+        use_selected_stories_only: true
+        include_full_records: true
+      reflection:
+        enabled: true
+        max_revision_passes: 1
+        target_score: 8
+
+    metadata_creator:
+      provider: openai
+      model: gpt-4o-mini
+      prompt_version: v1
+      temperature: 0.4
+      metadata_policy:
+        title_option_count: 8
+        thumbnail_text_option_count: 5
+        max_tags: 20
+        include_source_urls: true
+      memory_context:
+        recent_title_angles: []
+
+    voiceover:
+      provider: kokoro_local
+      style: general_youtube
+      voice: null
+      speed: 0.98
+      language_code: a
+      sample_rate_hz: 24000
+      keep_chunks: true
+      force: true
+      output_dir: ""
+      chunking:
+        chunk_max_chars: null
+        max_sentences_per_chunk: null
+        chunk_pause_seconds: null
+        paragraph_pause_seconds: null
+      chatterbox:
+        device: auto
+        exaggeration: 0.65
+        cfg_weight: 0.5
+        audio_prompt_path: null
+        cache_dir: "{OUTPUT_V2}/model_cache/huggingface_local"
+      f5_tts:
+        model: F5TTS_v1_Base
+        device: cpu
+        ref_audio_path: "{OUTPUT_V2}/voiceover/_smoke_chatterbox_no_xet/audio/full_voiceover.wav"
+        ref_text: Today, we are testing a more expressive local voiceover model for the new pipeline.
+        cache_dir: "{OUTPUT_V2}/model_cache/f5_tts"
+        nfe_step: 16
+        cfg_strength: 2.0
+        sway_sampling_coef: -1.0
+        target_rms: 0.1
+        cross_fade_duration: 0.15
+        remove_silence: false
+        seed: 1234
+      dia:
+        model_checkpoint: nari-labs/Dia-1.6B-0626
+        device: cpu
+        cache_dir: "{OUTPUT_V2}/model_cache/dia"
+        max_new_tokens: 256
+        guidance_scale: 3.0
+        temperature: 1.8
+        top_p: 0.9
+        top_k: 45
+        speaker_tag: S1

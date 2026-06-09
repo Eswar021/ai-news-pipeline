@@ -54,6 +54,11 @@ There is intentionally no central `src/pipeline_v2/runner.py` yet. During the
 early v2 migration, use notebooks under `notebooks/` to build app inputs, call
 individual apps, and write notebook-run outputs.
 
+Workbench-level defaults may live in a small orchestration config such as
+`src/pipeline_v2/config/workbench.yaml`, but that file is owned by the notebook
+or future orchestrator. App cores must still receive resolved config through
+their input envelopes rather than reading YAML directly.
+
 Create subfolders only when the app is actively being migrated. Do not prebuild
 empty applications.
 
@@ -148,6 +153,7 @@ Do not hardcode:
 - source caps
 - score thresholds
 - selected formats
+- LLM providers
 - model names
 - prompt versions
 - editorial rules
@@ -163,7 +169,7 @@ the durable prompt text must live in prompt files.
 
 The app input config should specify:
 
-- model or model profile
+- provider and model
 - prompt name
 - prompt version
 - worker/concurrency settings when relevant
