@@ -27,9 +27,15 @@ src/pipeline_v2/
 ```
 
 There is intentionally no central `src/pipeline_v2/runner.py` yet. For now,
-run the app sequence through `notebooks/v2_apps_workbench.ipynb`.
+use two notebooks:
 
-The workbench reads its operator-facing defaults from
+- `notebooks/v2_apps_workbench.ipynb` runs the pure app sequence through the
+  currently migrated apps.
+- `notebooks/v2_chatgpt_voiceover_workbench.ipynb` resumes from an App 4
+  `video_packaging` run, exports a ChatGPT content-packet handoff, then runs
+  voiceover from manually saved script text.
+
+The notebooks read operator-facing defaults from
 `src/pipeline_v2/config/workbench.yaml`. Keep that file simple and
 module-wise: set `provider` and `model` directly under the LLM-using module
 configs such as `story_mapping.story_label`, `script_generation`, and

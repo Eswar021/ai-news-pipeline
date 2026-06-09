@@ -86,10 +86,13 @@ profiles:
         recent_title_angles: []
 
     voiceover:
-      provider: kokoro_local
-      style: general_youtube
+      # provider: kokoro_local
+      # style: general_youtube
+      # speed: 0.98
+      provider: chatterbox_local
+      style: dramatic_news
+      speed: 0.96
       voice: null
-      speed: 0.98
       language_code: a
       sample_rate_hz: 24000
       keep_chunks: true
