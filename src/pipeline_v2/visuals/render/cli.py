@@ -1,0 +1,22 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from .app import run
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Render v2 visual scene clips with Remotion.")
+    parser.add_argument("--input-json", required=True, help="Path to the render input JSON.")
+    args = parser.parse_args()
+    input_path = Path(args.input_json)
+    result = run(json.loads(input_path.read_text(encoding="utf-8")))
+    if result["status"] == "failed":
+        raise SystemExit(f"[visual_render] ERROR: {result['summary'].get('failure_reason', 'failed')}")
+
+
+if __name__ == "__main__":
+    main()
+

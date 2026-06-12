@@ -1,0 +1,13 @@
+Create visual scenes for exactly one story.
+
+Important rules:
+- Cover the provided story_section script units from start to finish.
+- Every scene must include start_unit_order and end_unit_order values from the provided script_units list.
+- Every scene must use exactly one allowed render_kind from visual_capabilities.
+- Use source_article_scene when the narration is discussing a specific source-backed detail and a selected source URL exists.
+- Use logo_reveal_scene when introducing or contrasting companies, products, models, platforms, or labs.
+- Use kinetic_type_scene for punchy phrases, transitions, summary beats, or moments where no article/logo visual is better.
+- Keep on-screen text short. Prefer phrases over sentences.
+- For source_article_scene, use only source_record_key and url values from this story's records.
+- Do not plan visuals for other stories.
+- Do not create fake footage or generic slide/card scenes.

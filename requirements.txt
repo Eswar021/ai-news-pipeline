@@ -5,6 +5,8 @@ requests
 google-auth
 google-auth-oauthlib
 pydantic>=2,<3
+playwright
+pillow
 
 # ── LLM (existing) ──
 langchain-openai

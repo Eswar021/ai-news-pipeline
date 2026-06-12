@@ -4,7 +4,7 @@
 rebuild pipeline.
 
 The earlier copied numbered-layer snapshot has been removed. The current v2
-tree is centered on standalone apps plus the app-like voiceover module.
+tree is centered on standalone apps plus app-like media subsystems.
 
 ## Target Direction
 
@@ -23,6 +23,7 @@ src/pipeline_v2/
 |   `-- memory_update/
 |-- handoffs/
 |-- voiceover/
+|-- visuals/
 `-- shared/
 ```
 
@@ -65,6 +66,7 @@ Currently migrated apps:
 App-like media modules:
 
 - `voiceover`
+- `visuals`
 
 Standalone handoff utilities:
 
@@ -75,6 +77,18 @@ Standalone handoff utilities:
 audio files. It still accepts a JSON/dict input and returns a JSON/dict result,
 but it is allowed to write WAV/package artifacts under a caller-provided
 `output_v2` directory.
+
+`visuals` is intentionally parallel to `voiceover` because its core output is
+rendered media files. It is a small subsystem with a pure planner plus
+media-writing resolver/render steps. The active visual language is motion-first:
+source article scenes, logo reveal scenes, and kinetic type scenes. Do not bring
+back generic title/timeline/entity/card renderers as primary output.
+
+The Remotion renderer lives under `visuals/remotion_engine/`. Before rendering
+clips on a fresh machine, run `npm install` in that directory. The notebook then
+uses `visuals.render` to write per-scene MP4 clips under `output_v2/visuals/`.
+After that, `visuals.assembly` concatenates those clips and muxes the selected
+voiceover WAV into a final review MP4 under the same run folder.
 
 The v2 voiceover module currently supports `kokoro_local` for lightweight local
 draft audio and `chatterbox_local` for more expressive local narration.

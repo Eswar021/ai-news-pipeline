@@ -85,6 +85,153 @@ profiles:
       memory_context:
         recent_title_angles: []
 
+    visuals:
+      planner:
+        provider: openai
+        model: gpt-4o-mini
+        prompt_version: v1
+        temperature: 0.3
+        words_per_minute: 150
+        style:
+          visual_language: premium YouTube AI news motion graphics
+          motion_style: fast editorial cuts, article zooms, logo reveals, kinetic type
+          color_system: dark graphite newsroom with electric cyan, warm white, and restrained red accents
+          typography: bold broadcast sans, large kinetic phrases, minimal small text
+          avoid:
+            - PPT-style cards
+            - generic timeline cards
+            - static slide-deck layouts
+            - walls of text
+        scene_policy:
+          target_aspect_ratio: "16:9"
+          max_scenes: 64
+          min_scene_seconds: 3
+          max_scene_seconds: 14
+          min_scenes_per_story: 3
+          max_scenes_per_story: 8
+          max_source_article_scenes: 20
+          max_logo_reveal_scenes: 24
+          max_kinetic_type_scenes: 32
+          allowed_render_kinds:
+            - source_article_scene
+            - logo_reveal_scene
+            - kinetic_type_scene
+        visual_capabilities:
+          source_article_scene:
+            description: Show a real source webpage, article, blog, paper, or report as visual proof for a narration beat.
+            best_for:
+              - source-backed details
+              - headline reveals
+              - important claims that benefit from visible provenance
+              - showing article context while the narrator explains the story
+            required_payload_fields:
+              - url
+              - source_record_key
+              - target_text
+              - highlight_phrases
+              - crop_strategy
+              - overlay_headline
+              - motion_style
+            avoid_when:
+              - no selected source URL exists
+              - the narration is a broad transition rather than a source-specific point
+              - the scene would become a static slide with too much text
+            render_notes: Use article zooms, headline/body focus, and highlight scans. Never invent URLs or quotes.
+          logo_reveal_scene:
+            description: Use company, product, model, or platform logos/entities as a quick YouTube-style identity moment.
+            best_for:
+              - introducing a company or product
+              - contrasting two entities
+              - moving between stories
+              - creating quick recognition without a full screenshot
+            required_payload_fields:
+              - entities
+              - primary_entity
+              - logo_strategy
+              - companion_text
+              - motion_style
+            avoid_when:
+              - the story is about a source claim that needs article grounding
+              - the entity is unclear
+              - the companion text would duplicate a full sentence from narration
+            render_notes: Prefer short companion text, logo stacks, spotlights, and pop/slide reveals.
+          kinetic_type_scene:
+            description: Animate short phrases from the narration with typewriter, word snap, highlight sweep, or similar motion.
+            best_for:
+              - retention beats
+              - transitions
+              - key takeaways
+              - moments where no source screenshot or logo is the right visual
+            required_payload_fields:
+              - phrases
+              - emphasis_words
+              - animation_style
+              - background_motif
+            avoid_when:
+              - the phrase is too long for on-screen reading
+              - the scene would become a wall of text
+              - a source article is needed for credibility at that moment
+            render_notes: Keep phrases short and punchy. Use motion, emphasis, and atmosphere rather than cards.
+        source_policy:
+          use_selected_stories_only: true
+          include_full_records: true
+          max_records_per_story_for_prompt: 4
+          max_record_chars_for_prompt: 1200
+
+      asset_resolver:
+        force: true
+        output_dir: ""
+        target_width: 1920
+        target_height: 1080
+        browser:
+          headless: true
+          timeout_ms: 25000
+          post_load_wait_ms: 1200
+          device_scale_factor: 1.0
+          user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+        source_screenshots:
+          enabled: true
+          capture_mode: target_text_focus
+          save_full_page_debug: false
+          save_raw_capture_debug: true
+        logos:
+          local_logo_dir: ""
+          simple_icons_enabled: true
+          favicon_fallback_enabled: true
+          text_fallback_enabled: true
+
+      render:
+        force: true
+        output_dir: ""
+        remotion_engine_dir: ""
+        width: 1920
+        height: 1080
+        fps: 30
+        codec: h264
+        render_timeout_seconds: 240
+        max_scene_duration_seconds: null
+        scene_limit: null
+
+      assembly:
+        force: true
+        output_dir: ""
+        ffmpeg_path: ffmpeg
+        ffprobe_path: ffprobe
+        final_video_filename: final_video.mp4
+        video_codec: copy
+        audio_codec: aac
+        audio_bitrate: 192k
+        audio_sample_rate_hz: 48000
+        audio_channels: 2
+        shortest: true
+        movflags_faststart: true
+        allow_reencode_fallback: true
+        reencode_video_codec: libx264
+        reencode_preset: medium
+        reencode_crf: 18
+        pixel_format: yuv420p
+        duration_tolerance_seconds: 2.0
+
     voiceover:
       # provider: kokoro_local
       # style: general_youtube

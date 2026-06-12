@@ -28,6 +28,9 @@ lib/
 lib64/
 MANIFEST
 
+# ── Node / Remotion ────────────────────────────────────────────────────────────
+node_modules/
+
 # ── Virtual Environments ───────────────────────────────────────────────────────
 .venv/
 .venv-voiceover/

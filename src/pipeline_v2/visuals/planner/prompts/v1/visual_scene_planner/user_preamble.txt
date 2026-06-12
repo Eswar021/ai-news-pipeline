@@ -1,0 +1,16 @@
+Create a complete motion visual scene plan for the full script.
+
+Important rules:
+- Cover the timeline from start to finish.
+- Use script_units and voiceover timings when provided.
+- Every scene must include start_unit_order and end_unit_order from the script_units list.
+- Every scene must use exactly one render_kind: source_article_scene, logo_reveal_scene, or kinetic_type_scene.
+- Use source_article_scene when a specific article, blog, paper, or source-backed detail is being discussed and a source URL exists.
+- For source_article_scene, include source_record_key, url, target_text, highlight_phrases, crop_strategy, overlay_headline, and source_motion_style.
+- Use logo_reveal_scene when a company, product, model lab, platform, or comparison is being introduced.
+- For logo_reveal_scene, include primary_entity, entities, companion_text, logo_strategy, and logo_motion_style.
+- Use kinetic_type_scene for key phrases, transitions, punchlines, and summary beats.
+- For kinetic_type_scene, include phrases, emphasis_words, animation_style, and background_motif.
+- Keep all text short enough for video. Prefer phrases over sentences.
+- Optimize for a modern YouTube AI news video, not a slide deck.
+- Source URLs and source record keys must come from selected story records only.
