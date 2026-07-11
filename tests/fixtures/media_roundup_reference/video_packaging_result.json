@@ -1,0 +1,169 @@
+{
+  "status": "ok",
+  "data": {
+    "run_id": "fixture_media_roundup_reference",
+    "generated_at": "2026-07-11T12:00:00+05:30",
+    "selected_format": "roundup",
+    "script_app": "script_generation.formats.roundup",
+    "video_packet": {
+      "packet_type": "roundup",
+      "selected_format": "roundup",
+      "script_app": "script_generation.formats.roundup",
+      "target_duration_seconds": 101,
+      "intro_seconds": 15,
+      "closing_seconds": 10,
+      "segment_seconds": 76,
+      "story_count": 3,
+      "selected_story_ids": [
+        "story_evidence",
+        "story_sync",
+        "story_render"
+      ],
+      "stories": [
+        {
+          "story_id": "story_evidence",
+          "story_title": "From raw sources to a grounded story map",
+          "rank": 1,
+          "rank_score": 9.4,
+          "priority_bucket": "high",
+          "story_identity": {
+            "primary_entity": "Evidence Pipeline",
+            "owning_org": "AI Content Creation",
+            "product_or_project": "Story Mapping",
+            "story_action": "organizes",
+            "story_type": "workflow_explainer",
+            "canonical_story_key": "pipeline|evidence|story-map",
+            "one_sentence_story": "The pipeline preserves source records while clustering them into a usable story map.",
+            "editorial_value": "high",
+            "is_tutorial": false,
+            "is_event_update": false,
+            "is_noise": false,
+            "why_it_matters": "A script can remain grounded without forcing the writer to reopen earlier pipeline outputs."
+          },
+          "source_groups": ["project_docs"],
+          "records": [
+            {
+              "record_key": "record_evidence_contract",
+              "title": "Application-oriented pipeline architecture",
+              "url": "https://github.com/Eswar021/ai-news-pipeline",
+              "source": "project_repository",
+              "source_group": "project_docs",
+              "published_at": "2026-07-11T12:00:00+05:30",
+              "summary": "Each application receives a JSON contract and carries the selected source context forward."
+            }
+          ],
+          "video_segment": {
+            "segment_id": "segment_01_story_evidence",
+            "segment_order": 1,
+            "role": "lead",
+            "target_seconds": 26,
+            "source_record_keys": ["record_evidence_contract"]
+          }
+        },
+        {
+          "story_id": "story_sync",
+          "story_title": "One semantic beat map keeps narration and visuals aligned",
+          "rank": 2,
+          "rank_score": 8.9,
+          "priority_bucket": "high",
+          "story_identity": {
+            "primary_entity": "Visual Planner",
+            "owning_org": "AI Content Creation",
+            "product_or_project": "Semantic Beat Map",
+            "story_action": "synchronizes",
+            "story_type": "workflow_explainer",
+            "canonical_story_key": "pipeline|audio|visual-sync",
+            "one_sentence_story": "Voiceover timing and script sections are converted into explicit semantic visual beats.",
+            "editorial_value": "high",
+            "is_tutorial": false,
+            "is_event_update": false,
+            "is_noise": false,
+            "why_it_matters": "The renderer receives a precise visual action for the narration playing at that moment."
+          },
+          "source_groups": ["project_docs"],
+          "records": [
+            {
+              "record_key": "record_visual_contract",
+              "title": "Motion visuals subsystem",
+              "url": "https://github.com/Eswar021/ai-news-pipeline",
+              "source": "project_repository",
+              "source_group": "project_docs",
+              "published_at": "2026-07-11T12:00:00+05:30",
+              "summary": "The planner maps script sections and voiceover chunks into a continuous scene timeline."
+            }
+          ],
+          "video_segment": {
+            "segment_id": "segment_02_story_sync",
+            "segment_order": 2,
+            "role": "major",
+            "target_seconds": 26,
+            "source_record_keys": ["record_visual_contract"]
+          }
+        },
+        {
+          "story_id": "story_render",
+          "story_title": "Reusable motion components turn the plan into a video",
+          "rank": 3,
+          "rank_score": 8.5,
+          "priority_bucket": "high",
+          "story_identity": {
+            "primary_entity": "Remotion Renderer",
+            "owning_org": "AI Content Creation",
+            "product_or_project": "Visual Scene Library",
+            "story_action": "renders",
+            "story_type": "workflow_explainer",
+            "canonical_story_key": "pipeline|scene-spec|video",
+            "one_sentence_story": "Reusable motion components render validated scene specifications into short clips and assemble them with audio.",
+            "editorial_value": "high",
+            "is_tutorial": false,
+            "is_event_update": false,
+            "is_noise": false,
+            "why_it_matters": "Visual quality can improve family by family without rebuilding the production pipeline."
+          },
+          "source_groups": ["project_docs"],
+          "records": [
+            {
+              "record_key": "record_render_contract",
+              "title": "Code-generated motion scene library",
+              "url": "https://github.com/Eswar021/ai-news-pipeline",
+              "source": "project_repository",
+              "source_group": "project_docs",
+              "published_at": "2026-07-11T12:00:00+05:30",
+              "summary": "Validated JSON payloads drive reusable Remotion scene components and final audio/video assembly."
+            }
+          ],
+          "video_segment": {
+            "segment_id": "segment_03_story_render",
+            "segment_order": 3,
+            "role": "major",
+            "target_seconds": 24,
+            "source_record_keys": ["record_render_contract"]
+          }
+        }
+      ],
+      "format_contract": {
+        "format": "roundup",
+        "script_app": "script_generation.formats.roundup",
+        "section_sequence": ["intro", "story_segments", "closing"],
+        "allowed_segment_roles": ["lead", "major", "brief"],
+        "must_use_selected_stories_only": true,
+        "tone_control_owner": "script_generation"
+      }
+    }
+  },
+  "summary": {
+    "input_story_count": 3,
+    "candidate_story_count": 3,
+    "selected_story_count": 3,
+    "rejected_story_count": 0,
+    "selection_reason_counts": {"selected": 3},
+    "role_counts": {"lead": 1, "major": 2},
+    "target_duration_seconds": 101,
+    "failure_reason": ""
+  },
+  "handoff": {
+    "ready_for_script_generation": true,
+    "script_app": "script_generation.formats.roundup",
+    "selected_format": "roundup"
+  }
+}

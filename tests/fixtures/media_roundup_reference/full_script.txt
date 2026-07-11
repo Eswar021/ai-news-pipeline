@@ -1,0 +1,9 @@
+An automated video is only convincing when every stage agrees on what the story is. Here is the short version of how this pipeline moves from scattered source material to narration, synchronized motion, and a finished video.
+
+It starts by keeping the evidence attached. Collection brings in articles and transcripts, evidence preparation cleans them, and story mapping groups records that describe the same development. The important part is continuity: when a story moves forward, its source records move with it. The writer gets useful context without guessing, and later tools can still trace each selected idea back to the material that introduced it.
+
+The next challenge is synchronization. A good script is not one undifferentiated wall of text; it has an intro, clear story sections, and a closing. Voiceover turns those sections into timed audio chunks. The visual planner then converts each chunk into a semantic beat, so a workflow explanation gets a flow diagram while a key contrast gets a focused comparison instead of unrelated decoration.
+
+Finally, validated scene specifications drive reusable motion components. Counters animate numbers, maps explain relationships, process views reveal steps, and kinetic type is saved for moments that truly need emphasis. Each scene stays short, renders independently, and can be retried without rebuilding the whole episode. The clips are stitched to the voiceover timeline, then the original audio is attached to the final video.
+
+That separation is the real advantage: evidence, writing, voice, planning, rendering, and assembly can improve independently while the contracts keep the finished story coherent.

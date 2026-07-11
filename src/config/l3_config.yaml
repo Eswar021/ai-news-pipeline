@@ -1,6 +1,0 @@
-layer_3:
-  embedding_model: "all-MiniLM-L6-v2"
-  use_llm_story_labels: true
-  story_label_model: "gpt-5-nano"
-  story_label_prompt_version: "v1"
-  story_label_worker_count: 10

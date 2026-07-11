@@ -1,0 +1,26 @@
+flowchart LR
+  sources["Source ecosystem"] --> collect["News collection"]
+  collect --> prep["Evidence preparation"]
+  prep --> stories["Story mapping"]
+  stories --> packet["Video packaging"]
+  packet --> script["Script generation"]
+  script --> metadata["YouTube metadata"]
+  script --> voice["Voiceover"]
+  packet --> visuals["Visual planning"]
+  script --> visuals
+  voice --> visuals
+  visuals --> assets["Media and assets"]
+  assets --> render["Scene rendering"]
+  render --> assembly["Video assembly"]
+  voice --> assembly
+  assembly --> review["Manual publish review"]
+
+  classDef data fill:#e8f3ff,stroke:#1677ff,color:#10233d;
+  classDef semantic fill:#fff3d6,stroke:#e28a00,color:#3f2800;
+  classDef media fill:#e9fbf4,stroke:#079669,color:#073d2d;
+  classDef output fill:#f1ecff,stroke:#7652d6,color:#2b1b55;
+
+  class sources,collect,prep,stories data;
+  class packet,script,metadata,visuals semantic;
+  class voice,assets,render media;
+  class assembly,review output;

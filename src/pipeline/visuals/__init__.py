@@ -1,0 +1,1 @@
+"""Pipeline motion-visual subsystem."""

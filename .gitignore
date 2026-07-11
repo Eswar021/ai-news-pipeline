@@ -43,7 +43,11 @@ ENV/
 output/
 
 data/
+# Historical pre-canonicalization runs. New runs use output/runs/.
 output_v2/
+
+# Local model/provider caches survive output cleanup and are never committed.
+.cache/
 
 local_tests/
 

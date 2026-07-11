@@ -1,133 +1,105 @@
 # AI Content Creation Pipeline
 
-This repository is being rebuilt into a cleaner AI content production system for
-collecting AI news, mapping stories, producing YouTube scripts, creating
-metadata, and generating voiceover audio.
+An application-oriented AI news production system that collects source
+material, maps stories, writes a roundup script, creates YouTube metadata,
+generates voiceover, plans motion visuals, renders scene clips, and assembles a
+final video.
 
-The old root `pipelines/` runtime has been retired. Current development happens
-under `src/`.
+## Architecture
 
-## Active Tracks
-
-There are two active pipeline tracks:
-
-- `src/pipeline/`: stable v1 rebuild runtime. Keep this working.
-- `src/pipeline_v2/`: experimental application-oriented rewrite. New modular
-  app work happens here.
-
-Pipeline v2 apps expose direct JSON/dict boundaries:
+The canonical runtime is `src/pipeline/`. Functional applications use a direct
+JSON/dict boundary:
 
 ```python
-def run(input_json: dict) -> dict:
-    ...
+from src.pipeline.apps.story_mapping import run
+
+result = run(input_json)
 ```
 
-The v2 app workbench is currently the orchestration surface while contracts
-stabilize:
+Each app owns its Pydantic contracts, configuration defaults, prompts, LLM
+provider adapter, and local helpers. Core apps return data and do not write
+files. Notebooks own orchestration and run artifacts; voiceover and visual
+modules may write media files because those files are their product.
 
 ```text
-notebooks/v2_apps_workbench.ipynb
+src/pipeline/
+├── apps/            # collection through metadata
+├── handoffs/        # ChatGPT and publish adapters
+├── orchestration/   # frozen run context helpers
+├── voiceover/       # local TTS providers and WAV packaging
+├── visuals/         # planning, media, assets, rendering, assembly
+└── config/          # workbench.yaml
 ```
 
-## Current v2 Flow
+## Notebooks
 
-The current v2 flow is functionality-first, not layer-number-first:
+Use focused notebooks instead of one stateful end-to-end workbench:
+
+- `notebooks/production/content_pipeline.ipynb`: Apps 1–6.
+- `notebooks/handoffs/chatgpt_handoffs.ipynb`: manual script and visual-plan handoffs.
+- `notebooks/production/voiceover_generation.ipynb`: canonical script to WAV.
+- `notebooks/production/visual_production.ipynb`: plan, assets, clips, and final video.
+- `notebooks/labs/visual_assets_lab.ipynb`: isolated visual-family experiments.
+
+The production media notebooks support a deterministic fixture mode and a real
+run mode. Start with fixture mode when checking installation or renderer changes.
+
+## Outputs
+
+New runs use a run-first layout:
 
 ```text
-news_collection
-  -> evidence_prep
-  -> story_mapping
-  -> video_packaging
-  -> script_generation/formats/roundup
-  -> metadata_creator
-  -> voiceover
+output/runs/{run_id}/
+├── run_context.json
+├── news_collection/
+├── evidence_prep/
+├── story_mapping/
+├── video_packaging/
+├── script_generation/
+├── metadata_creator/
+├── voiceover/
+└── visuals/
 ```
 
-The core apps do not write files. The notebook owns JSON output writing under
-`output_v2/`. The v2 voiceover module is the exception because audio generation
-must produce WAV files.
+`output/current_run.json` identifies the latest notebook-created run.
+`output_v2/` contains historical pre-canonicalization runs and is not used by
+new workflows. Model caches live under `.cache/ai_content_creation/models/`.
 
-## Useful Commands
+## Reference Media Test
 
-Run the stable v1 rebuild pipeline:
-
-```bash
-python -m src.pipeline.runner 0 1 2 3 4 5 6 7 8 9 --run-profile daily_48h_all_sources
-```
-
-Compile the active v2 apps:
-
-```bash
-python3 -B -m compileall src/pipeline_v2/apps
-```
-
-Compile the v2 voiceover module with its Python 3.12 environment:
-
-```bash
-.venv-voiceover/bin/python -B -m compileall src/pipeline_v2/voiceover
-```
-
-Run v2 voiceover from a prepared input JSON:
-
-```bash
-.venv-voiceover/bin/python -m src.pipeline_v2.voiceover.cli --input-json output_v2/voiceover_inputs/example.json
-```
-
-Export a stable v1 ChatGPT handoff:
-
-```bash
-python3 -m src.pipeline_v2.handoffs.chatgpt_exporter.cli --run-id current
-python3 -m src.pipeline_v2.handoffs.chatgpt_exporter.cli --run-id current --profile script_review
-python3 -m src.pipeline_v2.handoffs.publish_handoff.cli --run-id current
-```
-
-## Key Docs
-
-Start here before changing architecture:
-
-- `AGENTS.md`
-- `docs/rebuild/system_blueprint.md`
-- `docs/rebuild/l0_l1_decisions.md`
-- `docs/rebuild/pipeline_v2_application_architecture.md`
-- `src/pipeline_v2/README.md`
-- `src/pipeline_v2/voiceover/README.md`
-
-Current architecture diagrams:
-
-- `docs/architecture_showcase.mmd`
-- `docs/architecture_showcase_technical.mmd`
-- `docs/architecture_showcase.svg`
-
-## Project Shape
+The committed fixture provides a polished section-aware script and curated
+visual scene plan without network or LLM dependencies:
 
 ```text
-src/
-├── config/              # stable rebuild config
-├── llm/                 # stable rebuild LLM helpers
-├── pipeline/            # stable v1 rebuild runtime
-├── prompts/             # shared stable v1 prompt files
-├── pipeline_v2/         # application-oriented v2 rewrite: apps + voiceover
-
-output/                  # generated v1 outputs, git-ignored
-output_v2/               # generated v2 workbench outputs, git-ignored
-notebooks/               # source-controlled operator notebooks
-secrets/                 # local secrets, git-ignored except README
-docs/rebuild/            # current rebuild architecture notes
+tests/fixtures/media_roundup_reference/
 ```
 
-## Cleanup Notes
+Set `INPUT_MODE = "fixture"` in the voiceover and visual production notebooks.
+Generated test media is written under `output/tests/media_roundup_reference/`.
 
-The legacy root `pipelines/`, `config/`, `llm/`, and `schemas/` trees,
-historical `data/` outputs, old root pipeline wrappers, and old system design
-documents have been removed. If older behavior is needed for reference, use git
-history rather than reintroducing legacy imports into new code.
+## Configuration
 
-Stable v1 prompt files now live under `src/prompts/`. Pipeline v2 modules keep
-their prompts app-local instead of depending on shared stable v1 prompt files.
+Edit `src/pipeline/config/workbench.yaml` to select providers, models, voices,
+visual capabilities, rendering quality, and policy limits. A production content
+run freezes the selected profile and config hash into `run_context.json`; media
+notebooks use that frozen profile.
 
-Root `client_secret_*.json` files should not exist in source control. Keep
-OAuth client and token files under `secrets/`, which is ignored by git.
+The default voiceover is free local Kokoro. Other local providers remain
+available but may require additional models or reference audio.
 
-ChatGPT and publishing handoffs now live under `src/pipeline_v2/handoffs/` and
-own their app-local prompts/contracts instead of depending on stable v1 runtime
-modules.
+## Development Checks
+
+```bash
+python3 -B -m compileall src/pipeline
+python3 -m pytest -q
+
+cd src/pipeline/visuals/remotion_engine
+npm run typecheck
+```
+
+Architecture references:
+
+- `docs/architecture/pipeline_application_architecture.md`
+- `docs/architecture/media_modules.md`
+- `docs/architecture/visuals_roadmap.md`
+- `docs/handoffs/chatgpt_handoff_strategy.md`

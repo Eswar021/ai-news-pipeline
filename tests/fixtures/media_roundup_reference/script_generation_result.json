@@ -1,0 +1,270 @@
+{
+  "status": "ok",
+  "data": {
+    "run_id": "fixture_media_roundup_reference",
+    "generated_at": "2026-07-11T18:42:53.386679+05:30",
+    "selected_format": "roundup",
+    "script_package": {
+      "package_type": "roundup_script",
+      "selected_format": "roundup",
+      "generation_source": "chatgpt_handoff",
+      "script_source": "tests/fixtures/media_roundup_reference/chatgpt_response.txt",
+      "target_duration_seconds": 101,
+      "intro_seconds": 15,
+      "closing_seconds": 10,
+      "story_count": 3,
+      "selected_story_ids": [
+        "story_evidence",
+        "story_sync",
+        "story_render"
+      ],
+      "section_plan": [
+        {
+          "section_id": "section_00_intro",
+          "section_type": "intro",
+          "section_order": 0,
+          "story_id": "",
+          "story_title": "",
+          "role": "",
+          "target_seconds": 15,
+          "word_budget": 38,
+          "allowed_story_ids": [
+            "story_evidence",
+            "story_sync",
+            "story_render"
+          ],
+          "allowed_source_record_keys": [
+            "record_evidence_contract",
+            "record_visual_contract",
+            "record_render_contract"
+          ]
+        },
+        {
+          "section_id": "section_01_story_evidence",
+          "section_type": "story",
+          "section_order": 1,
+          "story_id": "story_evidence",
+          "story_title": "From raw sources to a grounded story map",
+          "role": "lead",
+          "target_seconds": 26,
+          "word_budget": 65,
+          "allowed_story_ids": [
+            "story_evidence"
+          ],
+          "allowed_source_record_keys": [
+            "record_evidence_contract"
+          ]
+        },
+        {
+          "section_id": "section_02_story_sync",
+          "section_type": "story",
+          "section_order": 2,
+          "story_id": "story_sync",
+          "story_title": "One semantic beat map keeps narration and visuals aligned",
+          "role": "major",
+          "target_seconds": 26,
+          "word_budget": 65,
+          "allowed_story_ids": [
+            "story_sync"
+          ],
+          "allowed_source_record_keys": [
+            "record_visual_contract"
+          ]
+        },
+        {
+          "section_id": "section_03_story_render",
+          "section_type": "story",
+          "section_order": 3,
+          "story_id": "story_render",
+          "story_title": "Reusable motion components turn the plan into a video",
+          "role": "major",
+          "target_seconds": 24,
+          "word_budget": 60,
+          "allowed_story_ids": [
+            "story_render"
+          ],
+          "allowed_source_record_keys": [
+            "record_render_contract"
+          ]
+        },
+        {
+          "section_id": "section_99_closing",
+          "section_type": "closing",
+          "section_order": 4,
+          "story_id": "",
+          "story_title": "",
+          "role": "",
+          "target_seconds": 10,
+          "word_budget": 25,
+          "allowed_story_ids": [
+            "story_evidence",
+            "story_sync",
+            "story_render"
+          ],
+          "allowed_source_record_keys": [
+            "record_evidence_contract",
+            "record_visual_contract",
+            "record_render_contract"
+          ]
+        }
+      ],
+      "story_usage_cards": [],
+      "script_strategy": "Reference narration for deterministic media-pipeline testing. No external context was used.",
+      "revision_notes_applied": [],
+      "reflection": {
+        "enabled": false,
+        "iterations": [],
+        "revision_count": 0,
+        "final_score": null,
+        "note": "Authored and reviewed through the manual ChatGPT handoff."
+      },
+      "sections": [
+        {
+          "section_id": "section_00_intro",
+          "section_type": "intro",
+          "section_order": 0,
+          "story_id": "",
+          "story_title": "",
+          "role": "",
+          "target_seconds": 15,
+          "word_budget": 38,
+          "narration_text": "An automated video is only convincing when every stage agrees on what the story is. Here is the short version of how this pipeline moves from scattered source material to narration, synchronized motion, and a finished video.",
+          "word_count": 37,
+          "estimated_seconds": 14.8,
+          "used_story_ids": [
+            "story_evidence",
+            "story_sync",
+            "story_render"
+          ],
+          "used_source_record_keys": [],
+          "analysis_sentences": []
+        },
+        {
+          "section_id": "section_01_story_evidence",
+          "section_type": "story",
+          "section_order": 1,
+          "story_id": "story_evidence",
+          "story_title": "From raw sources to a grounded story map",
+          "role": "lead",
+          "target_seconds": 26,
+          "word_budget": 65,
+          "narration_text": "It starts by keeping the evidence attached. Collection brings in articles and transcripts, evidence preparation cleans them, and story mapping groups records that describe the same development. The important part is continuity: when a story moves forward, its source records move with it. The writer gets useful context without guessing, and later tools can still trace each selected idea back to the material that introduced it.",
+          "word_count": 66,
+          "estimated_seconds": 26.4,
+          "used_story_ids": [
+            "story_evidence"
+          ],
+          "used_source_record_keys": [
+            "record_evidence_contract"
+          ],
+          "analysis_sentences": []
+        },
+        {
+          "section_id": "section_02_story_sync",
+          "section_type": "story",
+          "section_order": 2,
+          "story_id": "story_sync",
+          "story_title": "One semantic beat map keeps narration and visuals aligned",
+          "role": "major",
+          "target_seconds": 26,
+          "word_budget": 65,
+          "narration_text": "The next challenge is synchronization. A good script is not one undifferentiated wall of text; it has an intro, clear story sections, and a closing. Voiceover turns those sections into timed audio chunks. The visual planner then converts each chunk into a semantic beat, so a workflow explanation gets a flow diagram while a key contrast gets a focused comparison instead of unrelated decoration.",
+          "word_count": 64,
+          "estimated_seconds": 25.6,
+          "used_story_ids": [
+            "story_sync"
+          ],
+          "used_source_record_keys": [
+            "record_visual_contract"
+          ],
+          "analysis_sentences": []
+        },
+        {
+          "section_id": "section_03_story_render",
+          "section_type": "story",
+          "section_order": 3,
+          "story_id": "story_render",
+          "story_title": "Reusable motion components turn the plan into a video",
+          "role": "major",
+          "target_seconds": 24,
+          "word_budget": 60,
+          "narration_text": "Finally, validated scene specifications drive reusable motion components. Counters animate numbers, maps explain relationships, process views reveal steps, and kinetic type is saved for moments that truly need emphasis. Each scene stays short, renders independently, and can be retried without rebuilding the whole episode. The clips are stitched to the voiceover timeline, then the original audio is attached to the final video.",
+          "word_count": 62,
+          "estimated_seconds": 24.8,
+          "used_story_ids": [
+            "story_render"
+          ],
+          "used_source_record_keys": [
+            "record_render_contract"
+          ],
+          "analysis_sentences": []
+        },
+        {
+          "section_id": "section_99_closing",
+          "section_type": "closing",
+          "section_order": 4,
+          "story_id": "",
+          "story_title": "",
+          "role": "",
+          "target_seconds": 10,
+          "word_budget": 25,
+          "narration_text": "That separation is the real advantage: evidence, writing, voice, planning, rendering, and assembly can improve independently while the contracts keep the finished story coherent.",
+          "word_count": 24,
+          "estimated_seconds": 9.6,
+          "used_story_ids": [
+            "story_evidence",
+            "story_sync",
+            "story_render"
+          ],
+          "used_source_record_keys": [],
+          "analysis_sentences": []
+        }
+      ],
+      "full_script": "An automated video is only convincing when every stage agrees on what the story is. Here is the short version of how this pipeline moves from scattered source material to narration, synchronized motion, and a finished video.\n\nIt starts by keeping the evidence attached. Collection brings in articles and transcripts, evidence preparation cleans them, and story mapping groups records that describe the same development. The important part is continuity: when a story moves forward, its source records move with it. The writer gets useful context without guessing, and later tools can still trace each selected idea back to the material that introduced it.\n\nThe next challenge is synchronization. A good script is not one undifferentiated wall of text; it has an intro, clear story sections, and a closing. Voiceover turns those sections into timed audio chunks. The visual planner then converts each chunk into a semantic beat, so a workflow explanation gets a flow diagram while a key contrast gets a focused comparison instead of unrelated decoration.\n\nFinally, validated scene specifications drive reusable motion components. Counters animate numbers, maps explain relationships, process views reveal steps, and kinetic type is saved for moments that truly need emphasis. Each scene stays short, renders independently, and can be retried without rebuilding the whole episode. The clips are stitched to the voiceover timeline, then the original audio is attached to the final video.\n\nThat separation is the real advantage: evidence, writing, voice, planning, rendering, and assembly can improve independently while the contracts keep the finished story coherent.",
+      "full_script_stats": {
+        "total_word_count": 253,
+        "estimated_duration_seconds": 101.2,
+        "section_order": [
+          "section_00_intro",
+          "section_01_story_evidence",
+          "section_02_story_sync",
+          "section_03_story_render",
+          "section_99_closing"
+        ]
+      },
+      "manual_handoff": {
+        "response_version": "CHATGPT_PIPELINE_RESPONSE_V1",
+        "notes": "Reference narration for deterministic media-pipeline testing. No external context was used.",
+        "metadata_text": "title_options:\n- How an AI Pipeline Builds a Video End to End\nthumbnail_text_options:\n- SOURCES TO SCREEN\ndescription_intro:\nA compact look at the contracts and timing that keep automated narration and visuals aligned.\ntags:\n- AI video workflow\n- motion graphics\n- automation",
+        "section_parse_mode": "inline_markers"
+      },
+      "checks": {
+        "passed": true,
+        "errors": [],
+        "warnings": []
+      }
+    }
+  },
+  "summary": {
+    "run_id": "fixture_media_roundup_reference",
+    "generated_at": "2026-07-11T18:42:53.386679+05:30",
+    "status": "ok",
+    "selected_format": "roundup",
+    "section_count": 5,
+    "story_section_count": 3,
+    "total_word_count": 253,
+    "estimated_duration_seconds": 101.2,
+    "llm_call_count": 0,
+    "generation_source": "chatgpt_handoff",
+    "failure_reason": "",
+    "checks": {
+      "passed": true,
+      "errors": [],
+      "warnings": []
+    }
+  },
+  "handoff": {
+    "ready_for_metadata_creation": true
+  },
+  "llm_calls": []
+}
