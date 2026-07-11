@@ -8,6 +8,11 @@ Before planning or building new pipeline code, read:
 - `docs/rebuild/l0_l1_decisions.md`
 - `docs/rebuild/pipeline_v2_application_architecture.md` when working in
   `src/pipeline_v2/`
+- `docs/rebuild/pipeline_v2_media_handoff_modules.md` when working in
+  `src/pipeline_v2/handoffs/`, `src/pipeline_v2/voiceover/`, or
+  `src/pipeline_v2/visuals/`
+- `docs/rebuild/visuals_roadmap.md` and `src/pipeline_v2/visuals/README.md`
+  when working in `src/pipeline_v2/visuals/`
 
 The retired root `pipelines/`, `config/`, `llm/`, and `schemas/` trees have
 been removed. Historical `data/` outputs and the root `memory/` tree have also
@@ -65,6 +70,7 @@ src/pipeline_v2/
 │   └── memory_update/
 ├── handoffs/
 ├── voiceover/
+├── visuals/
 └── shared/
 ```
 

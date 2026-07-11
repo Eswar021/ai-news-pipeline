@@ -13,6 +13,32 @@ from ..generators.source_screenshot import capture_source_viewport
 from .config import NEXT_MODULE, PACKAGE_TYPE
 from .contract import AssetResolverRequest, AssetResolverResponse
 
+SOURCE_SCREENSHOT_RENDER_KINDS = {"source_article_scene", "quote_or_claim_highlight_scene"}
+DISCOVERED_MEDIA_RENDER_KINDS = {"context_image_scene", "broll_video_scene"}
+NO_ASSET_RENDER_KINDS = {
+    "kinetic_type_scene",
+    "bullet_build_scene",
+    "entity_compare_scene",
+    "recap_sequence_scene",
+    "data_counter_scene",
+    "trend_line_scene",
+    "bar_chart_scene",
+    "bar_race_scene",
+    "ranked_list_scene",
+    "benchmark_delta_scene",
+    "ecosystem_map_scene",
+    "architecture_flow_scene",
+    "process_zoom_scene",
+    "browser_walkthrough_scene",
+    "decision_tree_scene",
+    "capability_matrix_scene",
+    "timeline_zoom_scene",
+    "document_stack_scene",
+    "signal_radar_scene",
+    "interface_transform_scene",
+    "transition_stinger_scene",
+}
+
 
 def run(input_json: dict) -> dict:
     request = AssetResolverRequest.model_validate(input_json)
@@ -37,12 +63,22 @@ def run(input_json: dict) -> dict:
     screenshots_dir.mkdir(parents=True, exist_ok=True)
     logos_dir.mkdir(parents=True, exist_ok=True)
 
-    visual_scene_plan = request.input.visual_scene_planning.data.visual_scene_plan
+    visual_media_package = _visual_media_package(request)
+    visual_scene_plan = (
+        visual_media_package.get("visual_scene_plan", {})
+        if visual_media_package
+        else request.input.visual_scene_planning.data.visual_scene_plan
+    )
     scenes = visual_scene_plan.get("scene_timeline", [])
     resolved_assets: list[dict[str, Any]] = []
+    media_selections = {
+        clean_text(selection.get("scene_id", "")): selection
+        for selection in visual_media_package.get("selections", [])
+        if isinstance(selection, dict) and clean_text(selection.get("scene_id", ""))
+    }
 
-    source_scenes = [scene for scene in scenes if scene.get("render_kind") == "source_article_scene"]
-    other_scenes = [scene for scene in scenes if scene.get("render_kind") != "source_article_scene"]
+    source_scenes = [scene for scene in scenes if scene.get("render_kind") in SOURCE_SCREENSHOT_RENDER_KINDS]
+    other_scenes = [scene for scene in scenes if scene.get("render_kind") not in SOURCE_SCREENSHOT_RENDER_KINDS]
 
     if source_scenes and request.config.source_screenshots.enabled:
         with sync_playwright() as playwright:
@@ -75,7 +111,9 @@ def run(input_json: dict) -> dict:
     for scene in other_scenes:
         if scene.get("render_kind") == "logo_reveal_scene":
             resolved_assets.append(_resolve_logo(scene, request, logos_dir))
-        elif scene.get("render_kind") == "kinetic_type_scene":
+        elif scene.get("render_kind") in DISCOVERED_MEDIA_RENDER_KINDS:
+            resolved_assets.append(_resolve_discovered_media(scene, media_selections))
+        elif scene.get("render_kind") in NO_ASSET_RENDER_KINDS:
             resolved_assets.append(_resolve_no_asset(scene))
         else:
             resolved_assets.append(_unsupported_scene(scene))
@@ -87,6 +125,7 @@ def run(input_json: dict) -> dict:
         generated_at=generated_at,
         output_dir=output_dir,
         visual_scene_plan=visual_scene_plan,
+        visual_media_package=visual_media_package,
         resolved_assets=resolved_assets,
     )
     summary = _build_summary(
@@ -183,6 +222,49 @@ def _resolve_no_asset(scene: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _resolve_discovered_media(
+    scene: dict[str, Any],
+    media_selections: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    scene_id = clean_text(scene.get("scene_id", ""))
+    render_kind = clean_text(scene.get("render_kind", ""))
+    expected_type = "video" if render_kind == "broll_video_scene" else "image"
+    asset_type = "broll_video" if expected_type == "video" else "context_image"
+    selection = media_selections.get(scene_id)
+    if not selection:
+        return _base_asset(scene) | {
+            "asset_type": asset_type,
+            "status": "failed",
+            "asset_path": "",
+            "media": {},
+            "error": "media discovery did not provide a selection for this scene",
+        }
+    asset_path = Path(clean_text(selection.get("asset_path", "")))
+    if selection.get("media_type") != expected_type:
+        return _base_asset(scene) | {
+            "asset_type": asset_type,
+            "status": "failed",
+            "asset_path": "",
+            "media": selection,
+            "error": f"media selection type {selection.get('media_type')!r} does not match expected {expected_type!r}",
+        }
+    if not asset_path.exists() or not asset_path.is_file() or asset_path.stat().st_size <= 0:
+        return _base_asset(scene) | {
+            "asset_type": asset_type,
+            "status": "failed",
+            "asset_path": str(asset_path),
+            "media": selection,
+            "error": "selected media file is missing or empty",
+        }
+    return _base_asset(scene) | {
+        "asset_type": asset_type,
+        "status": "resolved",
+        "asset_path": str(asset_path.resolve()),
+        "media": selection,
+        "error": "",
+    }
+
+
 def _disabled_source_screenshot(scene: dict[str, Any]) -> dict[str, Any]:
     return _base_asset(scene) | {
         "asset_type": "source_screenshot",
@@ -218,6 +300,7 @@ def _build_manifest(
     generated_at: str,
     output_dir: Path,
     visual_scene_plan: dict[str, Any],
+    visual_media_package: dict[str, Any],
     resolved_assets: list[dict[str, Any]],
 ) -> dict[str, Any]:
     by_scene_id = {asset["scene_id"]: asset for asset in resolved_assets}
@@ -236,6 +319,7 @@ def _build_manifest(
         "generated_at": generated_at,
         "output_dir": str(output_dir),
         "visual_scene_plan": visual_scene_plan,
+        "visual_media_package": visual_media_package,
         "resolved_assets": resolved_assets,
         "render_scenes": render_scenes,
     }
@@ -254,6 +338,8 @@ def _build_summary(
         "resolved_asset_count": len([asset for asset in resolved_assets if asset.get("status") in {"resolved", "ready"}]),
         "source_screenshot_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "source_screenshot" and asset.get("status") == "resolved"]),
         "logo_asset_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "logo_asset" and asset.get("status") == "resolved"]),
+        "context_image_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "context_image" and asset.get("status") == "resolved"]),
+        "broll_video_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "broll_video" and asset.get("status") == "resolved"]),
         "failed_asset_count": len(failed),
         "asset_type_counts": counter_dict([asset.get("asset_type", "") for asset in resolved_assets]),
         "status_counts": counter_dict([asset.get("status", "") for asset in resolved_assets]),
@@ -277,3 +363,10 @@ def _status_from_summary(summary: dict[str, Any]) -> str:
     if failed:
         return "partial"
     return "ok"
+
+
+def _visual_media_package(request: AssetResolverRequest) -> dict[str, Any]:
+    envelope = request.input.visual_media_discovery
+    if envelope is None:
+        return {}
+    return envelope.data.visual_media_package

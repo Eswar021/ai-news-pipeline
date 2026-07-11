@@ -116,10 +116,28 @@ class VisualScenePlanEnvelope(BaseModel):
     handoff: dict[str, Any] = Field(default_factory=dict)
 
 
+class VisualMediaPackageData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    run_id: str | None = None
+    generated_at: str | None = None
+    visual_media_package: dict[str, Any]
+
+
+class VisualMediaPackageEnvelope(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str | None = None
+    data: VisualMediaPackageData
+    summary: dict[str, Any] = Field(default_factory=dict)
+    handoff: dict[str, Any] = Field(default_factory=dict)
+
+
 class AssetResolverInput(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     visual_scene_planning: VisualScenePlanEnvelope
+    visual_media_discovery: VisualMediaPackageEnvelope | None = None
 
 
 class AssetResolverRequest(BaseModel):
@@ -134,6 +152,14 @@ class AssetResolverRequest(BaseModel):
         plan = self.input.visual_scene_planning.data.visual_scene_plan
         if not isinstance(plan.get("scene_timeline"), list) or not plan.get("scene_timeline"):
             raise ValueError("visual_scene_plan.scene_timeline is missing or empty")
+        media = self.input.visual_media_discovery
+        if media is not None:
+            if media.status not in {"ok", "partial"}:
+                raise ValueError("input.visual_media_discovery.status must be ok or partial")
+            package = media.data.visual_media_package
+            enriched_plan = package.get("visual_scene_plan") if isinstance(package, dict) else None
+            if not isinstance(enriched_plan, dict) or not isinstance(enriched_plan.get("scene_timeline"), list):
+                raise ValueError("visual_media_package.visual_scene_plan.scene_timeline is missing")
         return self
 
 
@@ -150,6 +176,8 @@ class AssetResolverSummary(BaseModel):
     resolved_asset_count: int
     source_screenshot_count: int
     logo_asset_count: int
+    context_image_count: int = 0
+    broll_video_count: int = 0
     failed_asset_count: int
     output_dir: str
     failure_reason: str = ""
@@ -165,4 +193,3 @@ class AssetResolverResponse(BaseModel):
     data: AssetResolverData
     summary: AssetResolverSummary
     handoff: AssetResolverHandoff
-

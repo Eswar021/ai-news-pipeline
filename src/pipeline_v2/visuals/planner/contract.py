@@ -5,8 +5,32 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .config import (
+    DEFAULT_MAX_BULLET_BUILD_SCENES,
+    DEFAULT_MAX_CONSECUTIVE_SAME_KIND,
+    DEFAULT_MAX_ARCHITECTURE_FLOW_SCENES,
+    DEFAULT_MAX_BAR_CHART_SCENES,
+    DEFAULT_MAX_BAR_RACE_SCENES,
+    DEFAULT_MAX_BENCHMARK_DELTA_SCENES,
+    DEFAULT_MAX_BROWSER_WALKTHROUGH_SCENES,
+    DEFAULT_MAX_BROLL_VIDEO_SCENES,
+    DEFAULT_MAX_CAPABILITY_MATRIX_SCENES,
+    DEFAULT_MAX_CONTEXT_IMAGE_SCENES,
+    DEFAULT_MAX_DATA_COUNTER_SCENES,
+    DEFAULT_MAX_DECISION_TREE_SCENES,
+    DEFAULT_MAX_DOCUMENT_STACK_SCENES,
+    DEFAULT_MAX_ECOSYSTEM_MAP_SCENES,
+    DEFAULT_MAX_ENTITY_COMPARE_SCENES,
+    DEFAULT_MAX_INTERFACE_TRANSFORM_SCENES,
     DEFAULT_MAX_KINETIC_TYPE_SCENES,
     DEFAULT_MAX_LOGO_REVEAL_SCENES,
+    DEFAULT_MAX_QUOTE_OR_CLAIM_SCENES,
+    DEFAULT_MAX_RECAP_SEQUENCE_SCENES,
+    DEFAULT_MAX_PROCESS_ZOOM_SCENES,
+    DEFAULT_MAX_RANKED_LIST_SCENES,
+    DEFAULT_MAX_SIGNAL_RADAR_SCENES,
+    DEFAULT_MAX_TIMELINE_ZOOM_SCENES,
+    DEFAULT_MAX_TREND_LINE_SCENES,
+    DEFAULT_MAX_TRANSITION_STINGER_SCENES,
     DEFAULT_MAX_RECORD_CHARS,
     DEFAULT_MAX_RECORDS_PER_STORY,
     DEFAULT_MAX_SCENES,
@@ -22,7 +46,34 @@ from .config import (
 
 VisualPlannerStatus = Literal["ok", "failed"]
 LLMProvider = Literal["openai", "gemini", "lmstudio"]
-RenderKind = Literal["source_article_scene", "logo_reveal_scene", "kinetic_type_scene"]
+RenderKind = Literal[
+    "source_article_scene",
+    "context_image_scene",
+    "broll_video_scene",
+    "logo_reveal_scene",
+    "kinetic_type_scene",
+    "bullet_build_scene",
+    "quote_or_claim_highlight_scene",
+    "entity_compare_scene",
+    "recap_sequence_scene",
+    "data_counter_scene",
+    "trend_line_scene",
+    "bar_chart_scene",
+    "bar_race_scene",
+    "ranked_list_scene",
+    "benchmark_delta_scene",
+    "ecosystem_map_scene",
+    "architecture_flow_scene",
+    "process_zoom_scene",
+    "browser_walkthrough_scene",
+    "decision_tree_scene",
+    "capability_matrix_scene",
+    "timeline_zoom_scene",
+    "document_stack_scene",
+    "signal_radar_scene",
+    "interface_transform_scene",
+    "transition_stinger_scene",
+]
 
 
 class VisualsRun(BaseModel):
@@ -61,11 +112,39 @@ class ScenePolicyConfig(BaseModel):
     max_scenes: int = DEFAULT_MAX_SCENES
     min_scene_seconds: float = DEFAULT_MIN_SCENE_SECONDS
     max_scene_seconds: float = DEFAULT_MAX_SCENE_SECONDS
+    semantic_min_scene_seconds: float = 5.0
+    semantic_target_scene_seconds: float = 9.0
+    semantic_max_units_per_scene: int = 4
+    compact_per_chunk_scenes: bool = True
     min_scenes_per_story: int = DEFAULT_MIN_SCENES_PER_STORY
     max_scenes_per_story: int = DEFAULT_MAX_SCENES_PER_STORY
     max_source_article_scenes: int = DEFAULT_MAX_SOURCE_ARTICLE_SCENES
+    max_context_image_scenes: int = DEFAULT_MAX_CONTEXT_IMAGE_SCENES
+    max_broll_video_scenes: int = DEFAULT_MAX_BROLL_VIDEO_SCENES
     max_logo_reveal_scenes: int = DEFAULT_MAX_LOGO_REVEAL_SCENES
     max_kinetic_type_scenes: int = DEFAULT_MAX_KINETIC_TYPE_SCENES
+    max_bullet_build_scenes: int = DEFAULT_MAX_BULLET_BUILD_SCENES
+    max_quote_or_claim_highlight_scenes: int = DEFAULT_MAX_QUOTE_OR_CLAIM_SCENES
+    max_entity_compare_scenes: int = DEFAULT_MAX_ENTITY_COMPARE_SCENES
+    max_recap_sequence_scenes: int = DEFAULT_MAX_RECAP_SEQUENCE_SCENES
+    max_data_counter_scenes: int = DEFAULT_MAX_DATA_COUNTER_SCENES
+    max_trend_line_scenes: int = DEFAULT_MAX_TREND_LINE_SCENES
+    max_bar_chart_scenes: int = DEFAULT_MAX_BAR_CHART_SCENES
+    max_bar_race_scenes: int = DEFAULT_MAX_BAR_RACE_SCENES
+    max_ranked_list_scenes: int = DEFAULT_MAX_RANKED_LIST_SCENES
+    max_benchmark_delta_scenes: int = DEFAULT_MAX_BENCHMARK_DELTA_SCENES
+    max_ecosystem_map_scenes: int = DEFAULT_MAX_ECOSYSTEM_MAP_SCENES
+    max_architecture_flow_scenes: int = DEFAULT_MAX_ARCHITECTURE_FLOW_SCENES
+    max_process_zoom_scenes: int = DEFAULT_MAX_PROCESS_ZOOM_SCENES
+    max_browser_walkthrough_scenes: int = DEFAULT_MAX_BROWSER_WALKTHROUGH_SCENES
+    max_decision_tree_scenes: int = DEFAULT_MAX_DECISION_TREE_SCENES
+    max_capability_matrix_scenes: int = DEFAULT_MAX_CAPABILITY_MATRIX_SCENES
+    max_timeline_zoom_scenes: int = DEFAULT_MAX_TIMELINE_ZOOM_SCENES
+    max_document_stack_scenes: int = DEFAULT_MAX_DOCUMENT_STACK_SCENES
+    max_signal_radar_scenes: int = DEFAULT_MAX_SIGNAL_RADAR_SCENES
+    max_interface_transform_scenes: int = DEFAULT_MAX_INTERFACE_TRANSFORM_SCENES
+    max_transition_stinger_scenes: int = DEFAULT_MAX_TRANSITION_STINGER_SCENES
+    max_consecutive_same_kind: int = DEFAULT_MAX_CONSECUTIVE_SAME_KIND
     allowed_render_kinds: list[RenderKind] = Field(default_factory=lambda: list(RENDER_KINDS))
 
     @model_validator(mode="after")
@@ -76,10 +155,20 @@ class ScenePolicyConfig(BaseModel):
             raise ValueError("scene_policy scene seconds must be positive")
         if self.min_scene_seconds > self.max_scene_seconds:
             raise ValueError("scene_policy.min_scene_seconds must be <= max_scene_seconds")
+        if self.semantic_min_scene_seconds <= 0 or self.semantic_target_scene_seconds <= 0:
+            raise ValueError("scene_policy semantic scene seconds must be positive")
+        if self.semantic_min_scene_seconds > self.max_scene_seconds:
+            raise ValueError("scene_policy.semantic_min_scene_seconds must be <= max_scene_seconds")
+        if self.semantic_target_scene_seconds > self.max_scene_seconds:
+            raise ValueError("scene_policy.semantic_target_scene_seconds must be <= max_scene_seconds")
+        if self.semantic_max_units_per_scene < 1:
+            raise ValueError("scene_policy.semantic_max_units_per_scene must be at least 1")
         if self.min_scenes_per_story < 1:
             raise ValueError("scene_policy.min_scenes_per_story must be at least 1")
         if self.max_scenes_per_story < self.min_scenes_per_story:
             raise ValueError("scene_policy.max_scenes_per_story must be >= min_scenes_per_story")
+        if self.max_consecutive_same_kind < 1:
+            raise ValueError("scene_policy.max_consecutive_same_kind must be at least 1")
         if not self.allowed_render_kinds:
             raise ValueError("scene_policy.allowed_render_kinds must not be empty")
         return self
@@ -139,6 +228,7 @@ class VisualPlannerConfig(BaseModel):
     prompt_version: str
     temperature: float = 0.3
     words_per_minute: int = 150
+    allow_deterministic_story_fallbacks: bool = False
     style: VisualStyleConfig = Field(default_factory=VisualStyleConfig)
     scene_policy: ScenePolicyConfig = Field(default_factory=ScenePolicyConfig)
     source_policy: SourcePolicyConfig = Field(default_factory=SourcePolicyConfig)
@@ -261,6 +351,7 @@ class VisualPlannerSummary(BaseModel):
 
 class VisualPlannerHandoff(BaseModel):
     ready_for_visual_asset_resolution: bool
+    ready_for_visual_media_discovery: bool
     next_module: str
     selected_format: str
 

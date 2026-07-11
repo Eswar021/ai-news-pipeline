@@ -3,7 +3,7 @@ Create episode-level motion direction for the full AI news roundup.
 Important rules:
 - Give global direction only; do not create individual scenes.
 - Use the visual_capabilities from the payload as the available production vocabulary.
-- Optimize for a modern YouTube video with article zooms, logo reveals, and kinetic text.
+- Optimize for a modern YouTube video with article zooms, real contextual images, representative b-roll, logo reveals, diagrams, and restrained kinetic text.
 - Keep the visual style energetic, clear, and credible without becoming a technical slide deck.
 - Explain how story-level planners should vary the scene mix across the episode.
 - Do not recommend fake footage, fake screenshots, fake quotes, or invented visual sources.

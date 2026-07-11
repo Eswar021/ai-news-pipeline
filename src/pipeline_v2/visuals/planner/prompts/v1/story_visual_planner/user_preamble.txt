@@ -3,11 +3,27 @@ Create visual scenes for exactly one story.
 Important rules:
 - Cover the provided story_section script units from start to finish.
 - Every scene must include start_unit_order and end_unit_order values from the provided script_units list.
+- Do not create one scene for every script unit by default. Group adjacent units into a semantic visual scene when they form one complete idea.
+- Aim for scenes around 6-10 seconds when the timing allows, while respecting scene_policy.max_scene_seconds.
+- Use each scene's start_unit_order/end_unit_order to say which units it covers; the system will preserve exact unit-level beat timing later.
 - Every scene must use exactly one allowed render_kind from visual_capabilities.
 - Use source_article_scene when the narration is discussing a specific source-backed detail and a selected source URL exists.
+- Use quote_or_claim_highlight_scene when a source-backed claim, number, caveat, reported detail, or caution needs a screenshot plus callout.
+- Use context_image_scene for a concrete real-world subject or environment that is better shown than described. Provide specific search_queries, must_show, and must_avoid fields; do not provide an asset URL.
+- Use broll_video_scene for a concrete action, environment, device, lab, office, or infrastructure moment that benefits from real motion. Treat it as representative b-roll, never exact event footage, and provide search intent rather than a URL.
 - Use logo_reveal_scene when introducing or contrasting companies, products, models, platforms, or labs.
-- Use kinetic_type_scene for punchy phrases, transitions, summary beats, or moments where no article/logo visual is better.
+- Use entity_compare_scene when two or more companies, models, products, or platforms need a quick contrast.
+- Use data_counter_scene when the narration includes concrete numbers, dates, speedups, costs, percentages, valuations, model sizes, or adoption counts.
+- Use trend_line_scene when the narration implies growth, decline, pressure, competition, momentum, acceleration, or a race heating up. Use conceptual trend labels unless exact data points are provided.
+- Use ecosystem_map_scene when the narration explains relationships among companies, products, platforms, developers, users, clouds, or model providers.
+- Use architecture_flow_scene when the narration explains how an SDK, API, model call, app, agent, training system, or integration path works.
+- Use bullet_build_scene only when the narration has multiple points that are not better shown as a data counter, trend line, ecosystem map, architecture flow, source screenshot, or logo/entity visual.
+- Use recap_sequence_scene for closing, recap, or summary beats if those units are provided.
+- Use kinetic_type_scene only for punchy phrases, transitions, or moments where no richer visual is better.
+- Avoid more than two consecutive scenes with the same render_kind.
 - Keep on-screen text short. Prefer phrases over sentences.
-- For source_article_scene, use only source_record_key and url values from this story's records.
+- Prefer non-text graphics over text containers when both could work.
+- Use story-specific labels. Avoid generic placeholders like Input/System/Outcome, Manual process/Old systems/Slow handoffs, watch next, or Best fit.
+- For source_article_scene and quote_or_claim_highlight_scene, use only source_record_key and url values from this story's records.
 - Do not plan visuals for other stories.
-- Do not create fake footage or generic slide/card scenes.
+- Do not create fake footage, generic AI stock-image requests, or generic slide/card scenes.

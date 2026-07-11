@@ -4,13 +4,22 @@ Important rules:
 - Cover the timeline from start to finish.
 - Use script_units and voiceover timings when provided.
 - Every scene must include start_unit_order and end_unit_order from the script_units list.
-- Every scene must use exactly one render_kind: source_article_scene, logo_reveal_scene, or kinetic_type_scene.
+- Every scene must use exactly one allowed render_kind from visual_capabilities.
 - Use source_article_scene when a specific article, blog, paper, or source-backed detail is being discussed and a source URL exists.
 - For source_article_scene, include source_record_key, url, target_text, highlight_phrases, crop_strategy, overlay_headline, and source_motion_style.
+- Use quote_or_claim_highlight_scene for a source-backed claim, number, caveat, or reported detail that needs a screenshot plus callout.
 - Use logo_reveal_scene when a company, product, model lab, platform, or comparison is being introduced.
 - For logo_reveal_scene, include primary_entity, entities, companion_text, logo_strategy, and logo_motion_style.
-- Use kinetic_type_scene for key phrases, transitions, punchlines, and summary beats.
+- Use entity_compare_scene when two or more companies, products, platforms, or models need contrast.
+- Use data_counter_scene when narration includes concrete numbers, dates, speedups, costs, percentages, valuations, model sizes, or adoption counts.
+- Use trend_line_scene when narration implies growth, decline, pressure, competition, momentum, acceleration, or a race heating up.
+- Use ecosystem_map_scene when narration explains relationships among companies, products, platforms, developers, users, clouds, or model providers.
+- Use architecture_flow_scene when narration explains how an SDK, API, model call, app, agent, training system, or integration path works.
+- Use bullet_build_scene only when multiple points are not better shown as a data counter, trend line, ecosystem map, architecture flow, source screenshot, or logo/entity visual.
+- Use recap_sequence_scene for closing summary beats.
+- Use kinetic_type_scene only for short key phrases, transitions, and punchlines.
 - For kinetic_type_scene, include phrases, emphasis_words, animation_style, and background_motif.
 - Keep all text short enough for video. Prefer phrases over sentences.
+- Prefer non-text graphics over text containers when both could work.
 - Optimize for a modern YouTube AI news video, not a slide deck.
 - Source URLs and source record keys must come from selected story records only.

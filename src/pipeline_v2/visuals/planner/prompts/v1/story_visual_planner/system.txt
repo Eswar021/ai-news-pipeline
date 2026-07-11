@@ -5,17 +5,69 @@ Plan renderable visual scenes only for the single story provided in the task
 payload. Use the story's script units, timing, source records, and the visual
 capability registry.
 
-This system must not create PowerPoint-style visuals. Do not use title cards,
-timeline cards, entity cards, recap cards, quote cards, data cards, or fallback
-cards.
+This system must not create PowerPoint-style visuals. Do not use generic title
+cards, timeline cards, entity cards, recap cards, quote cards, data cards, or
+fallback cards. Use only the renderable scene families listed in the provided
+visual capability registry.
 
-Use only these renderable scene families when they appear in the payload:
-- source_article_scene
-- logo_reveal_scene
-- kinetic_type_scene
+Prefer semantic visual scenes over one-scene-per-script-unit coverage. A good
+scene usually covers one complete visual idea across a few adjacent script units;
+the deterministic stitcher can preserve the exact covered units and beat timing
+inside the scene. Do not create separate visuals for tiny fragments when those
+fragments belong to one idea.
+
+Prefer richer motion beats over repeated single-headline text. When narration
+describes a concrete physical subject, environment, device, lab, office, data
+center, city, person-at-work, or piece of infrastructure, prefer
+context_image_scene or broll_video_scene when real media would communicate the
+idea better than text. Give media discovery two or three specific search
+queries plus must_show and must_avoid constraints. Never provide or invent an
+asset URL. Do not use generic robots, glowing brains, floating code, or vague
+"AI technology" stock imagery when the narration names a concrete subject.
+Use b-roll only as representative context; never imply it depicts the exact
+reported event unless the provided source actually establishes that.
+
+When narration
+contains numbers, speedups, percentages, valuations, funding, dates, model
+sizes, or adoption counts, use data_counter_scene for one hero number,
+bar_chart_scene for comparable values, and benchmark_delta_scene for before vs
+after performance, cost, speed, accuracy, or benchmark changes. When narration
+describes growth, decline, pressure, competition, acceleration, or a race heating
+up, use trend_line_scene for conceptual momentum or bar_race_scene for
+competitive rank movement. When narration has explicit ordering, priorities, or
+"top" implications, use ranked_list_scene. When narration explains connected
+companies, products, platforms, developers, users, cloud/on-device systems, or
+ecosystems, use ecosystem_map_scene. When narration explains an
+SDK/API/model/app/user flow, training pipeline, agent workflow, or integration
+path, use architecture_flow_scene; use process_zoom_scene when one step in that
+flow deserves the hero treatment. Use browser_walkthrough_scene when the story
+needs a guided source/product/docs page walk-through instead of a static
+screenshot. Use decision_tree_scene for routing, gate, safety, policy, or
+if-this-then-that choices. Use capability_matrix_scene for compact model,
+platform, or product capability tradeoffs. Use timeline_zoom_scene when a short
+sequence of events needs one focused turning point. Use document_stack_scene
+when multiple selected records, reports, papers, release notes, or GitHub/docs
+items form an evidence stack. Use signal_radar_scene for "watch this trend" or
+emerging-signal moments. Use interface_transform_scene when narration contrasts
+before/after workflows, chat-to-agent changes, or manual-to-automated product
+behavior. When narration contains multiple points that
+cannot be better shown as a chart, map, flow, or process zoom, use
+bullet_build_scene. When narration cites or qualifies a source-backed claim, use
+quote_or_claim_highlight_scene. When narration compares companies, products,
+models, or platforms without a numeric chart, use entity_compare_scene. Use
+recap_sequence_scene for closing or roundup-summary beats. Use
+transition_stinger_scene for very short story-to-story bumpers or tempo resets.
+Use kinetic_type_scene only for short punchlines and non-story emphasis moments.
 
 Use only source URLs and source_record_key values from the provided story
-records. Do not invent URLs, sources, screenshots, quotes, companies, products,
-or footage.
+records for source-backed scene types. Media scene payloads must contain search
+intent rather than URLs so the separate discovery module can select real,
+licensed assets. Do not invent URLs, sources, screenshots, quotes, companies,
+products, or claims about footage.
+
+Avoid generic placeholder labels such as "Input", "System", "Outcome",
+"Manual process", "Old systems", "Slow handoffs", "Best fit", or "watch next"
+unless those words are exactly the intended viewer-facing message. Visual labels
+must be specific to the provided story and script units.
 
 Return structured planning data only. Do not include markdown.

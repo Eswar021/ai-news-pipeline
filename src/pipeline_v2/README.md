@@ -79,10 +79,12 @@ but it is allowed to write WAV/package artifacts under a caller-provided
 `output_v2` directory.
 
 `visuals` is intentionally parallel to `voiceover` because its core output is
-rendered media files. It is a small subsystem with a pure planner plus
-media-writing resolver/render steps. The active visual language is motion-first:
-source article scenes, logo reveal scenes, and kinetic type scenes. Do not bring
-back generic title/timeline/entity/card renderers as primary output.
+rendered media files. It is a small subsystem with a pure planner followed by
+media discovery, asset resolution, rendering, and assembly. The active visual
+language is motion-first: source article scenes, real contextual images,
+representative b-roll, logo reveals, kinetic type, source-backed callouts,
+comparisons, counters, charts, maps, and architecture flows. Do not bring back
+generic title/timeline/entity/card renderers as primary output.
 
 The Remotion renderer lives under `visuals/remotion_engine/`. Before rendering
 clips on a fresh machine, run `npm install` in that directory. The notebook then
@@ -90,8 +92,8 @@ uses `visuals.render` to write per-scene MP4 clips under `output_v2/visuals/`.
 After that, `visuals.assembly` concatenates those clips and muxes the selected
 voiceover WAV into a final review MP4 under the same run folder.
 
-The v2 voiceover module currently supports `kokoro_local` for lightweight local
-draft audio and `chatterbox_local` for more expressive local narration.
+The v2 voiceover workbench currently uses `kokoro_local` as its fast/free
+long-form default and keeps `chatterbox_local` as a slower expressive option.
 Chatterbox settings such as device, exaggeration, CFG weight, optional reference
 audio, and Hugging Face cache directory are passed through the input config.
 The workbench stores model downloads under `output_v2/model_cache/` so large
@@ -114,3 +116,9 @@ through the app input/config contract instead of hardcoding it in code.
 For the full contract, read:
 
 - `docs/rebuild/pipeline_v2_application_architecture.md`
+- `docs/rebuild/pipeline_v2_media_handoff_modules.md`
+- `docs/rebuild/visuals_roadmap.md`
+
+For visuals specifically, also read:
+
+- `src/pipeline_v2/visuals/README.md`

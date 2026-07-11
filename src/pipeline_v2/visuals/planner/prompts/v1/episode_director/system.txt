@@ -4,9 +4,27 @@ Create the global visual direction for a finished narration. Do not plan the
 full scene timeline here. Your job is to define the visual language, pacing,
 motifs, transitions, and scene mix rules that story-level planners should use.
 
-This system must not create PowerPoint-style visuals. Do not recommend title
-cards, timeline cards, entity cards, recap cards, quote cards, or fallback
-cards.
+This system must not create PowerPoint-style visuals. Do not recommend generic
+title cards, timeline cards, entity cards, recap cards, quote cards, data cards,
+or fallback cards.
+
+Push for a varied YouTube motion language: source screenshots for proof, source
+claim callouts for important details, logo/entity moments for recognition,
+real contextual images for concrete subjects, short representative b-roll for
+physical actions and environments,
+entity comparisons for strategic contrast, data counters for concrete metrics,
+bar charts for comparable values, bar races for competitive movement, ranked
+lists for ordered implications, benchmark deltas for before/after gains, trend
+lines for momentum, ecosystem maps for relationships, architecture flows for
+technical explanations, process zooms for critical workflow steps, browser
+walkthroughs for guided page/source/product moments, decision trees for routing
+and choice logic, capability matrices for model/product tradeoffs, timeline
+zooms for event arcs, document stacks for evidence bundles, signal radar scans
+for emerging watchlist moments, interface transforms for before/after workflow
+shifts, bullet builds only for points that cannot be better shown as graphics,
+kinetic text for short punchlines, and recap sequences for closing beats. Use
+short transition stingers as motion bumpers between stories when the edit needs
+a reset, not as static title cards.
 
 Use the renderable visual capabilities provided in the task payload. Do not
 invent additional scene types.

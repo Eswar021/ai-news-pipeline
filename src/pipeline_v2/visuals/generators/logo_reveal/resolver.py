@@ -8,16 +8,24 @@ from ...common import clean_text, slugify
 
 SIMPLE_ICON_ALIASES = {
     "amazon": "siAmazon",
+    "amazon bedrock": "siAmazon",
+    "amazon web services": "siAmazon",
     "anthropic": "siAnthropic",
     "apple": "siApple",
+    "aws": "siAmazon",
+    "bedrock": "siAmazon",
+    "claude": "siClaude",
+    "chatgpt": "siOpenai",
+    "gemini": "siGooglegemini",
     "github": "siGithub",
     "google": "siGoogle",
+    "google gemini": "siGooglegemini",
     "hugging face": "siHuggingface",
     "ibm": "siIbm",
     "meta": "siMeta",
-    "microsoft": "siMicrosoft",
     "nvidia": "siNvidia",
     "openai": "siOpenai",
+    "openai chatgpt": "siOpenai",
     "oracle": "siOracle",
     "tesla": "siTesla",
     "xai": "siX",
@@ -43,7 +51,7 @@ def resolve_logo_asset(
             "fallback_svg_path": "",
         }
 
-    simple_icon_export = SIMPLE_ICON_ALIASES.get(primary_entity.lower())
+    simple_icon_export = _simple_icon_for(primary_entity)
     fallback_svg_path = _write_text_logo_svg(primary_entity, output_dir)
     return {
         "status": "resolved",
@@ -53,6 +61,16 @@ def resolve_logo_asset(
         "simple_icon_export": simple_icon_export or "",
         "fallback_svg_path": str(fallback_svg_path),
     }
+
+
+def _simple_icon_for(primary_entity: str) -> str | None:
+    normalized = primary_entity.lower().strip()
+    if normalized in SIMPLE_ICON_ALIASES:
+        return SIMPLE_ICON_ALIASES[normalized]
+    for alias, export_name in SIMPLE_ICON_ALIASES.items():
+        if alias in normalized:
+            return export_name
+    return None
 
 
 def _local_logo_path(primary_entity: str, local_logo_dir: Path | None) -> Path | None:
@@ -82,4 +100,3 @@ def _write_text_logo_svg(primary_entity: str, output_dir: Path) -> Path:
         encoding="utf-8",
     )
     return path
-

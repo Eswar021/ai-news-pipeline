@@ -16,19 +16,22 @@ the product of this step. The caller must provide `config.output_dir`.
 
 | Provider | Best Use | Status |
 | --- | --- | --- |
-| `kokoro_local` | Fast local smoke tests and simple narration. | Real smoke passed. |
-| `chatterbox_local` | Best current default for expressive YouTube narration. | Real smoke passed. |
+| `kokoro_local` | Fast, free local long-form narration and the active workbench default. | Real smoke passed. |
+| `chatterbox_local` | Slower expressive previews when extra delivery variation is worth the render time. | Real smoke passed. |
 | `f5_tts_local` | Voice/style transfer from a reference WAV plus matching text. | Real smoke passed. |
 | `dia_transformers` | Expressive dialogue-style generation with speaker tags. | Adapter tested; CPU generation is too slow for regular use here. |
 
-Use `chatterbox_local` first when testing script quality. Use `f5_tts_local`
+Use `kokoro_local` for normal end-to-end runs. Use `chatterbox_local` only when
+you specifically want a slower expressive comparison, and use `f5_tts_local`
 when you have a reference voice clip you want the model to imitate. Keep
 `dia_transformers` for GPU testing.
 
-Chatterbox runs a 1000-step sampling loop for every text chunk. That is normal,
-but a full 8-minute script can take a long time if the script is split into many
-small chunks. For full-script tests, prefer `general_youtube` plus larger chunk
-settings. For quick audio checks, generate a 1-2 sentence preview first.
+Kokoro quality and throughput are both better when long-form narration is not
+split into tiny fragments. The active workbench profile uses up to four
+sentences or 900 characters per chunk, while preserving short pauses between
+chunks and paragraphs. Chatterbox runs a long sampling loop for every chunk,
+so a full script can still take a long time even with larger chunks. Generate a
+1-2 sentence preview before choosing Chatterbox for a complete run.
 
 ## Notebook Usage
 
@@ -52,10 +55,15 @@ Change the `voiceover` section there:
 
 ```yaml
 voiceover:
-  provider: chatterbox_local
-  style: dramatic_news
-  voice: null
-  speed: 0.96
+  provider: kokoro_local
+  style: general_youtube
+  voice: af_heart
+  speed: 1.0
+  chunking:
+    chunk_max_chars: 900
+    max_sentences_per_chunk: 4
+    chunk_pause_seconds: 0.12
+    paragraph_pause_seconds: 0.38
 ```
 
 Supported provider values:
@@ -84,8 +92,10 @@ under:
 output_v2/voiceover/{RUN_ID}_{provider}_{style}_{voice}_{speed}_chatgpt_script/
 ```
 
-The notebook prints the planned chunk count before synthesis. If the count is
-above about 25 and you are using `chatterbox_local`, expect a slow run.
+The notebook prints the planned chunk count before synthesis. A long Kokoro
+script should normally produce far fewer chunks than the previous small-chunk
+profile. If the count is above about 25 with `chatterbox_local`, expect a slow
+run.
 
 ## CLI Usage
 

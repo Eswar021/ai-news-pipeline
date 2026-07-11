@@ -2,9 +2,7 @@ import React from "react";
 import { AbsoluteFill, Img, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { MotionBackground } from "./Background";
 import { VisualSceneSpec } from "./types";
-import { clamp01, font, palette } from "./style";
-
-const textValue = (value: unknown) => (typeof value === "string" ? value : "");
+import { clamp01, font, palette, readableTitleSize, sceneEyebrow, textValue } from "./style";
 
 export const SourceArticleScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
@@ -16,6 +14,8 @@ export const SourceArticleScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }
   const scanX = interpolate(frame, [25, durationInFrames - 18], [-360, 1360], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const headline = textValue(payload.overlay_headline) || spec.scene.script_excerpt || "Source context";
   const targetText = textValue(payload.target_text);
+  const eyebrow = sceneEyebrow(payload, "SOURCE VIEW");
+  const sourceLabel = textValue(payload.source_label) || textValue(asset.capture?.domain) || "source";
   const image = asset.asset_data_uri || "";
 
   return (
@@ -23,11 +23,11 @@ export const SourceArticleScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }
       <MotionBackground motif="newsroom_grid" />
       <div style={{ position: "absolute", top: 62, left: 78, right: 78, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div style={{ color: palette.cyan, fontSize: 25, fontWeight: 900, letterSpacing: "0.18em" }}>SOURCE VIEW</div>
-          <div style={{ marginTop: 16, maxWidth: 1260, fontSize: 58, lineHeight: 0.94, fontWeight: 950, letterSpacing: "-0.045em" }}>{headline}</div>
+          {eyebrow && <div style={{ color: palette.cyan, fontSize: 25, fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase" }}>{eyebrow}</div>}
+          <div style={{ marginTop: eyebrow ? 16 : 0, maxWidth: 1260, fontSize: readableTitleSize(headline, 62), lineHeight: 0.94, fontWeight: 950, letterSpacing: "-0.05em" }}>{headline}</div>
         </div>
         <div style={{ color: palette.muted, fontSize: 24, fontWeight: 800, padding: "14px 20px", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 999 }}>
-          {textValue(asset.capture?.domain) || "ARTICLE"}
+          {sourceLabel}
         </div>
       </div>
 
@@ -48,11 +48,11 @@ export const SourceArticleScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }
         <div style={{ position: "absolute", top: 54, bottom: 0, left: scanX, width: 190, background: "linear-gradient(90deg, transparent, rgba(99,215,255,0.22), transparent)", filter: "blur(3px)" }} />
       </div>
 
-      <div style={{ position: "absolute", left: 112, right: 112, bottom: 42, display: "flex", gap: 18, alignItems: "center" }}>
-        <div style={{ color: "#061016", background: palette.cyan, borderRadius: 999, padding: "11px 17px", fontWeight: 950, fontSize: 22 }}>HIGHLIGHT</div>
-        <div style={{ color: "#d8e4f2", fontSize: 26, fontWeight: 750, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{targetText}</div>
-      </div>
+      {targetText && (
+        <div style={{ position: "absolute", left: 112, right: 112, bottom: 42, padding: "16px 22px", borderRadius: 999, background: "rgba(7,13,22,0.78)", border: `1px solid ${palette.cyan}55`, color: "#d8e4f2", fontSize: 28, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {targetText}
+        </div>
+      )}
     </AbsoluteFill>
   );
 };
-

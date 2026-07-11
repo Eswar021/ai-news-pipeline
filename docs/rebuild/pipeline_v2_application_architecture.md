@@ -220,6 +220,30 @@ L9_memory          -> apps/memory_update
 business app. During the notebook-first phase, keep that logic outside app
 cores until the v2 runtime contract is clearer.
 
+## Media And Handoff Modules
+
+Some v2 functionality is intentionally parallel to `apps/` because the module
+product is a file-based operator or media artifact:
+
+```text
+src/pipeline_v2/handoffs/
+src/pipeline_v2/voiceover/
+src/pipeline_v2/visuals/
+```
+
+These modules still use the v2-style JSON/dict boundary, but they may write the
+files that are their actual product when the caller provides an output
+directory. Examples:
+
+- handoffs may write Markdown review packets
+- voiceover may write WAV files and audio manifests
+- visuals may write downloaded contextual media, attribution manifests,
+  screenshots, logo assets, MP4 scene clips, and final review videos
+
+Read `docs/rebuild/pipeline_v2_media_handoff_modules.md` before changing those
+modules. For visuals, also read `src/pipeline_v2/visuals/README.md` and
+`docs/rebuild/visuals_roadmap.md`.
+
 ## Migration Order
 
 Migrate one function at a time:

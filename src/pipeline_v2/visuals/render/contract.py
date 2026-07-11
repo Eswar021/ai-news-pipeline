@@ -28,11 +28,17 @@ class VisualRenderConfig(BaseModel):
     output_dir: str
     force: bool = False
     remotion_engine_dir: str | None = None
+    quality_preset: Literal["custom", "1080p", "2k", "4k"] = "custom"
     width: int = DEFAULT_WIDTH
     height: int = DEFAULT_HEIGHT
     fps: int = DEFAULT_FPS
     codec: str = DEFAULT_CODEC
+    crf: int | None = None
+    video_bitrate: str | None = None
+    x264_preset: str | None = None
+    pixel_format: str | None = None
     render_timeout_seconds: int = 240
+    worker_count: int = 1
     max_scene_duration_seconds: float | None = None
     scene_limit: int | None = None
 
@@ -43,11 +49,11 @@ class VisualRenderConfig(BaseModel):
             raise ValueError("config.output_dir must not be empty")
         return value
 
-    @field_validator("width", "height", "fps", "render_timeout_seconds")
+    @field_validator("width", "height", "fps", "render_timeout_seconds", "worker_count")
     @classmethod
     def positive_numbers_required(cls, value: int) -> int:
         if value < 1:
-            raise ValueError("render dimensions, fps, and timeout must be positive")
+            raise ValueError("render dimensions, fps, timeout, and worker_count must be positive")
         return value
 
     @field_validator("max_scene_duration_seconds")
@@ -55,6 +61,13 @@ class VisualRenderConfig(BaseModel):
     def max_scene_duration_must_be_positive(cls, value: float | None) -> float | None:
         if value is not None and value <= 0:
             raise ValueError("config.max_scene_duration_seconds must be positive when provided")
+        return value
+
+    @field_validator("crf")
+    @classmethod
+    def crf_must_be_valid(cls, value: int | None) -> int | None:
+        if value is not None and (value < 0 or value > 51):
+            raise ValueError("config.crf must be between 0 and 51 when provided")
         return value
 
 

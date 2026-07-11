@@ -15,6 +15,7 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 PROFILE_ORDER = [
     "publish_review",
     "script_review",
+    "visual_scene_plan",
     "content_packet",
     "editorial_brief",
     "fact_packet",
@@ -41,6 +42,10 @@ PROFILE_ALIASES = {
     "l7": "script_review",
     "script": "script_review",
     "script_review": "script_review",
+    "visual": "visual_scene_plan",
+    "visuals": "visual_scene_plan",
+    "visual_plan": "visual_scene_plan",
+    "visual_scene_plan": "visual_scene_plan",
     "l8": "publish_review",
     "publish": "publish_review",
     "publish_review": "publish_review",
@@ -231,6 +236,8 @@ def _profile_summary_lines(profile: str, artifact: dict[str, Any]) -> list[str]:
         return _content_packet_summary(artifact)
     if profile == "script_review":
         return _script_review_summary(artifact)
+    if profile == "visual_scene_plan":
+        return _visual_scene_plan_summary(artifact)
     if profile == "publish_review":
         return _publish_review_summary(artifact)
     raise ValueError(f"Unsupported profile summary: {profile}")
@@ -322,6 +329,28 @@ def _script_review_summary(artifact: dict[str, Any]) -> list[str]:
         f"- Estimated duration: {estimated_seconds}s",
         f"- Sections: {len(sections)}",
         f"- Title options: {len(metadata.get('title_options', []))}",
+    ]
+
+
+def _visual_scene_plan_summary(artifact: dict[str, Any]) -> list[str]:
+    script = artifact.get("script", {}) if isinstance(artifact.get("script"), dict) else {}
+    video_packet = artifact.get("video_packet", {}) if isinstance(artifact.get("video_packet"), dict) else {}
+    voiceover = artifact.get("voiceover_timing", {}) if isinstance(artifact.get("voiceover_timing"), dict) else {}
+    visual_context = artifact.get("visual_context", {}) if isinstance(artifact.get("visual_context"), dict) else {}
+    scene_policy = visual_context.get("scene_policy", {}) if isinstance(visual_context.get("scene_policy"), dict) else {}
+    capabilities = visual_context.get("visual_capabilities", {}) if isinstance(visual_context.get("visual_capabilities"), dict) else {}
+    stories = video_packet.get("stories") or video_packet.get("selected_stories") or []
+    chunks = voiceover.get("chunks") if isinstance(voiceover.get("chunks"), list) else []
+    return [
+        f"- Packet type: {artifact.get('package_type', '')}",
+        f"- Selected format: {artifact.get('selected_format', video_packet.get('selected_format', ''))}",
+        f"- Script words: {script.get('word_count', '')}",
+        f"- Voiceover duration: {voiceover.get('duration_seconds', '')}s",
+        f"- Voiceover chunks: {len(chunks)}",
+        f"- Selected stories: {len(stories) if isinstance(stories, list) else ''}",
+        f"- Max scene seconds: {scene_policy.get('max_scene_seconds', '')}",
+        f"- Allowed render kinds: {', '.join(scene_policy.get('allowed_render_kinds', []))}",
+        f"- Visual capabilities: {len(capabilities)}",
     ]
 
 
