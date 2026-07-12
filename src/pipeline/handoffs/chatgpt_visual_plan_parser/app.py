@@ -5,6 +5,15 @@ import json
 import re
 from typing import Any
 
+from src.pipeline.contracts import (
+    build_artifact_provenance,
+    require_matching_run_id,
+    require_parent_fingerprint,
+    validate_artifact_provenance,
+    validate_script_provenance,
+    visual_plan_artifact_payload,
+    voiceover_artifact_payload,
+)
 from src.pipeline.handoffs.common import clean_text, iso_now
 
 from .contract import ChatGPTVisualPlanParserRequest
@@ -78,6 +87,24 @@ def run(input_json: dict) -> dict:
     run_id = request.run.run_id
     video_packet = request.input.video_packaging.data.video_packet
     selected_format = clean_text(request.input.video_packaging.data.selected_format or video_packet.get("selected_format", ""))
+    script_result = request.input.script_generation
+    script_data = script_result.get("data") or {}
+    script_package = script_data.get("script_package") or {}
+    script_text = clean_text(script_package.get("full_script"))
+    require_matching_run_id(run_id, request.input.video_packaging.data.run_id, "video_packaging")
+    require_matching_run_id(run_id, script_data.get("run_id"), "script_generation")
+    script_provenance = validate_script_provenance(
+        script_package,
+        run_id=run_id,
+        upstream_run_id=script_data.get("run_id"),
+    )
+    voiceover_package = _voiceover_package(request.input.voiceover)
+    voiceover_provenance = _validate_voiceover_for_script(
+        voiceover_package,
+        run_id=run_id,
+        script_provenance=script_provenance,
+        script_package=script_package,
+    )
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -103,8 +130,28 @@ def run(input_json: dict) -> dict:
         errors=errors,
         warnings=warnings,
     )
+    scene_timeline = _retime_scenes_from_aligned_units(
+        scenes=scene_timeline,
+        voiceover=request.input.voiceover,
+        warnings=warnings,
+        errors=errors,
+    )
+    scene_timeline = _insert_story_title_interstitials(
+        scenes=scene_timeline,
+        video_packet=video_packet,
+        voiceover=request.input.voiceover,
+        allowed_render_kinds=allowed_render_kinds,
+        errors=errors,
+        warnings=warnings,
+    )
+    scene_timeline = _split_overlong_scenes(
+        scenes=scene_timeline,
+        voiceover=request.input.voiceover,
+        scene_policy=request.config.scene_policy,
+        warnings=warnings,
+    )
     scene_timeline = _reconcile_scene_sections(scene_timeline, story_sections, warnings)
-    expected_duration = _expected_duration_seconds(request.input.voiceover, request.input.script_text)
+    expected_duration = _expected_duration_seconds(request.input.voiceover, script_text)
     scene_timeline = _close_timeline_gaps(
         scenes=scene_timeline,
         expected_duration=expected_duration,
@@ -122,6 +169,7 @@ def run(input_json: dict) -> dict:
         voiceover=request.input.voiceover,
         warnings=warnings,
     )
+    _validate_story_title_interstitials(scene_timeline, video_packet, errors)
     coverage = _coverage_report(
         scenes=scene_timeline,
         expected_duration=expected_duration,
@@ -160,7 +208,8 @@ def run(input_json: dict) -> dict:
         ],
         "source_script": {
             "script_source": clean_text(request.input.script_source or "manual_chatgpt_script"),
-            "word_count": len(request.input.script_text.split()),
+            "word_count": len(script_text.split()),
+            "script_fingerprint": script_provenance["script_fingerprint"],
         },
         "audio_timeline": _audio_timeline(request.input.voiceover, expected_duration),
         "scene_policy": request.config.scene_policy,
@@ -172,6 +221,16 @@ def run(input_json: dict) -> dict:
         },
         "planner_warnings": warnings,
     }
+    parents = {"script": script_provenance["script_fingerprint"]}
+    if voiceover_provenance:
+        parents["voiceover"] = voiceover_provenance["voiceover_fingerprint"]
+    visual_scene_plan["provenance"] = build_artifact_provenance(
+        artifact_type="visual_plan",
+        run_id=run_id,
+        parents=parents,
+        script_source=script_provenance.get("script_source", ""),
+        payload=visual_plan_artifact_payload(visual_scene_plan),
+    )
     checks = {"passed": not errors, "errors": errors, "warnings": warnings}
     visual_scene_plan["checks"] = checks
     status = "ok" if checks["passed"] else "failed"
@@ -497,6 +556,8 @@ def _compact_semantic_scenes(
 
 
 def _should_merge_semantic_neighbors(first: dict[str, Any], second: dict[str, Any], scene_policy: dict[str, Any]) -> bool:
+    if _is_story_title_interstitial(first) or _is_story_title_interstitial(second):
+        return False
     if clean_text(first.get("story_id", "")) != clean_text(second.get("story_id", "")):
         return False
     if clean_text(first.get("section_type", "")) != clean_text(second.get("section_type", "")):
@@ -524,6 +585,200 @@ def _should_merge_semantic_neighbors(first: dict[str, Any], second: dict[str, An
     if len(first_units) <= 1 and len(second_units) <= 1 and first_kind in GRAPHIC_RENDER_KINDS and second_kind in GRAPHIC_RENDER_KINDS:
         return True
     return False
+
+
+def _insert_story_title_interstitials(
+    *,
+    scenes: list[dict[str, Any]],
+    video_packet: dict[str, Any],
+    voiceover: dict[str, Any] | None,
+    allowed_render_kinds: set[str],
+    errors: list[str],
+    warnings: list[str],
+) -> list[dict[str, Any]]:
+    if "transition_stinger_scene" not in allowed_render_kinds:
+        errors.append("transition_stinger_scene must be allowed for deterministic roundup story titles")
+        return scenes
+    chunks = _voiceover_chunks(voiceover)
+    first_beat_by_story: dict[str, dict[str, Any]] = {}
+    for chunk in chunks:
+        story_id = clean_text(chunk.get("story_id", ""))
+        if story_id and story_id not in first_beat_by_story:
+            first_beat_by_story[story_id] = chunk
+
+    output = [dict(scene) for scene in scenes]
+    inserted = 0
+    ordered_stories = sorted(
+        (story for story in video_packet.get("stories", []) if isinstance(story, dict)),
+        key=lambda story: _safe_int((story.get("video_segment") or {}).get("segment_order"), 999999),
+    )
+    for story in ordered_stories:
+        story_id = clean_text(story.get("story_id", ""))
+        beat = first_beat_by_story.get(story_id)
+        if beat is None:
+            errors.append(f"{story_id}: no aligned voiceover beat exists for deterministic story title")
+            continue
+        start = _safe_float(beat.get("start_seconds"), 0.0)
+        speech_end = _safe_float(beat.get("end_seconds"), start)
+        end = min(speech_end, start + 3.2)
+        if end - start < 1.0:
+            end = min(speech_end, start + 1.0)
+        if end <= start:
+            errors.append(f"{story_id}: first aligned beat has invalid timing for story title")
+            continue
+
+        trimmed: list[dict[str, Any]] = []
+        for scene in output:
+            scene_start = _safe_float(scene.get("start_seconds"), 0.0)
+            scene_end = _safe_float(scene.get("end_seconds"), scene_start)
+            if scene_end <= start + 0.01 or scene_start >= end - 0.01:
+                trimmed.append(scene)
+                continue
+            if scene_start < start - 0.01:
+                before = dict(scene)
+                before["end_seconds"] = round(start, 2)
+                _refresh_scene_duration(before)
+                trimmed.append(before)
+            if scene_end > end + 0.01:
+                after = dict(scene)
+                after["start_seconds"] = round(end, 2)
+                _refresh_scene_duration(after)
+                trimmed.append(after)
+        output = trimmed
+
+        identity = story.get("story_identity") if isinstance(story.get("story_identity"), dict) else {}
+        segment = story.get("video_segment") if isinstance(story.get("video_segment"), dict) else {}
+        output.append(
+            {
+                "scene_id": "",
+                "scene_order": 0,
+                "story_id": story_id,
+                "section_type": "story",
+                "start_seconds": round(start, 2),
+                "end_seconds": round(end, 2),
+                "duration_seconds": round(end - start, 2),
+                "render_kind": "transition_stinger_scene",
+                "script_excerpt": clean_text(beat.get("text", "")),
+                "visual_intent": "Introduce the story while narration continues.",
+                "payload": {
+                    "transition_label": _short_text(story.get("story_title") or story.get("title"), 90),
+                    "subtitle": _short_text(identity.get("why_it_matters", ""), 110),
+                    "background_motif": "newsroom_grid",
+                    "motion_style": "signal_wipe",
+                    "eyebrow": f"STORY {_safe_int(segment.get('segment_order'), inserted + 1)}",
+                    "voice_behavior": "continue",
+                },
+                "source_record_keys": [],
+                "source_urls": [],
+                "covered_unit_orders": [_safe_int(beat.get("order"), 0)],
+            }
+        )
+        inserted += 1
+    if inserted:
+        warnings.append(f"Inserted {inserted} deterministic moving story-title interstitial(s).")
+    return _renumber_scenes(output)
+
+
+def _retime_scenes_from_aligned_units(
+    *,
+    scenes: list[dict[str, Any]],
+    voiceover: dict[str, Any] | None,
+    warnings: list[str],
+    errors: list[str],
+) -> list[dict[str, Any]]:
+    chunks = _voiceover_chunks(voiceover)
+    if not chunks:
+        return scenes
+    by_order = {_safe_int(chunk.get("order"), index): chunk for index, chunk in enumerate(chunks, start=1)}
+    retimed = 0
+    output: list[dict[str, Any]] = []
+    for scene in scenes:
+        current = dict(scene)
+        orders = sorted({_safe_int(value, 0) for value in current.get("covered_unit_orders", []) if _safe_int(value, 0)})
+        if not orders:
+            output.append(current)
+            continue
+        unknown = [order for order in orders if order not in by_order]
+        if unknown:
+            errors.append(f"{current.get('scene_id')}: covered_unit_orders contains unknown aligned units: {unknown}")
+            output.append(current)
+            continue
+        current["start_seconds"] = round(_safe_float(by_order[orders[0]].get("start_seconds"), 0.0), 2)
+        current["end_seconds"] = round(_safe_float(by_order[orders[-1]].get("end_seconds"), current["start_seconds"]), 2)
+        _refresh_scene_duration(current)
+        output.append(current)
+        retimed += 1
+    if retimed:
+        warnings.append(f"Retimed {retimed} ChatGPT scene(s) from authoritative aligned unit orders.")
+    return _renumber_scenes(output)
+
+
+def _split_overlong_scenes(
+    *,
+    scenes: list[dict[str, Any]],
+    voiceover: dict[str, Any] | None,
+    scene_policy: dict[str, Any],
+    warnings: list[str],
+) -> list[dict[str, Any]]:
+    max_seconds = max(1.0, _safe_float(scene_policy.get("max_scene_seconds"), 14.0))
+    chunks = _voiceover_chunks(voiceover)
+    output: list[dict[str, Any]] = []
+    split_count = 0
+    for scene in scenes:
+        start = _safe_float(scene.get("start_seconds"), 0.0)
+        end = _safe_float(scene.get("end_seconds"), start)
+        duration = max(0.0, end - start)
+        if duration <= max_seconds + 0.01:
+            output.append(scene)
+            continue
+        slice_count = max(2, int((duration + max_seconds - 0.0001) // max_seconds))
+        balanced = duration / slice_count
+        for slice_index in range(slice_count):
+            slice_start = start + slice_index * balanced
+            slice_end = end if slice_index == slice_count - 1 else start + (slice_index + 1) * balanced
+            current = dict(scene)
+            current["payload"] = dict(scene.get("payload", {})) if isinstance(scene.get("payload"), dict) else {}
+            current["start_seconds"] = round(slice_start, 2)
+            current["end_seconds"] = round(slice_end, 2)
+            _refresh_scene_duration(current)
+            overlapping_orders = [
+                _safe_int(chunk.get("order"), index)
+                for index, chunk in enumerate(chunks, start=1)
+                if _safe_float(chunk.get("end_seconds"), 0.0) > slice_start + 0.01
+                and _safe_float(chunk.get("start_seconds"), 0.0) < slice_end - 0.01
+            ]
+            if overlapping_orders:
+                current["covered_unit_orders"] = sorted(set(overlapping_orders))
+            output.append(current)
+        split_count += 1
+    if split_count:
+        warnings.append(f"Split {split_count} overlong ChatGPT scene(s) into balanced render-safe slices.")
+    return _renumber_scenes(output)
+
+
+def _validate_story_title_interstitials(
+    scenes: list[dict[str, Any]],
+    video_packet: dict[str, Any],
+    errors: list[str],
+) -> None:
+    for story in video_packet.get("stories", []):
+        if not isinstance(story, dict):
+            continue
+        story_id = clean_text(story.get("story_id", ""))
+        story_scenes = [scene for scene in scenes if clean_text(scene.get("story_id", "")) == story_id]
+        title_scenes = [scene for scene in story_scenes if _is_story_title_interstitial(scene)]
+        if len(title_scenes) != 1:
+            errors.append(f"{story_id}: expected exactly one deterministic story title, found {len(title_scenes)}")
+        elif story_scenes and title_scenes[0].get("scene_id") != story_scenes[0].get("scene_id"):
+            errors.append(f"{story_id}: deterministic story title is not the first scene in its story")
+
+
+def _is_story_title_interstitial(scene: dict[str, Any]) -> bool:
+    payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
+    return (
+        clean_text(scene.get("render_kind", "")) == "transition_stinger_scene"
+        and clean_text(payload.get("voice_behavior", "")) == "continue"
+    )
 
 
 def _merge_adjacent_scenes(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
@@ -655,6 +910,8 @@ def _attach_scene_beats(
             beats.append(
                 {
                     "unit_order": order,
+                    "beat_id": chunk.get("beat_id", ""),
+                    "beat_type": chunk.get("beat_type", ""),
                     "start_seconds": round(start, 2),
                     "end_seconds": round(end, 2),
                     "relative_start_seconds": round(max(0.0, start - scene_start), 2),
@@ -687,6 +944,37 @@ def _chunk_overlaps_scene(chunk: dict[str, Any], scene: dict[str, Any]) -> bool:
 
 def _voiceover_chunks(voiceover: dict[str, Any] | None) -> list[dict[str, Any]]:
     package = _voiceover_package(voiceover)
+    audio_units = package.get("audio_units") if isinstance(package.get("audio_units"), list) else []
+    if audio_units:
+        normalized_beats: list[dict[str, Any]] = []
+        order = 0
+        for unit in sorted(
+            (item for item in audio_units if isinstance(item, dict)),
+            key=lambda item: _safe_int(item.get("unit_order"), 999999),
+        ):
+            beats = unit.get("aligned_beats") if isinstance(unit.get("aligned_beats"), list) else []
+            for beat in sorted(
+                (item for item in beats if isinstance(item, dict)),
+                key=lambda item: _safe_int(item.get("beat_order"), 999999),
+            ):
+                order += 1
+                start = _safe_float(beat.get("start_seconds"), 0.0)
+                end = _safe_float(beat.get("end_seconds"), start)
+                normalized_beats.append(
+                    {
+                        "order": order,
+                        "start_seconds": start,
+                        "end_seconds": end,
+                        "duration_seconds": max(0.0, end - start),
+                        "text": clean_text(beat.get("text", "")),
+                        "beat_id": clean_text(beat.get("beat_id", "")),
+                        "beat_type": clean_text(beat.get("beat_type", "")),
+                        "section_id": clean_text(beat.get("section_id") or unit.get("section_id")),
+                        "story_id": clean_text(beat.get("story_id") or unit.get("story_id")),
+                    }
+                )
+        if normalized_beats:
+            return normalized_beats
     chunks = package.get("chunks") if isinstance(package.get("chunks"), list) else []
     normalized: list[dict[str, Any]] = []
     for index, chunk in enumerate(chunks, start=1):
@@ -801,6 +1089,8 @@ def _visual_beat_map(scene_timeline: list[dict[str, Any]]) -> list[dict[str, Any
                     "section_type": scene.get("section_type", ""),
                     "render_kind": scene.get("render_kind", ""),
                     "unit_order": beat.get("unit_order"),
+                    "beat_id": beat.get("beat_id", ""),
+                    "beat_type": beat.get("beat_type", ""),
                     "start_seconds": beat.get("start_seconds"),
                     "end_seconds": beat.get("end_seconds"),
                     "relative_start_seconds": beat.get("relative_start_seconds"),
@@ -1012,8 +1302,8 @@ def _coverage_report(
             errors.append(f"scene timeline should start at 0.0 seconds, got {timeline_start:.2f}")
         if expected_duration - timeline_end > tolerance:
             errors.append(f"scene timeline ends too early: {timeline_end:.2f}s vs expected {expected_duration:.2f}s")
-        if timeline_end - expected_duration > max(tolerance, max_scene):
-            warnings.append(f"scene timeline extends beyond expected duration: {timeline_end:.2f}s vs {expected_duration:.2f}s")
+        if timeline_end - expected_duration > tolerance:
+            errors.append(f"scene timeline ends too late: {timeline_end:.2f}s vs expected {expected_duration:.2f}s")
     if gap_count:
         errors.append(f"scene timeline has {gap_count} time gaps")
     if overlap_count:
@@ -1128,6 +1418,56 @@ def _voiceover_package(voiceover: dict[str, Any] | None) -> dict[str, Any]:
     return voiceover
 
 
+def _validate_voiceover_for_script(
+    voiceover_package: dict[str, Any],
+    *,
+    run_id: str,
+    script_provenance: dict[str, Any],
+    script_package: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not voiceover_package:
+        return None
+    require_matching_run_id(run_id, voiceover_package.get("run_id"), "voiceover")
+    provenance = voiceover_package.get("provenance")
+    validate_artifact_provenance(
+        provenance,
+        artifact_type="voiceover",
+        run_id=run_id,
+        payload=voiceover_artifact_payload(voiceover_package),
+        label="voiceover",
+    )
+    require_parent_fingerprint(
+        provenance,
+        parent_name="script",
+        expected=script_provenance["script_fingerprint"],
+        label="voiceover",
+    )
+    if not clean_text((provenance or {}).get("voiceover_fingerprint")):
+        raise ValueError("voiceover.provenance.voiceover_fingerprint is required")
+    expected_beats = {
+        clean_text(beat.get("beat_id")): clean_text(beat.get("narration_text"))
+        for section in script_package.get("sections", [])
+        if isinstance(section, dict)
+        for beat in section.get("beats", [])
+        if isinstance(beat, dict) and clean_text(beat.get("beat_id"))
+    }
+    actual_beats = {
+        clean_text(beat.get("beat_id")): clean_text(beat.get("text"))
+        for unit in voiceover_package.get("audio_units", [])
+        if isinstance(unit, dict)
+        for beat in unit.get("aligned_beats", [])
+        if isinstance(beat, dict) and clean_text(beat.get("beat_id"))
+    }
+    if expected_beats and actual_beats != expected_beats:
+        changed = sorted(
+            beat_id
+            for beat_id in set(expected_beats) | set(actual_beats)
+            if expected_beats.get(beat_id) != actual_beats.get(beat_id)
+        )
+        raise ValueError(f"voiceover aligned beats do not match the selected script: {changed[:8]}")
+    return provenance
+
+
 def _build_summary(
     *,
     visual_scene_plan: dict[str, Any],
@@ -1171,3 +1511,15 @@ def _safe_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _short_text(value: Any, limit: int) -> str:
+    cleaned = clean_text(value)
+    if len(cleaned) <= limit:
+        return cleaned
+    if limit <= 3:
+        return "." * max(0, limit)
+    candidate = cleaned[: limit - 3].rstrip(" ,.;:")
+    if " " in candidate:
+        candidate = candidate.rsplit(" ", 1)[0].rstrip(" ,.;:")
+    return (candidate or cleaned[: limit - 3].rstrip(" ,.;:")) + "..."

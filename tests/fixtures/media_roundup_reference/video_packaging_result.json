@@ -9,10 +9,11 @@
       "packet_type": "roundup",
       "selected_format": "roundup",
       "script_app": "script_generation.formats.roundup",
-      "target_duration_seconds": 101,
-      "intro_seconds": 15,
-      "closing_seconds": 10,
-      "segment_seconds": 76,
+      "duration_policy": {
+        "mode": "content_driven",
+        "configured_ceiling_seconds": null,
+        "timing_source_of_truth": "voiceover"
+      },
       "story_count": 3,
       "selected_story_ids": [
         "story_evidence",
@@ -56,7 +57,6 @@
             "segment_id": "segment_01_story_evidence",
             "segment_order": 1,
             "role": "lead",
-            "target_seconds": 26,
             "source_record_keys": ["record_evidence_contract"]
           }
         },
@@ -96,7 +96,6 @@
             "segment_id": "segment_02_story_sync",
             "segment_order": 2,
             "role": "major",
-            "target_seconds": 26,
             "source_record_keys": ["record_visual_contract"]
           }
         },
@@ -136,7 +135,6 @@
             "segment_id": "segment_03_story_render",
             "segment_order": 3,
             "role": "major",
-            "target_seconds": 24,
             "source_record_keys": ["record_render_contract"]
           }
         }
@@ -147,6 +145,8 @@
         "section_sequence": ["intro", "story_segments", "closing"],
         "allowed_segment_roles": ["lead", "major", "brief"],
         "must_use_selected_stories_only": true,
+        "duration_mode": "content_driven",
+        "timing_source_of_truth": "voiceover",
         "tone_control_owner": "script_generation"
       }
     }
@@ -158,7 +158,8 @@
     "rejected_story_count": 0,
     "selection_reason_counts": {"selected": 3},
     "role_counts": {"lead": 1, "major": 2},
-    "target_duration_seconds": 101,
+    "duration_mode": "content_driven",
+    "duration_ceiling_seconds": null,
     "failure_reason": ""
   },
   "handoff": {

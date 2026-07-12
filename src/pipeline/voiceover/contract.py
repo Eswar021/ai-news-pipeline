@@ -70,6 +70,20 @@ class ChunkingConfig(BaseModel):
         return value
 
 
+class AlignmentConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    require_script_beats: bool = True
+    beat_pause_seconds: float = 0.08
+    section_pause_seconds: float = 0.32
+
+    @field_validator("beat_pause_seconds", "section_pause_seconds")
+    @classmethod
+    def pauses_must_be_non_negative(cls, value: float) -> float:
+        if value < 0 or value > 2:
+            raise ValueError("alignment pause values must be between 0 and 2 seconds")
+        return value
+
 class ChatterboxConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -209,6 +223,7 @@ class VoiceoverConfig(BaseModel):
     force: bool = False
     output_dir: str
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
+    alignment: AlignmentConfig = Field(default_factory=AlignmentConfig)
     chatterbox: ChatterboxConfig = Field(default_factory=ChatterboxConfig)
     f5_tts: F5TTSConfig = Field(default_factory=F5TTSConfig)
     dia: DiaConfig = Field(default_factory=DiaConfig)
@@ -256,7 +271,7 @@ class VoiceoverConfig(BaseModel):
 class ScriptGenerationData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    run_id: str | None = None
+    run_id: str
     generated_at: str | None = None
     selected_format: str | None = None
     script_package: dict[str, Any]
@@ -308,6 +323,8 @@ class VoiceoverSummary(BaseModel):
     audio_path: str
     duration_seconds: float
     chunk_count: int
+    audio_unit_count: int = 0
+    aligned_beat_count: int = 0
     word_count: int
 
 

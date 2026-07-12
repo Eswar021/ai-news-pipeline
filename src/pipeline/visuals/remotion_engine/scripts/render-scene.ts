@@ -7,6 +7,7 @@ import { renderMedia, selectComposition } from "@remotion/renderer";
 type Args = {
   spec: string;
   out: string;
+  serveUrl?: string;
 };
 
 const parseArgs = (): Args => {
@@ -21,7 +22,7 @@ const parseArgs = (): Args => {
     console.error("Usage: npm run render-scene -- --spec <scene.json> --out <scene.mp4>");
     process.exit(1);
   }
-  return { spec: parsed.spec, out: parsed.out };
+  return {spec: parsed.spec, out: parsed.out, serveUrl: parsed["serve-url"]};
 };
 
 const run = async () => {
@@ -29,17 +30,21 @@ const run = async () => {
   const specPath = path.resolve(args.spec);
   const outputPath = path.resolve(args.out);
   const sceneSpec = JSON.parse(fs.readFileSync(specPath, "utf-8"));
-  const publicDir = fs.mkdtempSync(path.join(os.tmpdir(), "pipeline-remotion-public-"));
+  const publicDir = args.serveUrl
+    ? null
+    : fs.mkdtempSync(path.join(os.tmpdir(), "pipeline-remotion-public-"));
   try {
-    prepareRuntimeAsset(sceneSpec, publicDir);
+    if (publicDir) prepareRuntimeAsset(sceneSpec, publicDir);
     const fps = Number(sceneSpec.fps || 30);
     const durationInFrames = Math.max(30, Math.round(Number(sceneSpec.duration_seconds || 6) * fps));
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
-    const serveUrl = await bundle({
-      entryPoint: path.join(process.cwd(), "src", "index.tsx"),
-      publicDir
-    });
+    const serveUrl = args.serveUrl
+      ? path.resolve(args.serveUrl)
+      : await bundle({
+          entryPoint: path.join(process.cwd(), "src", "index.tsx"),
+          publicDir: publicDir as string,
+        });
     const composition = await selectComposition({
       serveUrl,
       id: "VisualScene",
@@ -57,8 +62,13 @@ const run = async () => {
       },
       codec: sceneSpec.codec || "h264",
       outputLocation: outputPath,
-      inputProps: { sceneSpec }
+      inputProps: {sceneSpec},
+      overwrite: true,
     };
+
+    if (sceneSpec.render_concurrency !== null && sceneSpec.render_concurrency !== undefined) {
+      renderOptions.concurrency = Number(sceneSpec.render_concurrency);
+    }
 
     if (sceneSpec.crf !== null && sceneSpec.crf !== undefined) {
       renderOptions.crf = Number(sceneSpec.crf);
@@ -75,7 +85,7 @@ const run = async () => {
 
     await renderMedia(renderOptions);
   } finally {
-    fs.rmSync(publicDir, { recursive: true, force: true });
+    if (publicDir) fs.rmSync(publicDir, {recursive: true, force: true});
   }
 };
 

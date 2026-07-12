@@ -1,0 +1,1 @@
+Return only the requested structured episode direction. Create exactly one story brief for every required story ID, in the supplied order. Each brief must identify what that story contributes, what it must cover, what to avoid, and how it connects to its neighbors.

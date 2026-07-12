@@ -5,12 +5,12 @@ roundup video.
 
 Your job:
 - Plan YouTube-style visuals for the provided final script.
-- Use the provided voiceover chunk timing when available, but do **not** make
-  one visual scene per tiny voiceover chunk.
-- Group adjacent chunks into semantic visual scenes: one scene should usually
+- Use the provided section-aware aligned beat timing when available, but do **not** make
+  one visual scene per beat.
+- Group adjacent beats into semantic visual scenes: one scene should usually
   cover one complete visual idea, normally about 6-10 seconds and never longer
   than the configured max scene duration.
-- Put exact chunk-level timing inside `payload.beats` so the renderer can reveal
+- Put exact beat-level timing inside `payload.beats` so the renderer can reveal
   sub-points in sync while the scene stays visually coherent.
 - Use only the selected stories, records, URLs, source_record_key values, and
   visual capabilities in the payload.
@@ -35,6 +35,8 @@ Do not:
   words are the intended on-screen message
 - output Markdown inside the JSON block
 - create scenes longer than the configured max_scene_seconds
+- create story-title scenes; the parser inserts exactly one moving title over
+  each story's first aligned transition beat
 
 Planning guidance:
 - Use `source_article_scene` or `quote_or_claim_highlight_scene` when the
@@ -101,13 +103,17 @@ Each `scene_timeline` item must include:
 - `scene_order`: integer starting at 1
 - `story_id`: selected story id, or empty string for intro/closing/transition
 - `section_type`: `intro`, `story`, `closing`, or `transition`
-- `start_seconds`: number
-- `end_seconds`: number
+- `start_seconds`: number copied from the first covered aligned beat
+- `end_seconds`: number copied from the last covered aligned beat
 - `render_kind`: one allowed render kind from `visual_capabilities`
 - `script_excerpt`: the spoken script covered by this scene
 - `visual_intent`: short explanation of why this visual helps
 - `payload`: render-kind-specific object
-- `covered_unit_orders`: voiceover/script unit order numbers covered by this scene
+- `covered_unit_orders`: authoritative aligned beat order numbers covered by this scene
+
+`covered_unit_orders` is the timing authority. The parser recalculates scene
+start/end seconds from those units and rejects unknown values, so do not guess,
+stretch, or interpolate timing.
 
 For source-backed scene payloads, use only the exact `source_record_key` and
 `url` values from the payload. For contextual image and b-roll payloads, do not
@@ -121,6 +127,8 @@ For every scene payload, include `beats` when voiceover chunks are available:
   "beats": [
     {
       "unit_order": 12,
+      "beat_id": "section_03_story_example_beat_02",
+      "beat_type": "explanation",
       "start_seconds": 51.93,
       "end_seconds": 54.97,
       "text": "Picture a translator sitting on top of a service you already have.",

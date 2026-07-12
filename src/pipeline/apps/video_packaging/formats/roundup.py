@@ -4,32 +4,26 @@ from copy import deepcopy
 from typing import Any
 
 from ..config import ROUNDUP_FORMAT_CONTRACT, SCRIPT_APP_BY_FORMAT
-from ..utils import clean_text, count_values, normalize_key, round_to_five, safe_int
+from ..utils import clean_text, count_values, normalize_key, safe_int
 
 
 def build_roundup_packet(stories: list[dict[str, Any]], config: dict[str, Any]) -> dict[str, Any]:
     selected, selection_stats = select_roundup_stories(stories, config)
     roles = roundup_roles(len(selected))
-    seconds = roundup_seconds(
-        roles,
-        target_duration_seconds=int(config["target_duration_seconds"]),
-        intro_seconds=int(config["intro_seconds"]),
-        closing_seconds=int(config["closing_seconds"]),
-        role_weights=dict(config["role_weights"]),
-    )
-    packaged_stories = build_packaged_stories(selected, roles, seconds)
+    packaged_stories = build_packaged_stories(selected, roles)
+    duration_ceiling = config.get("duration_ceiling_seconds")
+    if duration_ceiling is None:
+        duration_ceiling = config.get("target_duration_seconds")
 
     packet = {
         "packet_type": "roundup",
         "selected_format": "roundup",
         "script_app": SCRIPT_APP_BY_FORMAT["roundup"],
-        "target_duration_seconds": int(config["target_duration_seconds"]),
-        "intro_seconds": int(config["intro_seconds"]),
-        "closing_seconds": int(config["closing_seconds"]),
-        "segment_seconds": sum(
-            int(story["video_segment"]["target_seconds"])
-            for story in packaged_stories
-        ),
+        "duration_policy": {
+            "mode": "content_driven",
+            "configured_ceiling_seconds": int(duration_ceiling) if duration_ceiling else None,
+            "timing_source_of_truth": "voiceover",
+        },
         "story_count": len(packaged_stories),
         "selected_story_ids": [_story_id(story) for story in packaged_stories],
         "stories": packaged_stories,
@@ -112,26 +106,7 @@ def roundup_roles(count: int) -> list[str]:
     return roles
 
 
-def roundup_seconds(
-    roles: list[str],
-    *,
-    target_duration_seconds: int,
-    intro_seconds: int,
-    closing_seconds: int,
-    role_weights: dict[str, float],
-) -> list[int]:
-    if not roles:
-        return []
-    story_budget = target_duration_seconds - intro_seconds - closing_seconds
-    weights = [float(role_weights[role]) for role in roles]
-    total_weight = sum(weights) or 1.0
-    seconds = [round_to_five(story_budget * weight / total_weight) for weight in weights]
-    drift = story_budget - sum(seconds)
-    seconds[-1] += drift
-    return seconds
-
-
-def build_packaged_stories(stories: list[dict[str, Any]], roles: list[str], seconds: list[int]) -> list[dict[str, Any]]:
+def build_packaged_stories(stories: list[dict[str, Any]], roles: list[str]) -> list[dict[str, Any]]:
     packaged = []
     for index, story in enumerate(stories, start=1):
         packaged_story = deepcopy(story)
@@ -141,7 +116,6 @@ def build_packaged_stories(stories: list[dict[str, Any]], roles: list[str], seco
             "segment_id": f"segment_{index:02d}_{story_id}",
             "segment_order": index,
             "role": roles[index - 1],
-            "target_seconds": int(seconds[index - 1]),
             "source_record_keys": [
                 clean_text(record.get("record_key", ""))
                 for record in records
@@ -162,7 +136,10 @@ def _rejection_reasons(
     product_counts: dict[str, int],
     event_counts: dict[str, int],
 ) -> list[str]:
+    entity_key, product_key, event_key = _diversity_keys(story)
     if selected_count >= max_stories:
+        if bool(config.get("reject_duplicate_events", True)) and event_key and event_counts.get(event_key, 0) >= 1:
+            return ["duplicate_canonical_event"]
         return ["after_max_stories"]
 
     reasons: list[str] = []
@@ -177,12 +154,17 @@ def _rejection_reasons(
     if bool(config["exclude_tutorials"]) and bool(identity.get("is_tutorial")):
         reasons.append("excluded_tutorial")
 
-    entity_key, product_key, event_key = _diversity_keys(story)
+    if bool(config.get("reject_duplicate_events", True)) and event_key and event_counts.get(event_key, 0) >= 1:
+        reasons.append("duplicate_canonical_event")
     if entity_key and entity_counts.get(entity_key, 0) >= int(config["max_per_entity"]):
         reasons.append("entity_diversity_cap")
     if product_key and product_counts.get(product_key, 0) >= int(config["max_per_product"]):
         reasons.append("product_diversity_cap")
-    if event_key and event_counts.get(event_key, 0) >= int(config["max_per_event_family"]):
+    if (
+        event_key
+        and not bool(config.get("reject_duplicate_events", True))
+        and event_counts.get(event_key, 0) >= int(config["max_per_event_family"])
+    ):
         reasons.append("event_family_diversity_cap")
     return reasons
 

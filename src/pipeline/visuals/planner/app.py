@@ -10,6 +10,17 @@ from typing import Any, Literal
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.pipeline.contracts import (
+    build_artifact_provenance,
+    build_text_script_provenance,
+    require_matching_run_id,
+    require_parent_fingerprint,
+    validate_artifact_provenance,
+    validate_script_provenance,
+    visual_plan_artifact_payload,
+    voiceover_artifact_payload,
+)
+
 from ..common import (
     clean_text,
     count_words,
@@ -395,6 +406,10 @@ def run(input_json: dict) -> dict:
     selected_format = clean_text(video_packaging.data.selected_format)
     llm_calls: list[dict[str, Any]] = []
 
+    require_matching_run_id(run_id, video_packaging.data.run_id, "video_packaging")
+    if request.input.script_generation is not None and request.input.script_generation.status != "ok":
+        raise ValueError("input.script_generation.status must be ok")
+
     failure_reason = _upstream_failure_reason(video_packaging, selected_format, video_packet)
     script_text = _extract_script_text(request)
     script_source = clean_text(request.input.script_source or "")
@@ -410,22 +425,30 @@ def run(input_json: dict) -> dict:
         )
 
     voiceover_package = normalize_voiceover_package(request.input.voiceover)
+    script_provenance = _resolve_script_provenance(request, script_text, script_source)
+    voiceover_provenance = _validate_voiceover_for_script(
+        voiceover_package,
+        run_id=run_id,
+        script_provenance=script_provenance,
+        script_sections=_script_generation_sections(request),
+    )
     script_units = _build_script_units(
         script_text=script_text,
         voiceover_package=voiceover_package,
-        video_packet=video_packet,
-        words_per_minute=int(config["words_per_minute"]),
+        script_sections=_script_generation_sections(request),
+        words_per_minute=int(config["diagnostic_words_per_minute"]),
     )
+    script_units = _attach_script_beat_context(script_units, request)
     stories = _selected_stories(video_packet)
     source_index = _build_source_index(stories)
-    story_ranges = _story_time_ranges(video_packet, stories)
+    script_asset_hints = _script_story_asset_hints(request)
     story_sections = _build_story_sections(
         request=request,
         script_text=script_text,
         script_units=script_units,
-        video_packet=video_packet,
         stories=stories,
     )
+    story_ranges = _story_time_ranges(story_sections, stories)
 
     episode_prompt_bundle = load_prompt_bundle(EPISODE_DIRECTOR_PROMPT_MODULE, config["prompt_version"])
     story_prompt_bundle = load_prompt_bundle(STORY_VISUAL_PLANNER_PROMPT_MODULE, config["prompt_version"])
@@ -451,6 +474,7 @@ def run(input_json: dict) -> dict:
         story_sections=story_sections,
         stories=stories,
         source_index=source_index,
+        script_asset_hints=script_asset_hints,
         episode_direction=episode_direction,
         config=config,
         prompt_bundle=story_prompt_bundle,
@@ -473,6 +497,8 @@ def run(input_json: dict) -> dict:
         story_drafts=story_drafts,
         config=config,
         llm_calls=llm_calls,
+        script_provenance=script_provenance,
+        voiceover_provenance=voiceover_provenance,
     )
     checks = _check_scene_plan(visual_scene_plan, config)
     visual_scene_plan["checks"] = checks
@@ -552,6 +578,7 @@ def _generate_story_visual_plans(
     story_sections: list[dict[str, Any]],
     stories: list[dict[str, Any]],
     source_index: dict[str, Any],
+    script_asset_hints: dict[str, dict[str, Any]],
     episode_direction: dict[str, Any],
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
@@ -576,6 +603,7 @@ def _generate_story_visual_plans(
             "scene_policy": config["scene_policy"],
             "visual_capabilities": _visual_capabilities_for_prompt(config),
             "story": _story_for_prompt(story, source_index, config),
+            "available_story_assets": script_asset_hints.get(story_id, {}),
             "story_section": _section_for_prompt(section),
             "script_units": _script_units_for_story_prompt(section.get("script_units", [])),
             "allowed_render_kinds": config["scene_policy"]["allowed_render_kinds"],
@@ -584,6 +612,9 @@ def _generate_story_visual_plans(
                 "plan_only_this_story": True,
                 "use_only_this_story_records": True,
                 "use_absolute_start_unit_order_values_from_script_units": True,
+                "treat_beat_id_and_visual_brief_as_authoritative_context": True,
+                "do_not_author_seconds_or_retime_narration": True,
+                "first_story_title_beat_is_inserted_deterministically": True,
                 "do_not_create_title_timeline_entity_recap_or_fallback_cards": True,
                 "prefer_source_article_scene_for_source_specific_claims": True,
                 "prefer_context_image_scene_for_concrete_physical_subjects": True,
@@ -735,6 +766,8 @@ def _build_visual_scene_plan(
     story_drafts: dict[str, dict[str, Any]],
     config: dict[str, Any],
     llm_calls: list[dict[str, Any]],
+    script_provenance: dict[str, Any],
+    voiceover_provenance: dict[str, Any] | None,
 ) -> dict[str, Any]:
     scene_timeline = _build_scene_timeline(
         story_sections=story_sections,
@@ -747,7 +780,7 @@ def _build_visual_scene_plan(
     asset_manifest = _build_asset_manifest(scene_timeline)
     total_duration = _total_duration(script_units, voiceover_package, video_packet)
     coverage = _coverage_report(scene_timeline, script_units, total_duration, config)
-    return {
+    visual_scene_plan = {
         "package_type": PACKAGE_TYPE,
         "selected_format": SUPPORTED_FORMAT,
         "planning_strategy": "episode_director_plus_per_story",
@@ -764,6 +797,7 @@ def _build_visual_scene_plan(
         "source_script": {
             "script_source": script_source or "script_generation",
             "word_count": count_words(script_text),
+            "script_fingerprint": script_provenance["script_fingerprint"],
         },
         "audio_timeline": _audio_context(voiceover_package, total_duration),
         "scene_policy": config["scene_policy"],
@@ -776,6 +810,17 @@ def _build_visual_scene_plan(
         "story_time_ranges": story_ranges,
         "planner_warnings": _planner_warnings(story_drafts),
     }
+    parents = {"script": script_provenance["script_fingerprint"]}
+    if voiceover_provenance:
+        parents["voiceover"] = voiceover_provenance["voiceover_fingerprint"]
+    visual_scene_plan["provenance"] = build_artifact_provenance(
+        artifact_type="visual_plan",
+        run_id=run_id,
+        parents=parents,
+        script_source=script_provenance.get("script_source", ""),
+        payload=visual_plan_artifact_payload(visual_scene_plan),
+    )
+    return visual_scene_plan
 
 
 def _build_scene_timeline(
@@ -871,7 +916,58 @@ def _normalize_story_candidate_scenes(
                 "reason": clean_text(draft.get("reason", "")),
             }
         )
-    return candidates
+    title_card = section.get("title_card") if isinstance(section.get("title_card"), dict) else None
+    if not title_card:
+        return candidates
+
+    remaining: list[dict[str, Any]] = []
+    for candidate in candidates:
+        candidate = dict(candidate)
+        candidate_start = safe_int(candidate.get("start_unit_order"), section_start)
+        candidate_end = safe_int(candidate.get("end_unit_order"), candidate_start)
+        if candidate_start <= section_start:
+            candidate_start = section_start + 1
+        if candidate_start <= candidate_end and candidate_start <= section_end:
+            candidate["start_unit_order"] = candidate_start
+            remaining.append(candidate)
+
+    display_title = clean_text(title_card.get("display_title")) or clean_text(story.get("story_title", ""))
+    subtitle = clean_text(title_card.get("subtitle"))
+    title_kind = "transition_stinger_scene" if "transition_stinger_scene" in set(policy["allowed_render_kinds"]) else "logo_reveal_scene"
+    title_payload = {
+        "transition_label": short_text(display_title, 62),
+        "subtitle": short_text(subtitle or clean_text((story.get("story_identity") or {}).get("why_it_matters", "")), 82),
+        "background_motif": "newsroom_grid",
+        "motion_style": "signal_wipe",
+        "eyebrow": f"STORY {safe_int((story.get('video_segment') or {}).get('segment_order'), 1)}",
+        "voice_behavior": "continue",
+        "configured_title_seconds": safe_float(title_card.get("duration_seconds"), 2.8),
+    }
+    if title_kind == "logo_reveal_scene":
+        primary_entity = _primary_entity_for_story(story_id, source_index)
+        title_payload = {
+            "entities": [primary_entity] if primary_entity else [],
+            "primary_entity": primary_entity,
+            "logo_strategy": "simple_icons_then_favicon_then_text",
+            "companion_text": short_text(display_title, 62),
+            "motion_style": "spotlight",
+            "voice_behavior": "continue",
+        }
+    title_candidate = {
+        "story_id": story_id,
+        "story_title": clean_text(story.get("story_title", "")),
+        "section_type": "story",
+        "start_unit_order": section_start,
+        "end_unit_order": section_start,
+        "render_kind": title_kind,
+        "script_excerpt": _section_unit_excerpt(section, section_start, section_start),
+        "visual_intent": "Introduce the story with a moving title while narration continues.",
+        "payload": title_payload,
+        "source_record_keys": [],
+        "source_urls": [],
+        "reason": "Deterministic story-title interstitial anchored to the canonical transition beat.",
+    }
+    return [title_candidate, *remaining]
 
 
 def _stitch_section(
@@ -996,6 +1092,11 @@ def _unit_time_slices(
     range_units = script_units[start_unit - 1 : end_unit]
     if not range_units:
         return []
+    if any(
+        safe_float(unit.get("end_seconds"), 0.0) - safe_float(unit.get("start_seconds"), 0.0) > max_seconds + 0.01
+        for unit in range_units
+    ):
+        return _fixed_time_slices(start_unit, end_unit, script_units, policy)
     slices: list[dict[str, Any]] = []
     current_units: list[dict[str, Any]] = []
     current_start = safe_float(range_units[0].get("start_seconds"), 0.0)
@@ -1020,6 +1121,11 @@ def _unit_time_slices(
     for index, unit in enumerate(range_units):
         if not current_units:
             current_start = safe_float(unit.get("start_seconds"), 0.0)
+        else:
+            candidate_end = safe_float(unit.get("end_seconds"), current_start)
+            if candidate_end - current_start > max_seconds + 0.01:
+                close_current()
+                current_start = safe_float(unit.get("start_seconds"), candidate_end)
         current_units.append(unit)
         current_end = safe_float(unit.get("end_seconds"), current_start)
         duration = max(0.0, current_end - current_start)
@@ -1053,9 +1159,12 @@ def _fixed_time_slices(
     section_start = safe_float(range_units[0].get("start_seconds"), 0.0)
     section_end = safe_float(range_units[-1].get("end_seconds"), section_start)
     slices: list[dict[str, Any]] = []
+    total_duration = max(0.0, section_end - section_start)
+    slice_count = max(1, math.ceil(total_duration / max_seconds))
+    balanced_duration = total_duration / slice_count if slice_count else total_duration
     cursor = section_start
-    while cursor < section_end:
-        slice_end = min(section_end, cursor + max_seconds)
+    for slice_index in range(slice_count):
+        slice_end = section_end if slice_index == slice_count - 1 else min(section_end, cursor + balanced_duration)
         unit_orders = []
         for unit in range_units:
             unit_order = safe_int(unit.get("order"), 0)
@@ -1121,12 +1230,16 @@ def _visual_beats_for_slice(unit_slice: dict[str, Any], script_units: list[dict[
         beats.append(
             {
                 "unit_order": order,
+                "beat_id": clean_text(unit.get("beat_id", "")),
+                "beat_type": clean_text(unit.get("beat_type", "")),
                 "start_seconds": round(start, 2),
                 "end_seconds": round(end, 2),
                 "relative_start_seconds": round(max(0.0, start - scene_start_seconds), 2),
                 "relative_end_seconds": round(max(0.0, end - scene_start_seconds), 2),
                 "text": text,
-                "visual_action": _visual_action_for_beat(text),
+                "visual_action": clean_text((unit.get("visual_brief") or {}).get("visual_intent", "")) or _visual_action_for_beat(text),
+                "visual_brief": unit.get("visual_brief", {}),
+                "source_record_keys": unit.get("source_record_keys", []),
                 "emphasis_words": meaningful_words(text)[:4],
             }
         )
@@ -1160,7 +1273,17 @@ def _fallback_candidate_for_slice(
     story_id = clean_text(section.get("story_id", ""))
     section_type = clean_text(section.get("section_type", ""))
     excerpt = _script_excerpt(script_units, unit_slice["start_unit_order"], unit_slice["end_unit_order"])
-    first_key = (source_index["record_keys_by_story"].get(story_id) or [""])[0]
+    covered_units = script_units[unit_slice["start_unit_order"] - 1 : unit_slice["end_unit_order"]]
+    first_unit = covered_units[0] if covered_units else {}
+    visual_brief = first_unit.get("visual_brief") if isinstance(first_unit.get("visual_brief"), dict) else {}
+    visual_intent = clean_text(visual_brief.get("visual_intent", ""))
+    hinted_keys = [
+        clean_text(key)
+        for unit in covered_units
+        for key in (unit.get("source_record_keys") or [])
+        if clean_text(key)
+    ]
+    first_key = (hinted_keys or source_index["record_keys_by_story"].get(story_id) or [""])[0]
     record = source_index["records_by_key"].get(first_key, {})
     url = clean_text(record.get("url", ""))
     primary_entity = _primary_entity_for_story(story_id, source_index)
@@ -1169,6 +1292,24 @@ def _fallback_candidate_for_slice(
         render_kind = "recap_sequence_scene" if "recap_sequence_scene" in allowed else "bullet_build_scene"
     elif section_type != "story":
         render_kind = "bullet_build_scene" if "bullet_build_scene" in allowed else "kinetic_type_scene"
+    elif visual_intent in {"story_title", "transition"} and "transition_stinger_scene" in allowed:
+        render_kind = "transition_stinger_scene"
+    elif visual_intent == "source_proof" and url and "source_article_scene" in allowed:
+        render_kind = "source_article_scene"
+    elif visual_intent == "entity_intro" and primary_entity and "logo_reveal_scene" in allowed:
+        render_kind = "logo_reveal_scene"
+    elif visual_intent == "product_demo" and url and "browser_walkthrough_scene" in allowed:
+        render_kind = "browser_walkthrough_scene"
+    elif visual_intent == "metric_explainer" and "data_counter_scene" in allowed:
+        render_kind = "data_counter_scene"
+    elif visual_intent == "process_explainer" and "architecture_flow_scene" in allowed:
+        render_kind = "architecture_flow_scene"
+    elif visual_intent == "comparison" and "entity_compare_scene" in allowed:
+        render_kind = "entity_compare_scene"
+    elif visual_intent == "context_media" and "context_image_scene" in allowed:
+        render_kind = "context_image_scene"
+    elif visual_intent == "takeaway" and "kinetic_type_scene" in allowed:
+        render_kind = "kinetic_type_scene"
     elif group_index == 1 and primary_entity:
         render_kind = "logo_reveal_scene"
     elif url and _excerpt_has_browser_context(excerpt) and "browser_walkthrough_scene" in allowed:
@@ -1298,6 +1439,9 @@ def _fallback_candidate_for_slice(
         "after": {"label": "After", "detail": "AI-assisted workflow", "items": _flow_step_labels_from_text(excerpt)[:3]},
         "transformation_label": "workflow shift",
         "transform_motion_style": "panel_morph",
+        "transition_label": clean_text(story.get("story_title", "")) or _short_phrase(excerpt),
+        "transition_subtitle": clean_text(visual_brief.get("on_screen_text", "")) or _short_phrase(excerpt),
+        "stinger_motion_style": "signal_wipe",
     }
     source_record_key, source_url = _source_for_scene(draft, story_id, render_kind, source_index)
     payload = _payload_for_scene(
@@ -1315,7 +1459,7 @@ def _fallback_candidate_for_slice(
         "section_type": section_type,
         "render_kind": render_kind,
         "script_excerpt": excerpt,
-        "visual_intent": _default_visual_intent(render_kind),
+        "visual_intent": clean_text(visual_brief.get("purpose", "")) or _default_visual_intent(render_kind),
         "payload": payload,
         "source_record_keys": [source_record_key] if source_record_key else [],
         "source_urls": [source_url] if source_url else [],
@@ -1389,6 +1533,12 @@ def _compact_scene_timeline(scenes: list[dict[str, Any]], policy: dict[str, Any]
         for index in range(len(compacted) - 1):
             first = compacted[index]
             second = compacted[index + 1]
+            if _is_story_title_interstitial(first) or _is_story_title_interstitial(second):
+                continue
+            if clean_text(first.get("section_type", "")) != clean_text(second.get("section_type", "")):
+                continue
+            if clean_text(first.get("story_id", "")) != clean_text(second.get("story_id", "")):
+                continue
             combined = safe_float(second.get("end_seconds"), 0.0) - safe_float(first.get("start_seconds"), 0.0)
             if combined <= max_scene_seconds + 0.01 and (
                 safe_float(first.get("duration_seconds"), 0.0) < min_scene_seconds
@@ -1414,6 +1564,12 @@ def _compact_scene_timeline(scenes: list[dict[str, Any]], policy: dict[str, Any]
         for index in range(len(compacted) - 1):
             first = compacted[index]
             second = compacted[index + 1]
+            if _is_story_title_interstitial(first) or _is_story_title_interstitial(second):
+                continue
+            if clean_text(first.get("section_type", "")) != clean_text(second.get("section_type", "")):
+                continue
+            if clean_text(first.get("story_id", "")) != clean_text(second.get("story_id", "")):
+                continue
             combined = safe_float(second.get("end_seconds"), 0.0) - safe_float(first.get("start_seconds"), 0.0)
             if combined > max_scene_seconds + 0.01:
                 continue
@@ -1434,6 +1590,8 @@ def _compact_scene_timeline(scenes: list[dict[str, Any]], policy: dict[str, Any]
 
 
 def _should_merge_semantic_neighbors(first: dict[str, Any], second: dict[str, Any], policy: dict[str, Any]) -> bool:
+    if _is_story_title_interstitial(first) or _is_story_title_interstitial(second):
+        return False
     if clean_text(first.get("story_id", "")) != clean_text(second.get("story_id", "")):
         return False
     if clean_text(first.get("section_type", "")) != clean_text(second.get("section_type", "")):
@@ -1462,6 +1620,14 @@ def _should_merge_semantic_neighbors(first: dict[str, Any], second: dict[str, An
     if safe_float(second.get("duration_seconds"), 0.0) < safe_float(policy.get("semantic_min_scene_seconds"), 5.0):
         return True
     return False
+
+
+def _is_story_title_interstitial(scene: dict[str, Any]) -> bool:
+    payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
+    return (
+        clean_text(scene.get("render_kind", "")) == "transition_stinger_scene"
+        and clean_text(payload.get("voice_behavior", "")) == "continue"
+    )
 
 
 def _scene_headline(scene: dict[str, Any]) -> str:
@@ -1840,7 +2006,6 @@ def _build_story_sections(
     request: VisualPlannerRequest,
     script_text: str,
     script_units: list[dict[str, Any]],
-    video_packet: dict[str, Any],
     stories: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     explicit_sections = _script_generation_sections(request)
@@ -1851,7 +2016,7 @@ def _build_story_sections(
     story_ids_with_units = {section.get("story_id") for section in sections if section.get("section_type") == "story"}
     expected_story_ids = {clean_text(story.get("story_id", "")) for story in stories}
     if expected_story_ids - story_ids_with_units:
-        sections = _sections_from_target_proportions(script_units, video_packet, stories)
+        sections = _sections_from_content_order(script_units, stories)
     return sections
 
 
@@ -1872,16 +2037,37 @@ def _sections_from_script_generation_sections(
     stories: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     story_lookup = {clean_text(story.get("story_id", "")): story for story in stories}
+    if script_units and all(clean_text(unit.get("section_id", "")) for unit in script_units):
+        sections: list[dict[str, Any]] = []
+        for section in explicit_sections:
+            section_id = clean_text(section.get("section_id", ""))
+            units = [unit for unit in script_units if clean_text(unit.get("section_id", "")) == section_id]
+            if not units:
+                continue
+            story_id = clean_text(section.get("story_id", ""))
+            mapped = _section_from_unit_range(
+                section_type=clean_text(section.get("section_type", "story")),
+                story=story_lookup.get(story_id, {}),
+                start_unit=safe_int(units[0].get("order"), 1),
+                end_unit=safe_int(units[-1].get("order"), 1),
+                script_units=script_units,
+                assignment_method="canonical_script_beats_with_voiceover_alignment",
+            )
+            mapped["section_id"] = section_id
+            mapped["title_card"] = section.get("title_card")
+            sections.append(mapped)
+        if len(sections) == len(explicit_sections):
+            return sections
     cursor = 1
     sections: list[dict[str, Any]] = []
     for index, section in enumerate(explicit_sections, start=1):
-        target_words = max(1, count_words(clean_text(section.get("narration_text", ""))))
+        section_word_count = max(1, count_words(clean_text(section.get("narration_text", ""))))
         start = cursor
         consumed = 0
-        while cursor <= len(script_units) and (consumed < target_words or index == len(explicit_sections)):
+        while cursor <= len(script_units) and (consumed < section_word_count or index == len(explicit_sections)):
             consumed += safe_int(script_units[cursor - 1].get("word_count"), count_words(script_units[cursor - 1].get("text", "")))
             cursor += 1
-            if index != len(explicit_sections) and consumed >= target_words:
+            if index != len(explicit_sections) and consumed >= section_word_count:
                 break
         end = max(start, min(len(script_units), cursor - 1))
         section_type = clean_text(section.get("section_type", "story")) or "story"
@@ -1902,7 +2088,7 @@ def _sections_from_script_generation_sections(
 def _sections_from_manual_script(script_text: str, script_units: list[dict[str, Any]], stories: list[dict[str, Any]]) -> list[dict[str, Any]]:
     paragraphs = _script_paragraphs(script_text)
     if not paragraphs:
-        return _sections_from_target_proportions(script_units, {"intro_seconds": 0, "closing_seconds": 0}, stories)
+        return _sections_from_content_order(script_units, stories)
     labels = _assign_paragraphs_to_sections(paragraphs, stories)
     unit_labels = _assign_units_to_paragraph_labels(script_units, paragraphs, labels)
     return _sections_from_unit_labels(unit_labels, script_units, stories, assignment_method="manual_script_inference")
@@ -2028,44 +2214,42 @@ def _sections_from_unit_labels(
     return [section for section in sections if section]
 
 
-def _sections_from_target_proportions(
+def _sections_from_content_order(
     script_units: list[dict[str, Any]],
-    video_packet: dict[str, Any],
     stories: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    total_duration = safe_float(script_units[-1].get("end_seconds"), 0.0) if script_units else 0.0
-    target_duration = safe_float(video_packet.get("target_duration_seconds"), total_duration) or total_duration or 1.0
-    scale = total_duration / target_duration if target_duration else 1.0
-    ranges: list[dict[str, Any]] = []
-    intro_end = safe_float(video_packet.get("intro_seconds"), 0.0) * scale
-    if intro_end > 0:
-        ranges.append({"section_type": "intro", "story": {}, "start": 0.0, "end": intro_end})
-    cursor = intro_end
-    for story in stories:
-        segment = story.get("video_segment") if isinstance(story.get("video_segment"), dict) else {}
-        duration = safe_float(segment.get("target_seconds"), 0.0) * scale
-        ranges.append({"section_type": "story", "story": story, "start": cursor, "end": cursor + duration})
-        cursor += duration
-    if cursor < total_duration:
-        ranges.append({"section_type": "closing", "story": {}, "start": cursor, "end": total_duration})
-
+    if not script_units:
+        return []
+    group_count = len(stories) + 2
+    labels_by_group = [
+        {"section_type": "intro", "story_id": ""},
+        *[
+            {"section_type": "story", "story_id": clean_text(story.get("story_id", ""))}
+            for story in stories
+        ],
+        {"section_type": "closing", "story_id": ""},
+    ]
+    if len(script_units) >= group_count:
+        base, remainder = divmod(len(script_units), group_count)
+        group_sizes = [base + (1 if index < remainder else 0) for index in range(group_count)]
+    else:
+        group_sizes = [1] * len(script_units) + [0] * (group_count - len(script_units))
     labels: list[dict[str, Any]] = []
-    for unit in script_units:
-        midpoint = _unit_midpoint(unit)
-        selected = ranges[-1] if ranges else {"section_type": "story", "story": stories[0] if stories else {}}
-        for item in ranges:
-            if safe_float(item.get("start"), 0.0) <= midpoint <= safe_float(item.get("end"), 0.0):
-                selected = item
+    unit_index = 0
+    for group_index, size in enumerate(group_sizes):
+        label = labels_by_group[group_index]
+        for _ in range(size):
+            if unit_index >= len(script_units):
                 break
-        story = selected.get("story") if isinstance(selected.get("story"), dict) else {}
-        labels.append(
-            {
-                "unit_order": safe_int(unit.get("order"), len(labels) + 1),
-                "section_type": clean_text(selected.get("section_type", "story")),
-                "story_id": clean_text(story.get("story_id", "")),
-            }
-        )
-    return _sections_from_unit_labels(labels, script_units, stories, assignment_method="target_proportion_fallback")
+            unit = script_units[unit_index]
+            labels.append(
+                {
+                    "unit_order": safe_int(unit.get("order"), unit_index + 1),
+                    **label,
+                }
+            )
+            unit_index += 1
+    return _sections_from_unit_labels(labels, script_units, stories, assignment_method="content_order_fallback")
 
 
 def _section_from_unit_range(
@@ -2110,6 +2294,12 @@ def _section_from_unit_range(
                 "end_seconds": unit["end_seconds"],
                 "duration_seconds": unit["duration_seconds"],
                 "text": unit["text"],
+                "section_id": unit.get("section_id", ""),
+                "story_id": unit.get("story_id", ""),
+                "beat_id": unit.get("beat_id", ""),
+                "beat_type": unit.get("beat_type", ""),
+                "source_record_keys": unit.get("source_record_keys", []),
+                "visual_brief": unit.get("visual_brief", {}),
             }
             for unit in units
         ],
@@ -2597,25 +2787,34 @@ def _selected_stories(video_packet: dict[str, Any]) -> list[dict[str, Any]]:
     )
 
 
-def _story_time_ranges(video_packet: dict[str, Any], stories: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    cursor = safe_float(video_packet.get("intro_seconds"), 0.0)
+def _story_time_ranges(
+    story_sections: list[dict[str, Any]],
+    stories: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    sections_by_story = {
+        clean_text(section.get("story_id", "")): section
+        for section in story_sections
+        if clean_text(section.get("section_type", "")) == "story"
+        and clean_text(section.get("story_id", ""))
+    }
     ranges: list[dict[str, Any]] = []
     for story in stories:
         story_id = clean_text(story.get("story_id", ""))
-        segment = story.get("video_segment") if isinstance(story.get("video_segment"), dict) else {}
-        duration = safe_float(segment.get("target_seconds"), 0.0)
-        if duration <= 0:
-            duration = safe_float(video_packet.get("segment_seconds"), 60.0)
+        section = sections_by_story.get(story_id)
+        if not section:
+            continue
+        start = safe_float(section.get("start_seconds"), 0.0)
+        end = safe_float(section.get("end_seconds"), start)
         ranges.append(
             {
                 "story_id": story_id,
                 "story_title": clean_text(story.get("story_title", "")),
-                "start_seconds": round(cursor, 2),
-                "end_seconds": round(cursor + duration, 2),
-                "duration_seconds": round(duration, 2),
+                "start_seconds": round(start, 2),
+                "end_seconds": round(end, 2),
+                "duration_seconds": round(max(0.0, end - start), 2),
+                "timing_source": clean_text(section.get("assignment_method", "")),
             }
         )
-        cursor += duration
     return ranges
 
 
@@ -2840,6 +3039,8 @@ def _visual_beat_map(scene_timeline: list[dict[str, Any]]) -> list[dict[str, Any
                     "section_type": scene.get("section_type", ""),
                     "render_kind": scene.get("render_kind", ""),
                     "unit_order": beat.get("unit_order"),
+                    "beat_id": beat.get("beat_id", ""),
+                    "beat_type": beat.get("beat_type", ""),
                     "start_seconds": beat.get("start_seconds"),
                     "end_seconds": beat.get("end_seconds"),
                     "relative_start_seconds": beat.get("relative_start_seconds"),
@@ -2883,6 +3084,23 @@ def _check_scene_plan(visual_scene_plan: dict[str, Any], config: dict[str, Any])
         errors.append(f"scene timeline has {coverage.get('gap_count')} time gaps")
     if safe_int(coverage.get("overlap_count"), 0) > 0:
         errors.append(f"scene timeline has {coverage.get('overlap_count')} time overlaps")
+    timeline_start = safe_float(coverage.get("timeline_start_seconds"), 0.0)
+    timeline_end = safe_float(coverage.get("timeline_end_seconds"), 0.0)
+    expected_end = safe_float(coverage.get("total_duration_seconds"), 0.0)
+    if abs(timeline_start) > 0.05:
+        errors.append(f"scene timeline must start at 0.0 seconds, got {timeline_start:.2f}")
+    if expected_end > 0 and abs(timeline_end - expected_end) > 0.25:
+        errors.append(
+            f"scene timeline must end at the authoritative duration: {timeline_end:.2f}s vs {expected_end:.2f}s"
+        )
+    for story_plan in visual_scene_plan.get("story_plans", []):
+        story_id = clean_text(story_plan.get("story_id", ""))
+        story_scenes = [scene for scene in scenes if clean_text(scene.get("story_id", "")) == story_id]
+        title_scenes = [scene for scene in story_scenes if _is_story_title_interstitial(scene)]
+        if len(title_scenes) != 1:
+            errors.append(f"{story_id} must have exactly one deterministic story-title interstitial; found {len(title_scenes)}")
+        elif story_scenes and title_scenes[0].get("scene_id") != story_scenes[0].get("scene_id"):
+            errors.append(f"{story_id} story-title interstitial must be the first scene in its story")
     source_scenes = [
         scene
         for scene in scenes
@@ -3106,6 +3324,77 @@ def _failed_response(
     return response.model_dump(mode="json")
 
 
+def _resolve_script_provenance(
+    request: VisualPlannerRequest,
+    script_text: str,
+    script_source: str,
+) -> dict[str, Any]:
+    script_generation = request.input.script_generation
+    if script_generation is None:
+        return build_text_script_provenance(
+            script_text,
+            run_id=request.run.run_id,
+            script_source=script_source or "input.script_text",
+        )
+    require_matching_run_id(request.run.run_id, script_generation.data.run_id, "script_generation")
+    return validate_script_provenance(
+        script_generation.data.script_package,
+        run_id=request.run.run_id,
+        upstream_run_id=script_generation.data.run_id,
+    )
+
+
+def _validate_voiceover_for_script(
+    voiceover_package: dict[str, Any] | None,
+    *,
+    run_id: str,
+    script_provenance: dict[str, Any],
+    script_sections: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not voiceover_package:
+        return None
+    require_matching_run_id(run_id, voiceover_package.get("run_id"), "voiceover")
+    provenance = voiceover_package.get("provenance")
+    validate_artifact_provenance(
+        provenance,
+        artifact_type="voiceover",
+        run_id=run_id,
+        payload=voiceover_artifact_payload(voiceover_package),
+        label="voiceover",
+    )
+    require_parent_fingerprint(
+        provenance,
+        parent_name="script",
+        expected=script_provenance["script_fingerprint"],
+        label="voiceover",
+    )
+    voiceover_fingerprint = clean_text((provenance or {}).get("voiceover_fingerprint"))
+    if not voiceover_fingerprint:
+        raise ValueError("voiceover.provenance.voiceover_fingerprint is required")
+    if script_sections:
+        expected_beats = {
+            clean_text(beat.get("beat_id")): clean_text(beat.get("narration_text"))
+            for section in script_sections
+            for beat in section.get("beats", [])
+            if isinstance(beat, dict) and clean_text(beat.get("beat_id"))
+        }
+        actual_beats = {
+            clean_text(beat.get("beat_id")): clean_text(beat.get("text"))
+            for unit in voiceover_package.get("audio_units", [])
+            if isinstance(unit, dict)
+            for beat in unit.get("aligned_beats", [])
+            if isinstance(beat, dict) and clean_text(beat.get("beat_id"))
+        }
+        if set(actual_beats) != set(expected_beats):
+            missing = sorted(set(expected_beats) - set(actual_beats))
+            extra = sorted(set(actual_beats) - set(expected_beats))
+            raise ValueError(f"voiceover beat IDs do not match the script; missing={missing[:8]}, extra={extra[:8]}")
+        changed = [beat_id for beat_id, text in expected_beats.items() if actual_beats.get(beat_id) != text]
+        if changed:
+            raise ValueError(f"voiceover narration does not match the current script beats: {changed[:8]}")
+    return provenance
+
+
 def _upstream_failure_reason(video_packaging, selected_format: str, video_packet: dict[str, Any]) -> str:
     if video_packaging.status and video_packaging.status != "ok":
         return "input.video_packaging.status must be ok"
@@ -3121,6 +3410,23 @@ def _upstream_failure_reason(video_packaging, selected_format: str, video_packet
 def _extract_script_text(request: VisualPlannerRequest) -> str:
     if request.input.script_generation is not None:
         package = request.input.script_generation.data.script_package
+        sections = package.get("sections") if isinstance(package.get("sections"), list) else []
+        projected_sections: list[str] = []
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            beats = section.get("beats") if isinstance(section.get("beats"), list) else []
+            text = " ".join(clean_text(beat.get("narration_text", "")) for beat in beats if isinstance(beat, dict)).strip()
+            if not text:
+                text = clean_text(section.get("narration_text", ""))
+            if text:
+                projected_sections.append(text)
+        if projected_sections:
+            projected = "\n\n".join(projected_sections)
+            full_script = clean_text(package.get("full_script", ""))
+            if full_script and clean_text(projected) != full_script:
+                raise ValueError("script_package.full_script does not match its deterministic section/beat projection")
+            return projected
         return str(package.get("full_script", "") or "").strip()
     return str(request.input.script_text or "").strip()
 
@@ -3129,17 +3435,128 @@ def _build_script_units(
     *,
     script_text: str,
     voiceover_package: dict[str, Any] | None,
-    video_packet: dict[str, Any],
+    script_sections: list[dict[str, Any]],
     words_per_minute: int,
 ) -> list[dict[str, Any]]:
     chunks = voiceover_chunks(voiceover_package)
     if chunks:
         return chunks
+    if script_sections:
+        return _estimated_script_beat_units(script_sections, words_per_minute)
     return split_script_units(
         script_text,
         words_per_minute=words_per_minute,
-        target_duration_seconds=safe_float(video_packet.get("target_duration_seconds"), None),
     )
+
+
+def _estimated_script_beat_units(
+    sections: list[dict[str, Any]],
+    words_per_minute: int,
+) -> list[dict[str, Any]]:
+    units: list[dict[str, Any]] = []
+    cursor = 0.0
+    for section in sections:
+        section_id = clean_text(section.get("section_id", ""))
+        beats = [beat for beat in section.get("beats", []) if isinstance(beat, dict)]
+        if not beats:
+            beats = [
+                {
+                    "beat_id": f"{section_id}_beat_01",
+                    "beat_type": clean_text(section.get("section_type", "")),
+                    "narration_text": clean_text(section.get("narration_text", "")),
+                    "source_record_keys": list(section.get("used_source_record_keys", [])),
+                    "visual_brief": {},
+                }
+            ]
+        for beat in beats:
+            text = clean_text(beat.get("narration_text", ""))
+            if not text:
+                continue
+            words = count_words(text)
+            duration = safe_float(beat.get("estimated_seconds"), 0.0)
+            if duration <= 0:
+                duration = words / max(1, words_per_minute) * 60.0
+            end = cursor + max(0.01, duration)
+            beat_id = clean_text(beat.get("beat_id", "")) or f"{section_id}_beat_{len(units) + 1:02d}"
+            units.append(
+                {
+                    "unit_id": beat_id,
+                    "order": len(units) + 1,
+                    "text": text,
+                    "word_count": words,
+                    "start_seconds": round(cursor, 2),
+                    "end_seconds": round(end, 2),
+                    "duration_seconds": round(end - cursor, 2),
+                    "timing_source": "script_beat_estimate",
+                    "section_id": section_id,
+                    "section_type": clean_text(section.get("section_type", "")),
+                    "story_id": clean_text(section.get("story_id", "")),
+                    "story_title": clean_text(section.get("story_title", "")),
+                    "beat_id": beat_id,
+                    "beat_type": clean_text(beat.get("beat_type", "")),
+                    "source_record_keys": list(beat.get("source_record_keys", [])),
+                    "visual_brief": dict(beat.get("visual_brief") or {}),
+                }
+            )
+            cursor = end
+    return units
+
+
+def _attach_script_beat_context(
+    script_units: list[dict[str, Any]],
+    request: VisualPlannerRequest,
+) -> list[dict[str, Any]]:
+    script_generation = request.input.script_generation
+    if script_generation is None:
+        return script_units
+    sections = script_generation.data.script_package.get("sections")
+    if not isinstance(sections, list):
+        return script_units
+    beat_index: dict[str, dict[str, Any]] = {}
+    section_index: dict[str, dict[str, Any]] = {}
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        section_id = clean_text(section.get("section_id", ""))
+        if section_id:
+            section_index[section_id] = section
+        for beat in section.get("beats", []):
+            if not isinstance(beat, dict):
+                continue
+            beat_id = clean_text(beat.get("beat_id", ""))
+            if beat_id:
+                beat_index[beat_id] = beat
+    enriched: list[dict[str, Any]] = []
+    for unit in script_units:
+        item = dict(unit)
+        beat = beat_index.get(clean_text(item.get("beat_id") or item.get("unit_id")), {})
+        section = section_index.get(clean_text(item.get("section_id", "")), {})
+        if beat:
+            item["beat_id"] = beat.get("beat_id", item.get("beat_id", ""))
+            item["beat_type"] = beat.get("beat_type", item.get("beat_type", ""))
+            item["source_record_keys"] = list(beat.get("source_record_keys", []))
+            item["visual_brief"] = dict(beat.get("visual_brief") or {})
+        if section:
+            item["section_type"] = section.get("section_type", item.get("section_type", ""))
+            item["story_id"] = section.get("story_id", item.get("story_id", ""))
+            item["story_title"] = section.get("story_title", item.get("story_title", ""))
+            item["title_card"] = section.get("title_card")
+        enriched.append(item)
+    return enriched
+
+
+def _script_story_asset_hints(request: VisualPlannerRequest) -> dict[str, dict[str, Any]]:
+    script_generation = request.input.script_generation
+    if script_generation is None:
+        return {}
+    raw = script_generation.data.script_package.get("story_asset_hints")
+    if not isinstance(raw, list):
+        return {}
+    return {
+        clean_text(item.get("story_id", "")): dict(item)
+        for item in raw
+        if isinstance(item, dict) and clean_text(item.get("story_id", ""))
+    }
 
 
 def _audio_context(voiceover_package: dict[str, Any] | None, total_duration: float) -> dict[str, Any]:
@@ -3153,8 +3570,11 @@ def _audio_context(voiceover_package: dict[str, Any] | None, total_duration: flo
         }
     audio = package.get("audio") if isinstance(package.get("audio"), dict) else {}
     chunks = voiceover_chunks(package)
+    timing_source = "voiceover_package"
+    if chunks:
+        timing_source = clean_text(chunks[0].get("timing_source", "")) or "voiceover_chunks"
     return {
-        "timing_source": "voiceover_chunks" if chunks else "voiceover_package",
+        "timing_source": timing_source,
         "duration_seconds": round(safe_float(audio.get("duration_seconds"), total_duration), 2),
         "chunk_count": len(chunks),
         "audio_path": clean_text(audio.get("full_audio_path") or audio.get("audio_path", "")),
@@ -3169,15 +3589,18 @@ def _total_duration(script_units: list[dict[str, Any]], voiceover_package: dict[
             return duration
     if script_units:
         return safe_float(script_units[-1].get("end_seconds"), 0.0)
-    return safe_float(video_packet.get("target_duration_seconds"), 0.0)
+    duration_policy = video_packet.get("duration_policy") if isinstance(video_packet.get("duration_policy"), dict) else {}
+    return safe_float(duration_policy.get("configured_ceiling_seconds"), 0.0)
 
 
 def _video_packet_summary(video_packet: dict[str, Any]) -> dict[str, Any]:
     return {
         "packet_type": clean_text(video_packet.get("packet_type", "")),
-        "target_duration_seconds": video_packet.get("target_duration_seconds"),
-        "intro_seconds": video_packet.get("intro_seconds"),
-        "closing_seconds": video_packet.get("closing_seconds"),
+        "duration_policy": video_packet.get("duration_policy") or {
+            "mode": "content_driven",
+            "configured_ceiling_seconds": video_packet.get("target_duration_seconds"),
+            "timing_source_of_truth": "voiceover",
+        },
         "story_count": len(video_packet.get("stories", [])),
         "selected_story_ids": video_packet.get("selected_story_ids", []),
     }
@@ -3225,6 +3648,10 @@ def _script_units_for_story_prompt(script_units: list[dict[str, Any]]) -> list[d
             "end_seconds": unit.get("end_seconds"),
             "duration_seconds": unit.get("duration_seconds"),
             "text": short_text(unit.get("text", ""), 320),
+            "beat_id": unit.get("beat_id", ""),
+            "beat_type": unit.get("beat_type", ""),
+            "source_record_keys": unit.get("source_record_keys", []),
+            "visual_brief": unit.get("visual_brief", {}),
         }
         for unit in script_units
     ]

@@ -6,6 +6,16 @@ import shutil
 import subprocess
 from typing import Any
 
+from src.pipeline.contracts import (
+    build_artifact_provenance,
+    file_sha256,
+    final_video_artifact_payload,
+    require_matching_run_id,
+    require_parent_fingerprint,
+    validate_artifact_provenance,
+    voiceover_artifact_payload,
+)
+
 from ..common import clean_text, iso_now, safe_float
 from .config import PACKAGE_TYPE
 from .contract import VideoAssemblyRequest, VideoAssemblyResponse
@@ -29,9 +39,57 @@ def run(input_json: dict) -> dict:
 
     visual_package = request.input.visual_render.data.visual_render_package
     voiceover_package = _normalize_voiceover_package(request.input.voiceover)
+    require_matching_run_id(request.run.run_id, request.input.visual_render.data.run_id, "visual_render")
+    require_matching_run_id(request.run.run_id, visual_package.get("run_id"), "visual_render_package")
+    require_matching_run_id(request.run.run_id, voiceover_package.get("run_id"), "voiceover")
+    render_provenance, voiceover_provenance = _validate_provenance_chain(
+        visual_package,
+        voiceover_package,
+    )
     rendered_scenes = _rendered_scenes(visual_package)
     audio_path = _voiceover_audio_path(voiceover_package)
-    failure_reason = _preflight_failure_reason(rendered_scenes, audio_path)
+    failure_reason = _preflight_failure_reason(rendered_scenes, audio_path, visual_package)
+    if not failure_reason:
+        declared_audio_hash = clean_text(voiceover_provenance.get("audio_sha256"))
+        actual_audio_hash = file_sha256(audio_path)
+        if declared_audio_hash != actual_audio_hash:
+            failure_reason = "Voiceover WAV does not match provenance.audio_sha256"
+
+    audio_duration = _probe_duration(request.config.ffprobe_path, audio_path) if audio_path.exists() else 0.0
+    clip_durations = [
+        _probe_duration(request.config.ffprobe_path, Path(clean_text(scene.get("output_path", ""))))
+        for scene in rendered_scenes
+    ]
+    visual_duration = round(sum(clip_durations), 2)
+    planned_visual_duration = round(
+        sum(safe_float(scene.get("duration_seconds"), 0.0) for scene in rendered_scenes),
+        2,
+    )
+    preflight_delta = abs(visual_duration - audio_duration) if visual_duration and audio_duration else 0.0
+    if not failure_reason and audio_duration <= 0:
+        failure_reason = f"Could not determine voiceover duration from {audio_path}"
+    if not failure_reason and any(duration <= 0 for duration in clip_durations):
+        bad = [
+            rendered_scenes[index].get("scene_id")
+            for index, duration in enumerate(clip_durations)
+            if duration <= 0
+        ]
+        failure_reason = f"Could not determine rendered duration for scenes: {bad[:10]}"
+    if not failure_reason and preflight_delta > request.config.duration_tolerance_seconds:
+        failure_reason = (
+            f"Rendered visual duration differs from voiceover before assembly by {preflight_delta:.2f}s "
+            f"(visual={visual_duration:.2f}s, audio={audio_duration:.2f}s, "
+            f"tolerance={request.config.duration_tolerance_seconds:.2f}s)"
+        )
+    if not failure_reason:
+        plan_duration = _planned_timeline_duration(visual_package)
+        if plan_duration <= 0:
+            failure_reason = "Visual render package is missing a valid planned timeline duration."
+        elif abs(plan_duration - audio_duration) > request.config.duration_tolerance_seconds:
+            failure_reason = (
+                f"Visual plan duration differs from voiceover by {abs(plan_duration - audio_duration):.2f}s "
+                f"(plan={plan_duration:.2f}s, audio={audio_duration:.2f}s)"
+            )
 
     command: list[str] = []
     fallback_command: list[str] = []
@@ -54,10 +112,6 @@ def run(input_json: dict) -> dict:
         elif not final_video_path.exists():
             failure_reason = "ffmpeg completed but final video was not created"
 
-    visual_duration = round(sum(safe_float(scene.get("duration_seconds"), 0.0) for scene in rendered_scenes), 2)
-    audio_duration = safe_float((voiceover_package.get("audio") or {}).get("duration_seconds"), 0.0)
-    if audio_duration <= 0 and audio_path:
-        audio_duration = _probe_duration(request.config.ffprobe_path, audio_path)
     final_duration = _probe_duration(request.config.ffprobe_path, final_video_path) if final_video_path.exists() else 0.0
     delta = abs(final_duration - audio_duration) if final_duration and audio_duration else 0.0
     if not failure_reason and delta > request.config.duration_tolerance_seconds:
@@ -65,6 +119,9 @@ def run(input_json: dict) -> dict:
             f"Final video duration differs from voiceover by {delta:.2f}s "
             f"(tolerance {request.config.duration_tolerance_seconds:.2f}s)"
         )
+    stream_types = _probe_stream_types(request.config.ffprobe_path, final_video_path) if final_video_path.exists() else set()
+    if not failure_reason and not {"audio", "video"}.issubset(stream_types):
+        failure_reason = f"Final video must contain audio and video streams; found {sorted(stream_types)}"
 
     status = "failed" if failure_reason else "ok"
     package = _build_package(
@@ -84,11 +141,15 @@ def run(input_json: dict) -> dict:
             "sample_rate_hz": request.config.audio_sample_rate_hz,
             "channels": request.config.audio_channels,
         },
+        render_provenance=render_provenance,
+        voiceover_provenance=voiceover_provenance,
     )
     summary = {
         "assembled_scene_count": len(rendered_scenes),
         "audio_duration_seconds": round(audio_duration, 2),
         "visual_duration_seconds": visual_duration,
+        "planned_visual_duration_seconds": planned_visual_duration,
+        "preflight_duration_delta_seconds": round(preflight_delta, 2),
         "final_duration_seconds": round(final_duration, 2),
         "duration_delta_seconds": round(delta, 2),
         "output_dir": str(output_dir),
@@ -143,7 +204,11 @@ def _voiceover_audio_path(voiceover_package: dict[str, Any]) -> Path:
     return Path(path).resolve() if path else Path("__missing_voiceover_audio__").resolve()
 
 
-def _preflight_failure_reason(rendered_scenes: list[dict[str, Any]], audio_path: Path) -> str:
+def _preflight_failure_reason(
+    rendered_scenes: list[dict[str, Any]],
+    audio_path: Path,
+    visual_package: dict[str, Any],
+) -> str:
     if not rendered_scenes:
         return "No rendered scenes were provided."
     failed = [scene for scene in rendered_scenes if scene.get("status") != "rendered"]
@@ -158,7 +223,29 @@ def _preflight_failure_reason(rendered_scenes: list[dict[str, Any]], audio_path:
         return f"Rendered scene files are missing: {missing[:5]}"
     if not audio_path.exists():
         return f"Voiceover audio file does not exist: {audio_path}"
+    expected_scenes = _planned_scenes(visual_package)
+    expected_ids = [clean_text(scene.get("scene_id", "")) for scene in expected_scenes]
+    actual_ids = [clean_text(scene.get("scene_id", "")) for scene in rendered_scenes]
+    if expected_ids != actual_ids:
+        return "Rendered scene IDs/order do not match the visual scene plan."
     return ""
+
+
+def _planned_scenes(visual_package: dict[str, Any]) -> list[dict[str, Any]]:
+    manifest = visual_package.get("visual_asset_manifest") or {}
+    plan = manifest.get("visual_scene_plan") or {}
+    scenes = plan.get("scene_timeline")
+    if not isinstance(scenes, list) or not scenes:
+        return []
+    return sorted(
+        (scene for scene in scenes if isinstance(scene, dict)),
+        key=lambda scene: int(scene.get("scene_order") or 999999),
+    )
+
+
+def _planned_timeline_duration(visual_package: dict[str, Any]) -> float:
+    scenes = _planned_scenes(visual_package)
+    return safe_float(scenes[-1].get("end_seconds"), 0.0) if scenes else 0.0
 
 
 def _write_concat_list(path: Path, rendered_scenes: list[dict[str, Any]]) -> None:
@@ -264,6 +351,78 @@ def _probe_duration(ffprobe_path: str, path: Path) -> float:
     return safe_float(completed.stdout.strip(), 0.0)
 
 
+def _probe_stream_types(ffprobe_path: str, path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    completed = subprocess.run(
+        [
+            ffprobe_path,
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "json",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return set()
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return set()
+    return {
+        clean_text(stream.get("codec_type", ""))
+        for stream in payload.get("streams", [])
+        if isinstance(stream, dict) and clean_text(stream.get("codec_type", ""))
+    }
+
+
+def _validate_provenance_chain(
+    visual_package: dict[str, Any],
+    voiceover_package: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    render_provenance = visual_package.get("provenance")
+    voiceover_provenance = voiceover_package.get("provenance")
+    if not isinstance(render_provenance, dict):
+        raise ValueError("visual_render_package.provenance is required")
+    if not isinstance(voiceover_provenance, dict):
+        raise ValueError("voiceover_package.provenance is required")
+    validate_artifact_provenance(
+        voiceover_provenance,
+        artifact_type="voiceover",
+        run_id=voiceover_package["run_id"],
+        payload=voiceover_artifact_payload(voiceover_package),
+        label="voiceover",
+    )
+    validate_artifact_provenance(
+        render_provenance,
+        artifact_type="visual_render",
+        run_id=visual_package["run_id"],
+        payload=_render_identity_payload(visual_package),
+        label="visual_render",
+    )
+    script_fingerprint = clean_text(voiceover_provenance.get("script_fingerprint"))
+    voiceover_fingerprint = clean_text(voiceover_provenance.get("voiceover_fingerprint"))
+    require_parent_fingerprint(
+        render_provenance,
+        parent_name="script",
+        expected=script_fingerprint,
+        label="visual_render",
+    )
+    require_parent_fingerprint(
+        render_provenance,
+        parent_name="voiceover",
+        expected=voiceover_fingerprint,
+        label="visual_render",
+    )
+    return render_provenance, voiceover_provenance
+
+
 def _build_package(
     *,
     run_id: str,
@@ -277,8 +436,10 @@ def _build_package(
     fallback_command: list[str],
     fallback_used: bool,
     audio_encoding: dict[str, Any],
+    render_provenance: dict[str, Any],
+    voiceover_provenance: dict[str, Any],
 ) -> dict[str, Any]:
-    return {
+    package = {
         "package_type": PACKAGE_TYPE,
         "run_id": run_id,
         "generated_at": generated_at,
@@ -286,6 +447,7 @@ def _build_package(
         "final_video_path": str(final_video_path) if final_video_path.exists() else "",
         "concat_list_path": str(concat_list_path),
         "scene_count": len(rendered_scenes),
+        "scene_ids": [clean_text(scene.get("scene_id", "")) for scene in rendered_scenes],
         "scene_paths": [clean_text(scene.get("output_path", "")) for scene in rendered_scenes],
         "voiceover_audio_path": clean_text(
             (voiceover_package.get("audio") or {}).get("full_audio_path")
@@ -296,4 +458,37 @@ def _build_package(
         "fallback_ffmpeg_command": fallback_command,
         "fallback_used": fallback_used,
         "audio_encoding": audio_encoding,
+    }
+    if final_video_path.exists():
+        package["final_video_sha256"] = file_sha256(final_video_path)
+    package["provenance"] = build_artifact_provenance(
+        artifact_type="final_video",
+        run_id=run_id,
+        parents={
+            "script": voiceover_provenance["script_fingerprint"],
+            "voiceover": voiceover_provenance["voiceover_fingerprint"],
+            "visual_plan": render_provenance["visual_plan_fingerprint"],
+            "visual_render": render_provenance["artifact_fingerprint"],
+        },
+        script_source=voiceover_provenance.get("script_source", ""),
+        payload=final_video_artifact_payload(package),
+    )
+    return package
+
+
+def _render_identity_payload(package: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "render_settings": package.get("render_settings", {}),
+        "rendered_scenes": [
+            {
+                "scene_id": scene.get("scene_id", ""),
+                "scene_order": scene.get("scene_order"),
+                "render_kind": scene.get("render_kind", ""),
+                "duration_seconds": scene.get("duration_seconds", 0),
+                "status": scene.get("status", ""),
+                "output_path": scene.get("output_path", ""),
+            }
+            for scene in package.get("rendered_scenes", [])
+            if isinstance(scene, dict)
+        ],
     }

@@ -5,6 +5,14 @@ Plan renderable visual scenes only for the single story provided in the task
 payload. Use the story's script units, timing, source records, and the visual
 capability registry.
 
+Each script unit may carry a canonical beat_id, beat_type, source_record_keys,
+and visual_brief written with the narration. Treat these as authoritative
+semantic context. You choose the best renderable implementation; you do not
+rewrite the narration, move a beat to another story, or invent timing. The
+system derives seconds from aligned voiceover and inserts the moving story
+title over the first transition beat deterministically, so do not create a
+second title scene.
+
 This system must not create PowerPoint-style visuals. Do not use generic title
 cards, timeline cards, entity cards, recap cards, quote cards, data cards, or
 fallback cards. Use only the renderable scene families listed in the provided

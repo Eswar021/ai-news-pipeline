@@ -22,6 +22,11 @@ The stages are intentionally separate:
 - `render` turns each resolved scene into an MP4 clip.
 - `assembly` concatenates clips and attaches the voiceover.
 
+Every production stage carries artifact provenance. The visual plan is bound
+to one script and voiceover fingerprint; media discovery, asset resolution,
+and rendering propagate that lineage. A mismatched or historical artifact is
+rejected before expensive work instead of being selected by modification time.
+
 If story-level LLM planning fails, do not let that silently become a generic
 video. `visuals.planner.allow_deterministic_story_fallbacks` defaults to
 `false`, so structural LLM/schema failures stop at planning. Set it to `true`
@@ -46,7 +51,9 @@ Purpose:
 - read the video packet, script, optional voiceover package, and visual config
 - create an episode-level direction
 - plan renderable scenes per selected story
-- stitch scenes deterministically to script or voiceover timing
+- consume canonical beat IDs, visual briefs, source keys, and aligned voice timing
+- insert one moving story-title interstitial over each story's first transition beat
+- stitch scenes deterministically without allowing the LLM to author raw seconds
 - return `data.visual_scene_plan`
 
 The planner uses LangChain structured output with Pydantic models. Durable
@@ -67,17 +74,23 @@ URLs. The planner does not search, download, capture, resolve, or render media.
 Script input can come from either:
 
 - `input.script_generation`, the App 5 script-generation envelope.
-- `input.script_text`, the parsed ChatGPT handoff/manual script text.
+- `input.script_text`, an explicit unstructured text fallback for isolated tests.
 
-The planner normalizes both into the same internal script units before section
-mapping and scene planning. App 5 sections are preferred when present; manual
-scripts use story/entity/paragraph inference plus voiceover chunks when
-available.
+Production native and ChatGPT scripts both arrive through
+`input.script_generation` and already share canonical sections and audiovisual
+beats. The planner joins those beats to
+`voiceover.audio_units[].aligned_beats` by ID, then sends only one story's
+beats, records, source keys, visual briefs, and available asset hints to that
+story's LLM call. Paragraph/entity inference is used only for an intentionally
+unstructured `script_text` test input.
 
-The planner should not treat voiceover chunks as visual scenes. Voiceover chunks
-are timing units; visual scenes are semantic units. A scene may cover several
-adjacent chunks when they form one understandable visual idea, and the scene
-payload should carry `beats` with the exact chunk timing for internal reveals.
+The planner should not treat beats as one-scene-per-beat instructions. Beats
+are semantic timing anchors; one scene may cover adjacent beats when they form
+one understandable visual idea. Scene payloads retain every covered `beat_id`
+and exact timing for internal reveals. A beat longer than the render cap is
+split into balanced visual slices without losing its identity. Title
+interstitials are protected from compaction and cannot merge into neighboring
+sections.
 
 ### 2. Media Discovery
 
@@ -167,8 +180,10 @@ from src.pipeline.visuals.render import run
 Purpose:
 
 - validate scene durations before rendering
-- call the Remotion CLI adapter
-- render one MP4 clip per scene
+- build the Remotion project once per render run
+- render independent MP4 scene clips with bounded parallel workers
+- cap Remotion frame concurrency inside each scene to avoid CPU/RAM overload
+- retry failed or missing scene outputs serially and preserve attempt logs
 - return `data.visual_render_package`
 
 The Remotion source lives under:
@@ -178,6 +193,22 @@ src/pipeline/visuals/remotion_engine/
 ```
 
 Run `npm install` there on a fresh machine before rendering.
+
+Render concurrency is config-driven:
+
+```text
+worker_count          scene clips rendered at the same time
+frame_concurrency     Remotion browser tabs used inside each scene render
+max_render_attempts   bounded attempts per scene; retries run serially
+```
+
+Do not start two full render cells at the same time. One render run already
+uses multiple scene workers and browser tabs; overlapping runs compete for the
+same CPU, memory, and encoders and can be slower than one bounded run.
+
+The production profile keeps 2K resolution and CRF-based quality while using
+the `veryfast` x264 preset. This favors shorter local render time and somewhat
+larger clips instead of reducing resolution.
 
 ### 5. Assembly
 
@@ -189,8 +220,12 @@ from src.pipeline.visuals.assembly import run
 
 Purpose:
 
+- verify script, voiceover, visual-plan, and render fingerprints
+- probe each rendered clip and the WAV before invoking ffmpeg
+- require planned scene IDs/order and real visual duration to match the audio
 - concatenate rendered scene clips
 - attach the selected voiceover WAV
+- verify that the final MP4 contains both video and audio streams
 - write the final review MP4
 - return `data.final_video_package`
 
@@ -264,6 +299,8 @@ Scene payloads may include:
   "beats": [
     {
       "unit_order": 12,
+      "beat_id": "section_02_story_example_beat_03",
+      "beat_type": "explanation",
       "start_seconds": 51.93,
       "end_seconds": 54.97,
       "relative_start_seconds": 0,
@@ -402,7 +439,7 @@ the narration easier to understand.
 
 When changing visuals:
 
-- read this README and `docs/architecture/visuals_roadmap.md`
+- read this README and `docs/current_system_architecture.md`
 - inspect the actual planner, resolver, render, and Remotion code before edits
 - keep visual behavior config-driven
 - keep prompt instructions in versioned prompt files

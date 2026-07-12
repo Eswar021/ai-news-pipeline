@@ -3,9 +3,14 @@
 Standalone JSON/dict adapters for manual or external workflows.
 
 - `chatgpt_exporter`: produces paste-ready instruction and payload files.
-- `chatgpt_script_parser`: converts a manual ChatGPT response into the canonical script contract.
-- `chatgpt_visual_plan_parser`: validates a manual visual plan into the canonical planner contract.
-- `publish_handoff`: creates a human publishing-review document from current content and media envelopes.
+- `chatgpt_script_parser`: validates explicit story beats, or normalizes marked
+  prose into the canonical section/beat/title/audio-plan contract with
+  content-driven length.
+- `chatgpt_visual_plan_parser`: retimes manual scenes from authoritative aligned
+  beat orders, inserts deterministic moving story titles, splits overlong
+  scenes, and validates the canonical planner contract.
+- `publish_handoff`: validates finalized metadata and matching script,
+  voiceover, visual, and final-video lineage before creating a human review document.
 
 Core modules return files in memory. Notebooks or CLIs own file writing.
 

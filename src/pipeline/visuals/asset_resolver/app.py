@@ -7,6 +7,14 @@ from typing import Any
 
 from playwright.sync_api import sync_playwright
 
+from src.pipeline.contracts import (
+    build_artifact_provenance,
+    require_matching_run_id,
+    require_parent_fingerprint,
+    validate_artifact_provenance,
+    visual_plan_artifact_payload,
+)
+
 from ..common import clean_text, counter_dict, iso_now
 from ..generators.logo_reveal import resolve_logo_asset
 from ..generators.source_screenshot import capture_source_viewport
@@ -64,12 +72,34 @@ def run(input_json: dict) -> dict:
     logos_dir.mkdir(parents=True, exist_ok=True)
 
     visual_media_package = _visual_media_package(request)
+    canonical_visual_scene_plan = request.input.visual_scene_planning.data.visual_scene_plan
     visual_scene_plan = (
         visual_media_package.get("visual_scene_plan", {})
         if visual_media_package
-        else request.input.visual_scene_planning.data.visual_scene_plan
+        else canonical_visual_scene_plan
     )
     scenes = visual_scene_plan.get("scene_timeline", [])
+    require_matching_run_id(
+        request.run.run_id,
+        request.input.visual_scene_planning.data.run_id,
+        "visual_scene_planning",
+    )
+    plan_provenance = _required_plan_provenance(canonical_visual_scene_plan, request.run.run_id)
+    if visual_media_package:
+        require_matching_run_id(request.run.run_id, visual_media_package.get("run_id"), "visual_media")
+        validate_artifact_provenance(
+            visual_media_package.get("provenance"),
+            artifact_type="visual_media",
+            run_id=request.run.run_id,
+            payload=_media_identity_payload(visual_media_package),
+            label="visual_media",
+        )
+        require_parent_fingerprint(
+            visual_media_package.get("provenance"),
+            parent_name="visual_plan",
+            expected=plan_provenance["visual_plan_fingerprint"],
+            label="visual_media",
+        )
     resolved_assets: list[dict[str, Any]] = []
     media_selections = {
         clean_text(selection.get("scene_id", "")): selection
@@ -127,6 +157,7 @@ def run(input_json: dict) -> dict:
         visual_scene_plan=visual_scene_plan,
         visual_media_package=visual_media_package,
         resolved_assets=resolved_assets,
+        plan_provenance=plan_provenance,
     )
     summary = _build_summary(
         resolved_assets=resolved_assets,
@@ -302,6 +333,7 @@ def _build_manifest(
     visual_scene_plan: dict[str, Any],
     visual_media_package: dict[str, Any],
     resolved_assets: list[dict[str, Any]],
+    plan_provenance: dict[str, Any],
 ) -> dict[str, Any]:
     by_scene_id = {asset["scene_id"]: asset for asset in resolved_assets}
     render_scenes: list[dict[str, Any]] = []
@@ -313,7 +345,7 @@ def _build_manifest(
                 "resolved_asset": asset,
             }
         )
-    return {
+    manifest = {
         "package_type": PACKAGE_TYPE,
         "run_id": run_id,
         "generated_at": generated_at,
@@ -323,6 +355,22 @@ def _build_manifest(
         "resolved_assets": resolved_assets,
         "render_scenes": render_scenes,
     }
+    parents = {
+        "visual_plan": plan_provenance["visual_plan_fingerprint"],
+        "script": plan_provenance["script_fingerprint"],
+    }
+    if plan_provenance.get("voiceover_fingerprint"):
+        parents["voiceover"] = plan_provenance["voiceover_fingerprint"]
+    if visual_media_package:
+        parents["visual_media"] = visual_media_package["provenance"]["artifact_fingerprint"]
+    manifest["provenance"] = build_artifact_provenance(
+        artifact_type="visual_assets",
+        run_id=run_id,
+        parents=parents,
+        script_source=plan_provenance.get("script_source", ""),
+        payload=_asset_identity_payload(manifest),
+    )
+    return manifest
 
 
 def _build_summary(
@@ -370,3 +418,51 @@ def _visual_media_package(request: AssetResolverRequest) -> dict[str, Any]:
     if envelope is None:
         return {}
     return envelope.data.visual_media_package
+
+
+def _required_plan_provenance(plan: dict[str, Any], run_id: str) -> dict[str, Any]:
+    provenance = plan.get("provenance")
+    if not isinstance(provenance, dict):
+        raise ValueError("visual_scene_plan.provenance is required")
+    require_matching_run_id(run_id, provenance.get("run_id"), "visual_scene_plan.provenance")
+    validate_artifact_provenance(
+        provenance,
+        artifact_type="visual_plan",
+        run_id=run_id,
+        payload=visual_plan_artifact_payload(plan),
+        label="visual_scene_plan",
+    )
+    for field in ("visual_plan_fingerprint", "script_fingerprint"):
+        if not clean_text(provenance.get(field)):
+            raise ValueError(f"visual_scene_plan.provenance.{field} is required")
+    return provenance
+
+
+def _media_identity_payload(package: dict[str, Any]) -> dict[str, Any]:
+    plan = package.get("visual_scene_plan") or {}
+    return {
+        "selections": package.get("selections", []),
+        "fallbacks": package.get("fallbacks", []),
+        "unresolved": package.get("unresolved", []),
+        "scene_timeline": plan.get("scene_timeline", []),
+    }
+
+
+def _asset_identity_payload(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "resolved_assets": [
+            {
+                "scene_id": asset.get("scene_id", ""),
+                "asset_type": asset.get("asset_type", ""),
+                "status": asset.get("status", ""),
+                "asset_path": asset.get("asset_path", ""),
+            }
+            for asset in manifest.get("resolved_assets", [])
+            if isinstance(asset, dict)
+        ],
+        "scene_ids": [
+            scene.get("scene_id", "")
+            for scene in manifest.get("render_scenes", [])
+            if isinstance(scene, dict)
+        ],
+    }

@@ -5,10 +5,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .config import (
+    DEFAULT_DIAGNOSTIC_WORDS_PER_MINUTE,
+    DEFAULT_LLM_RETRY_ENABLED,
+    DEFAULT_LLM_RETRY_INITIAL_DELAY_SECONDS,
+    DEFAULT_LLM_RETRY_MAX_ATTEMPTS,
+    DEFAULT_LLM_RETRY_MAX_DELAY_SECONDS,
     DEFAULT_MAX_REVISION_PASSES,
-    DEFAULT_REFLECTION_ENABLED,
-    DEFAULT_REFLECTION_TARGET_SCORE,
+    DEFAULT_REVIEW_ENABLED,
     DEFAULT_SCRIPT_WORKER_COUNT,
+    DEFAULT_TITLE_CARD_SECONDS,
 )
 
 
@@ -63,28 +68,121 @@ class SourcePolicy(BaseModel):
         return self
 
 
-class ReflectionConfig(BaseModel):
-    model_config = ConfigDict(extra="allow")
+class LLMRetryConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-    enabled: bool = DEFAULT_REFLECTION_ENABLED
+    enabled: bool = DEFAULT_LLM_RETRY_ENABLED
+    max_attempts: int = DEFAULT_LLM_RETRY_MAX_ATTEMPTS
+    initial_delay_seconds: float = DEFAULT_LLM_RETRY_INITIAL_DELAY_SECONDS
+    max_delay_seconds: float = DEFAULT_LLM_RETRY_MAX_DELAY_SECONDS
+
+    @model_validator(mode="after")
+    def retry_policy_must_be_bounded(self) -> "LLMRetryConfig":
+        if self.max_attempts < 1 or self.max_attempts > 8:
+            raise ValueError("llm_retry.max_attempts must be between 1 and 8")
+        if self.initial_delay_seconds < 0.1 or self.initial_delay_seconds > 30:
+            raise ValueError("llm_retry.initial_delay_seconds must be between 0.1 and 30")
+        if self.max_delay_seconds < self.initial_delay_seconds:
+            raise ValueError("llm_retry.max_delay_seconds must be >= initial_delay_seconds")
+        if self.max_delay_seconds > 120:
+            raise ValueError("llm_retry.max_delay_seconds must be <= 120")
+        return self
+
+
+class SectionWritingGuidance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    suggested_words: int | None = None
+    beat_guidance: str
+    editorial_goal: str
+
+    @field_validator("suggested_words")
+    @classmethod
+    def suggested_words_must_be_positive(cls, value: int | None) -> int | None:
+        if value is not None and value < 1:
+            raise ValueError("writing_guidance suggested_words must be positive when provided")
+        return value
+
+
+class WritingGuidance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    intro: SectionWritingGuidance = Field(
+        default_factory=lambda: SectionWritingGuidance(
+            suggested_words=70,
+            beat_guidance="Use two or three purposeful beats.",
+            editorial_goal="Hook the viewer and preview the episode without listing every headline.",
+        )
+    )
+    lead: SectionWritingGuidance = Field(
+        default_factory=lambda: SectionWritingGuidance(
+            suggested_words=240,
+            beat_guidance="Use as many distinct beats as the explanation naturally needs.",
+            editorial_goal="Explain the strongest story fully, clearly, and without padding.",
+        )
+    )
+    major: SectionWritingGuidance = Field(
+        default_factory=lambda: SectionWritingGuidance(
+            suggested_words=180,
+            beat_guidance="Use a compact sequence of distinct explanatory beats.",
+            editorial_goal="Cover what changed, why it matters, and the useful caveat.",
+        )
+    )
+    brief: SectionWritingGuidance = Field(
+        default_factory=lambda: SectionWritingGuidance(
+            suggested_words=120,
+            beat_guidance="Use a few focused beats and finish once the takeaway is clear.",
+            editorial_goal="Deliver the essential update without stretching limited source material.",
+        )
+    )
+    closing: SectionWritingGuidance = Field(
+        default_factory=lambda: SectionWritingGuidance(
+            suggested_words=45,
+            beat_guidance="Use one or two concise beats.",
+            editorial_goal="Synthesize the episode and end naturally without repeating every story.",
+        )
+    )
+    connector: SectionWritingGuidance = Field(
+        default_factory=lambda: SectionWritingGuidance(
+            suggested_words=8,
+            beat_guidance="Use one natural spoken line.",
+            editorial_goal="Introduce the next story while its title motion appears.",
+        )
+    )
+
+
+class ReviewConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = DEFAULT_REVIEW_ENABLED
     max_revision_passes: int = DEFAULT_MAX_REVISION_PASSES
-    target_score: int = DEFAULT_REFLECTION_TARGET_SCORE
+    quality_criteria: list[str] = Field(
+        default_factory=lambda: [
+            "clear spoken explanation",
+            "strong viewer value",
+            "natural YouTube pacing",
+            "no repetition or filler",
+            "no hype or fake certainty",
+            "visualizable story beats",
+        ]
+    )
 
     @field_validator("max_revision_passes")
     @classmethod
     def revision_passes_must_be_bounded(cls, value: int) -> int:
         if value < 0:
-            raise ValueError("reflection.max_revision_passes must be non-negative")
-        if value > 3:
-            raise ValueError("reflection.max_revision_passes should stay <= 3 for notebook runs")
+            raise ValueError("review.max_revision_passes must be non-negative")
+        if value > 2:
+            raise ValueError("review.max_revision_passes must be <= 2")
         return value
 
-    @field_validator("target_score")
+    @field_validator("quality_criteria")
     @classmethod
-    def target_score_must_be_valid(cls, value: int) -> int:
-        if value < 1 or value > 10:
-            raise ValueError("reflection.target_score must be between 1 and 10")
-        return value
+    def quality_criteria_must_not_be_empty(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if isinstance(item, str) and item.strip()]
+        if not cleaned:
+            raise ValueError("review.quality_criteria must contain at least one criterion")
+        return cleaned
 
 
 class RoundupScriptConfig(BaseModel):
@@ -95,12 +193,14 @@ class RoundupScriptConfig(BaseModel):
     base_url: str | None = None
     prompt_version: str
     temperature: float
-    words_per_minute: int
-    duration_tolerance_seconds: int
+    diagnostic_words_per_minute: int = DEFAULT_DIAGNOSTIC_WORDS_PER_MINUTE
     worker_count: int = DEFAULT_SCRIPT_WORKER_COUNT
+    title_card_seconds: float = DEFAULT_TITLE_CARD_SECONDS
+    llm_retry: LLMRetryConfig = Field(default_factory=LLMRetryConfig)
+    writing_guidance: WritingGuidance = Field(default_factory=WritingGuidance)
     script_style: ScriptStyle
     source_policy: SourcePolicy
-    reflection: ReflectionConfig = Field(default_factory=ReflectionConfig)
+    review: ReviewConfig = Field(default_factory=ReviewConfig)
 
     @field_validator("model", "prompt_version")
     @classmethod
@@ -116,18 +216,18 @@ class RoundupScriptConfig(BaseModel):
             raise ValueError("config.temperature must be between 0 and 2")
         return value
 
-    @field_validator("words_per_minute", "worker_count")
+    @field_validator("diagnostic_words_per_minute", "worker_count")
     @classmethod
     def positive_int_fields(cls, value: int) -> int:
         if value < 1:
-            raise ValueError("config.words_per_minute and worker_count must be at least 1")
+            raise ValueError("config.diagnostic_words_per_minute and worker_count must be at least 1")
         return value
 
-    @field_validator("duration_tolerance_seconds")
+    @field_validator("title_card_seconds")
     @classmethod
-    def duration_tolerance_must_be_non_negative(cls, value: int) -> int:
-        if value < 0:
-            raise ValueError("config.duration_tolerance_seconds must be non-negative")
+    def title_card_seconds_must_be_bounded(cls, value: float) -> float:
+        if value < 1.5 or value > 5:
+            raise ValueError("config.title_card_seconds must be between 1.5 and 5 seconds")
         return value
 
 
@@ -137,9 +237,10 @@ class VideoPacket(BaseModel):
     packet_type: str
     selected_format: str
     script_app: str
-    target_duration_seconds: int
-    intro_seconds: int
-    closing_seconds: int
+    duration_policy: dict[str, Any] = Field(default_factory=dict)
+    target_duration_seconds: int | None = None
+    intro_seconds: int | None = None
+    closing_seconds: int | None = None
     segment_seconds: int | None = None
     story_count: int | None = None
     selected_story_ids: list[str] = Field(default_factory=list)
@@ -153,18 +254,11 @@ class VideoPacket(BaseModel):
             raise ValueError("video_packet packet_type, selected_format, and script_app must not be empty")
         return value
 
-    @field_validator("target_duration_seconds")
+    @field_validator("target_duration_seconds", "intro_seconds", "closing_seconds", "segment_seconds")
     @classmethod
-    def target_duration_must_be_positive(cls, value: int) -> int:
-        if value < 1:
-            raise ValueError("video_packet.target_duration_seconds must be positive")
-        return value
-
-    @field_validator("intro_seconds", "closing_seconds")
-    @classmethod
-    def bookend_seconds_must_be_non_negative(cls, value: int) -> int:
-        if value < 0:
-            raise ValueError("video_packet intro_seconds and closing_seconds must be non-negative")
+    def legacy_timing_fields_must_not_be_negative(cls, value: int | None) -> int | None:
+        if value is not None and value < 0:
+            raise ValueError("legacy video-packet timing fields must not be negative")
         return value
 
 
@@ -197,11 +291,166 @@ class ScriptGenerationRequest(BaseModel):
     input: ScriptGenerationInput
 
 
+class VisualBriefContract(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    purpose: str
+    visual_intent: Literal[
+        "story_title",
+        "source_proof",
+        "entity_intro",
+        "product_demo",
+        "metric_explainer",
+        "process_explainer",
+        "comparison",
+        "context_media",
+        "transition",
+        "takeaway",
+    ]
+    preferred_asset_types: list[
+        Literal["source_page", "product_ui", "logo", "photo", "video", "chart", "diagram", "kinetic_text"]
+    ] = Field(default_factory=list)
+    must_show: list[str] = Field(default_factory=list)
+    on_screen_text: str = ""
+    avoid: list[str] = Field(default_factory=list)
+
+
+class ScriptBeatContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    beat_id: str
+    beat_order: int
+    beat_type: Literal[
+        "hook",
+        "transition",
+        "what_changed",
+        "explanation",
+        "example",
+        "why_it_matters",
+        "caveat",
+        "takeaway",
+        "intro",
+        "conclusion",
+    ]
+    story_id: str = ""
+    narration_text: str
+    word_count: int
+    estimated_seconds: float
+    source_record_keys: list[str] = Field(default_factory=list)
+    visual_brief: VisualBriefContract
+
+    @field_validator("beat_id", "narration_text")
+    @classmethod
+    def beat_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("script beat IDs and narration must not be empty")
+        return value
+
+
+class StoryTitleCardContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_title: str
+    subtitle: str = ""
+    duration_seconds: float
+    voice_behavior: Literal["continue"]
+    anchor_beat_id: str
+
+
+class ScriptSectionContract(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    section_id: str
+    section_type: Literal["intro", "story", "closing"]
+    section_order: int
+    story_id: str = ""
+    story_title: str = ""
+    role: str = ""
+    target_seconds: int | None = None
+    word_budget: int | None = None
+    title_card: StoryTitleCardContract | None = None
+    beats: list[ScriptBeatContract]
+    narration_text: str
+    word_count: int
+    estimated_seconds: float
+    used_story_ids: list[str] = Field(default_factory=list)
+    used_source_record_keys: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def story_sections_require_title_cards(self) -> "ScriptSectionContract":
+        if not self.beats:
+            raise ValueError(f"{self.section_id} must contain script beats")
+        if self.section_type == "story" and self.title_card is None:
+            raise ValueError(f"{self.section_id} must contain a story title-card contract")
+        if self.section_type != "story" and self.title_card is not None:
+            raise ValueError(f"{self.section_id} must not contain a story title-card contract")
+        return self
+
+
+class FullScriptStatsContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    total_word_count: int
+    estimated_duration_seconds: float
+    section_order: list[str]
+    beat_count: int
+
+
+class ScriptAudioUnitContract(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    audio_unit_id: str
+    section_id: str
+    section_type: Literal["intro", "story", "closing"]
+    story_id: str = ""
+    story_title: str = ""
+    narration_text: str = ""
+    beat_ids: list[str]
+
+
+class ScriptAudioPlanContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    unit_strategy: Literal["one_audio_unit_per_section_with_beat_anchors"]
+    units: list[ScriptAudioUnitContract]
+
+
+class ScriptChecksContract(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    passed: bool
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RoundupScriptPackage(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    package_type: Literal["roundup_script"]
+    selected_format: Literal["roundup"]
+    generation_source: Literal["native_app", "chatgpt_handoff"]
+    provenance: dict[str, Any]
+    generation_strategy: str
+    duration_policy: dict[str, Any] = Field(default_factory=dict)
+    target_duration_seconds: int | None = None
+    intro_seconds: int | None = None
+    closing_seconds: int | None = None
+    story_count: int = 0
+    selected_story_ids: list[str] = Field(default_factory=list)
+    section_plan: list[dict[str, Any]] = Field(default_factory=list)
+    story_asset_hints: list[dict[str, Any]] = Field(default_factory=list)
+    sections: list[ScriptSectionContract]
+    full_script: str
+    full_script_stats: FullScriptStatsContract
+    audio_plan: ScriptAudioPlanContract
+    checks: ScriptChecksContract
+
+
 class ScriptGenerationData(BaseModel):
     run_id: str
     generated_at: str
     selected_format: str
-    script_package: dict[str, Any]
+    script_package: RoundupScriptPackage
 
 
 class ScriptGenerationSummary(BaseModel):
@@ -217,6 +466,8 @@ class ScriptGenerationSummary(BaseModel):
 
 class ScriptGenerationHandoff(BaseModel):
     ready_for_metadata_creation: bool
+    ready_for_voiceover: bool
+    ready_for_visual_planning: bool
 
 
 class ScriptGenerationResponse(BaseModel):

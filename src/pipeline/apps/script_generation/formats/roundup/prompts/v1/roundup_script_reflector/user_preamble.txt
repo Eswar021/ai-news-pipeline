@@ -1,9 +1,0 @@
-Review the current full script as a YouTube video.
-
-Rules:
-1. Be direct and practical.
-2. If the script is already strong enough, set should_revise to false.
-3. If revising would improve watchability, set should_revise to true and give a concise rewrite_brief.
-4. priority_fixes should focus on hook, clarity, flow, pacing, transition quality, audience fit, and ending.
-5. Do not produce a long compliance critique.
-6. Do not ask for a rewrite only because the script could be more technically cautious.

@@ -17,12 +17,14 @@ def make_llm(
     model: str,
     temperature: float = 0.4,
     base_url: str | None = None,
+    max_retries: int = 0,
 ):
     provider = provider.lower().strip()
     if provider == "openai":
         kwargs: dict[str, Any] = {
             "model": model,
             "api_key": _resolve_env(["OPENAI_API_KEY", "OPENAI_API_KEY_A_C_C"]),
+            "max_retries": max_retries,
         }
         if _model_supports_temperature(model):
             kwargs["temperature"] = temperature
@@ -33,6 +35,7 @@ def make_llm(
             "model": model,
             "api_key": os.getenv("LMSTUDIO_API_KEY", "lm-studio"),
             "base_url": base_url or os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1"),
+            "max_retries": max_retries,
         }
         if _model_supports_temperature(model):
             kwargs["temperature"] = temperature

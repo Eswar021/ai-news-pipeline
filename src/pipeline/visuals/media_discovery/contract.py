@@ -129,7 +129,7 @@ class VisualMediaConfig(BaseModel):
 class VisualScenePlanData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    run_id: str | None = None
+    run_id: str
     generated_at: str | None = None
     selected_format: str | None = None
     visual_scene_plan: dict[str, Any]

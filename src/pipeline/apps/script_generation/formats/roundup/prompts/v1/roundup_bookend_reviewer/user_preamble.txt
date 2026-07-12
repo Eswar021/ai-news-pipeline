@@ -1,0 +1,1 @@
+Return only the requested structured review result and always provide complete candidate bookends. Set should_apply_revision true only when the candidate materially improves the current bookends or fixes a structural issue. Do not lengthen the intro, connectors, or closing merely to approach suggested words.

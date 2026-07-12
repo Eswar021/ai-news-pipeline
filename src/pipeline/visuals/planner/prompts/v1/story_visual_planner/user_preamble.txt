@@ -3,6 +3,9 @@ Create visual scenes for exactly one story.
 Important rules:
 - Cover the provided story_section script units from start to finish.
 - Every scene must include start_unit_order and end_unit_order values from the provided script_units list.
+- Use the canonical beat_id, beat_type, source_record_keys, and visual_brief on each script unit to keep the visual tied to what is spoken.
+- Do not return raw start/end seconds; aligned voiceover owns timing.
+- Do not plan a duplicate title scene for the first story transition beat; code inserts that scene.
 - Do not create one scene for every script unit by default. Group adjacent units into a semantic visual scene when they form one complete idea.
 - Aim for scenes around 6-10 seconds when the timing allows, while respecting scene_policy.max_scene_seconds.
 - Use each scene's start_unit_order/end_unit_order to say which units it covers; the system will preserve exact unit-level beat timing later.

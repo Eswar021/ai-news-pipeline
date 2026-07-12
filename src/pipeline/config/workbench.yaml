@@ -31,17 +31,12 @@ profiles:
       roundup:
         candidate_limit: 20
         min_stories: 3
-        max_stories: 7
-        target_duration_seconds: 480
-        intro_seconds: 35
-        closing_seconds: 20
-        role_weights:
-          lead: 1.35
-          major: 1.05
-          brief: 0.75
+        max_stories: 5
+        duration_mode: content_driven
         max_per_entity: 2
         max_per_product: 1
         max_per_event_family: 2
+        reject_duplicate_events: true
         allowed_priority_buckets:
           - high
           - medium
@@ -53,9 +48,39 @@ profiles:
       model: gpt-4o
       prompt_version: v1
       temperature: 0.4
-      words_per_minute: 150
-      duration_tolerance_seconds: 45
+      diagnostic_words_per_minute: 140
       worker_count: 1
+      title_card_seconds: 2.8
+      llm_retry:
+        enabled: true
+        max_attempts: 5
+        initial_delay_seconds: 1.0
+        max_delay_seconds: 30.0
+      writing_guidance:
+        intro:
+          suggested_words: 70
+          beat_guidance: Use two or three purposeful beats.
+          editorial_goal: Hook the viewer and preview the episode without listing every headline.
+        lead:
+          suggested_words: 240
+          beat_guidance: Use as many distinct beats as the explanation naturally needs.
+          editorial_goal: Explain the strongest story fully, clearly, and without padding.
+        major:
+          suggested_words: 180
+          beat_guidance: Use a compact sequence of distinct explanatory beats.
+          editorial_goal: Cover what changed, why it matters, and the useful caveat.
+        brief:
+          suggested_words: 120
+          beat_guidance: Use a few focused beats and finish once the takeaway is clear.
+          editorial_goal: Deliver the essential update without stretching limited source material.
+        closing:
+          suggested_words: 45
+          beat_guidance: Use one or two concise beats.
+          editorial_goal: Synthesize the episode and end naturally without repeating every story.
+        connector:
+          suggested_words: 8
+          beat_guidance: Use one natural spoken line.
+          editorial_goal: Introduce the next story while its title motion appears.
       script_style:
         audience: AI-curious professionals
         tone: clear, energetic, grounded
@@ -67,10 +92,16 @@ profiles:
       source_policy:
         use_selected_stories_only: true
         include_full_records: true
-      reflection:
+      review:
         enabled: true
         max_revision_passes: 1
-        target_score: 8
+        quality_criteria:
+          - clear spoken explanation
+          - strong viewer value
+          - natural YouTube pacing
+          - no repetition or filler
+          - no hype or fake certainty
+          - visualizable story beats
 
     metadata_creator:
       provider: openai
@@ -85,13 +116,17 @@ profiles:
       memory_context:
         recent_title_angles: []
 
+    metadata_finalizer:
+      require_all_script_sections: true
+      first_chapter_tolerance_seconds: 0.25
+
     visuals:
       planner:
         provider: openai
         model: gpt-4o-mini
         prompt_version: v1
         temperature: 0.3
-        words_per_minute: 150
+        diagnostic_words_per_minute: 150
         allow_deterministic_story_fallbacks: false
         style:
           visual_language: premium YouTube AI news motion graphics
@@ -709,11 +744,15 @@ profiles:
         fps: 30
         codec: h264
         crf: 15
-        x264_preset: medium
+        x264_preset: veryfast
         pixel_format: yuv420p
         video_bitrate: null
+        bundle_timeout_seconds: 240
         render_timeout_seconds: 240
         worker_count: 3
+        frame_concurrency: 2
+        max_render_attempts: 2
+        keep_render_logs: true
         max_scene_duration_seconds: null
         scene_limit: null
 
@@ -752,6 +791,10 @@ profiles:
         max_sentences_per_chunk: 4
         chunk_pause_seconds: 0.12
         paragraph_pause_seconds: 0.38
+      alignment:
+        require_script_beats: true
+        beat_pause_seconds: 0.08
+        section_pause_seconds: 0.32
       chatterbox:
         device: auto
         exaggeration: 0.65

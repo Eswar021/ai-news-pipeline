@@ -3,13 +3,17 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from .checks import build_full_script, check_script_package
+from src.pipeline.contracts import build_script_provenance
+
+from .assembler import assemble_script
+from .checks import check_script_package
 from .config import (
-    FULL_SCRIPT_PROMPT_MODULE,
-    REFLECTION_PROMPT_MODULE,
-    REVISION_PROMPT_MODULE,
+    BOOKEND_REVIEWER_PROMPT_MODULE,
+    BOOKEND_WRITER_PROMPT_MODULE,
+    DIRECTOR_PROMPT_MODULE,
     SCRIPT_APP,
-    STORY_USAGE_PROMPT_MODULE,
+    STORY_REVIEWER_PROMPT_MODULE,
+    STORY_WRITER_PROMPT_MODULE,
     SUPPORTED_FORMAT,
 )
 from .contract import ScriptGenerationRequest, ScriptGenerationResponse
@@ -45,16 +49,18 @@ def run(input_json: dict) -> dict:
 
     section_plan = build_roundup_section_inputs(video_packet, config)
     prompt_bundles = {
-        "story_usage": load_prompt_bundle(STORY_USAGE_PROMPT_MODULE, config["prompt_version"]),
-        "full_script": load_prompt_bundle(FULL_SCRIPT_PROMPT_MODULE, config["prompt_version"]),
-        "reflection": load_prompt_bundle(REFLECTION_PROMPT_MODULE, config["prompt_version"]),
-        "revision": load_prompt_bundle(REVISION_PROMPT_MODULE, config["prompt_version"]),
+        "director": load_prompt_bundle(DIRECTOR_PROMPT_MODULE, config["prompt_version"]),
+        "story_writer": load_prompt_bundle(STORY_WRITER_PROMPT_MODULE, config["prompt_version"]),
+        "story_reviewer": load_prompt_bundle(STORY_REVIEWER_PROMPT_MODULE, config["prompt_version"]),
+        "bookend_writer": load_prompt_bundle(BOOKEND_WRITER_PROMPT_MODULE, config["prompt_version"]),
+        "bookend_reviewer": load_prompt_bundle(BOOKEND_REVIEWER_PROMPT_MODULE, config["prompt_version"]),
     }
     llm = make_llm(
         provider=config["provider"],
         model=config["model"],
         temperature=float(config["temperature"]),
         base_url=config.get("base_url"),
+        max_retries=0,
     )
     generated = generate_roundup_script(
         video_packet=video_packet,
@@ -64,20 +70,26 @@ def run(input_json: dict) -> dict:
         llm=llm,
         llm_calls=llm_calls,
     )
-    sections = generated["sections"]
-    full_script = build_full_script(sections, int(config["words_per_minute"]))
+    assembled = assemble_script(
+        section_plan=section_plan,
+        director=generated["director"],
+        story_segments=generated["story_segments"],
+        bookends=generated["bookends"],
+        words_per_minute=int(config["diagnostic_words_per_minute"]),
+        title_card_seconds=float(config["title_card_seconds"]),
+    )
     script_package = _build_script_package(
         video_packet=video_packet,
         section_plan=section_plan,
         generated=generated,
-        sections=sections,
-        full_script=full_script,
+        assembled=assembled,
     )
-    checks = check_script_package(
+    script_package["provenance"] = build_script_provenance(
         script_package,
-        video_packet,
-        duration_tolerance_seconds=int(config["duration_tolerance_seconds"]),
+        run_id=run_id,
+        script_source="native_app",
     )
+    checks = check_script_package(script_package, video_packet)
     script_package["checks"] = checks
     status = "ok" if checks["passed"] else "failed"
     failure_reason = "" if status == "ok" else "; ".join(checks["errors"])
@@ -98,7 +110,11 @@ def run(input_json: dict) -> dict:
             llm_calls=llm_calls,
             failure_reason=failure_reason,
         ),
-        handoff={"ready_for_metadata_creation": status == "ok"},
+        handoff={
+            "ready_for_metadata_creation": status == "ok",
+            "ready_for_voiceover": status == "ok",
+            "ready_for_visual_planning": status == "ok",
+        },
         llm_calls=llm_calls,
     )
     return response.model_dump(mode="json")
@@ -125,30 +141,26 @@ def _build_script_package(
     video_packet: dict[str, Any],
     section_plan: list[dict[str, Any]],
     generated: dict[str, Any],
-    sections: list[dict[str, Any]],
-    full_script: dict[str, Any],
+    assembled: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         "package_type": "roundup_script",
         "selected_format": SUPPORTED_FORMAT,
         "generation_source": "native_app",
-        "target_duration_seconds": int(video_packet["target_duration_seconds"]),
-        "intro_seconds": int(video_packet["intro_seconds"]),
-        "closing_seconds": int(video_packet["closing_seconds"]),
+        "duration_policy": _duration_policy(video_packet),
         "story_count": len(video_packet.get("stories", [])),
         "selected_story_ids": list(video_packet.get("selected_story_ids", [])),
         "section_plan": _compact_section_plan(section_plan),
-        "story_usage_cards": generated["story_usage_cards"],
-        "script_strategy": generated.get("script_strategy", ""),
-        "revision_notes_applied": generated.get("revision_notes_applied", []),
-        "reflection": generated["reflection"],
-        "sections": sections,
-        "full_script": full_script["narration_text"],
-        "full_script_stats": {
-            "total_word_count": int(full_script["total_word_count"]),
-            "estimated_duration_seconds": float(full_script["estimated_duration_seconds"]),
-            "section_order": full_script["section_order"],
-        },
+        "generation_strategy": assembled["generation_strategy"],
+        "episode_direction": assembled["episode_direction"],
+        "story_segments": generated["story_segments"],
+        "story_asset_hints": generated["story_asset_hints"],
+        "bookends": generated["bookends"],
+        "review": generated["review"],
+        "sections": assembled["sections"],
+        "full_script": assembled["full_script"],
+        "full_script_stats": assembled["full_script_stats"],
+        "audio_plan": assembled["audio_plan"],
         "checks": {},
     }
 
@@ -162,8 +174,7 @@ def _compact_section_plan(section_plan: list[dict[str, Any]]) -> list[dict[str, 
             "story_id": section.get("story_id", ""),
             "story_title": section.get("story_title", ""),
             "role": section.get("role", ""),
-            "target_seconds": section["target_seconds"],
-            "word_budget": section["word_budget"],
+            "writing_guidance": section.get("writing_guidance", {}),
             "allowed_story_ids": section["allowed_story_ids"],
             "allowed_source_record_keys": section["allowed_source_record_keys"],
         }
@@ -184,30 +195,40 @@ def _failed_response(
         "package_type": "roundup_script",
         "selected_format": SUPPORTED_FORMAT,
         "generation_source": "native_app",
-        "target_duration_seconds": int(video_packet.get("target_duration_seconds", 0) or 0),
+        "duration_policy": _duration_policy(video_packet),
         "sections": [],
         "section_plan": [],
-        "story_usage_cards": [],
-        "script_strategy": "",
-        "revision_notes_applied": [],
-        "reflection": {
-            "enabled": bool(config.get("reflection", {}).get("enabled", True)),
-            "iterations": [],
+        "generation_strategy": "director_plus_per_story_beats_plus_bookends",
+        "episode_direction": {},
+        "story_segments": [],
+        "story_asset_hints": [],
+        "bookends": {},
+        "review": {
+            "enabled": bool(config.get("review", {}).get("enabled", True)),
+            "story_reviews": [],
+            "bookend_reviews": [],
+            "bookend_final_gate_issues": [],
             "revision_count": 0,
-            "final_score": None,
         },
         "full_script": "",
         "full_script_stats": {
             "total_word_count": 0,
             "estimated_duration_seconds": 0.0,
             "section_order": [],
+            "beat_count": 0,
         },
+        "audio_plan": {"unit_strategy": "one_audio_unit_per_section_with_beat_anchors", "units": []},
         "checks": {
             "passed": False,
             "errors": [reason],
             "warnings": [],
         },
     }
+    script_package["provenance"] = build_script_provenance(
+        script_package,
+        run_id=run_id,
+        script_source="native_app",
+    )
     response = ScriptGenerationResponse(
         status="failed",
         data={
@@ -225,7 +246,11 @@ def _failed_response(
             llm_calls=llm_calls,
             failure_reason=reason,
         ),
-        handoff={"ready_for_metadata_creation": False},
+        handoff={
+            "ready_for_metadata_creation": False,
+            "ready_for_voiceover": False,
+            "ready_for_visual_planning": False,
+        },
         llm_calls=llm_calls,
     )
     return response.model_dump(mode="json")
@@ -259,21 +284,40 @@ def _build_summary(
             "model": config.get("model", ""),
             "prompt_version": config.get("prompt_version", ""),
             "worker_count": int(config.get("worker_count", 1)),
-            "reflection_enabled": bool(config.get("reflection", {}).get("enabled", True)),
-            "max_revision_passes": int(config.get("reflection", {}).get("max_revision_passes", 1)),
-            "target_score": int(config.get("reflection", {}).get("target_score", 8)),
-            "parallelized_steps": ["story_usage_analyzer"] if int(config.get("worker_count", 1)) > 1 else [],
+            "review_enabled": bool(config.get("review", {}).get("enabled", True)),
+            "max_revision_passes": int(config.get("review", {}).get("max_revision_passes", 1)),
+            "retry_policy": config.get("llm_retry", {}),
+            "parallelized_steps": ["roundup_story_writer"] if int(config.get("worker_count", 1)) > 1 else [],
             "serial_steps": [
-                "story_usage_analyzer",
-                "roundup_full_script_writer",
-                "roundup_script_reflector",
-                "roundup_script_reviser",
+                "roundup_director",
+                "roundup_bookend_writer",
             ],
         },
-        "reflection": script_package.get("reflection", {}),
+        "content_policy": {
+            "mode": "content_driven",
+            "word_counts_are_approval_gates": False,
+            "duration_is_an_approval_gate": False,
+            "timing_source_of_truth": "voiceover",
+            "diagnostic_words_per_minute": int(config.get("diagnostic_words_per_minute", 0)),
+            "writing_guidance": config.get("writing_guidance", {}),
+        },
+        "review": script_package.get("review", {}),
         "checks": script_package.get("checks", {}),
     }
 
 
 def _iso_now() -> str:
     return datetime.now(IST).isoformat()
+
+
+def _duration_policy(video_packet: dict[str, Any]) -> dict[str, Any]:
+    policy = dict(video_packet.get("duration_policy") or {})
+    if not policy:
+        policy = {
+            "mode": "content_driven",
+            "configured_ceiling_seconds": video_packet.get("target_duration_seconds"),
+            "timing_source_of_truth": "voiceover",
+        }
+    policy.setdefault("mode", "content_driven")
+    policy.setdefault("timing_source_of_truth", "voiceover")
+    return policy

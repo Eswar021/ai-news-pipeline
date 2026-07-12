@@ -107,7 +107,7 @@ class MetadataConfig(BaseModel):
 class ScriptGenerationData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    run_id: str | None = None
+    run_id: str
     generated_at: str | None = None
     selected_format: str
     script_package: dict[str, Any]
@@ -125,7 +125,7 @@ class ScriptGenerationEnvelope(BaseModel):
 class VideoPackagingData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    run_id: str | None = None
+    run_id: str
     generated_at: str | None = None
     selected_format: str
     script_app: str
@@ -172,6 +172,8 @@ class MetadataSummary(BaseModel):
 
 
 class MetadataHandoff(BaseModel):
+    ready_for_metadata_finalization: bool
+    chapters_finalized: bool
     ready_for_media_production: bool
 
 

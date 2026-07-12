@@ -4,10 +4,8 @@ This file is the standing contract for work in this repository.
 
 Before changing pipeline code, read:
 
-- `docs/architecture/pipeline_application_architecture.md`
-- `docs/architecture/media_modules.md` for handoff, voiceover, or visual work
-- `docs/architecture/visuals_roadmap.md` and `src/pipeline/visuals/README.md`
-  for visual work
+- `docs/current_system_architecture.md`
+- `src/pipeline/visuals/README.md` when changing visual implementation
 
 ## Canonical Runtime
 
@@ -26,7 +24,9 @@ src/pipeline/
 │   ├── story_mapping/
 │   ├── video_packaging/
 │   ├── script_generation/
-│   └── metadata_creator/
+│   ├── metadata_creator/
+│   └── metadata_finalizer/
+├── contracts/
 ├── handoffs/
 ├── orchestration/
 ├── voiceover/
@@ -103,6 +103,8 @@ output/
 │   ├── video_packaging/
 │   ├── script_generation/
 │   ├── metadata_creator/
+│   ├── metadata_finalizer/
+│   ├── orchestration/
 │   ├── voiceover/
 │   └── visuals/
 ├── tests/
@@ -128,7 +130,9 @@ raw records
   -> ranked stories carrying records
   -> selected video packet carrying stories
   -> section-aware script package
-  -> metadata and media production
+  -> metadata draft and beat-aware voiceover
+  -> audio-timed metadata finalization and visual production
+  -> fingerprint-validated final video and publish review
 ```
 
 The current production path intentionally does not include the retired
@@ -142,8 +146,9 @@ Current handoffs must name real consumers:
 - evidence prep -> story mapping
 - story mapping -> video packaging
 - video packaging -> script generation
-- script generation -> metadata creation
-- metadata creation -> media production/manual publish review
+- script generation -> metadata draft and voiceover
+- voiceover -> metadata finalization and visual planning
+- finalized metadata plus final video -> manual publish review
 
 ## LLM Policy
 
@@ -152,7 +157,7 @@ Use LLMs for semantic judgment and code for stable guardrails.
 Good LLM responsibilities:
 
 - story identity and editorial value
-- coherent full-script writing and bounded reflection
+- episode direction, story-local beat writing, bounded targeted repair, and bookend continuity
 - viewer-facing metadata
 - visual direction and semantic scene planning
 
@@ -161,7 +166,7 @@ Good deterministic responsibilities:
 - collection and normalization
 - source and record provenance
 - format routing and selection caps
-- timing, duration, and section checks
+- section order, source ownership, observed timing, and audiovisual alignment checks
 - Pydantic structured-output validation
 - asset resolution, rendering, and assembly
 
@@ -169,8 +174,9 @@ Use LangChain structured output with Pydantic models where an LLM must return
 structure. Keep `llm_client.py` limited to provider/model construction and keep
 LLM logging separate. Prompt text belongs in versioned files, not inline Python.
 
-Reflection/revision loops must have a config-driven hard maximum. Never allow
-an unbounded agent loop.
+Review/revision loops must have a config-driven hard maximum. Approved story
+bodies must not be replaced by a whole-episode rewrite. Never allow an
+unbounded agent loop.
 
 ## Script Compatibility
 
@@ -179,15 +185,29 @@ App-generated and manual ChatGPT scripts must use the same canonical
 `handoffs/chatgpt_script_parser`; downstream voiceover, metadata, and visuals
 must not contain a second manual-script schema.
 
-Prefer explicit script sections: intro, one section per selected story, then
-closing. Preserve section IDs outside spoken narration so visual planning can
-map exact story boundaries without leaking internal IDs into audio.
+Require explicit script sections: intro, one section per selected story, then
+closing. Each section carries stable audiovisual beats and source/visual
+briefs; `section.narration_text` and `full_script` are deterministic
+projections. Preserve section, story, and beat IDs outside spoken narration so
+voiceover and visual planning never reconstruct boundaries from prose.
+
+Script length is content-driven. Role-specific word suggestions may guide an
+LLM prompt, but word counts, beat counts, and nominal episode duration are not
+approval quotas. Keep observed word and estimated-duration telemetry for
+inspection only. Actual synthesized voiceover timing is authoritative for
+visual planning and final assembly.
+
+Every successful canonical script must include a deterministic content
+fingerprint. Voiceover, visual planning, media discovery, asset resolution,
+rendering, assembly, metadata finalization, and publish handoff must propagate
+and verify parent fingerprints. Never select downstream artifacts by
+modification time.
 
 ## Visual Policy
 
 Visual planning and asset/render production are separate responsibilities.
 
-- the planner chooses renderable scene kinds and produces semantic timing
+- the planner chooses renderable scene kinds against voiceover-aligned script beats; LLMs do not author raw seconds
 - media discovery finds contextual images/video only when requested
 - asset resolution obtains screenshots, logos, and discovered media
 - Remotion renders short independent scene clips

@@ -18,29 +18,29 @@ class RunInfo(BaseModel):
 
 
 class ChatGPTScriptParserConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
-    words_per_minute: int = 150
-    duration_tolerance_seconds: int = 60
+    diagnostic_words_per_minute: int = 140
+    title_card_seconds: float = 2.8
 
-    @field_validator("words_per_minute")
+    @field_validator("diagnostic_words_per_minute")
     @classmethod
     def words_per_minute_must_be_positive(cls, value: int) -> int:
         if value < 1:
-            raise ValueError("config.words_per_minute must be positive")
+            raise ValueError("config.diagnostic_words_per_minute must be positive")
         return value
 
-    @field_validator("duration_tolerance_seconds")
-    @classmethod
-    def tolerance_must_be_non_negative(cls, value: int) -> int:
-        if value < 0:
-            raise ValueError("config.duration_tolerance_seconds must be non-negative")
-        return value
+    @model_validator(mode="after")
+    def title_card_timing_must_be_valid(self) -> "ChatGPTScriptParserConfig":
+        if self.title_card_seconds < 1.5 or self.title_card_seconds > 5:
+            raise ValueError("config.title_card_seconds must be between 1.5 and 5")
+        return self
 
 
 class VideoPackagingData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
+    run_id: str
     selected_format: str
     script_app: str | None = None
     video_packet: dict[str, Any]

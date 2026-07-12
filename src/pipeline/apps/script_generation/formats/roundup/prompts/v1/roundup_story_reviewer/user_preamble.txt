@@ -1,0 +1,1 @@
+Return only the requested structured review result and always include a complete candidate segment, not a patch. Set should_apply_revision true only when the candidate materially improves the current segment or fixes a structural issue. Do not expand merely to approach suggested_words, and do not shorten away useful explanation merely for pacing.

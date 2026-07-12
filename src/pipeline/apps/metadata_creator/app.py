@@ -8,6 +8,12 @@ from typing import Any, Literal
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.pipeline.contracts import (
+    build_artifact_provenance,
+    require_matching_run_id,
+    validate_script_provenance,
+)
+
 from .config import METADATA_PROMPT_MODULE, PACKAGE_TYPE, SUPPORTED_FORMAT
 from .contract import MetadataRequest, MetadataResponse
 from .llm_client import make_llm
@@ -56,6 +62,13 @@ def run(input_json: dict) -> dict:
     video_packet = video_packaging.data.video_packet
     llm_calls: list[dict[str, Any]] = []
 
+    require_matching_run_id(run_id, script_generation.data.run_id, "script_generation")
+    require_matching_run_id(run_id, video_packaging.data.run_id, "video_packaging")
+    script_provenance = validate_script_provenance(
+        script_package,
+        run_id=run_id,
+        upstream_run_id=script_generation.data.run_id,
+    )
     _validate_supported_roundup(script_generation.data.selected_format, video_packaging.data.selected_format, video_packet)
 
     sections = _script_sections(script_package)
@@ -147,10 +160,18 @@ def run(input_json: dict) -> dict:
     checks = _check_metadata(metadata, sections, config)
     metadata_package = {
         "package_type": PACKAGE_TYPE,
+        "package_stage": "draft",
         "selected_format": SUPPORTED_FORMAT,
         "youtube_metadata": metadata,
         "checks": checks,
     }
+    metadata_package["provenance"] = build_artifact_provenance(
+        artifact_type="metadata_draft",
+        run_id=run_id,
+        parents={"script": script_provenance["script_fingerprint"]},
+        script_source=script_provenance.get("script_source", ""),
+        payload=metadata,
+    )
     status = "ok" if checks["passed"] else "failed"
     failure_reason = "" if status == "ok" else "; ".join(checks["errors"])
     response = MetadataResponse(
@@ -162,7 +183,11 @@ def run(input_json: dict) -> dict:
             "metadata_package": metadata_package,
         },
         summary=_build_summary(metadata, llm_calls, failure_reason),
-        handoff={"ready_for_media_production": status == "ok"},
+        handoff={
+            "ready_for_metadata_finalization": status == "ok",
+            "chapters_finalized": False,
+            "ready_for_media_production": False,
+        },
         llm_calls=llm_calls,
     )
     return response.model_dump(mode="json")
@@ -294,13 +319,21 @@ def _build_youtube_metadata(
         "thumbnail_text_options": thumbnail_options,
         "blocked_title_angles": dedupe([clean_text(value) for value in draft.get("blocked_title_angles", [])]),
         "description_draft": description,
+        "description_components": {
+            "intro": clean_text(draft.get("description_intro", "")),
+            "channel_footer": _channel_footer(config["channel"]),
+            "include_source_urls": bool(policy["include_source_urls"]),
+        },
         "chapters": chapters,
         "tags": tags,
         "source_urls": source_urls if bool(policy["include_source_urls"]) else [],
         "metadata_basis": {
             "script_section_count": len(script_package.get("sections", [])),
+            "script_beat_count": sum(len(section.get("beats", [])) for section in script_package.get("sections", [])),
             "selected_story_count": len(video_packet.get("stories", [])),
             "source_policy": "final_script_primary_video_packet_sources",
+            "chapter_timing_source": "script_estimate",
+            "chapters_finalized": False,
         },
     }
 
@@ -394,7 +427,14 @@ def _build_description(
     if source_urls:
         lines.extend(["", "Sources:"])
         lines.extend(source_urls)
-    footer = " - ".join(
+    footer = _channel_footer(channel)
+    if footer:
+        lines.extend(["", footer])
+    return "\n".join(line for line in lines if line is not None).strip()
+
+
+def _channel_footer(channel: dict[str, Any]) -> str:
+    return " - ".join(
         value
         for value in (
             clean_text(channel.get("channel_name", "")),
@@ -402,9 +442,6 @@ def _build_description(
         )
         if value
     )
-    if footer:
-        lines.extend(["", footer])
-    return "\n".join(line for line in lines if line is not None).strip()
 
 
 def _build_tags(llm_tags: list[Any], video_packet: dict[str, Any], max_tags: int) -> list[str]:
@@ -471,6 +508,7 @@ def _failed_response(
     }
     metadata_package = {
         "package_type": PACKAGE_TYPE,
+        "package_stage": "draft",
         "selected_format": selected_format,
         "youtube_metadata": metadata,
         "checks": {
@@ -488,7 +526,11 @@ def _failed_response(
             "metadata_package": metadata_package,
         },
         summary=_build_summary(metadata, llm_calls, reason),
-        handoff={"ready_for_media_production": False},
+        handoff={
+            "ready_for_metadata_finalization": False,
+            "chapters_finalized": False,
+            "ready_for_media_production": False,
+        },
         llm_calls=llm_calls,
     )
     return response.model_dump(mode="json")
@@ -538,13 +580,18 @@ def _recent_title_angles(config: dict[str, Any]) -> list[str]:
 
 
 def _video_context(video_packet: dict[str, Any], script_package: dict[str, Any]) -> dict[str, Any]:
+    episode_direction = script_package.get("episode_direction") if isinstance(script_package.get("episode_direction"), dict) else {}
     return {
         "selected_format": SUPPORTED_FORMAT,
-        "target_duration_seconds": video_packet.get("target_duration_seconds", 0),
+        "duration_policy": script_package.get("duration_policy") or video_packet.get("duration_policy") or {},
+        "observed_script_duration_seconds": (script_package.get("full_script_stats") or {}).get(
+            "estimated_duration_seconds", 0
+        ),
         "story_count": video_packet.get("story_count", len(video_packet.get("stories", []))),
         "selected_story_ids": list(video_packet.get("selected_story_ids", [])),
-        "script_strategy": clean_text(script_package.get("script_strategy", "")),
-        "reflection_final_score": (script_package.get("reflection") or {}).get("final_score"),
+        "generation_strategy": clean_text(script_package.get("generation_strategy", "")),
+        "episode_thesis": clean_text(episode_direction.get("episode_thesis", "")),
+        "review_revision_count": int((script_package.get("review") or {}).get("revision_count", 0) or 0),
     }
 
 

@@ -22,12 +22,6 @@ def estimated_seconds(text: str, words_per_minute: int) -> float:
     return round(word_count(text) * 60.0 / words_per_minute, 1)
 
 
-def word_budget(target_seconds: int, words_per_minute: int) -> int:
-    if target_seconds <= 0:
-        return 0
-    return max(1, round(target_seconds * words_per_minute / 60.0))
-
-
 def dedupe(values: list[str]) -> list[str]:
     seen: set[str] = set()
     kept: list[str] = []

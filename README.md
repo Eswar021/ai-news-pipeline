@@ -1,7 +1,7 @@
 # AI Content Creation Pipeline
 
 An application-oriented AI news production system that collects source
-material, maps stories, writes a roundup script, creates YouTube metadata,
+material, maps stories, writes story-local audiovisual beats for a coherent roundup, creates YouTube metadata,
 generates voiceover, plans motion visuals, renders scene clips, and assembles a
 final video.
 
@@ -24,6 +24,7 @@ modules may write media files because those files are their product.
 ```text
 src/pipeline/
 ├── apps/            # collection through metadata
+├── contracts/       # stable artifact identity and lineage
 ├── handoffs/        # ChatGPT and publish adapters
 ├── orchestration/   # frozen run context helpers
 ├── voiceover/       # local TTS providers and WAV packaging
@@ -35,10 +36,10 @@ src/pipeline/
 
 Use focused notebooks instead of one stateful end-to-end workbench:
 
-- `notebooks/production/content_pipeline.ipynb`: Apps 1–6.
+- `notebooks/production/content_pipeline.ipynb`: Apps 1–6 through metadata draft.
 - `notebooks/handoffs/chatgpt_handoffs.ipynb`: manual script and visual-plan handoffs.
-- `notebooks/production/voiceover_generation.ipynb`: canonical script to WAV.
-- `notebooks/production/visual_production.ipynb`: plan, assets, clips, and final video.
+- `notebooks/production/voiceover_generation.ipynb`: canonical script to WAV and audio-timed metadata.
+- `notebooks/production/visual_production.ipynb`: plan, assets, clips, final video, and publish review.
 - `notebooks/labs/visual_assets_lab.ipynb`: isolated visual-family experiments.
 
 The production media notebooks support a deterministic fixture mode and a real
@@ -57,6 +58,8 @@ output/runs/{run_id}/
 ├── video_packaging/
 ├── script_generation/
 ├── metadata_creator/
+├── metadata_finalizer/
+├── orchestration/
 ├── voiceover/
 └── visuals/
 ```
@@ -97,9 +100,6 @@ cd src/pipeline/visuals/remotion_engine
 npm run typecheck
 ```
 
-Architecture references:
+Current architecture, source map, workflow diagram, and synchronization contract:
 
-- `docs/architecture/pipeline_application_architecture.md`
-- `docs/architecture/media_modules.md`
-- `docs/architecture/visuals_roadmap.md`
-- `docs/handoffs/chatgpt_handoff_strategy.md`
+- `docs/current_system_architecture.md`

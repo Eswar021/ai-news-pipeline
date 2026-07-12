@@ -6,6 +6,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from src.pipeline.contracts import file_sha256
+
 from .audio_manifest import build_summary, build_voiceover_package
 from .config import (
     PROVIDER_CHATTERBOX_LOCAL,
@@ -21,6 +23,7 @@ from .providers.chatterbox_local import synthesize_chunk_to_wav as synthesize_ch
 from .providers.dia_transformers import synthesize_chunk_to_wav as synthesize_dia_chunk_to_wav
 from .providers.f5_tts_local import synthesize_chunk_to_wav as synthesize_f5_chunk_to_wav
 from .providers.kokoro_local import concatenate_wav_files, synthesize_chunk_to_wav as synthesize_kokoro_chunk_to_wav
+from .script_units import build_audio_units, resolve_script_input
 from .text_chunks import estimated_seconds_from_words, split_narration_into_chunks, word_count
 
 
@@ -28,15 +31,18 @@ def run(input_json: dict) -> dict:
     request = VoiceoverRequest.model_validate(input_json)
     validate_provider(request.config.provider)
 
-    script_text, script_source = _resolve_script_input(request)
     style_profile = resolve_style(request.config.style)
     voice_name = _resolved_voice_name(request, style_profile)
     speed_value = request.config.speed if request.config.speed is not None else style_profile.speed
     chunking = _resolved_chunking(request, style_profile)
+    script_input = resolve_script_input(request, chunking)
+    script_text = script_input["text"]
+    script_source = script_input["source"]
 
     output_dir = Path(request.config.output_dir)
     audio_dir = output_dir / "audio"
     chunk_dir = audio_dir / "chunks"
+    audio_unit_dir = audio_dir / "units"
     package_path = output_dir / "voiceover_package.json"
     summary_path = output_dir / "summary.json"
     full_audio_path = audio_dir / "full_voiceover.wav"
@@ -46,7 +52,7 @@ def run(input_json: dict) -> dict:
     if request.config.force and output_dir.exists():
         shutil.rmtree(output_dir)
 
-    chunks = split_narration_into_chunks(script_text, **chunking)
+    chunks = list(script_input["chunks"])
     if not chunks:
         raise ValueError("Voiceover input script is empty after cleanup.")
 
@@ -132,6 +138,12 @@ def run(input_json: dict) -> dict:
     else:
         raise NotImplementedError(f"Voiceover provider '{request.config.provider}' is not implemented yet.")
 
+    audio_units = build_audio_units(
+        synthesized_chunks=synthesized_chunks,
+        output_dir=audio_unit_dir,
+        sample_rate_hz=actual_sample_rate_hz,
+    )
+
     if not request.config.keep_chunks:
         _discard_chunk_files(synthesized_chunks, chunk_dir)
 
@@ -148,6 +160,10 @@ def run(input_json: dict) -> dict:
         script_word_count=script_words,
         estimated_script_seconds=_estimated_script_seconds(request, script_words),
         chunks=synthesized_chunks,
+        audio_units=audio_units,
+        alignment_strategy=script_input["alignment_strategy"],
+        script_provenance=script_input["provenance"],
+        audio_sha256=file_sha256(full_audio_path),
     )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -166,20 +182,6 @@ def run(input_json: dict) -> dict:
         handoff=package["handoff"],
     )
     return response.model_dump(mode="json")
-
-
-def _resolve_script_input(request: VoiceoverRequest) -> tuple[str, str]:
-    if request.input.script_text is not None and request.input.script_text.strip():
-        return request.input.script_text.strip(), request.input.script_source or "input.script_text"
-
-    script_generation = request.input.script_generation
-    if script_generation is None:
-        raise ValueError("input.script_generation or input.script_text is required")
-    package = script_generation.data.script_package
-    script_text = str(package.get("full_script", "")).strip()
-    if not script_text:
-        raise KeyError("script_generation.data.script_package.full_script is missing or empty")
-    return script_text, "script_generation.data.script_package.full_script"
 
 
 def _resolved_chunking(request: VoiceoverRequest, style_profile: VoiceoverStyle) -> dict[str, Any]:

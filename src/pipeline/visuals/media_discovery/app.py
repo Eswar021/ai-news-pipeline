@@ -10,6 +10,13 @@ import subprocess
 from typing import Any
 from urllib.parse import urlparse
 
+from src.pipeline.contracts import (
+    build_artifact_provenance,
+    require_matching_run_id,
+    validate_artifact_provenance,
+    visual_plan_artifact_payload,
+)
+
 from ..common import clean_text, counter_dict, dedupe, iso_now, safe_float, short_text, slugify
 from .config import BROLL_VIDEO_RENDER_KIND, MEDIA_RENDER_KINDS, NEXT_MODULE, PACKAGE_TYPE
 from .contract import VisualMediaRequest, VisualMediaResponse
@@ -38,6 +45,12 @@ def run(input_json: dict) -> dict:
     videos_dir.mkdir(parents=True, exist_ok=True)
 
     original_plan = request.input.visual_scene_planning.data.visual_scene_plan
+    require_matching_run_id(
+        request.run.run_id,
+        request.input.visual_scene_planning.data.run_id,
+        "visual_scene_planning",
+    )
+    plan_provenance = _required_plan_provenance(original_plan, request.run.run_id)
     enriched_plan = deepcopy(original_plan)
     scenes = enriched_plan.get("scene_timeline", [])
     media_scenes = [scene for scene in scenes if clean_text(scene.get("render_kind", "")) in MEDIA_RENDER_KINDS]
@@ -99,6 +112,19 @@ def run(input_json: dict) -> dict:
         "fallbacks": fallbacks,
         "unresolved": unresolved,
     }
+    parents = {
+        "visual_plan": plan_provenance["visual_plan_fingerprint"],
+        "script": plan_provenance["script_fingerprint"],
+    }
+    if plan_provenance.get("voiceover_fingerprint"):
+        parents["voiceover"] = plan_provenance["voiceover_fingerprint"]
+    package["provenance"] = build_artifact_provenance(
+        artifact_type="visual_media",
+        run_id=request.run.run_id,
+        parents=parents,
+        script_source=plan_provenance.get("script_source", ""),
+        payload=_media_identity_payload(package),
+    )
     summary = _build_summary(
         media_scenes=media_scenes,
         selections=selections,
@@ -128,6 +154,34 @@ def run(input_json: dict) -> dict:
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     result_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
     return result
+
+
+def _required_plan_provenance(plan: dict[str, Any], run_id: str) -> dict[str, Any]:
+    provenance = plan.get("provenance")
+    if not isinstance(provenance, dict):
+        raise ValueError("visual_scene_plan.provenance is required")
+    require_matching_run_id(run_id, provenance.get("run_id"), "visual_scene_plan.provenance")
+    validate_artifact_provenance(
+        provenance,
+        artifact_type="visual_plan",
+        run_id=run_id,
+        payload=visual_plan_artifact_payload(plan),
+        label="visual_scene_plan",
+    )
+    for field in ("visual_plan_fingerprint", "script_fingerprint"):
+        if not clean_text(provenance.get(field)):
+            raise ValueError(f"visual_scene_plan.provenance.{field} is required")
+    return provenance
+
+
+def _media_identity_payload(package: dict[str, Any]) -> dict[str, Any]:
+    plan = package.get("visual_scene_plan") or {}
+    return {
+        "selections": package.get("selections", []),
+        "fallbacks": package.get("fallbacks", []),
+        "unresolved": package.get("unresolved", []),
+        "scene_timeline": plan.get("scene_timeline", []),
+    }
 
 
 def _discover_candidates(

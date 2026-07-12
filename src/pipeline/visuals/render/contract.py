@@ -37,8 +37,12 @@ class VisualRenderConfig(BaseModel):
     video_bitrate: str | None = None
     x264_preset: str | None = None
     pixel_format: str | None = None
+    bundle_timeout_seconds: int = 240
     render_timeout_seconds: int = 240
     worker_count: int = 1
+    frame_concurrency: int = 2
+    max_render_attempts: int = 2
+    keep_render_logs: bool = True
     max_scene_duration_seconds: float | None = None
     scene_limit: int | None = None
 
@@ -49,11 +53,27 @@ class VisualRenderConfig(BaseModel):
             raise ValueError("config.output_dir must not be empty")
         return value
 
-    @field_validator("width", "height", "fps", "render_timeout_seconds", "worker_count")
+    @field_validator(
+        "width",
+        "height",
+        "fps",
+        "bundle_timeout_seconds",
+        "render_timeout_seconds",
+        "worker_count",
+        "frame_concurrency",
+        "max_render_attempts",
+    )
     @classmethod
     def positive_numbers_required(cls, value: int) -> int:
         if value < 1:
-            raise ValueError("render dimensions, fps, timeout, and worker_count must be positive")
+            raise ValueError("render dimensions, fps, timeouts, concurrency, and attempts must be positive")
+        return value
+
+    @field_validator("max_render_attempts")
+    @classmethod
+    def render_attempts_must_be_bounded(cls, value: int) -> int:
+        if value > 5:
+            raise ValueError("config.max_render_attempts must not exceed 5")
         return value
 
     @field_validator("max_scene_duration_seconds")
@@ -74,7 +94,7 @@ class VisualRenderConfig(BaseModel):
 class AssetResolverData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    run_id: str | None = None
+    run_id: str
     generated_at: str | None = None
     visual_asset_manifest: dict[str, Any]
 

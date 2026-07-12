@@ -4,6 +4,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "bundle-engine": "tsx scripts/bundle-engine.ts",
     "render-scene": "tsx scripts/render-scene.ts",
     "typecheck": "tsc --noEmit"
   },

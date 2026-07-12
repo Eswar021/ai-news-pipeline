@@ -227,7 +227,7 @@ class VisualPlannerConfig(BaseModel):
     base_url: str | None = None
     prompt_version: str
     temperature: float = 0.3
-    words_per_minute: int = 150
+    diagnostic_words_per_minute: int = 150
     allow_deterministic_story_fallbacks: bool = False
     style: VisualStyleConfig = Field(default_factory=VisualStyleConfig)
     scene_policy: ScenePolicyConfig = Field(default_factory=ScenePolicyConfig)
@@ -248,11 +248,11 @@ class VisualPlannerConfig(BaseModel):
             raise ValueError("config.temperature must be between 0 and 2")
         return value
 
-    @field_validator("words_per_minute")
+    @field_validator("diagnostic_words_per_minute")
     @classmethod
     def words_per_minute_must_be_positive(cls, value: int) -> int:
         if value < 1:
-            raise ValueError("config.words_per_minute must be at least 1")
+            raise ValueError("config.diagnostic_words_per_minute must be at least 1")
         return value
 
     @model_validator(mode="after")
@@ -270,7 +270,7 @@ class VisualPlannerConfig(BaseModel):
 class ScriptGenerationData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    run_id: str | None = None
+    run_id: str
     generated_at: str | None = None
     selected_format: str | None = None
     script_package: dict[str, Any]
@@ -288,7 +288,7 @@ class ScriptGenerationEnvelope(BaseModel):
 class VideoPackagingData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    run_id: str | None = None
+    run_id: str
     generated_at: str | None = None
     selected_format: str
     script_app: str | None = None

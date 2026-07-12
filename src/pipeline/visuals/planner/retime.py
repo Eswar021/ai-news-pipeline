@@ -3,6 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from src.pipeline.contracts import build_artifact_provenance, visual_plan_artifact_payload
+
 
 def retime_visual_plan_result(result: dict[str, Any], target_duration_seconds: float) -> dict[str, Any]:
     """Scale a validated scene plan to an already-generated audio duration."""
@@ -41,6 +43,8 @@ def retime_visual_plan_result(result: dict[str, Any], target_duration_seconds: f
             "gap_count": 0,
             "overlap_count": 0,
             "max_scene_duration_seconds": max_scene_duration,
+            "timeline_start_seconds": round(float(scenes[0].get("start_seconds", 0) or 0), 2),
+            "timeline_end_seconds": round(float(scenes[-1].get("end_seconds", 0) or 0), 2),
         }
     )
     warnings = plan.setdefault("planner_warnings", [])
@@ -55,6 +59,41 @@ def retime_visual_plan_result(result: dict[str, Any], target_duration_seconds: f
     summary["max_scene_duration_seconds"] = coverage["max_scene_duration_seconds"]
     summary["retimed_to_voiceover"] = True
     summary["retime_scale"] = round(scale, 6)
+    return updated
+
+
+def bind_visual_plan_result(
+    result: dict[str, Any],
+    *,
+    run_id: str,
+    script_provenance: dict[str, Any],
+    voiceover_provenance: dict[str, Any],
+) -> dict[str, Any]:
+    """Bind a fixture/adapted plan to the exact script and voiceover it will render."""
+    updated = deepcopy(result)
+    data = updated.get("data") or {}
+    plan = data.get("visual_scene_plan") or {}
+    if not isinstance(plan.get("scene_timeline"), list) or not plan["scene_timeline"]:
+        raise ValueError("visual_scene_plan.scene_timeline is missing or empty")
+    script_fingerprint = script_provenance.get("script_fingerprint")
+    voiceover_fingerprint = voiceover_provenance.get("voiceover_fingerprint")
+    plan["source_script"] = {
+        **(plan.get("source_script") or {}),
+        "script_source": script_provenance.get("script_source", "fixture"),
+        "script_fingerprint": script_fingerprint,
+    }
+    plan["provenance"] = build_artifact_provenance(
+        artifact_type="visual_plan",
+        run_id=run_id,
+        parents={
+            "script": script_fingerprint,
+            "voiceover": voiceover_fingerprint,
+        },
+        script_source=script_provenance.get("script_source", ""),
+        payload=visual_plan_artifact_payload(plan),
+    )
+    data["run_id"] = run_id
+    updated["data"] = data
     return updated
 
 

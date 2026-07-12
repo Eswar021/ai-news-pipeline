@@ -101,7 +101,7 @@ def _build_files(
         {
             "filename": "02_payload.md",
             "content_type": "text/markdown",
-            "content": _build_payload(run_id, profile, artifact),
+            "content": _build_payload(run_id, profile, artifact, manifest),
         },
         {
             "filename": "03_manifest_context.md",
@@ -159,7 +159,7 @@ def _build_instructions(run_id: str, manifest: dict[str, Any], profile: str, pro
     )
 
 
-def _build_payload(run_id: str, profile: str, artifact: dict[str, Any]) -> str:
+def _build_payload(run_id: str, profile: str, artifact: dict[str, Any], manifest: dict[str, Any]) -> str:
     lines = [
         f"# ChatGPT Handoff Payload - {profile}",
         "",
@@ -169,7 +169,7 @@ def _build_payload(run_id: str, profile: str, artifact: dict[str, Any]) -> str:
         "## Compact Summary",
         "",
     ]
-    lines.extend(_profile_summary_lines(profile, artifact))
+    lines.extend(_profile_summary_lines(profile, artifact, manifest))
     lines.extend(
         [
             "",
@@ -207,11 +207,11 @@ def _build_manifest_context(run_id: str, manifest: dict[str, Any], summaries: di
     )
 
 
-def _profile_summary_lines(profile: str, artifact: dict[str, Any]) -> list[str]:
+def _profile_summary_lines(profile: str, artifact: dict[str, Any], manifest: dict[str, Any]) -> list[str]:
     if profile == "story_map":
         return _story_map_summary(artifact)
     if profile == "content_packet":
-        return _content_packet_summary(artifact)
+        return _content_packet_summary(artifact, manifest)
     if profile == "script_review":
         return _script_review_summary(artifact)
     if profile == "visual_scene_plan":
@@ -231,26 +231,101 @@ def _story_map_summary(artifact: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _content_packet_summary(artifact: dict[str, Any]) -> list[str]:
+def _content_packet_summary(artifact: dict[str, Any], manifest: dict[str, Any]) -> list[str]:
     packet = artifact.get("data", {}).get("video_packet", artifact)
     stories = packet.get("stories", []) if isinstance(packet.get("stories"), list) else []
+    ordered_stories = sorted(
+        stories,
+        key=lambda item: (item.get("video_segment") or {}).get("segment_order", 999),
+    )
+    profile = manifest.get("profile_config", {}) if isinstance(manifest.get("profile_config"), dict) else {}
+    script_config = profile.get("script_generation", {}) if isinstance(profile.get("script_generation"), dict) else {}
+    writing_guidance = _resolved_writing_guidance(script_config)
+    duration_policy = dict(packet.get("duration_policy") or {})
+    if not duration_policy:
+        duration_policy = {
+            "mode": "content_driven",
+            "configured_ceiling_seconds": packet.get("target_duration_seconds"),
+            "timing_source_of_truth": "voiceover",
+        }
     lines = [
         f"- Packet type: {packet.get('packet_type', '')}",
         f"- Selected format: {packet.get('selected_format', '')}",
-        f"- Target duration: {packet.get('target_duration_seconds', '')}s",
+        f"- Duration mode: {duration_policy.get('mode', 'content_driven')}",
+        f"- Optional duration ceiling: {duration_policy.get('configured_ceiling_seconds')}",
+        f"- Timing source of truth: {duration_policy.get('timing_source_of_truth', 'voiceover')}",
         f"- Selected stories: {len(stories)}",
         "",
         "### Selected Story Plan",
         "",
     ]
-    for story in sorted(stories, key=lambda item: (item.get("video_segment") or {}).get("segment_order", 999)):
+    segment_markers: list[str] = []
+    for story in ordered_stories:
         segment = story.get("video_segment") or {}
+        segment_id = clean_text(segment.get("segment_id"))
+        if not segment_id:
+            story_id = story.get("story_id", "<unknown>")
+            raise ValueError(
+                f"Selected story {story_id} is missing video_segment.segment_id"
+            )
+        if segment_id in segment_markers:
+            raise ValueError(f"Duplicate video_segment.segment_id in content packet: {segment_id}")
+        segment_markers.append(segment_id)
+        role = clean_text(segment.get("role")) or "major"
+        guidance = writing_guidance.get(role, {}) if isinstance(writing_guidance.get(role), dict) else {}
         lines.append(
             f"- {segment.get('segment_order', '?')}. {story.get('story_title', '')} "
-            f"role={segment.get('role', '')} target={segment.get('target_seconds', '')}s "
+            f"role={role} suggested_words={guidance.get('suggested_words', 'unspecified')} "
+            f"guidance={clean_text(guidance.get('editorial_goal')) or 'Explain the story clearly without padding.'} "
             f"records={len(story.get('records', []))}"
         )
+    lines.extend(
+        [
+            "",
+            "### Required Script Markers",
+            "",
+            "Copy these markers exactly, once each, in this order:",
+            "",
+            "1. `[[SECTION:intro]]`",
+        ]
+    )
+    lines.extend(
+        f"{index}. `[[SECTION:{segment_id}]]`"
+        for index, segment_id in enumerate(segment_markers, start=2)
+    )
+    lines.append(f"{len(segment_markers) + 2}. `[[SECTION:closing]]`")
+    lines.extend(
+        [
+            "",
+            "### Content-Length Policy",
+            "",
+            f"- Intro soft suggestion: {writing_guidance['intro']['suggested_words']} words",
+            f"- Closing soft suggestion: {writing_guidance['closing']['suggested_words']} words",
+            "- Suggested words are soft editorial guidance, not quotas or parser gates.",
+            "- Use as many coherent audiovisual beats as each story naturally needs.",
+            "- Do not repeat, pad, or add generic commentary to make a section longer.",
+            "- The parser validates section order, story ownership, source keys, and structure; it does not reject natural length.",
+            "- Voiceover establishes actual timing, and visual planning aligns to the resulting section and beat audio units.",
+        ]
+    )
     return lines
+
+
+def _resolved_writing_guidance(script_config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    defaults = {
+        "intro": {"suggested_words": 70, "editorial_goal": "Hook and preview the episode."},
+        "lead": {"suggested_words": 240, "editorial_goal": "Explain the strongest story fully without padding."},
+        "major": {"suggested_words": 180, "editorial_goal": "Cover what changed and why it matters."},
+        "brief": {"suggested_words": 120, "editorial_goal": "Deliver the essential update concisely."},
+        "closing": {"suggested_words": 45, "editorial_goal": "Synthesize and end naturally."},
+    }
+    configured = script_config.get("writing_guidance")
+    if not isinstance(configured, dict):
+        return defaults
+    return {
+        key: {**default, **(configured.get(key) if isinstance(configured.get(key), dict) else {})}
+        for key, default in defaults.items()
+    }
 
 
 def _script_review_summary(artifact: dict[str, Any]) -> list[str]:

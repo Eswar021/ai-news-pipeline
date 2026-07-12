@@ -9,9 +9,22 @@
       "selected_format": "roundup",
       "generation_source": "chatgpt_handoff",
       "script_source": "tests/fixtures/media_roundup_reference/chatgpt_response.txt",
-      "target_duration_seconds": 101,
-      "intro_seconds": 15,
-      "closing_seconds": 10,
+      "provenance": {
+        "contract_version": "script_generation_result_v1",
+        "provenance_version": "artifact_provenance_v1",
+        "artifact_type": "script",
+        "run_id": "fixture_media_roundup_reference",
+        "script_source": "tests/fixtures/media_roundup_reference/chatgpt_response.txt",
+        "script_fingerprint": "sha256:86be1473a59d6a83cc06a157cdb8302fa14e29d6a4fb6b697ef101b13431eff5",
+        "artifact_fingerprint": "sha256:86be1473a59d6a83cc06a157cdb8302fa14e29d6a4fb6b697ef101b13431eff5",
+        "section_count": 5,
+        "beat_count": 12
+      },
+      "duration_policy": {
+        "mode": "content_driven",
+        "configured_ceiling_seconds": null,
+        "timing_source_of_truth": "voiceover"
+      },
       "story_count": 3,
       "selected_story_ids": [
         "story_evidence",
@@ -26,8 +39,11 @@
           "story_id": "",
           "story_title": "",
           "role": "",
-          "target_seconds": 15,
-          "word_budget": 38,
+          "writing_guidance": {
+            "suggested_words": 70,
+            "editorial_goal": "Hook the viewer and preview the episode without listing every headline.",
+            "enforcement": "soft_editorial_guidance_only"
+          },
           "allowed_story_ids": [
             "story_evidence",
             "story_sync",
@@ -46,8 +62,11 @@
           "story_id": "story_evidence",
           "story_title": "From raw sources to a grounded story map",
           "role": "lead",
-          "target_seconds": 26,
-          "word_budget": 65,
+          "writing_guidance": {
+            "suggested_words": 240,
+            "editorial_goal": "Explain the strongest story fully, clearly, and without padding.",
+            "enforcement": "soft_editorial_guidance_only"
+          },
           "allowed_story_ids": [
             "story_evidence"
           ],
@@ -62,8 +81,11 @@
           "story_id": "story_sync",
           "story_title": "One semantic beat map keeps narration and visuals aligned",
           "role": "major",
-          "target_seconds": 26,
-          "word_budget": 65,
+          "writing_guidance": {
+            "suggested_words": 180,
+            "editorial_goal": "Cover what changed, why it matters, and the useful caveat.",
+            "enforcement": "soft_editorial_guidance_only"
+          },
           "allowed_story_ids": [
             "story_sync"
           ],
@@ -78,8 +100,11 @@
           "story_id": "story_render",
           "story_title": "Reusable motion components turn the plan into a video",
           "role": "major",
-          "target_seconds": 24,
-          "word_budget": 60,
+          "writing_guidance": {
+            "suggested_words": 180,
+            "editorial_goal": "Cover what changed, why it matters, and the useful caveat.",
+            "enforcement": "soft_editorial_guidance_only"
+          },
           "allowed_story_ids": [
             "story_render"
           ],
@@ -94,8 +119,11 @@
           "story_id": "",
           "story_title": "",
           "role": "",
-          "target_seconds": 10,
-          "word_budget": 25,
+          "writing_guidance": {
+            "suggested_words": 45,
+            "editorial_goal": "Synthesize the episode and end naturally without repeating every story.",
+            "enforcement": "soft_editorial_guidance_only"
+          },
           "allowed_story_ids": [
             "story_evidence",
             "story_sync",
@@ -108,14 +136,23 @@
           ]
         }
       ],
-      "story_usage_cards": [],
-      "script_strategy": "Reference narration for deterministic media-pipeline testing. No external context was used.",
-      "revision_notes_applied": [],
-      "reflection": {
+      "generation_strategy": "manual_story_sections_normalized_to_audiovisual_beats",
+      "episode_direction": {
+        "episode_thesis": "Reference narration for deterministic media-pipeline testing.",
+        "viewer_promise": "Show how a source becomes an aligned video.",
+        "hook_strategy": "manual_chatgpt_handoff",
+        "pacing_strategy": "content_driven_story_sections",
+        "ordered_story_ids": ["story_evidence", "story_sync", "story_render"],
+        "story_briefs": []
+      },
+      "story_segments": [],
+      "story_asset_hints": [],
+      "bookends": {"source": "manual_chatgpt_handoff", "intro_section_id": "section_00_intro", "closing_section_id": "section_99_closing"},
+      "review": {
         "enabled": false,
-        "iterations": [],
+        "story_reviews": [],
+        "bookend_reviews": [],
         "revision_count": 0,
-        "final_score": null,
         "note": "Authored and reviewed through the manual ChatGPT handoff."
       },
       "sections": [
@@ -126,8 +163,36 @@
           "story_id": "",
           "story_title": "",
           "role": "",
-          "target_seconds": 15,
-          "word_budget": 38,
+          "writing_guidance": {
+            "suggested_words": 70,
+            "editorial_goal": "Hook the viewer and preview the episode without listing every headline.",
+            "enforcement": "soft_editorial_guidance_only"
+          },
+          "title_card": null,
+          "beats": [
+            {
+              "beat_id": "section_00_intro_beat_01",
+              "beat_order": 1,
+              "beat_type": "hook",
+              "story_id": "",
+              "narration_text": "An automated video is only convincing when every stage agrees on what the story is.",
+              "word_count": 15,
+              "estimated_seconds": 6.0,
+              "source_record_keys": [],
+              "visual_brief": {"purpose": "Open on the synchronization problem.", "visual_intent": "transition", "preferred_asset_types": ["kinetic_text"], "must_show": [], "on_screen_text": "", "avoid": []}
+            },
+            {
+              "beat_id": "section_00_intro_beat_02",
+              "beat_order": 2,
+              "beat_type": "intro",
+              "story_id": "",
+              "narration_text": "Here is the short version of how this pipeline moves from scattered source material to narration, synchronized motion, and a finished video.",
+              "word_count": 22,
+              "estimated_seconds": 8.8,
+              "source_record_keys": [],
+              "visual_brief": {"purpose": "Preview the source-to-screen journey.", "visual_intent": "process_explainer", "preferred_asset_types": ["diagram"], "must_show": ["source to screen flow"], "on_screen_text": "", "avoid": []}
+            }
+          ],
           "narration_text": "An automated video is only convincing when every stage agrees on what the story is. Here is the short version of how this pipeline moves from scattered source material to narration, synchronized motion, and a finished video.",
           "word_count": 37,
           "estimated_seconds": 14.8,
@@ -146,8 +211,47 @@
           "story_id": "story_evidence",
           "story_title": "From raw sources to a grounded story map",
           "role": "lead",
-          "target_seconds": 26,
-          "word_budget": 65,
+          "writing_guidance": {
+            "suggested_words": 240,
+            "editorial_goal": "Explain the strongest story fully, clearly, and without padding.",
+            "enforcement": "soft_editorial_guidance_only"
+          },
+          "title_card": {"display_title": "From raw sources to a grounded story map", "subtitle": "", "duration_seconds": 2.8, "voice_behavior": "continue", "anchor_beat_id": "section_01_story_evidence_beat_01"},
+          "beats": [
+            {
+              "beat_id": "section_01_story_evidence_beat_01",
+              "beat_order": 1,
+              "beat_type": "transition",
+              "story_id": "story_evidence",
+              "narration_text": "It starts by keeping the evidence attached.",
+              "word_count": 7,
+              "estimated_seconds": 2.8,
+              "source_record_keys": ["record_evidence_contract"],
+              "visual_brief": {"purpose": "Introduce the evidence story while narration continues.", "visual_intent": "story_title", "preferred_asset_types": ["source_page", "logo"], "must_show": [], "on_screen_text": "", "avoid": []}
+            },
+            {
+              "beat_id": "section_01_story_evidence_beat_02",
+              "beat_order": 2,
+              "beat_type": "explanation",
+              "story_id": "story_evidence",
+              "narration_text": "Collection brings in articles and transcripts, evidence preparation cleans them, and story mapping groups records that describe the same development. The important part is continuity: when a story moves forward, its source records move with it.",
+              "word_count": 36,
+              "estimated_seconds": 14.4,
+              "source_record_keys": ["record_evidence_contract"],
+              "visual_brief": {"purpose": "Show evidence moving through the workflow.", "visual_intent": "process_explainer", "preferred_asset_types": ["diagram", "source_page"], "must_show": ["records moving with the story"], "on_screen_text": "", "avoid": []}
+            },
+            {
+              "beat_id": "section_01_story_evidence_beat_03",
+              "beat_order": 3,
+              "beat_type": "takeaway",
+              "story_id": "story_evidence",
+              "narration_text": "The writer gets useful context without guessing, and later tools can still trace each selected idea back to the material that introduced it.",
+              "word_count": 23,
+              "estimated_seconds": 9.2,
+              "source_record_keys": ["record_evidence_contract"],
+              "visual_brief": {"purpose": "Land the provenance takeaway.", "visual_intent": "takeaway", "preferred_asset_types": ["diagram"], "must_show": ["traceable source context"], "on_screen_text": "", "avoid": []}
+            }
+          ],
           "narration_text": "It starts by keeping the evidence attached. Collection brings in articles and transcripts, evidence preparation cleans them, and story mapping groups records that describe the same development. The important part is continuity: when a story moves forward, its source records move with it. The writer gets useful context without guessing, and later tools can still trace each selected idea back to the material that introduced it.",
           "word_count": 66,
           "estimated_seconds": 26.4,
@@ -166,8 +270,47 @@
           "story_id": "story_sync",
           "story_title": "One semantic beat map keeps narration and visuals aligned",
           "role": "major",
-          "target_seconds": 26,
-          "word_budget": 65,
+          "writing_guidance": {
+            "suggested_words": 180,
+            "editorial_goal": "Cover what changed, why it matters, and the useful caveat.",
+            "enforcement": "soft_editorial_guidance_only"
+          },
+          "title_card": {"display_title": "One semantic beat map keeps narration and visuals aligned", "subtitle": "", "duration_seconds": 2.8, "voice_behavior": "continue", "anchor_beat_id": "section_02_story_sync_beat_01"},
+          "beats": [
+            {
+              "beat_id": "section_02_story_sync_beat_01",
+              "beat_order": 1,
+              "beat_type": "transition",
+              "story_id": "story_sync",
+              "narration_text": "The next challenge is synchronization.",
+              "word_count": 5,
+              "estimated_seconds": 2.0,
+              "source_record_keys": ["record_visual_contract"],
+              "visual_brief": {"purpose": "Introduce the synchronization story.", "visual_intent": "story_title", "preferred_asset_types": ["logo", "kinetic_text"], "must_show": [], "on_screen_text": "", "avoid": []}
+            },
+            {
+              "beat_id": "section_02_story_sync_beat_02",
+              "beat_order": 2,
+              "beat_type": "explanation",
+              "story_id": "story_sync",
+              "narration_text": "A good script is not one undifferentiated wall of text; it has an intro, clear story sections, and a closing. Voiceover turns those sections into timed audio chunks.",
+              "word_count": 28,
+              "estimated_seconds": 11.2,
+              "source_record_keys": ["record_visual_contract"],
+              "visual_brief": {"purpose": "Show section-aware audio timing.", "visual_intent": "process_explainer", "preferred_asset_types": ["diagram"], "must_show": ["intro story closing audio units"], "on_screen_text": "", "avoid": []}
+            },
+            {
+              "beat_id": "section_02_story_sync_beat_03",
+              "beat_order": 3,
+              "beat_type": "takeaway",
+              "story_id": "story_sync",
+              "narration_text": "The visual planner then converts each chunk into a semantic beat, so a workflow explanation gets a flow diagram while a key contrast gets a focused comparison instead of unrelated decoration.",
+              "word_count": 31,
+              "estimated_seconds": 12.4,
+              "source_record_keys": ["record_visual_contract"],
+              "visual_brief": {"purpose": "Contrast aligned explanatory visuals with decoration.", "visual_intent": "comparison", "preferred_asset_types": ["diagram"], "must_show": ["beat to visual mapping"], "on_screen_text": "", "avoid": []}
+            }
+          ],
           "narration_text": "The next challenge is synchronization. A good script is not one undifferentiated wall of text; it has an intro, clear story sections, and a closing. Voiceover turns those sections into timed audio chunks. The visual planner then converts each chunk into a semantic beat, so a workflow explanation gets a flow diagram while a key contrast gets a focused comparison instead of unrelated decoration.",
           "word_count": 64,
           "estimated_seconds": 25.6,
@@ -186,8 +329,47 @@
           "story_id": "story_render",
           "story_title": "Reusable motion components turn the plan into a video",
           "role": "major",
-          "target_seconds": 24,
-          "word_budget": 60,
+          "writing_guidance": {
+            "suggested_words": 180,
+            "editorial_goal": "Cover what changed, why it matters, and the useful caveat.",
+            "enforcement": "soft_editorial_guidance_only"
+          },
+          "title_card": {"display_title": "Reusable motion components turn the plan into a video", "subtitle": "", "duration_seconds": 2.8, "voice_behavior": "continue", "anchor_beat_id": "section_03_story_render_beat_01"},
+          "beats": [
+            {
+              "beat_id": "section_03_story_render_beat_01",
+              "beat_order": 1,
+              "beat_type": "transition",
+              "story_id": "story_render",
+              "narration_text": "Finally, validated scene specifications drive reusable motion components.",
+              "word_count": 8,
+              "estimated_seconds": 3.2,
+              "source_record_keys": ["record_render_contract"],
+              "visual_brief": {"purpose": "Introduce the rendering story.", "visual_intent": "story_title", "preferred_asset_types": ["logo", "kinetic_text"], "must_show": [], "on_screen_text": "", "avoid": []}
+            },
+            {
+              "beat_id": "section_03_story_render_beat_02",
+              "beat_order": 2,
+              "beat_type": "explanation",
+              "story_id": "story_render",
+              "narration_text": "Counters animate numbers, maps explain relationships, process views reveal steps, and kinetic type is saved for moments that truly need emphasis. Each scene stays short, renders independently, and can be retried without rebuilding the whole episode.",
+              "word_count": 36,
+              "estimated_seconds": 14.4,
+              "source_record_keys": ["record_render_contract"],
+              "visual_brief": {"purpose": "Show reusable motion scene families and independent rendering.", "visual_intent": "process_explainer", "preferred_asset_types": ["diagram", "chart"], "must_show": ["short independent scene renders"], "on_screen_text": "", "avoid": []}
+            },
+            {
+              "beat_id": "section_03_story_render_beat_03",
+              "beat_order": 3,
+              "beat_type": "takeaway",
+              "story_id": "story_render",
+              "narration_text": "The clips are stitched to the voiceover timeline, then the original audio is attached to the final video.",
+              "word_count": 18,
+              "estimated_seconds": 7.2,
+              "source_record_keys": ["record_render_contract"],
+              "visual_brief": {"purpose": "Show scene clips joining the aligned audio timeline.", "visual_intent": "process_explainer", "preferred_asset_types": ["diagram"], "must_show": ["clips plus voiceover assembly"], "on_screen_text": "", "avoid": []}
+            }
+          ],
           "narration_text": "Finally, validated scene specifications drive reusable motion components. Counters animate numbers, maps explain relationships, process views reveal steps, and kinetic type is saved for moments that truly need emphasis. Each scene stays short, renders independently, and can be retried without rebuilding the whole episode. The clips are stitched to the voiceover timeline, then the original audio is attached to the final video.",
           "word_count": 62,
           "estimated_seconds": 24.8,
@@ -206,8 +388,25 @@
           "story_id": "",
           "story_title": "",
           "role": "",
-          "target_seconds": 10,
-          "word_budget": 25,
+          "writing_guidance": {
+            "suggested_words": 45,
+            "editorial_goal": "Synthesize the episode and end naturally without repeating every story.",
+            "enforcement": "soft_editorial_guidance_only"
+          },
+          "title_card": null,
+          "beats": [
+            {
+              "beat_id": "section_99_closing_beat_01",
+              "beat_order": 1,
+              "beat_type": "conclusion",
+              "story_id": "",
+              "narration_text": "That separation is the real advantage: evidence, writing, voice, planning, rendering, and assembly can improve independently while the contracts keep the finished story coherent.",
+              "word_count": 24,
+              "estimated_seconds": 9.6,
+              "source_record_keys": [],
+              "visual_brief": {"purpose": "Land the shared-contract takeaway.", "visual_intent": "takeaway", "preferred_asset_types": ["diagram", "kinetic_text"], "must_show": ["connected stages"], "on_screen_text": "", "avoid": []}
+            }
+          ],
           "narration_text": "That separation is the real advantage: evidence, writing, voice, planning, rendering, and assembly can improve independently while the contracts keep the finished story coherent.",
           "word_count": 24,
           "estimated_seconds": 9.6,
@@ -224,12 +423,23 @@
       "full_script_stats": {
         "total_word_count": 253,
         "estimated_duration_seconds": 101.2,
+        "beat_count": 12,
         "section_order": [
           "section_00_intro",
           "section_01_story_evidence",
           "section_02_story_sync",
           "section_03_story_render",
           "section_99_closing"
+        ]
+      },
+      "audio_plan": {
+        "unit_strategy": "one_audio_unit_per_section_with_beat_anchors",
+        "units": [
+          {"audio_unit_id": "audio_section_00_intro", "section_id": "section_00_intro", "section_type": "intro", "story_id": "", "story_title": "", "beat_ids": ["section_00_intro_beat_01", "section_00_intro_beat_02"]},
+          {"audio_unit_id": "audio_section_01_story_evidence", "section_id": "section_01_story_evidence", "section_type": "story", "story_id": "story_evidence", "story_title": "From raw sources to a grounded story map", "beat_ids": ["section_01_story_evidence_beat_01", "section_01_story_evidence_beat_02", "section_01_story_evidence_beat_03"]},
+          {"audio_unit_id": "audio_section_02_story_sync", "section_id": "section_02_story_sync", "section_type": "story", "story_id": "story_sync", "story_title": "One semantic beat map keeps narration and visuals aligned", "beat_ids": ["section_02_story_sync_beat_01", "section_02_story_sync_beat_02", "section_02_story_sync_beat_03"]},
+          {"audio_unit_id": "audio_section_03_story_render", "section_id": "section_03_story_render", "section_type": "story", "story_id": "story_render", "story_title": "Reusable motion components turn the plan into a video", "beat_ids": ["section_03_story_render_beat_01", "section_03_story_render_beat_02", "section_03_story_render_beat_03"]},
+          {"audio_unit_id": "audio_section_99_closing", "section_id": "section_99_closing", "section_type": "closing", "story_id": "", "story_title": "", "beat_ids": ["section_99_closing_beat_01"]}
         ]
       },
       "manual_handoff": {
@@ -264,7 +474,9 @@
     }
   },
   "handoff": {
-    "ready_for_metadata_creation": true
+    "ready_for_metadata_creation": true,
+    "ready_for_voiceover": true,
+    "ready_for_visual_planning": true
   },
   "llm_calls": []
 }

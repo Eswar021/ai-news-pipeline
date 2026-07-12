@@ -23,34 +23,18 @@ class VideoPackagingRun(BaseModel):
         return value
 
 
-class RoleWeights(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    lead: float
-    major: float
-    brief: float
-
-    @field_validator("lead", "major", "brief")
-    @classmethod
-    def weights_must_be_positive(cls, value: float) -> float:
-        if value <= 0:
-            raise ValueError("roundup.role_weights values must be positive")
-        return value
-
-
 class RoundupConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     candidate_limit: int
     min_stories: int
     max_stories: int
-    target_duration_seconds: int
-    intro_seconds: int
-    closing_seconds: int
-    role_weights: RoleWeights
+    duration_mode: Literal["content_driven"] = "content_driven"
+    duration_ceiling_seconds: int | None = None
     max_per_entity: int
     max_per_product: int
     max_per_event_family: int
+    reject_duplicate_events: bool = True
     allowed_priority_buckets: list[str]
     exclude_noise: bool
     exclude_tutorials: bool
@@ -59,7 +43,6 @@ class RoundupConfig(BaseModel):
         "candidate_limit",
         "min_stories",
         "max_stories",
-        "target_duration_seconds",
         "max_per_entity",
         "max_per_product",
         "max_per_event_family",
@@ -70,11 +53,11 @@ class RoundupConfig(BaseModel):
             raise ValueError("roundup positive integer fields must be at least 1")
         return value
 
-    @field_validator("intro_seconds", "closing_seconds")
+    @field_validator("duration_ceiling_seconds")
     @classmethod
-    def non_negative_seconds(cls, value: int) -> int:
-        if value < 0:
-            raise ValueError("roundup intro_seconds and closing_seconds must be non-negative")
+    def optional_ceiling_must_be_positive(cls, value: int | None) -> int | None:
+        if value is not None and value < 1:
+            raise ValueError("roundup.duration_ceiling_seconds must be positive when provided")
         return value
 
     @field_validator("allowed_priority_buckets")
@@ -95,9 +78,6 @@ class RoundupConfig(BaseModel):
             raise ValueError("roundup.min_stories must be <= roundup.max_stories")
         if self.candidate_limit < self.max_stories:
             raise ValueError("roundup.candidate_limit must be >= roundup.max_stories")
-        story_budget = self.target_duration_seconds - self.intro_seconds - self.closing_seconds
-        if story_budget <= 0:
-            raise ValueError("roundup target_duration_seconds must exceed intro_seconds + closing_seconds")
         return self
 
 
@@ -159,7 +139,8 @@ class VideoPackagingSummary(BaseModel):
     rejected_story_count: int
     selection_reason_counts: dict[str, int]
     role_counts: dict[str, int]
-    target_duration_seconds: int
+    duration_mode: Literal["content_driven"] = "content_driven"
+    duration_ceiling_seconds: int | None = None
     failure_reason: str = ""
 
 

@@ -37,6 +37,7 @@ class ChatGPTVisualPlanParserConfig(BaseModel):
 class VideoPackagingData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
+    run_id: str
     selected_format: str | None = None
     video_packet: dict[str, Any]
 
@@ -55,15 +56,15 @@ class ParserInput(BaseModel):
 
     response_text: str
     video_packaging: VideoPackagingEnvelope
-    script_text: str
+    script_generation: dict[str, Any]
     script_source: str | None = None
     voiceover: dict[str, Any] | None = None
 
-    @field_validator("response_text", "script_text")
+    @field_validator("response_text")
     @classmethod
     def text_fields_must_not_be_empty(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("input.response_text and input.script_text must not be empty")
+            raise ValueError("input.response_text must not be empty")
         return value
 
 
@@ -79,4 +80,9 @@ class ChatGPTVisualPlanParserRequest(BaseModel):
         packet = self.input.video_packaging.data.video_packet
         if not isinstance(packet, dict) or not packet:
             raise ValueError("input.video_packaging.data.video_packet is missing")
+        if self.input.script_generation.get("status") != "ok":
+            raise ValueError("input.script_generation.status must be ok")
+        script_package = (self.input.script_generation.get("data") or {}).get("script_package") or {}
+        if not str(script_package.get("full_script", "")).strip():
+            raise ValueError("input.script_generation.data.script_package.full_script is missing or empty")
         return self

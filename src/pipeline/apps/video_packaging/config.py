@@ -11,6 +11,8 @@ ROUNDUP_FORMAT_CONTRACT = {
     "allowed_segment_roles": ["lead", "major", "brief"],
     "must_use_selected_stories_only": True,
     "story_payload": "full_selected_stories_with_video_segment_metadata",
+    "duration_mode": "content_driven",
+    "timing_source_of_truth": "voiceover",
     "tone_control_owner": "script_generation",
 }
 

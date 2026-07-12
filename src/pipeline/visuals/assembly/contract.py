@@ -97,7 +97,7 @@ class VideoAssemblyConfig(BaseModel):
 class VisualRenderData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    run_id: str | None = None
+    run_id: str
     generated_at: str | None = None
     visual_render_package: dict[str, Any]
 

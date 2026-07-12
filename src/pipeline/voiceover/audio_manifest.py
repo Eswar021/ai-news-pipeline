@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.pipeline.contracts import build_artifact_provenance
+
 
 def build_voiceover_package(
     *,
@@ -18,12 +20,33 @@ def build_voiceover_package(
     script_word_count: int,
     estimated_script_seconds: float,
     chunks: list[dict[str, Any]],
+    audio_units: list[dict[str, Any]],
+    alignment_strategy: str,
+    script_provenance: dict[str, Any],
+    audio_sha256: str,
 ) -> dict:
+    provenance = build_artifact_provenance(
+        artifact_type="voiceover",
+        run_id=run_id,
+        parents={"script": script_provenance["script_fingerprint"]},
+        script_source=str(script_provenance.get("script_source", "")),
+        payload={
+            "provider": provider,
+            "voice": voice,
+            "style": style,
+            "sample_rate_hz": sample_rate_hz,
+            "duration_seconds": round(duration_seconds, 2),
+            "audio_sha256": audio_sha256,
+            "audio_units": [_identity_audio_unit(unit) for unit in audio_units],
+        },
+    )
+    provenance["audio_sha256"] = audio_sha256
     return {
         "run_id": run_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "package_type": "voiceover_package",
         "status": "ready",
+        "provenance": provenance,
         "provider": provider,
         "voice": voice,
         "style": style,
@@ -37,7 +60,16 @@ def build_voiceover_package(
             "source": script_source,
             "word_count": script_word_count,
             "estimated_script_seconds": estimated_script_seconds,
+            "script_source": script_provenance.get("script_source", script_source),
+            "script_fingerprint": script_provenance["script_fingerprint"],
+            "contract_version": script_provenance.get("contract_version", ""),
         },
+        "alignment": {
+            "strategy": alignment_strategy,
+            "section_aware": alignment_strategy == "script_beats",
+            "beat_aware": alignment_strategy == "script_beats",
+        },
+        "audio_units": [_portable_audio_unit_paths(unit) for unit in audio_units],
         "chunks": [_portable_chunk_paths(chunk) for chunk in chunks],
         "handoff": {
             "ready_for_video_assembly": True,
@@ -56,7 +88,12 @@ def build_summary(package: dict) -> dict:
         "audio_path": package["audio"]["full_audio_path"],
         "duration_seconds": package["audio"]["duration_seconds"],
         "chunk_count": len(package.get("chunks", [])),
+        "audio_unit_count": len(package.get("audio_units", [])),
+        "aligned_beat_count": sum(len(unit.get("aligned_beats", [])) for unit in package.get("audio_units", [])),
         "word_count": package["input_script"]["word_count"],
+        "script_source": package["input_script"].get("script_source", package["input_script"].get("source", "")),
+        "script_fingerprint": package.get("provenance", {}).get("script_fingerprint", ""),
+        "voiceover_fingerprint": package.get("provenance", {}).get("voiceover_fingerprint", ""),
         "ready_for_video_assembly": package["handoff"]["ready_for_video_assembly"],
         "requires_manual_audio_review": package["handoff"]["requires_manual_audio_review"],
     }
@@ -68,6 +105,36 @@ def _portable_chunk_paths(chunk: dict[str, Any]) -> dict[str, Any]:
     if audio_path:
         normalized["audio_path"] = _portable_path(Path(audio_path))
     return normalized
+
+
+def _portable_audio_unit_paths(unit: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(unit)
+    audio_path = normalized.get("audio_path")
+    if audio_path:
+        normalized["audio_path"] = _portable_path(Path(audio_path))
+    return normalized
+
+
+def _identity_audio_unit(unit: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "audio_unit_id": unit.get("audio_unit_id", ""),
+        "unit_order": unit.get("unit_order", 0),
+        "section_id": unit.get("section_id", ""),
+        "story_id": unit.get("story_id", ""),
+        "start_seconds": unit.get("start_seconds", 0),
+        "end_seconds": unit.get("end_seconds", 0),
+        "aligned_beats": [
+            {
+                "beat_id": beat.get("beat_id", ""),
+                "beat_order": beat.get("beat_order", 0),
+                "text": beat.get("text", ""),
+                "start_seconds": beat.get("start_seconds", 0),
+                "end_seconds": beat.get("end_seconds", 0),
+            }
+            for beat in unit.get("aligned_beats", [])
+            if isinstance(beat, dict)
+        ],
+    }
 
 
 def _portable_path(path: Path) -> str:

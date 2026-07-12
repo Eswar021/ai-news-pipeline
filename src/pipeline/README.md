@@ -5,6 +5,7 @@
 ```text
 src/pipeline/
 ├── apps/            # pure JSON/dict applications
+├── contracts/       # public cross-module artifact identity contracts
 ├── handoffs/        # manual/external adapters
 ├── orchestration/   # notebook run context
 ├── voiceover/       # local TTS and WAV packaging
@@ -44,6 +45,7 @@ Current pure applications:
 - `apps/video_packaging`
 - `apps/script_generation/formats/roundup`
 - `apps/metadata_creator`
+- `apps/metadata_finalizer`
 
 Current media/handoff modules:
 
@@ -54,13 +56,19 @@ Current media/handoff modules:
 - `voiceover`
 - `visuals`
 
-Both native and manual ChatGPT routes must produce the same script and visual
-planning contracts. Downstream code should never branch on a manual-only data
-shape.
+Both native and manual ChatGPT routes produce one section-aware script contract
+with stable audiovisual beats. Voiceover preserves those IDs in timed audio
+units, and both visual-planning routes consume the same aligned beat timeline.
+Downstream code must never branch on a manual-only data shape or infer story
+boundaries from `full_script`.
+
+Canonical scripts and all downstream media packages carry deterministic
+fingerprints. Notebook artifact selection is explicit or unambiguous and never
+uses newest-file-wins behavior. Metadata creation is a draft stage; actual
+chapter timestamps are finalized from voiceover section audio units.
 
 Read:
 
-- `docs/architecture/pipeline_application_architecture.md`
-- `docs/architecture/media_modules.md`
-- `docs/architecture/visuals_roadmap.md`
+- `docs/current_system_architecture.md`
+- `src/pipeline/apps/script_generation/formats/roundup/README.md`
 - `src/pipeline/visuals/README.md`

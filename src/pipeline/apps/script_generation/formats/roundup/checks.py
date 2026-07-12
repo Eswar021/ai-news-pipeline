@@ -26,8 +26,6 @@ def build_full_script(section_scripts: list[dict[str, Any]], words_per_minute: i
 def check_script_package(
     script_package: dict[str, Any],
     video_packet: dict[str, Any],
-    *,
-    duration_tolerance_seconds: int,
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -51,6 +49,7 @@ def check_script_package(
         errors.append(f"Expected {expected_story_sections} story sections, found {actual_story_sections}")
 
     known_source_keys = _source_key_index(stories)
+    observed_beat_ids: set[str] = set()
     for section in sections:
         section_id = section.get("section_id", "")
         narration = section.get("narration_text", "")
@@ -63,6 +62,31 @@ def check_script_package(
         if leaked_ids:
             errors.append(f"{section_id} narration contains internal IDs: {leaked_ids}")
 
+        beats = section.get("beats")
+        if not isinstance(beats, list) or not beats:
+            errors.append(f"{section_id} beats are missing or empty")
+            beats = []
+        reconstructed = " ".join(str(beat.get("narration_text", "")).strip() for beat in beats).strip()
+        if reconstructed != narration.strip():
+            errors.append(f"{section_id} narration_text is not the deterministic concatenation of its beats")
+        for expected_order, beat in enumerate(beats, start=1):
+            beat_id = str(beat.get("beat_id", "")).strip()
+            if not beat_id:
+                errors.append(f"{section_id} contains a beat without beat_id")
+            elif beat_id in observed_beat_ids:
+                errors.append(f"Duplicate beat_id: {beat_id}")
+            else:
+                observed_beat_ids.add(beat_id)
+            if int(beat.get("beat_order", 0) or 0) != expected_order:
+                errors.append(f"{section_id} beat order is not contiguous at {beat_id or expected_order}")
+            beat_narration = str(beat.get("narration_text", ""))
+            beat_markers = _visual_markers_in_narration(beat_narration)
+            if beat_markers:
+                errors.append(f"{beat_id} narration contains visual/editor directions: {beat_markers}")
+            beat_leaks = _internal_ids_in_narration(beat_narration)
+            if beat_leaks:
+                errors.append(f"{beat_id} narration contains internal IDs: {beat_leaks}")
+
         used_story_ids = set(section.get("used_story_ids", []))
         if not used_story_ids <= selected_story_ids:
             errors.append(f"{section_id} used story IDs outside selected stories: {sorted(used_story_ids - selected_story_ids)}")
@@ -72,13 +96,36 @@ def check_script_package(
         if unknown_source_keys:
             errors.append(f"{section_id} used unknown source record keys: {unknown_source_keys}")
 
-    target_seconds = int(video_packet.get("target_duration_seconds", 0) or 0)
+        if section.get("section_type") == "story":
+            title_card = section.get("title_card")
+            if not isinstance(title_card, dict) or not str(title_card.get("display_title", "")).strip():
+                errors.append(f"{section_id} is missing its story title-card contract")
+            elif title_card.get("voice_behavior") != "continue":
+                errors.append(f"{section_id} title card must use voice_behavior=continue")
+
     estimated = float(script_package.get("full_script_stats", {}).get("estimated_duration_seconds", 0) or 0)
-    if target_seconds and abs(estimated - target_seconds) > duration_tolerance_seconds:
-        errors.append(
-            f"Full script duration drift exceeds tolerance: estimated {estimated:.1f}s, "
-            f"target {target_seconds}s, tolerance {duration_tolerance_seconds}s"
+    duration_policy = dict(script_package.get("duration_policy") or video_packet.get("duration_policy") or {})
+    configured_ceiling = duration_policy.get("configured_ceiling_seconds")
+    if configured_ceiling is None:
+        configured_ceiling = video_packet.get("target_duration_seconds")
+    if configured_ceiling and estimated > float(configured_ceiling):
+        warnings.append(
+            "Observed script duration exceeds the configured editorial ceiling: "
+            f"estimated {estimated:.1f}s, ceiling {float(configured_ceiling):.1f}s. "
+            "The script remains valid because duration is observational, not an approval quota."
         )
+
+    review = script_package.get("review") or {}
+    for story_review in review.get("story_reviews", []):
+        story_gate_issues = list(story_review.get("final_gate_issues") or [])
+        if story_gate_issues:
+            errors.append(
+                f"{story_review.get('story_id', 'unknown_story')} has unresolved deterministic gates: "
+                f"{story_gate_issues}"
+            )
+    bookend_gate_issues = list(review.get("bookend_final_gate_issues") or [])
+    if bookend_gate_issues:
+        errors.append(f"Bookends have unresolved deterministic gates: {bookend_gate_issues}")
 
     return {
         "passed": not errors,

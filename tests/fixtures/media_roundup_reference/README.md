@@ -11,7 +11,11 @@ Files:
 
 - `video_packaging_result.json`: canonical selected-story packet.
 - `chatgpt_response.txt`: manual handoff response with explicit section markers.
-- `script_generation_result.json`: canonical parsed script envelope.
+- `script_generation_result.json`: canonical parsed script envelope with five
+  sections, twelve audiovisual beats, moving-title anchors, and five audio
+  units. Its length is content-driven; reported words and duration are
+  observational telemetry rather than approval targets. It also carries the
+  deterministic script fingerprint required by production media stages.
 - `full_script.txt`: narration-only convenience copy.
 - `visual_scene_planning_result.json`: curated planner-compatible scene plan.
 

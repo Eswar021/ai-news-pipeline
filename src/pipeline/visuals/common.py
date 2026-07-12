@@ -71,7 +71,12 @@ def short_text(text: str, limit: int) -> str:
     cleaned = clean_text(text)
     if len(cleaned) <= limit:
         return cleaned
-    return cleaned[: max(0, limit - 1)].rstrip(" ,.;:") + "..."
+    if limit <= 3:
+        return "." * max(0, limit)
+    candidate = cleaned[: limit - 3].rstrip(" ,.;:")
+    if " " in candidate:
+        candidate = candidate.rsplit(" ", 1)[0].rstrip(" ,.;:")
+    return (candidate or cleaned[: limit - 3].rstrip(" ,.;:")) + "..."
 
 
 def dedupe(values: list[str]) -> list[str]:
@@ -173,6 +178,9 @@ def voiceover_chunks(voiceover_package: dict[str, Any] | None) -> list[dict[str,
     package = normalize_voiceover_package(voiceover_package)
     if not package:
         return []
+    aligned = _voiceover_aligned_beats(package)
+    if aligned:
+        return aligned
     chunks = package.get("chunks")
     if not isinstance(chunks, list):
         return []
@@ -197,6 +205,49 @@ def voiceover_chunks(voiceover_package: dict[str, Any] | None) -> list[dict[str,
             }
         )
     return sorted(normalized, key=lambda item: item["order"])
+
+
+def _voiceover_aligned_beats(package: dict[str, Any]) -> list[dict[str, Any]]:
+    audio_units = package.get("audio_units")
+    if not isinstance(audio_units, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    order = 0
+    for unit in sorted(
+        (item for item in audio_units if isinstance(item, dict)),
+        key=lambda item: safe_int(item.get("unit_order"), 999999),
+    ):
+        beats = unit.get("aligned_beats")
+        if not isinstance(beats, list):
+            continue
+        for beat in sorted(
+            (item for item in beats if isinstance(item, dict)),
+            key=lambda item: safe_int(item.get("beat_order"), 999999),
+        ):
+            order += 1
+            text = clean_text(beat.get("text", ""))
+            start = safe_float(beat.get("start_seconds"), 0.0)
+            end = safe_float(beat.get("end_seconds"), start)
+            normalized.append(
+                {
+                    "unit_id": clean_text(beat.get("beat_id")) or f"voice_beat_{order:03d}",
+                    "order": order,
+                    "text": text,
+                    "word_count": safe_int(beat.get("word_count"), count_words(text)),
+                    "start_seconds": round(start, 2),
+                    "end_seconds": round(end, 2),
+                    "duration_seconds": round(max(0.0, end - start), 2),
+                    "section_id": clean_text(beat.get("section_id") or unit.get("section_id")),
+                    "section_type": clean_text(unit.get("section_type")),
+                    "story_id": clean_text(beat.get("story_id") or unit.get("story_id")),
+                    "story_title": clean_text(unit.get("story_title")),
+                    "beat_id": clean_text(beat.get("beat_id")),
+                    "beat_order": safe_int(beat.get("beat_order"), order),
+                    "beat_type": clean_text(beat.get("beat_type")),
+                    "timing_source": "voiceover_aligned_beat",
+                }
+            )
+    return normalized
 
 
 def record_text(record: dict[str, Any], *, max_chars: int) -> str:

@@ -30,9 +30,9 @@ class PublishHandoffInput(BaseModel):
     run_context: dict[str, Any]
     video_packaging: dict[str, Any]
     script_generation: dict[str, Any]
-    metadata_creator: dict[str, Any]
-    voiceover: dict[str, Any] | None = None
-    video_assembly: dict[str, Any] | None = None
+    metadata_finalizer: dict[str, Any]
+    voiceover: dict[str, Any]
+    video_assembly: dict[str, Any]
 
 
 class PublishHandoffRequest(BaseModel):
@@ -44,8 +44,14 @@ class PublishHandoffRequest(BaseModel):
     def required_inputs_must_be_ready(self) -> "PublishHandoffRequest":
         if not self.config.require_ready_inputs:
             return self
-        for name in ("video_packaging", "script_generation", "metadata_creator"):
+        for name in ("video_packaging", "script_generation", "metadata_finalizer", "video_assembly"):
             envelope = getattr(self.input, name)
             if envelope.get("status") != "ok":
                 raise ValueError(f"input.{name}.status must be ok")
+        voiceover = self.input.voiceover
+        if voiceover.get("status") == "ok":
+            return self
+        package = voiceover.get("voiceover_package") or (voiceover.get("data") or {}).get("voiceover_package") or voiceover
+        if package.get("status") != "ready":
+            raise ValueError("input.voiceover must be an ok envelope or ready voiceover package")
         return self
