@@ -3,8 +3,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from .cluster_reconciler import reconcile_components
 from .clusterer import cluster_records
 from .contract import StoryMappingRequest, StoryMappingResponse, StoryMappingStatus
+from .event_identity import attach_event_identities
 from .llm_client import make_llm
 from .pair_adjudicator import adjudicate_candidate_pairs
 from .prompt_loader import load_system_prompt
@@ -30,10 +32,40 @@ def run(input_json: dict) -> dict:
         "semantic_edges": 0,
     }
 
+    event_identity_cfg = request.config.clustering.event_identity.model_dump(mode="json")
+    event_identity_enabled = bool(event_identity_cfg["enabled"])
+    event_identity_worker_count = int(event_identity_cfg.get("worker_count", 1))
+    record_semantic_enricher = None
+    if records and event_identity_enabled:
+        event_identity_prompt = load_system_prompt(
+            "event_identity",
+            event_identity_cfg["prompt_version"],
+        )
+        event_identity_llm = make_llm(
+            provider=event_identity_cfg["provider"],
+            model=event_identity_cfg["model"],
+            temperature=float(event_identity_cfg["temperature"]),
+            base_url=event_identity_cfg.get("base_url"),
+        )
+        def record_semantic_enricher(candidate_records: list[dict]) -> list[dict]:
+            return attach_event_identities(
+                candidate_records,
+                config=event_identity_cfg,
+                llm=event_identity_llm,
+                system_prompt=event_identity_prompt,
+                llm_calls=llm_calls,
+            )
+
     pair_adjudication_call_count = 0
+    pair_confirmation_call_count = 0
     pair_adjudication_batch_count = 0
     pair_adjudication_worker_count = 0
     pair_adjudication_enabled = False
+    reconciliation_cfg = request.config.clustering.cluster_reconciliation.model_dump(
+        mode="json"
+    )
+    reconciliation_enabled = bool(reconciliation_cfg["enabled"])
+    reconciliation_worker_count = int(reconciliation_cfg.get("worker_count", 1))
     if records:
         pair_cfg = request.config.clustering.pair_adjudication.model_dump(mode="json")
         pair_adjudication_enabled = bool(pair_cfg["enabled"])
@@ -57,13 +89,41 @@ def run(input_json: dict) -> dict:
                     llm_calls=llm_calls,
                 )
 
+        cluster_reconciler = None
+        if reconciliation_enabled:
+            reconciliation_prompt = load_system_prompt(
+                "cluster_reconciliation",
+                reconciliation_cfg["prompt_version"],
+            )
+            reconciliation_llm = make_llm(
+                provider=reconciliation_cfg["provider"],
+                model=reconciliation_cfg["model"],
+                temperature=float(reconciliation_cfg["temperature"]),
+                base_url=reconciliation_cfg.get("base_url"),
+            )
+
+            def cluster_reconciler(components: list[dict]) -> dict[str, list[list[str]]]:
+                return reconcile_components(
+                    components,
+                    config=reconciliation_cfg,
+                    llm=reconciliation_llm,
+                    system_prompt=reconciliation_prompt,
+                    llm_calls=llm_calls,
+                )
+
         clusters, cluster_stats = cluster_records(
             records,
             cluster_cfg,
             pair_adjudicator=pair_adjudicator,
+            cluster_reconciler=cluster_reconciler,
+            record_semantic_enricher=record_semantic_enricher,
         )
         pair_adjudication_call_count = sum(
             item.get("module_name") == "pair_adjudication" for item in llm_calls
+        )
+        pair_confirmation_call_count = sum(
+            item.get("module_name") == "pair_adjudication_full_confirmation"
+            for item in llm_calls
         )
         pair_adjudication_batch_count = len(
             {
@@ -126,6 +186,17 @@ def run(input_json: dict) -> dict:
         pair_adjudication_call_count=pair_adjudication_call_count,
         pair_adjudication_batch_count=pair_adjudication_batch_count,
         pair_adjudication_worker_count=pair_adjudication_worker_count,
+        event_identity_enabled=event_identity_enabled,
+        event_identity_call_count=sum(
+            item.get("module_name") == "event_identity" for item in llm_calls
+        ),
+        event_identity_worker_count=event_identity_worker_count,
+        pair_confirmation_call_count=pair_confirmation_call_count,
+        reconciliation_enabled=reconciliation_enabled,
+        reconciliation_call_count=sum(
+            item.get("module_name") == "cluster_reconciliation" for item in llm_calls
+        ),
+        reconciliation_worker_count=reconciliation_worker_count,
     )
 
     response = StoryMappingResponse(
@@ -262,6 +333,13 @@ def _build_summary(
     pair_adjudication_call_count: int,
     pair_adjudication_batch_count: int,
     pair_adjudication_worker_count: int,
+    event_identity_enabled: bool,
+    event_identity_call_count: int,
+    event_identity_worker_count: int,
+    pair_confirmation_call_count: int,
+    reconciliation_enabled: bool,
+    reconciliation_call_count: int,
+    reconciliation_worker_count: int,
 ) -> dict:
     bucket_counts: dict[str, int] = {}
     source_group_mix: dict[str, int] = {}
@@ -297,6 +375,13 @@ def _build_summary(
         "candidate_covered_record_count": int(cluster_stats.get("candidate_covered_record_count", 0)),
         "truncated_candidate_pair_count": int(cluster_stats.get("truncated_candidate_pair_count", 0)),
         "transitive_merge_rejection_count": int(cluster_stats.get("transitive_merge_rejection_count", 0)),
+        "reconciliation_component_count": int(
+            cluster_stats.get("reconciliation_component_count", 0)
+        ),
+        "reconciled_group_count": int(cluster_stats.get("reconciled_group_count", 0)),
+        "reconciliation_split_count": int(
+            cluster_stats.get("reconciliation_split_count", 0)
+        ),
         "effective_max_pair_hours": effective_max_pair_hours,
         "ranking_authority": ranking_authority,
         "priority_bucket_counts": bucket_counts,
@@ -312,10 +397,22 @@ def _build_summary(
             "pair_adjudication_call_count": pair_adjudication_call_count,
             "pair_adjudication_batch_count": pair_adjudication_batch_count,
             "pair_adjudication_worker_count": pair_adjudication_worker_count,
+            "pair_confirmation_call_count": pair_confirmation_call_count,
+            "event_identity_enabled": event_identity_enabled,
+            "event_identity_call_count": event_identity_call_count,
+            "event_identity_worker_count": event_identity_worker_count,
+            "cluster_reconciliation_enabled": reconciliation_enabled,
+            "cluster_reconciliation_call_count": reconciliation_call_count,
+            "cluster_reconciliation_worker_count": reconciliation_worker_count,
             "parallelized_steps": [
                 step
                 for step, enabled in (
+                    ("event_identity", event_identity_enabled and event_identity_worker_count > 1),
                     ("pair_adjudication", pair_adjudication_enabled and pair_adjudication_worker_count > 1),
+                    (
+                        "cluster_reconciliation",
+                        reconciliation_enabled and reconciliation_worker_count > 1,
+                    ),
                     ("story_label", use_llm_story_labels and bool(stories)),
                 )
                 if enabled

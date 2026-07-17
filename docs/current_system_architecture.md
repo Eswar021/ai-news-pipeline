@@ -190,8 +190,8 @@ flowchart TD
     collection[news_collection<br/>normalized raw records and candidate ledger]
     evidence[evidence_prep<br/>cleaned records, flags, decision ledger]
     triage[editorial_triage<br/>advance, reserve, quarantine]
-    mapping[story_mapping<br/>semantic clusters and labeled stories]
-    selection[editorial_selection<br/>ordered roundup slate]
+    mapping[story_mapping<br/>event capsules, focused pair review,<br/>cluster reconciliation, story labels]
+    selection[editorial_selection<br/>semantic slate plus duplicate-story review]
     packaging[video_packaging<br/>selected stories and structural packet]
 
     subgraph writing[Roundup script generation]
@@ -228,11 +228,29 @@ flowchart TD
 | `news_collection`     | Frozen collection profile, source config, environment credentials | Collect and normalize all enabled source groups                     | Raw records and collector candidate ledger |
 | `evidence_prep`       | News collection result                                            | Clean article content, retain reversible flags and provenance       | Prepared records and decision ledger       |
 | `editorial_triage`    | Raw and prepared records plus channel policy                      | Make semantic advance/reserve/quarantine decisions                  | Authoritative editorial decisions          |
-| `story_mapping`       | Prepared records plus triage decisions                            | Cluster related records and label story identity                    | Stories carrying their full records        |
-| `editorial_selection` | All mapped stories                                                | Semantically choose and order the roundup slate                     | Editorial slate plus reserve               |
+| `story_mapping`       | Prepared records plus triage decisions                            | Nominate related records, extract candidate event identities, adjudicate one pair at a time, reconcile semantic components, and label stories | Stories carrying their full records        |
+| `editorial_selection` | All mapped stories                                                | Semantically screen, choose, deduplicate, and order the roundup slate | Editorial slate plus reserve               |
 | `video_packaging`     | Editorial slate                                                   | Apply roundup structure without writing narration                   | Video packet with selected stories         |
 | `script_generation`   | Video packet and full selected records                            | Direct, write, conditionally review, and assemble story-aware beats | Canonical`script_package`                |
 | `metadata_creator`    | Script package plus video packet                                  | Draft viewer-facing metadata                                        | Metadata draft package                     |
+
+### Story Identity And Slate Reconciliation
+
+Story mapping uses embeddings and triage story keys only to nominate a bounded
+candidate set. Candidate records then receive independent LLM event-identity
+capsules. Every candidate pair is adjudicated in its own call, and a proposed
+`same_event` decision is confirmed against both complete normalized records.
+Code validates only schema and opaque record identity at this boundary.
+
+Pair decisions form proposed semantic components. A component-level LLM then
+partitions every record exactly once into coherent event coverage, tightly
+connected event updates, or standalone records. This final partition avoids
+edge-order-dependent transitive merges while preserving full records and
+event-status distinctions such as planned versus released. The final roundup
+selector performs a second complete-context slate review so separately mapped
+versions of one event cannot knowingly occupy two episode slots. Duplicate
+judgment remains semantic; code checks only candidate coverage, selected count,
+role placement, and stable IDs.
 
 ### Canonical Script and Manual Script Branch
 

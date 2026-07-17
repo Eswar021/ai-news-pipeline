@@ -120,7 +120,58 @@ def _invoke_batch(
     system_prompt: str,
     llm_calls: list[dict[str, Any]],
 ) -> list[dict]:
-    payload = _pair_payload(batch)
+    if len(batch) != 1:
+        raise ValueError("Pair adjudication requires exactly one candidate per LLM call")
+
+    capsule_output = _invoke_context(
+        batch=batch,
+        batch_index=batch_index,
+        attempt=attempt,
+        config=config,
+        llm=llm,
+        system_prompt=system_prompt,
+        llm_calls=llm_calls,
+        include_full_records=False,
+        module_name="pair_adjudication",
+    )
+    decision = capsule_output[0]
+    if not bool(config.get("confirm_same_event_with_full_records", True)):
+        return capsule_output
+    if decision.get("relationship") != "same_event":
+        return capsule_output
+
+    confirmation_prompt = (
+        system_prompt
+        + "\n\nThis is a full-record confirmation of a proposed same_event merge. Read both "
+        "complete records independently. Confirm same_event only when they describe the same "
+        "concrete event; otherwise return the correct relationship."
+    )
+    return _invoke_context(
+        batch=batch,
+        batch_index=batch_index,
+        attempt=attempt,
+        config=config,
+        llm=llm,
+        system_prompt=confirmation_prompt,
+        llm_calls=llm_calls,
+        include_full_records=True,
+        module_name="pair_adjudication_full_confirmation",
+    )
+
+
+def _invoke_context(
+    *,
+    batch: list[dict],
+    batch_index: int,
+    attempt: int,
+    config: dict[str, Any],
+    llm,
+    system_prompt: str,
+    llm_calls: list[dict[str, Any]],
+    include_full_records: bool,
+    module_name: str,
+) -> list[dict]:
+    payload = _pair_payload(batch, include_full_records=include_full_records)
     prompt_inputs = {
         "system_prompt": system_prompt,
         "pair_payload": json.dumps(payload, ensure_ascii=False, indent=2),
@@ -146,13 +197,18 @@ def _invoke_batch(
     except Exception as exc:
         llm_calls.append(
             build_llm_call_log(
-                module_name="pair_adjudication",
+                module_name=module_name,
                 provider=config["provider"],
                 model=config["model"],
                 rendered_prompt=rendered,
                 raw_response=raw,
                 parsed_output=parsed_dict,
-                metadata=_batch_metadata(payload, batch_index=batch_index, attempt=attempt),
+                metadata=_batch_metadata(
+                    payload,
+                    batch_index=batch_index,
+                    attempt=attempt,
+                    include_full_records=include_full_records,
+                ),
                 duration_seconds=time.time() - started,
                 parse_error=str(exc),
             )
@@ -160,13 +216,18 @@ def _invoke_batch(
         raise
     llm_calls.append(
         build_llm_call_log(
-            module_name="pair_adjudication",
+            module_name=module_name,
             provider=config["provider"],
             model=config["model"],
             rendered_prompt=rendered,
             raw_response=raw,
             parsed_output=parsed_dict,
-            metadata=_batch_metadata(payload, batch_index=batch_index, attempt=attempt),
+            metadata=_batch_metadata(
+                payload,
+                batch_index=batch_index,
+                attempt=attempt,
+                include_full_records=include_full_records,
+            ),
             duration_seconds=time.time() - started,
         )
     )
@@ -198,13 +259,30 @@ def _candidate_batches(
     current: list[dict[str, Any]] = []
     for candidate in candidates:
         trial = [*current, candidate]
-        trial_chars = len(json.dumps(_pair_payload(trial), ensure_ascii=False))
+        trial_chars = len(
+            json.dumps(_pair_payload(trial, include_full_records=False), ensure_ascii=False)
+        )
         if current and (len(trial) > batch_size or trial_chars > max_batch_chars):
             batches.append(current)
             current = [candidate]
         else:
             current = trial
-        current_chars = len(json.dumps(_pair_payload(current), ensure_ascii=False))
+        current_chars = len(
+            json.dumps(_pair_payload(current, include_full_records=False), ensure_ascii=False)
+        )
+        full_pair_chars = len(
+            json.dumps(
+                _pair_payload([candidate], include_full_records=True),
+                ensure_ascii=False,
+            )
+        )
+        if full_pair_chars > single_pair_limit:
+            raise ValueError(
+                "A complete story-mapping pair exceeds pair_adjudication.max_single_pair_chars; "
+                "the normalized semantic context was not truncated. "
+                f"pair_id={candidate.get('pair_id')}, serialized_chars={full_pair_chars}, "
+                f"configured_limit={single_pair_limit}"
+            )
         if current_chars > max_batch_chars:
             if len(current) == 1 and current_chars <= single_pair_limit:
                 batches.append(current)
@@ -221,7 +299,11 @@ def _candidate_batches(
     return batches
 
 
-def _pair_payload(batch: list[dict[str, Any]]) -> dict[str, Any]:
+def _pair_payload(
+    batch: list[dict[str, Any]],
+    *,
+    include_full_records: bool = True,
+) -> dict[str, Any]:
     records: dict[str, dict[str, Any]] = {}
     pairs: list[dict[str, Any]] = []
     for item in batch:
@@ -230,9 +312,9 @@ def _pair_payload(batch: list[dict[str, Any]]) -> dict[str, Any]:
         left_key = clean_text(left.get("record_key"))
         right_key = clean_text(right.get("record_key"))
         if left_key:
-            records[left_key] = left
+            records[left_key] = left if include_full_records else _event_capsule_record(left)
         if right_key:
-            records[right_key] = right
+            records[right_key] = right if include_full_records else _event_capsule_record(right)
         pairs.append(
             {
                 **{
@@ -245,14 +327,36 @@ def _pair_payload(batch: list[dict[str, Any]]) -> dict[str, Any]:
             }
         )
     return {
-        "task": "Classify the temporal/story relationship for every candidate record pair.",
+        "task": "Classify the temporal/story relationship for this candidate record pair.",
+        "context_mode": "complete_records" if include_full_records else "event_identity_capsules",
         "pairs": pairs,
         "records_by_key": records,
         "required_pair_ids": [item["pair_id"] for item in batch],
     }
 
 
-def _batch_metadata(payload: dict[str, Any], *, batch_index: int, attempt: int) -> dict[str, Any]:
+def _event_capsule_record(record: dict[str, Any]) -> dict[str, Any]:
+    identity = dict(record.get("story_mapping_event_identity") or {})
+    return {
+        "record_key": clean_text(record.get("record_key")),
+        "title": clean_text(record.get("title")),
+        "url": clean_text(record.get("url")),
+        "published_at": clean_text(record.get("published_at")),
+        "source": clean_text(record.get("source")),
+        "source_group": clean_text(record.get("source_group")),
+        "source_relationship": clean_text(record.get("source_relationship")),
+        "event_identity": identity,
+        "triage_story_keys": list(record.get("triage_story_keys") or []),
+    }
+
+
+def _batch_metadata(
+    payload: dict[str, Any],
+    *,
+    batch_index: int,
+    attempt: int,
+    include_full_records: bool,
+) -> dict[str, Any]:
     records = dict(payload.get("records_by_key") or {})
     return {
         "batch_index": batch_index,
@@ -261,6 +365,10 @@ def _batch_metadata(payload: dict[str, Any], *, batch_index: int, attempt: int) 
         "record_count": len(records),
         "record_keys": list(records),
         "serialized_context_chars": len(json.dumps(payload, ensure_ascii=False)),
-        "source_context_mode": "complete_normalized_semantic_records_deduplicated_per_batch",
+        "source_context_mode": (
+            "complete_normalized_semantic_records"
+            if include_full_records
+            else "llm_event_identity_capsules"
+        ),
         "records_truncated": False,
     }

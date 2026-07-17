@@ -13,8 +13,9 @@ from .contract import (
     EditorialSelectionRequest,
     EditorialSelectionResponse,
     RoundupSlateDraft,
+    RoundupSlateReviewDraft,
 )
-from .config import SCREENING_PROMPT_MODULE
+from .config import SCREENING_PROMPT_MODULE, SLATE_REVIEW_PROMPT_MODULE
 from .llm_client import make_llm
 from .llm_logging import build_llm_call_log
 from .prompt_loader import load_prompt_bundle
@@ -70,6 +71,16 @@ def run(input_json: dict) -> dict:
 
     last_error = ""
     slate: dict[str, Any] | None = None
+    slate_review_changed = False
+    slate_review_reason = ""
+    duplicate_story_groups: list[dict[str, Any]] = []
+    slate_review_config = dict(config.get("slate_review") or {})
+    slate_review_prompt_bundle = None
+    if bool(slate_review_config.get("enabled")):
+        slate_review_prompt_bundle = load_prompt_bundle(
+            slate_review_config["prompt_version"],
+            module=SLATE_REVIEW_PROMPT_MODULE,
+        )
     for attempt in range(1, int(config["max_attempts"]) + 1):
         try:
             draft = _invoke_selector(
@@ -82,6 +93,25 @@ def run(input_json: dict) -> dict:
                 original_story_count=len(stories),
             )
             _validate_slate(draft, candidate_pool, config)
+            if slate_review_prompt_bundle is not None:
+                reviewed_draft = _invoke_slate_reviewer(
+                    stories=candidate_pool,
+                    proposed=draft,
+                    config=config,
+                    review_config=slate_review_config,
+                    prompt_bundle=slate_review_prompt_bundle,
+                    llm=llm,
+                    llm_calls=llm_calls,
+                    attempt=attempt,
+                )
+                _validate_slate(reviewed_draft, candidate_pool, config)
+                draft = reviewed_draft
+                slate_review_changed = bool(reviewed_draft.review_changed)
+                slate_review_reason = clean_text(reviewed_draft.review_reason)
+                duplicate_story_groups = [
+                    group.model_dump(mode="json")
+                    for group in reviewed_draft.duplicate_story_groups
+                ]
             slate = _materialize_slate(
                 draft,
                 stories,
@@ -125,6 +155,16 @@ def run(input_json: dict) -> dict:
                 for call in llm_calls
                 if call.get("module_name") == SCREENING_PROMPT_MODULE
             ),
+            "slate_review_enabled": bool(slate_review_config.get("enabled")),
+            "slate_review_call_count": sum(
+                1
+                for call in llm_calls
+                if call.get("module_name") == SLATE_REVIEW_PROMPT_MODULE
+            ),
+            "slate_review_changed": slate_review_changed,
+            "slate_review_reason": slate_review_reason,
+            "duplicate_story_group_count": len(duplicate_story_groups),
+            "duplicate_story_groups": duplicate_story_groups,
             "selection_strategy": screening["strategy"],
             "screening_round_count": len(screening["rounds"]),
             "final_candidate_story_count": len(candidate_pool),
@@ -141,6 +181,128 @@ def run(input_json: dict) -> dict:
         llm_calls=llm_calls,
     )
     return response.model_dump(mode="json")
+
+
+def _invoke_slate_reviewer(
+    *,
+    stories: list[dict],
+    proposed: RoundupSlateDraft,
+    config: dict[str, Any],
+    review_config: dict[str, Any],
+    prompt_bundle: dict[str, str],
+    llm,
+    llm_calls: list[dict[str, Any]],
+    attempt: int,
+) -> RoundupSlateReviewDraft:
+    story_contexts, selection_ref_to_story_id = _selection_contexts_with_refs(
+        stories,
+        config,
+    )
+    serialized_context_chars, serialized_context_tokens = _validate_call_context(
+        story_contexts,
+        config,
+    )
+    proposed_transport = _slate_with_selection_refs(
+        proposed,
+        selection_ref_to_story_id,
+    )
+    payload = {
+        "task": "Audit and finalize the proposed roundup slate.",
+        "channel": config["channel"],
+        "constraints": {
+            "min_stories": config["min_stories"],
+            "max_stories": config["max_stories"],
+            "exactly_one_lead": True,
+            "all_candidate_ids_must_be_accounted_for": True,
+            "do_not_select_duplicate_editorial_stories": True,
+        },
+        "selection_identity": {
+            "story_id_values_are_opaque_selection_refs": True,
+            "copy_story_id_values_exactly": True,
+        },
+        "proposed_slate": proposed_transport,
+        "candidate_stories": story_contexts,
+        "required_story_ids": [item["story_id"] for item in story_contexts],
+    }
+    prompt_inputs = {
+        "system_prompt": prompt_bundle["system"],
+        "user_preamble": prompt_bundle["user_preamble"],
+        "task_payload": json.dumps(payload, ensure_ascii=False, indent=2),
+    }
+    rendered_prompt = TASK_PROMPT.format(**prompt_inputs)
+    chain = TASK_PROMPT | llm.with_structured_output(
+        RoundupSlateReviewDraft,
+        include_raw=True,
+    )
+    raw = None
+    parsed_dict = None
+    last_error = ""
+    for review_attempt in range(1, int(review_config["max_attempts"]) + 1):
+        started = time.time()
+        try:
+            result = chain.invoke(prompt_inputs)
+            raw = result.get("raw") if isinstance(result, dict) else None
+            parsed = result.get("parsed") if isinstance(result, dict) else result
+            parsing_error = result.get("parsing_error") if isinstance(result, dict) else None
+            if parsing_error is not None or parsed is None:
+                raise ValueError(f"structured output parsing failed: {parsing_error}")
+            transport_output = (
+                parsed
+                if isinstance(parsed, RoundupSlateReviewDraft)
+                else RoundupSlateReviewDraft.model_validate(parsed)
+            )
+            parsed_dict = transport_output.model_dump(mode="json")
+            output = _restore_slate_review_story_ids(
+                transport_output,
+                selection_ref_to_story_id,
+            )
+            llm_calls.append(
+                build_llm_call_log(
+                    provider=config["provider"],
+                    model=config["model"],
+                    rendered_prompt=rendered_prompt,
+                    raw_response=raw,
+                    parsed_output=parsed_dict,
+                    metadata={
+                        **_selection_context_metadata(
+                            story_contexts,
+                            attempt=attempt,
+                            serialized_context_chars=serialized_context_chars,
+                            serialized_context_tokens=serialized_context_tokens,
+                            selection_ref_to_story_id=selection_ref_to_story_id,
+                        ),
+                        "review_attempt": review_attempt,
+                    },
+                    duration_seconds=time.time() - started,
+                    module_name=SLATE_REVIEW_PROMPT_MODULE,
+                )
+            )
+            return output
+        except Exception as exc:
+            last_error = clean_text(exc)
+            llm_calls.append(
+                build_llm_call_log(
+                    provider=config["provider"],
+                    model=config["model"],
+                    rendered_prompt=rendered_prompt,
+                    raw_response=raw,
+                    parsed_output=parsed_dict,
+                    metadata={
+                        **_selection_context_metadata(
+                            story_contexts,
+                            attempt=attempt,
+                            serialized_context_chars=serialized_context_chars,
+                            serialized_context_tokens=serialized_context_tokens,
+                            selection_ref_to_story_id=selection_ref_to_story_id,
+                        ),
+                        "review_attempt": review_attempt,
+                    },
+                    duration_seconds=time.time() - started,
+                    parse_error=last_error,
+                    module_name=SLATE_REVIEW_PROMPT_MODULE,
+                )
+            )
+    raise RuntimeError(f"roundup slate review unresolved after bounded retries: {last_error}")
 
 
 def _invoke_selector(
@@ -659,6 +821,56 @@ def _restore_slate_story_ids(
                 )
             decision["story_id"] = selection_ref_to_story_id[selection_ref]
     return RoundupSlateDraft.model_validate(payload)
+
+
+def _slate_with_selection_refs(
+    draft: RoundupSlateDraft,
+    selection_ref_to_story_id: dict[str, str],
+) -> dict[str, Any]:
+    story_id_to_selection_ref = {
+        story_id: selection_ref
+        for selection_ref, story_id in selection_ref_to_story_id.items()
+    }
+    payload = draft.model_dump(mode="json")
+    for collection_name in ("selected", "non_selected"):
+        for decision in payload[collection_name]:
+            story_id = clean_text(decision.get("story_id"))
+            selection_ref = story_id_to_selection_ref.get(story_id)
+            if selection_ref is None:
+                raise ValueError(
+                    "proposed editorial slate references a story outside the review pool: "
+                    f"{story_id}"
+                )
+            decision["story_id"] = selection_ref
+    return payload
+
+
+def _restore_slate_review_story_ids(
+    draft: RoundupSlateReviewDraft,
+    selection_ref_to_story_id: dict[str, str],
+) -> RoundupSlateReviewDraft:
+    payload = draft.model_dump(mode="json")
+    for collection_name in ("selected", "non_selected"):
+        for decision in payload[collection_name]:
+            selection_ref = clean_text(decision.get("story_id"))
+            if selection_ref not in selection_ref_to_story_id:
+                raise ValueError(
+                    "roundup slate review returned unknown selection reference: "
+                    f"{selection_ref}"
+                )
+            decision["story_id"] = selection_ref_to_story_id[selection_ref]
+    for group in payload["duplicate_story_groups"]:
+        restored_ids = []
+        for selection_ref in group["story_ids"]:
+            selection_ref = clean_text(selection_ref)
+            if selection_ref not in selection_ref_to_story_id:
+                raise ValueError(
+                    "roundup slate review duplicate group returned unknown selection "
+                    f"reference: {selection_ref}"
+                )
+            restored_ids.append(selection_ref_to_story_id[selection_ref])
+        group["story_ids"] = restored_ids
+    return RoundupSlateReviewDraft.model_validate(payload)
 
 
 def _validate_call_context(

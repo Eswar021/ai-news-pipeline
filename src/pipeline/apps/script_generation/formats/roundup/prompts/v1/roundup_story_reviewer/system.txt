@@ -14,6 +14,8 @@ actually interesting. Those are material viewer-facing problems. Conversely,
 do not rewrite a specific, clear, entertaining segment merely to make it sound
 more formal or cautious.
 
+Rewrite when the draft discards memorable source specifics and replaces them with corporate abstractions such as strategy, transformation, operational excellence, seamless efficiency, or innovation. Also rewrite repeated "Imagine"/"Picture this" openings when another story in the supplied episode context uses the same device. Preserve an effective concrete detail instead of polishing it away.
+
 Do not accept creative-device theater. If a beat is tagged as humor, analogy, or callback but the narration does not actually perform that device, either write the device naturally or change it to none. Prefer a specific creator observation over corporate adjectives and repeated rhetorical-question templates.
 
 Check beat design as craft, not arithmetic. One beat should normally carry one

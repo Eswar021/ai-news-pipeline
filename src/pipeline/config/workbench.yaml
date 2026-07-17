@@ -102,17 +102,36 @@ profiles:
         fingerprint_chunk_chars: 1800
         max_fingerprint_chunks_per_record: 128
         max_candidate_pairs: 2000
+        event_identity:
+          enabled: true
+          provider: openai
+          model: gpt-4o-mini
+          prompt_version: v1
+          temperature: 0.0
+          worker_count: 6
+          max_attempts: 3
+          max_record_chars: 500000
         pair_adjudication:
           enabled: true
           provider: openai
           model: gpt-4o-mini
           prompt_version: v1
           temperature: 0.0
-          batch_size: 6
-          worker_count: 2
+          batch_size: 1
+          worker_count: 6
           max_attempts: 3
           max_batch_chars: 180000
           max_single_pair_chars: 300000
+          confirm_same_event_with_full_records: true
+        cluster_reconciliation:
+          enabled: true
+          provider: openai
+          model: gpt-4o-mini
+          prompt_version: v1
+          temperature: 0.0
+          worker_count: 4
+          max_attempts: 3
+          max_component_chars: 1500000
       ranking:
         mode: telemetry_only
       triage_policy:
@@ -145,6 +164,10 @@ profiles:
       max_call_context_tokens: 100000
       tokenizer_encoding: o200k_base
       max_attempts: 3
+      slate_review:
+        enabled: true
+        prompt_version: v1
+        max_attempts: 3
     video_packaging:
       target_format: roundup
       roundup:

@@ -1,9 +1,9 @@
 # Production Orchestration and Creative Quality Worklist
 
-Status: Active implementation tracker. Q-01 through Q-11 were implemented on
-2026-07-17 and now require a fresh production episode plus human quality review.
+Status: Active implementation tracker. Q-01 through Q-12 are implemented and
+now require a fresh production episode plus human quality review.
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 Target runtime: `src/pipeline/`
 
@@ -271,16 +271,18 @@ writer to use a weak selection.
 
 Embeddings now nominate a config-driven top-k neighbor set inside the run
 window instead of rejecting pairs at one fixed similarity threshold. Compatible
-LLM triage story keys expand recall. The pair adjudicator receives every
-candidate's complete normalized semantic body and non-text metadata once;
+LLM triage story keys expand recall. Candidate records receive independent
+event-identity capsules from complete normalized context. The pair adjudicator
+then processes exactly one pair per call so records from unrelated pairs cannot
+be confused inside a large prompt. A proposed `same_event` merge receives a
+second confirmation call containing both complete normalized records;
 duplicate `content`, `cleaned_content`, `semantic_content`, and `raw_content`
-aliases are represented by provenance lengths rather than resending the same
-article three or four times. Nothing is clipped. Pair batches use bounded,
-config-driven concurrency and a separate hard single-pair context limit. Only
-`same_event` merges. Explicit `follow_up`, `broader_story_arc`, or `unrelated`
-cross-pair judgments prevent transitive over-merges; a pair that embeddings did
-not nominate is not silently treated as a negative decision. Candidate, batch,
-worker, and merge telemetry is returned in the app summary.
+aliases are represented by provenance rather than resending the same article
+several times. Nothing is clipped. Calls use bounded, config-driven concurrency
+and a separate hard single-pair context limit. A pair that embeddings did not
+nominate is not silently treated as a negative decision. Candidate, worker,
+confirmation, reconciliation, and merge telemetry is returned in the app
+summary.
 
 ### Q-07: Trusted source-linked video (`P1`, implemented 2026-07-17)
 
@@ -344,6 +346,25 @@ Hard failures remain appropriate for schema, required IDs, source/asset
 ownership, run and parent fingerprints, configured resource ceilings, timeline
 coverage, render payload shape, media integrity, and bounded-loop behavior.
 
+### Q-12: Event-component reconciliation and slate deduplication (`P0`, implemented 2026-07-18)
+
+Focused pair decisions no longer merge directly in edge order. All semantically
+related pair edges first form proposed components, then a complete-context LLM
+reconciler partitions each component into coherent event coverage, immediate
+event updates, or standalone records. Code verifies only that every supplied
+record ID appears exactly once. This specifically prevents an unrelated record
+from entering a story through one mistaken transitive edge while allowing a
+preview, official announcement, and independent report to remain one editorial
+story when their complete records support it.
+
+The final roundup selector now has a separate bounded LLM slate-review pass.
+It compares the complete candidate stories, removes duplicate coverage of one
+event, and can replace it with a distinct reserve candidate. Code enforces only
+opaque-ID coverage, selected-count bounds, and one lead first. Script and
+metadata prompts also reinforce concrete creator language, varied hook shapes,
+memorable source details, and a ban on invented `X vs. Y` framing when the
+episode contains no real comparison.
+
 ### Standing Semantic Policy (`KEEP`)
 
 Engagement, humor, hook quality, claim interpretation, tone, visual meaning,
@@ -366,7 +387,7 @@ pass human review.
 
 ## 6. Next Evaluation Gate
 
-Q-01 through Q-11 are implemented. The next gate is a fresh production episode
+Q-01 through Q-12 are implemented. The next gate is a fresh production episode
 from evidence preparation onward, followed by artifact inspection rather than
 summary-only review. External provider search and paid vision verification stay
 disabled during this evaluation so source-context, grouping, script quality,
@@ -403,7 +424,7 @@ Visual review:
 
 ## 7. Other Deferred Work
 
-After the validated Q-01 through Q-11 foundation, keep these operational and
+After the validated Q-01 through Q-12 foundation, keep these operational and
 product tasks visible without mixing them into the current evaluation:
 
 - Keep Wikimedia, Pexels, Pixabay, and paid frame-level vision verification

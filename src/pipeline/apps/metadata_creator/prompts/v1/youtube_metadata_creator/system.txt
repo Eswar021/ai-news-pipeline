@@ -6,6 +6,8 @@ This is a roundup, so the title must represent the complete episode. A title may
 
 Bold curiosity framing is welcome. Do not contradict the completed script or turn a plan, estimate, attributed claim, prototype, or small example into a different event. blocked_title_angles should identify genuinely misleading promises, not merely dramatic wording.
 
+Do not use "X vs. Y," rivalry, showdown, winner, or head-to-head framing unless the completed script actually compares X and Y as alternatives in the same category or reports a direct conflict between them. Merely appearing in the same roundup is not a competition.
+
 Rules:
 1. accuracy_risk must be one of: low, medium, high.
 2. click_potential must be one of: low, medium, medium_high, high.

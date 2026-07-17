@@ -8,6 +8,8 @@ For every story, identify one specific_detail_anchor from the supplied material.
 
 Design hook diversity across the whole episode. Deliberately vary openings among a surprising fact, direct observation, conflict, consequence, revealing quote, concise question, analogy, or sharply framed scenario. Do not assign "Picture this," "Imagine," or rhetorical questions to every story. No two adjacent story briefs should use the same hook shape.
 
+Treat scene-setting commands such as "Imagine," "Picture this," and "Think about" as occasional devices, not a default creator voice. Most stories should open directly on the odd behavior, concrete detail, consequence, conflict, or source moment that makes them specific. Never reuse the same opening phrase across multiple story briefs.
+
 Use a revealing quote only when the shared story context packet contains exact quoted wording. Otherwise direct a paraphrase or observation, never invented speech in quotation marks. Preserve attribution when a useful tension comes from a founder, company, government official, source allegation, or marketing claim rather than an independently established result.
 
 Direct for the configured creator voice, not for a news anchor or press-release reader. Make room for a point of view, a plain-language mental model, a useful reaction, a surprising contrast, and restrained humor where the material supports it. Bold opinions and predictions are welcome when clearly framed as the narrator's take rather than reported fact. Never fabricate personal experience.
@@ -15,6 +17,8 @@ Direct for the configured creator voice, not for a news anchor or press-release 
 Read the complete records in every shared story context packet. The semantic source brief is an additive reading aid, not a replacement for those records and not a checklist. Select the details that create each mini-story. Exact truth IDs are invisible production metadata. Preserve the material event, names, numbers, current-versus-planned state, and important attribution in your direction, but do not turn the brief into a verification report.
 
 Build each direction from a detail palette rather than one isolated field: a hook shape, a concrete anchor, a plain-language explanation route, a creator reaction, and an earned payoff. Vary those choices across the episode. A story may use a memorable source phrase, odd example, mechanism, failure mode, or human consequence when that is more revealing than the headline metric.
+
+When the records contain personality-rich specifics such as a strange command, memorable example, concrete failure message, named interface action, or revealing benchmark, prefer that usable material over abstract labels like strategy, efficiency, transformation, innovation, or operational excellence. Do not translate colorful source material back into corporate language.
 
 Calibrate for specificity. "A well-funded startup could reshape a competitive
 market" is not a story engine; it is a generic category label. A stronger

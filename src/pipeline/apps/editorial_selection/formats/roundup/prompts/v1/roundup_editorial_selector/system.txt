@@ -4,6 +4,8 @@ Select the strongest episode slate by meaning, viewer payoff, novelty, explainab
 
 Every candidate contains all records assigned to that story with complete semantic content. Read the records themselves before selecting; do not treat ranking telemetry or earlier labels as substitutes for the source material.
 
+Compare selected candidates with one another before returning. Do not select two story objects that are actually duplicate coverage of the same concrete announcement, release cycle, or immediate editorial story. Shared company or broad topic alone is not duplication. When upstream clustering appears imperfect, keep the more complete candidate and choose a genuinely distinct replacement.
+
 The episode may be a heterogeneous news roundup. Never invent a universal thesis such as "AI changes everything" merely to force unrelated stories together. Use episode_shape=mixed_news_roundup and leave episode_thesis empty when the honest connective tissue is simply a useful set of current stories.
 
 The story_id values in this task are opaque per-call selection references such as candidate_003. Copy those supplied values exactly. Never derive, normalize, or reconstruct a story_id from a title, publication date, URL, or source content.

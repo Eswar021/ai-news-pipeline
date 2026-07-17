@@ -19,6 +19,14 @@ from .utils import clean_text, hours_between, time_span_hours
 
 EmbeddingFn = Callable[[list[str], str], np.ndarray]
 PairAdjudicator = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
+ClusterReconciler = Callable[
+    [list[dict[str, Any]]],
+    dict[str, list[list[str]]],
+]
+RecordSemanticEnricher = Callable[
+    [list[dict[str, Any]]],
+    list[dict[str, Any]],
+]
 
 
 @dataclass
@@ -34,6 +42,9 @@ class ClusterStats:
     similarity_floor_pairs: int = 0
     candidate_covered_records: int = 0
     transitive_merge_rejections: int = 0
+    reconciliation_components: int = 0
+    reconciled_groups: int = 0
+    reconciliation_splits: int = 0
 
 
 def cluster_records(
@@ -42,6 +53,8 @@ def cluster_records(
     *,
     embedder: EmbeddingFn | None = None,
     pair_adjudicator: PairAdjudicator | None = None,
+    cluster_reconciler: ClusterReconciler | None = None,
+    record_semantic_enricher: RecordSemanticEnricher | None = None,
 ) -> tuple[list[dict], dict[str, Any]]:
     indexed = [
         _enrich_record(
@@ -66,6 +79,8 @@ def cluster_records(
         cluster_cfg,
         embedder=embedder,
         pair_adjudicator=pair_adjudicator,
+        cluster_reconciler=cluster_reconciler,
+        record_semantic_enricher=record_semantic_enricher,
     )
 
     components: dict[int, list[dict]] = defaultdict(list)
@@ -98,6 +113,9 @@ def cluster_records(
         "similarity_floor_pair_count": stats.similarity_floor_pairs,
         "candidate_covered_record_count": stats.candidate_covered_records,
         "transitive_merge_rejection_count": stats.transitive_merge_rejections,
+        "reconciliation_component_count": stats.reconciliation_components,
+        "reconciled_group_count": stats.reconciled_groups,
+        "reconciliation_split_count": stats.reconciliation_splits,
         "pair_relationship_counts": dict(
             Counter(item.get("relationship", "unknown") for item in pair_decisions)
         ),
@@ -117,6 +135,8 @@ def _apply_semantic_edges(
     *,
     embedder: EmbeddingFn | None,
     pair_adjudicator: PairAdjudicator | None,
+    cluster_reconciler: ClusterReconciler | None,
+    record_semantic_enricher: RecordSemanticEnricher | None,
 ) -> list[dict[str, Any]]:
     if len(records) < 2:
         return []
@@ -164,6 +184,19 @@ def _apply_semantic_edges(
     stats.triage_key_pairs = sum("shared_triage_story_key" in reasons for reasons in nominated.values())
     stats.similarity_floor_pairs = sum("similarity_floor" in reasons for reasons in nominated.values())
     stats.candidate_covered_records = len({index for pair in nominated for index in pair})
+    if record_semantic_enricher is not None and nominated:
+        candidate_record_indices = sorted({index for pair in nominated for index in pair})
+        candidate_records = [
+            _strip_internal_fields(records[index])
+            for index in candidate_record_indices
+        ]
+        enriched_records = record_semantic_enricher(candidate_records)
+        _apply_record_semantic_enrichment(
+            records,
+            candidate_record_indices=candidate_record_indices,
+            original_records=candidate_records,
+            enriched_records=enriched_records,
+        )
     candidates = [
         _pair_candidate(
             records[left_index],
@@ -223,6 +256,18 @@ def _apply_semantic_edges(
             decision.get("relationship")
         )
 
+    if cluster_reconciler is not None:
+        _apply_reconciled_semantic_edges(
+            records=records,
+            candidates=candidates,
+            resolved=resolved,
+            uf=uf,
+            edge_reasons=edge_reasons,
+            stats=stats,
+            cluster_reconciler=cluster_reconciler,
+        )
+        return resolved
+
     for candidate in candidates:
         decision = by_pair.get(candidate["pair_id"]) or {}
         if decision.get("relationship") != "same_event":
@@ -248,6 +293,148 @@ def _apply_semantic_edges(
             stats.semantic_edges += 1
         edge_reasons[_edge_key(left["_idx"], right["_idx"])] = "llm_same_event"
     return resolved
+
+
+def _apply_record_semantic_enrichment(
+    records: list[dict[str, Any]],
+    *,
+    candidate_record_indices: list[int],
+    original_records: list[dict[str, Any]],
+    enriched_records: list[dict[str, Any]],
+) -> None:
+    if len(enriched_records) != len(original_records):
+        raise ValueError(
+            "story-mapping semantic record enrichment returned the wrong record count"
+        )
+    expected_keys = [clean_text(record.get("record_key")) for record in original_records]
+    returned_keys = [clean_text(record.get("record_key")) for record in enriched_records]
+    if returned_keys != expected_keys:
+        raise ValueError(
+            "story-mapping semantic record enrichment changed record identity or order; "
+            f"expected={expected_keys}, returned={returned_keys}"
+        )
+    for index, enriched in zip(
+        candidate_record_indices,
+        enriched_records,
+        strict=True,
+    ):
+        records[index].update(enriched)
+
+
+def _apply_reconciled_semantic_edges(
+    *,
+    records: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    resolved: list[dict[str, Any]],
+    uf: "_UnionFind",
+    edge_reasons: dict[tuple[int, int], str],
+    stats: ClusterStats,
+    cluster_reconciler: ClusterReconciler,
+) -> None:
+    decision_by_pair = {
+        clean_text(item.get("pair_id")): item
+        for item in resolved
+    }
+    proposal = _UnionFind(len(records))
+    related_relationships = {"same_event", "follow_up", "broader_story_arc"}
+    for candidate in candidates:
+        decision = decision_by_pair.get(clean_text(candidate.get("pair_id"))) or {}
+        if clean_text(decision.get("relationship")) in related_relationships:
+            proposal.union(candidate["_left_index"], candidate["_right_index"])
+
+    proposed_members: dict[int, list[int]] = defaultdict(list)
+    for record_index in range(len(records)):
+        proposed_members[proposal.find(record_index)].append(record_index)
+
+    components: list[dict[str, Any]] = []
+    component_indices: dict[str, list[int]] = {}
+    for member_indices in proposed_members.values():
+        if len(member_indices) < 2:
+            continue
+        member_indices = sorted(member_indices)
+        member_set = set(member_indices)
+        record_keys = [
+            clean_text(records[index].get("record_key")) or f"index_{index}"
+            for index in member_indices
+        ]
+        component_hash = hashlib.sha1(
+            "|".join(sorted(record_keys)).encode("utf-8")
+        ).hexdigest()[:12]
+        component_id = f"component_{component_hash}"
+        component_indices[component_id] = member_indices
+        components.append(
+            {
+                "component_id": component_id,
+                "record_keys": record_keys,
+                "records": [build_record_context(records[index]) for index in member_indices],
+                "pair_decisions": [
+                    decision
+                    for candidate, decision in zip(candidates, resolved, strict=True)
+                    if candidate["_left_index"] in member_set
+                    and candidate["_right_index"] in member_set
+                ],
+            }
+        )
+
+    if not components:
+        return
+
+    stats.reconciliation_components = len(components)
+    reconciled = cluster_reconciler(components)
+    expected_component_ids = set(component_indices)
+    returned_component_ids = set(reconciled)
+    if returned_component_ids != expected_component_ids:
+        raise ValueError(
+            "cluster reconciler component coverage mismatch; "
+            f"missing={sorted(expected_component_ids - returned_component_ids)}, "
+            f"unknown={sorted(returned_component_ids - expected_component_ids)}"
+        )
+
+    record_index_by_key = {
+        clean_text(record.get("record_key")) or f"index_{index}": index
+        for index, record in enumerate(records)
+    }
+    for component in components:
+        component_id = component["component_id"]
+        groups = reconciled[component_id]
+        expected_keys = set(component["record_keys"])
+        returned_keys = [key for group in groups for key in group]
+        if len(returned_keys) != len(set(returned_keys)) or set(returned_keys) != expected_keys:
+            returned = set(returned_keys)
+            raise ValueError(
+                "cluster reconciler record coverage mismatch; "
+                f"component_id={component_id}, missing={sorted(expected_keys - returned)}, "
+                f"unknown={sorted(returned - expected_keys)}"
+            )
+        stats.reconciled_groups += len(groups)
+        if len(groups) > 1:
+            stats.reconciliation_splits += 1
+
+        group_by_record = {
+            record_key: group_index
+            for group_index, group in enumerate(groups)
+            for record_key in group
+        }
+        for candidate, decision in zip(candidates, resolved, strict=True):
+            if clean_text(decision.get("relationship")) != "same_event":
+                continue
+            left_key = clean_text(candidate["left_record"].get("record_key"))
+            right_key = clean_text(candidate["right_record"].get("record_key"))
+            if left_key in group_by_record and right_key in group_by_record:
+                if group_by_record[left_key] != group_by_record[right_key]:
+                    stats.transitive_merge_rejections += 1
+
+        for group in groups:
+            if len(group) < 2:
+                continue
+            anchor_index = record_index_by_key[group[0]]
+            for record_key in group[1:]:
+                other_index = record_index_by_key[record_key]
+                if uf.union(anchor_index, other_index):
+                    stats.semantic_edges += 1
+                edge_reasons[_edge_key(anchor_index, other_index)] = (
+                    "llm_cluster_reconciled"
+                )
 
 
 def _pair_candidate(
@@ -279,7 +466,7 @@ def _pair_candidate(
     }
 
 
-def _pair_record(record: dict) -> dict[str, Any]:
+def build_record_context(record: dict) -> dict[str, Any]:
     full_record = _strip_internal_fields(record)
     content_fields = ("cleaned_content", "content", "transcript", "semantic_content", "raw_content")
     source_field = next(
@@ -309,6 +496,10 @@ def _pair_record(record: dict) -> dict[str, Any]:
         (record.get("editorial_triage") or {}).get("possible_story_keys") or []
     )
     return full_record
+
+
+def _pair_record(record: dict) -> dict[str, Any]:
+    return build_record_context(record)
 
 
 def _triage_story_key_overlap(left: dict, right: dict) -> bool:

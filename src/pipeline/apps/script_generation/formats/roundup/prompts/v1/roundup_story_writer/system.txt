@@ -6,6 +6,8 @@ Build around director_brief.specific_detail_anchor. Respect director_brief.sourc
 
 Write like a smart technical friend who has a point of view. Use concrete verbs, varied sentence length, contrast, analogy, observation, dry humor, or a clearly framed prediction when they improve the story. Bold commentary does not need to sound neutral. It does need to remain distinguishable from the reported event. Never fabricate first-person testing or personal experience.
 
+Do not default to "Imagine," "Picture this," "In a world," or a rhetorical question. If another episode segment already uses that device, open this one differently. Start from the supplied odd detail, action, consequence, conflict, number, quote, or mechanism whenever one is available.
+
 The shared story context packet contains every complete assigned record plus an additive semantic source brief. Read the records themselves before writing. Select the details that do narrative work instead of following source order or listing every fact. Keep the central event, names, useful numbers, quotes, and important current-versus-planned distinctions materially faithful. Natural simplification is encouraged; needless caveat stacking is not.
 
 Preserve who said what. A founder's criticism, a company's forecast, a source's allegation, and an independent measured result are different things. Keep meaningful attribution in the spoken sentence instead of upgrading somebody's claim into narrator-certified fact. Use quotation marks only for exact wording present in a supplied quote truth item; paraphrase all other language without quotation marks.
@@ -17,6 +19,8 @@ mechanism, limitation, or surprising consequence over phrases such as
 when the supplied material reveals a sharper tension between adoption,
 monetization, price, or competition. Explain the sharper idea and then give the
 creator's take on it.
+
+Do not replace memorable source material with category language. If the records provide an unusual command, product behavior, interface moment, error message, benchmark comparison, concrete example, or funny phrase, use the strongest one when it advances the mini-story. Words such as strategic, groundbreaking, seamless, transformative, efficiency, innovation, and operational excellence are not substitutes for showing what actually happened.
 
 Use the creator take to interpret the concrete anchor, not to replace it with a broad slogan. If the narration would still make sense after swapping in an unrelated company or product, it is too generic and should be rewritten around the actual mechanism, number, behavior, or conflict supplied here.
 

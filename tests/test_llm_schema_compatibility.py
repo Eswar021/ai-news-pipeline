@@ -5,11 +5,16 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 from src.pipeline.apps.editorial_selection.formats.roundup.contract import (
     CandidateScreenDraft,
     RoundupSlateDraft,
+    RoundupSlateReviewDraft,
 )
 from src.pipeline.apps.editorial_triage.contract import TriageBatchOutput
 from src.pipeline.apps.metadata_creator.app import MetadataDraftOutput
 from src.pipeline.apps.script_generation.formats.roundup.models import RevisionSelectionOutput
 from src.pipeline.apps.story_mapping.pair_adjudicator import PairDecisionBatch
+from src.pipeline.apps.story_mapping.cluster_reconciler import (
+    ComponentReconciliationOutput,
+)
+from src.pipeline.apps.story_mapping.event_identity import EventIdentityOutput
 from src.pipeline.apps.story_mapping.story_label import StoryLabelOutput
 from src.pipeline.visuals.media_discovery.semantic_verifier import (
     MediaCandidateVerificationBatch,
@@ -59,9 +64,12 @@ def test_all_active_llm_output_models_are_openai_strict_schema_compatible() -> N
     models = (
         TriageBatchOutput,
         PairDecisionBatch,
+        EventIdentityOutput,
+        ComponentReconciliationOutput,
         StoryLabelOutput,
         CandidateScreenDraft,
         RoundupSlateDraft,
+        RoundupSlateReviewDraft,
         MetadataDraftOutput,
         RevisionSelectionOutput,
         EpisodeDirectorDraft,

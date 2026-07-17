@@ -13,6 +13,7 @@ from .config import (
     DEFAULT_MAX_STORY_CONTEXT_CHARS,
     DEFAULT_MAX_STORY_CONTEXT_TOKENS,
     DEFAULT_SCREENING_SHORTLIST_PER_BATCH,
+    DEFAULT_SLATE_REVIEW_MAX_ATTEMPTS,
     DEFAULT_TOKENIZER_ENCODING,
 )
 
@@ -48,6 +49,28 @@ class ChannelContext(BaseModel):
         return value
 
 
+class SlateReviewConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    prompt_version: str = "v1"
+    max_attempts: int = DEFAULT_SLATE_REVIEW_MAX_ATTEMPTS
+
+    @field_validator("prompt_version")
+    @classmethod
+    def prompt_version_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("config.slate_review.prompt_version must not be empty")
+        return value
+
+    @field_validator("max_attempts")
+    @classmethod
+    def attempts_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 5:
+            raise ValueError("config.slate_review.max_attempts must be between 1 and 5")
+        return value
+
+
 class RoundupEditorialSelectionConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -69,6 +92,7 @@ class RoundupEditorialSelectionConfig(BaseModel):
     tokenizer_encoding: str = DEFAULT_TOKENIZER_ENCODING
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
     channel: ChannelContext
+    slate_review: SlateReviewConfig = Field(default_factory=SlateReviewConfig)
 
     @field_validator("model", "prompt_version", "tokenizer_encoding")
     @classmethod
@@ -217,6 +241,24 @@ class RoundupSlateDraft(BaseModel):
     selected: list[SelectedStoryDraft]
     non_selected: list[NonSelectedStoryDraft]
     human_review_warning: str = ""
+
+
+class DuplicateStoryGroup(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    story_ids: list[str] = Field(min_length=2)
+    relationship: Literal[
+        "same_event",
+        "same_editorial_story",
+        "immediate_follow_up",
+    ]
+    reason: str
+
+
+class RoundupSlateReviewDraft(RoundupSlateDraft):
+    review_changed: bool
+    review_reason: str
+    duplicate_story_groups: list[DuplicateStoryGroup] = Field(default_factory=list)
 
 
 class CandidateScreenDecision(BaseModel):

@@ -16,6 +16,8 @@ when the candidate adds corporate language, generic importance claims,
 repetition, a forced analogy, or unsupported certainty. Accept the candidate
 only when its improvements are material and it has no material regression.
 
+A revision is a regression when it removes a memorable command, example, behavior, failure mode, or benchmark and replaces it with abstract strategy/innovation language. It is also a regression when it repeats the same "Imagine" or rhetorical-question opening used elsewhere. Prefer the version that lets the viewer see and remember the actual story.
+
 Return structured comparison data only. Do not include markdown or revised
 narration.
 

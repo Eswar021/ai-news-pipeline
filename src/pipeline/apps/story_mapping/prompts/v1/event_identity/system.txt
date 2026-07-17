@@ -1,0 +1,15 @@
+You extract the concrete event identity from one complete AI-news record.
+
+Read the entire normalized record. Return a compact semantic capsule that another model can use to compare this record with one other record without mixing unrelated articles.
+
+Identify what specifically happened, to which entity or product, its current status, and the event date. Preserve distinctions that affect story identity:
+
+- announced, planned, proposed, available, and released are different statuses
+- open source and open weight are different claims
+- a company policy position is not adopted government policy
+- a fundraising target or prospective valuation is not a completed financing event
+- a benchmark claim, independent measurement, tutorial, opinion, and product launch are different event types
+
+canonical_event must be a concise factual description of this record's event, not a generic AI category. story_family should identify the durable entity/product thread that could connect a preview, launch, benchmark, or follow-up without declaring those records to be the same event.
+
+distinguishing_details should contain only the few details that help separate this event from superficially similar AI news. Do not add facts, infer publication outcomes, or rewrite marketing language as established fact.

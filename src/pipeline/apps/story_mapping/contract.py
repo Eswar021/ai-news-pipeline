@@ -7,6 +7,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .config import (
     DEFAULT_CANDIDATE_NEIGHBORS_PER_RECORD,
     DEFAULT_CANDIDATE_SIMILARITY_FLOOR,
+    DEFAULT_CLUSTER_RECONCILIATION_MAX_ATTEMPTS,
+    DEFAULT_CLUSTER_RECONCILIATION_MAX_COMPONENT_CHARS,
+    DEFAULT_CLUSTER_RECONCILIATION_PROMPT_VERSION,
+    DEFAULT_CLUSTER_RECONCILIATION_WORKER_COUNT,
+    DEFAULT_EVENT_IDENTITY_MAX_ATTEMPTS,
+    DEFAULT_EVENT_IDENTITY_MAX_RECORD_CHARS,
+    DEFAULT_EVENT_IDENTITY_PROMPT_VERSION,
+    DEFAULT_EVENT_IDENTITY_WORKER_COUNT,
     DEFAULT_FINGERPRINT_CHUNK_CHARS,
     DEFAULT_MAX_FINGERPRINT_CHUNKS_PER_RECORD,
     DEFAULT_MAX_STORY_LABEL_CONTEXT_CHARS,
@@ -81,8 +89,14 @@ class ClusteringConfig(BaseModel):
     fingerprint_chunk_chars: int = DEFAULT_FINGERPRINT_CHUNK_CHARS
     max_fingerprint_chunks_per_record: int = DEFAULT_MAX_FINGERPRINT_CHUNKS_PER_RECORD
     max_candidate_pairs: int = DEFAULT_MAX_CANDIDATE_PAIRS
+    event_identity: "EventIdentityConfig" = Field(
+        default_factory=lambda: EventIdentityConfig()
+    )
     pair_adjudication: "PairAdjudicationConfig" = Field(
         default_factory=lambda: PairAdjudicationConfig()
+    )
+    cluster_reconciliation: "ClusterReconciliationConfig" = Field(
+        default_factory=lambda: ClusterReconciliationConfig()
     )
 
     @field_validator("candidate_neighbors_per_record")
@@ -144,6 +158,7 @@ class PairAdjudicationConfig(BaseModel):
     max_attempts: int = DEFAULT_PAIR_ADJUDICATION_MAX_ATTEMPTS
     max_batch_chars: int = DEFAULT_PAIR_ADJUDICATION_MAX_BATCH_CHARS
     max_single_pair_chars: int = DEFAULT_PAIR_ADJUDICATION_MAX_SINGLE_PAIR_CHARS
+    confirm_same_event_with_full_records: bool = True
 
     @field_validator("model", "prompt_version")
     @classmethod
@@ -155,8 +170,10 @@ class PairAdjudicationConfig(BaseModel):
     @field_validator("batch_size")
     @classmethod
     def batch_size_must_be_bounded(cls, value: int) -> int:
-        if value < 1 or value > 30:
-            raise ValueError("pair_adjudication.batch_size must be between 1 and 30")
+        if value != 1:
+            raise ValueError(
+                "pair_adjudication.batch_size must be 1 so each semantic judgment sees only one pair"
+            )
         return value
 
     @field_validator("worker_count")
@@ -191,6 +208,106 @@ class PairAdjudicationConfig(BaseModel):
     def temperature_must_be_valid(cls, value: float) -> float:
         if value < 0 or value > 2:
             raise ValueError("pair_adjudication.temperature must be between 0 and 2")
+        return value
+
+
+class EventIdentityConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool = False
+    provider: Literal["openai", "gemini", "lmstudio"] = "openai"
+    model: str = "gpt-4o-mini"
+    base_url: str | None = None
+    prompt_version: str = DEFAULT_EVENT_IDENTITY_PROMPT_VERSION
+    temperature: float = 0.0
+    worker_count: int = DEFAULT_EVENT_IDENTITY_WORKER_COUNT
+    max_attempts: int = DEFAULT_EVENT_IDENTITY_MAX_ATTEMPTS
+    max_record_chars: int = DEFAULT_EVENT_IDENTITY_MAX_RECORD_CHARS
+
+    @field_validator("model", "prompt_version")
+    @classmethod
+    def required_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("event_identity model and prompt_version must not be empty")
+        return value
+
+    @field_validator("worker_count")
+    @classmethod
+    def worker_count_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 12:
+            raise ValueError("event_identity.worker_count must be between 1 and 12")
+        return value
+
+    @field_validator("max_attempts")
+    @classmethod
+    def attempts_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 5:
+            raise ValueError("event_identity.max_attempts must be between 1 and 5")
+        return value
+
+    @field_validator("max_record_chars")
+    @classmethod
+    def record_limit_must_be_bounded(cls, value: int) -> int:
+        if value < 10_000 or value > 2_000_000:
+            raise ValueError("event_identity.max_record_chars must be between 10000 and 2000000")
+        return value
+
+    @field_validator("temperature")
+    @classmethod
+    def temperature_must_be_valid(cls, value: float) -> float:
+        if value < 0 or value > 2:
+            raise ValueError("event_identity.temperature must be between 0 and 2")
+        return value
+
+
+class ClusterReconciliationConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool = False
+    provider: Literal["openai", "gemini", "lmstudio"] = "openai"
+    model: str = "gpt-4o-mini"
+    base_url: str | None = None
+    prompt_version: str = DEFAULT_CLUSTER_RECONCILIATION_PROMPT_VERSION
+    temperature: float = 0.0
+    worker_count: int = DEFAULT_CLUSTER_RECONCILIATION_WORKER_COUNT
+    max_attempts: int = DEFAULT_CLUSTER_RECONCILIATION_MAX_ATTEMPTS
+    max_component_chars: int = DEFAULT_CLUSTER_RECONCILIATION_MAX_COMPONENT_CHARS
+
+    @field_validator("model", "prompt_version")
+    @classmethod
+    def required_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("cluster_reconciliation model and prompt_version must not be empty")
+        return value
+
+    @field_validator("worker_count")
+    @classmethod
+    def worker_count_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 8:
+            raise ValueError("cluster_reconciliation.worker_count must be between 1 and 8")
+        return value
+
+    @field_validator("max_attempts")
+    @classmethod
+    def attempts_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 5:
+            raise ValueError("cluster_reconciliation.max_attempts must be between 1 and 5")
+        return value
+
+    @field_validator("max_component_chars")
+    @classmethod
+    def component_limit_must_be_bounded(cls, value: int) -> int:
+        if value < 10_000 or value > 2_000_000:
+            raise ValueError(
+                "cluster_reconciliation.max_component_chars must be between 10000 and 2000000"
+            )
+        return value
+
+    @field_validator("temperature")
+    @classmethod
+    def temperature_must_be_valid(cls, value: float) -> float:
+        if value < 0 or value > 2:
+            raise ValueError("cluster_reconciliation.temperature must be between 0 and 2")
         return value
 
 

@@ -1,0 +1,1 @@
+Audit the proposed roundup against the complete candidate records. Return the final, fully accounted slate rather than comments alone.
