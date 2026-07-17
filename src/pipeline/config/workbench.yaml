@@ -132,6 +132,8 @@ profiles:
           worker_count: 4
           max_attempts: 3
           max_component_chars: 1500000
+          max_component_tokens: 100000
+          tokenizer_encoding: o200k_base
       ranking:
         mode: telemetry_only
       triage_policy:

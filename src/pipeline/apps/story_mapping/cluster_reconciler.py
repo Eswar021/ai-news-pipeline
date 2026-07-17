@@ -9,7 +9,7 @@ from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, ConfigDict, Field
 
 from .llm_logging import build_llm_call_log
-from .utils import clean_text
+from .utils import clean_text, text_token_count
 
 
 CLUSTER_RECONCILIATION_PROMPT = PromptTemplate.from_template(
@@ -113,6 +113,19 @@ def _reconcile_component(
             f"component_id={clean_text(component.get('component_id'))}, "
             f"serialized_chars={len(serialized)}"
         )
+    serialized_tokens = text_token_count(
+        serialized,
+        model=config["model"],
+        fallback_encoding=config["tokenizer_encoding"],
+    )
+    if serialized_tokens > int(config["max_component_tokens"]):
+        raise ValueError(
+            "A proposed story component exceeds cluster_reconciliation.max_component_tokens; "
+            "the semantic capsule context was not truncated and no provider call was made. "
+            f"component_id={clean_text(component.get('component_id'))}, "
+            f"serialized_tokens={serialized_tokens}, "
+            f"configured_limit={config['max_component_tokens']}"
+        )
 
     prompt_inputs = {
         "system_prompt": system_prompt,
@@ -165,7 +178,10 @@ def _reconcile_component(
                         "record_count": len(expected_keys),
                         "record_keys": expected_keys,
                         "serialized_context_chars": len(serialized),
-                        "source_context_mode": "complete_normalized_component_records",
+                        "serialized_context_tokens": serialized_tokens,
+                        "source_context_mode": (
+                            "event_identity_capsules_extracted_from_complete_records"
+                        ),
                         "records_truncated": False,
                     },
                     duration_seconds=time.time() - started,
@@ -188,7 +204,10 @@ def _reconcile_component(
                         "record_count": len(expected_keys),
                         "record_keys": expected_keys,
                         "serialized_context_chars": len(serialized),
-                        "source_context_mode": "complete_normalized_component_records",
+                        "serialized_context_tokens": serialized_tokens,
+                        "source_context_mode": (
+                            "event_identity_capsules_extracted_from_complete_records"
+                        ),
                         "records_truncated": False,
                     },
                     duration_seconds=time.time() - started,

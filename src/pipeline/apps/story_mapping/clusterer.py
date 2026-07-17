@@ -336,10 +336,9 @@ def _apply_reconciled_semantic_edges(
         for item in resolved
     }
     proposal = _UnionFind(len(records))
-    related_relationships = {"same_event", "follow_up", "broader_story_arc"}
     for candidate in candidates:
         decision = decision_by_pair.get(clean_text(candidate.get("pair_id"))) or {}
-        if clean_text(decision.get("relationship")) in related_relationships:
+        if clean_text(decision.get("relationship")) == "same_event":
             proposal.union(candidate["_left_index"], candidate["_right_index"])
 
     proposed_members: dict[int, list[int]] = defaultdict(list)
@@ -366,7 +365,11 @@ def _apply_reconciled_semantic_edges(
             {
                 "component_id": component_id,
                 "record_keys": record_keys,
-                "records": [build_record_context(records[index]) for index in member_indices],
+                "context_mode": "event_identity_capsules_from_complete_records",
+                "records": [
+                    _reconciliation_record_context(records[index])
+                    for index in member_indices
+                ],
                 "pair_decisions": [
                     decision
                     for candidate, decision in zip(candidates, resolved, strict=True)
@@ -435,6 +438,26 @@ def _apply_reconciled_semantic_edges(
                 edge_reasons[_edge_key(anchor_index, other_index)] = (
                     "llm_cluster_reconciled"
                 )
+
+
+def _reconciliation_record_context(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "record_key": clean_text(record.get("record_key")),
+        "title": clean_text(record.get("title")),
+        "url": clean_text(record.get("url")),
+        "published_at": clean_text(record.get("published_at")),
+        "source": clean_text(record.get("source")),
+        "source_group": clean_text(record.get("source_group")),
+        "source_relationship": clean_text(record.get("source_relationship")),
+        "event_identity": dict(record.get("story_mapping_event_identity") or {}),
+        "triage_story_keys": list(
+            (record.get("editorial_triage") or {}).get("possible_story_keys") or []
+        ),
+        "context_provenance": {
+            "event_identity_source": "complete_normalized_record",
+            "record_body_resent": False,
+        },
+    }
 
 
 def _pair_candidate(

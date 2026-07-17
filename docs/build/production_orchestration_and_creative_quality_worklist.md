@@ -348,14 +348,18 @@ coverage, render payload shape, media integrity, and bounded-loop behavior.
 
 ### Q-12: Event-component reconciliation and slate deduplication (`P0`, implemented 2026-07-18)
 
-Focused pair decisions no longer merge directly in edge order. All semantically
-related pair edges first form proposed components, then a complete-context LLM
-reconciler partitions each component into coherent event coverage, immediate
-event updates, or standalone records. Code verifies only that every supplied
-record ID appears exactly once. This specifically prevents an unrelated record
-from entering a story through one mistaken transitive edge while allowing a
-preview, official announcement, and independent report to remain one editorial
-story when their complete records support it.
+Focused pair decisions no longer merge directly in edge order. Only confirmed
+`same_event` edges form proposed components; `follow_up` and
+`broader_story_arc` stay as related-story links and cannot chain unrelated
+events into one oversized prompt. The reconciler partitions each component
+using independently extracted full-record event capsules and focused pair
+decisions, so it does not resend every article body. A config-driven token
+preflight runs before the provider call and prevents unrecoverable context-size
+requests from consuming retries. Code verifies only that every supplied record
+ID appears exactly once. This prevents an unrelated record from entering a
+story through one mistaken transitive edge while allowing a preview, official
+announcement, and independent report to remain one editorial story when their
+semantic evidence supports it.
 
 The final roundup selector now has a separate bounded LLM slate-review pass.
 It compares the complete candidate stories, removes duplicate coverage of one

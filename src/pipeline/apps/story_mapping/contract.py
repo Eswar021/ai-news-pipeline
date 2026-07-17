@@ -9,7 +9,9 @@ from .config import (
     DEFAULT_CANDIDATE_SIMILARITY_FLOOR,
     DEFAULT_CLUSTER_RECONCILIATION_MAX_ATTEMPTS,
     DEFAULT_CLUSTER_RECONCILIATION_MAX_COMPONENT_CHARS,
+    DEFAULT_CLUSTER_RECONCILIATION_MAX_COMPONENT_TOKENS,
     DEFAULT_CLUSTER_RECONCILIATION_PROMPT_VERSION,
+    DEFAULT_CLUSTER_RECONCILIATION_TOKENIZER_ENCODING,
     DEFAULT_CLUSTER_RECONCILIATION_WORKER_COUNT,
     DEFAULT_EVENT_IDENTITY_MAX_ATTEMPTS,
     DEFAULT_EVENT_IDENTITY_MAX_RECORD_CHARS,
@@ -272,12 +274,17 @@ class ClusterReconciliationConfig(BaseModel):
     worker_count: int = DEFAULT_CLUSTER_RECONCILIATION_WORKER_COUNT
     max_attempts: int = DEFAULT_CLUSTER_RECONCILIATION_MAX_ATTEMPTS
     max_component_chars: int = DEFAULT_CLUSTER_RECONCILIATION_MAX_COMPONENT_CHARS
+    max_component_tokens: int = DEFAULT_CLUSTER_RECONCILIATION_MAX_COMPONENT_TOKENS
+    tokenizer_encoding: str = DEFAULT_CLUSTER_RECONCILIATION_TOKENIZER_ENCODING
 
-    @field_validator("model", "prompt_version")
+    @field_validator("model", "prompt_version", "tokenizer_encoding")
     @classmethod
     def required_text_must_not_be_empty(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("cluster_reconciliation model and prompt_version must not be empty")
+            raise ValueError(
+                "cluster_reconciliation model, prompt_version, and tokenizer_encoding "
+                "must not be empty"
+            )
         return value
 
     @field_validator("worker_count")
@@ -300,6 +307,15 @@ class ClusterReconciliationConfig(BaseModel):
         if value < 10_000 or value > 2_000_000:
             raise ValueError(
                 "cluster_reconciliation.max_component_chars must be between 10000 and 2000000"
+            )
+        return value
+
+    @field_validator("max_component_tokens")
+    @classmethod
+    def component_token_limit_must_be_bounded(cls, value: int) -> int:
+        if value < 1_000 or value > 120_000:
+            raise ValueError(
+                "cluster_reconciliation.max_component_tokens must be between 1000 and 120000"
             )
         return value
 

@@ -72,8 +72,8 @@ def test_event_identity_reads_complete_record_context() -> None:
     assert llm_calls[0]["metadata"]["record_truncated"] is False
 
 
-def test_cluster_reconciler_reads_complete_component_and_returns_partition() -> None:
-    marker = "COMPONENT_FULL_CONTEXT_MARKER"
+def test_cluster_reconciler_uses_event_capsules_and_returns_partition() -> None:
+    marker = "EVENT_IDENTITY_CAPSULE_MARKER"
     parsed = ComponentReconciliationOutput.model_validate(
         {
             "component_id": "component_fixture",
@@ -107,10 +107,20 @@ def test_cluster_reconciler_reads_complete_component_and_returns_partition() -> 
         [
             {
                 "component_id": "component_fixture",
+                "context_mode": "event_identity_capsules_from_complete_records",
                 "records": [
-                    {"record_key": "record_a", "semantic_content": marker},
-                    {"record_key": "record_b", "semantic_content": "Same release."},
-                    {"record_key": "record_c", "semantic_content": "Other article."},
+                    {
+                        "record_key": "record_a",
+                        "event_identity": {"distinguishing_details": [marker]},
+                    },
+                    {
+                        "record_key": "record_b",
+                        "event_identity": {"canonical_event": "One release"},
+                    },
+                    {
+                        "record_key": "record_c",
+                        "event_identity": {"canonical_event": "Other article"},
+                    },
                 ],
                 "pair_decisions": [],
             }
@@ -121,6 +131,8 @@ def test_cluster_reconciler_reads_complete_component_and_returns_partition() -> 
             "worker_count": 1,
             "max_attempts": 1,
             "max_component_chars": 100_000,
+            "max_component_tokens": 10_000,
+            "tokenizer_encoding": "o200k_base",
         },
         llm=FakeLLM(),
         system_prompt="Reconcile records.",
@@ -132,6 +144,7 @@ def test_cluster_reconciler_reads_complete_component_and_returns_partition() -> 
     }
     assert marker in llm_calls[0]["messages"][0]["content"]
     assert llm_calls[0]["metadata"]["records_truncated"] is False
+    assert llm_calls[0]["metadata"]["serialized_context_tokens"] > 0
 
 
 def test_pair_adjudication_uses_capsule_then_complete_record_confirmation() -> None:
@@ -225,7 +238,12 @@ def test_cluster_reconciliation_splits_unrelated_record_from_event_component() -
             "title": title,
             "url": f"https://example.com/{record_key}",
             "published_at": f"2026-07-17T0{index}:00:00Z",
-            "content": title,
+            "content": title + (" FULL_ARTICLE_BODY" * 100),
+            "story_mapping_event_identity": {
+                "canonical_event": title,
+                "story_family": "Kimi K3" if "Kimi" in title else "Comic Chat",
+                "distinguishing_details": [f"identity_{record_key}"],
+            },
         }
         for index, (record_key, title) in enumerate(
             (
@@ -268,6 +286,8 @@ def test_cluster_reconciliation_splits_unrelated_record_from_event_component() -
 
     def reconcile(components: list[dict]) -> dict[str, list[list[str]]]:
         seen_components.extend(components)
+        assert all("semantic_content" not in record for record in components[0]["records"])
+        assert all(record.get("event_identity") for record in components[0]["records"])
         component_id = components[0]["component_id"]
         return {
             component_id: [
@@ -303,6 +323,65 @@ def test_cluster_reconciliation_splits_unrelated_record_from_event_component() -
     assert stats["reconciliation_component_count"] == 1
     assert stats["reconciliation_split_count"] == 1
     assert stats["transitive_merge_rejection_count"] == 1
+
+
+def test_follow_up_edge_does_not_create_reconciliation_component() -> None:
+    records = [
+        {
+            "record_key": "launch",
+            "source_group": "tech_news_apis",
+            "title": "Acme launches Agent One",
+            "url": "https://example.com/launch",
+            "published_at": "2026-07-17T00:00:00Z",
+            "content": "Agent One launched.",
+        },
+        {
+            "record_key": "follow_up",
+            "source_group": "tech_news_apis",
+            "title": "Acme expands Agent One",
+            "url": "https://example.com/follow-up",
+            "published_at": "2026-07-17T01:00:00Z",
+            "content": "A later expansion followed the launch.",
+        },
+    ]
+
+    def adjudicate(pairs: list[dict]) -> list[dict]:
+        return [
+            {
+                "pair_id": pair["pair_id"],
+                "relationship": "follow_up",
+                "confidence": 0.95,
+                "reason": "This is a distinct later event.",
+                "decision_source": "fixture",
+            }
+            for pair in pairs
+        ]
+
+    reconciliation_called = False
+
+    def reconcile(_components: list[dict]) -> dict[str, list[list[str]]]:
+        nonlocal reconciliation_called
+        reconciliation_called = True
+        return {}
+
+    clusters, stats = cluster_records(
+        records,
+        {
+            "embedding_model": "unused",
+            "effective_max_pair_hours": 48,
+            "candidate_neighbors_per_record": 1,
+            "candidate_similarity_floor": 0.0,
+            "max_candidate_pairs": 10,
+        },
+        embedder=lambda _texts, _model: np.asarray([[1.0, 0.0], [1.0, 0.0]]),
+        pair_adjudicator=adjudicate,
+        cluster_reconciler=reconcile,
+    )
+
+    assert reconciliation_called is False
+    assert len(clusters) == 2
+    assert stats["reconciliation_component_count"] == 0
+    assert all(cluster.get("related_stories") for cluster in clusters)
 
 
 def test_final_slate_review_replaces_duplicate_story(monkeypatch) -> None:

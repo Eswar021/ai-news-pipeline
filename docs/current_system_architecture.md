@@ -242,11 +242,15 @@ capsules. Every candidate pair is adjudicated in its own call, and a proposed
 `same_event` decision is confirmed against both complete normalized records.
 Code validates only schema and opaque record identity at this boundary.
 
-Pair decisions form proposed semantic components. A component-level LLM then
-partitions every record exactly once into coherent event coverage, tightly
-connected event updates, or standalone records. This final partition avoids
-edge-order-dependent transitive merges while preserving full records and
-event-status distinctions such as planned versus released. The final roundup
+Only confirmed `same_event` merge edges form proposed reconciliation
+components; `follow_up` and `broader_story_arc` remain related-story links and
+cannot create a giant transitive component. A component-level LLM partitions
+every record exactly once using the event capsules already extracted from full
+records plus focused pair decisions. Article bodies are not redundantly resent
+at this stage. A config-driven token preflight runs before the provider call.
+This final partition avoids edge-order-dependent transitive merges while the
+canonical stories still preserve full records and event-status distinctions
+such as planned versus released. The final roundup
 selector performs a second complete-context slate review so separately mapped
 versions of one event cannot knowingly occupy two episode slots. Duplicate
 judgment remains semantic; code checks only candidate coverage, selected count,

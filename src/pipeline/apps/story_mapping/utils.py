@@ -3,7 +3,10 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from functools import lru_cache
 from html import unescape
+
+import tiktoken
 
 
 def clean_text(value: str | None) -> str:
@@ -82,3 +85,15 @@ def time_span_hours(first_seen_at: str | None, last_seen_at: str | None) -> floa
     if first is None or last is None:
         return 0.0
     return round(abs((last - first).total_seconds()) / 3600.0, 2)
+
+
+def text_token_count(text: str, *, model: str, fallback_encoding: str) -> int:
+    return len(_token_encoding(model, fallback_encoding).encode(text))
+
+
+@lru_cache(maxsize=32)
+def _token_encoding(model: str, fallback_encoding: str):
+    try:
+        return tiktoken.encoding_for_model(model)
+    except KeyError:
+        return tiktoken.get_encoding(fallback_encoding)
