@@ -26,27 +26,11 @@ class VideoPackagingRun(BaseModel):
 class RoundupConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    candidate_limit: int
     min_stories: int
     max_stories: int
     duration_mode: Literal["content_driven"] = "content_driven"
     duration_ceiling_seconds: int | None = None
-    max_per_entity: int
-    max_per_product: int
-    max_per_event_family: int
-    reject_duplicate_events: bool = True
-    allowed_priority_buckets: list[str]
-    exclude_noise: bool
-    exclude_tutorials: bool
-
-    @field_validator(
-        "candidate_limit",
-        "min_stories",
-        "max_stories",
-        "max_per_entity",
-        "max_per_product",
-        "max_per_event_family",
-    )
+    @field_validator("min_stories", "max_stories")
     @classmethod
     def positive_ints(cls, value: int) -> int:
         if value < 1:
@@ -60,24 +44,10 @@ class RoundupConfig(BaseModel):
             raise ValueError("roundup.duration_ceiling_seconds must be positive when provided")
         return value
 
-    @field_validator("allowed_priority_buckets")
-    @classmethod
-    def priority_buckets_must_be_non_empty_strings(cls, value: list[str]) -> list[str]:
-        if not value:
-            raise ValueError("roundup.allowed_priority_buckets must not be empty")
-        cleaned = []
-        for bucket in value:
-            if not isinstance(bucket, str) or not bucket.strip():
-                raise ValueError("roundup.allowed_priority_buckets must contain non-empty strings")
-            cleaned.append(bucket.strip())
-        return cleaned
-
     @model_validator(mode="after")
     def validate_roundup_bounds(self) -> "RoundupConfig":
         if self.min_stories > self.max_stories:
             raise ValueError("roundup.min_stories must be <= roundup.max_stories")
-        if self.candidate_limit < self.max_stories:
-            raise ValueError("roundup.candidate_limit must be >= roundup.max_stories")
         return self
 
 
@@ -94,26 +64,26 @@ class VideoPackagingConfig(BaseModel):
         return self
 
 
-class StoryMappingData(BaseModel):
+class EditorialSelectionData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     run_id: str | None = None
     generated_at: str | None = None
-    story_count: int | None = None
-    stories: list[dict[str, Any]]
+    selected_format: str | None = None
+    editorial_slate: dict[str, Any]
 
 
-class StoryMappingEnvelope(BaseModel):
+class EditorialSelectionEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: str | None = None
-    data: StoryMappingData
+    data: EditorialSelectionData
     summary: dict[str, Any] = Field(default_factory=dict)
     handoff: dict[str, Any] = Field(default_factory=dict)
 
 
 class VideoPackagingInput(BaseModel):
-    story_mapping: StoryMappingEnvelope
+    editorial_selection: EditorialSelectionEnvelope
 
 
 class VideoPackagingRequest(BaseModel):

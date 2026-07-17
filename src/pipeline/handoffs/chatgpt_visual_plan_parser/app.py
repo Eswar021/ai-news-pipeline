@@ -15,6 +15,10 @@ from src.pipeline.contracts import (
     voiceover_artifact_payload,
 )
 from src.pipeline.handoffs.common import clean_text, iso_now
+from src.pipeline.visuals.asset_catalog.identity import catalog_identity_payload
+from src.pipeline.visuals.payload_validation import (
+    validate_scene_payload,
+)
 
 from .contract import ChatGPTVisualPlanParserRequest
 
@@ -38,6 +42,9 @@ DEFAULT_RENDER_KINDS = {
     "context_image_scene",
     "broll_video_scene",
     "logo_reveal_scene",
+    "editorial_text_scene",
+    "simple_explainer_scene",
+    "story_transition_scene",
     "kinetic_type_scene",
     "bullet_build_scene",
     "quote_or_claim_highlight_scene",
@@ -61,24 +68,29 @@ DEFAULT_RENDER_KINDS = {
     "interface_transform_scene",
     "transition_stinger_scene",
 }
-SOURCE_BACKED_RENDER_KINDS = {"source_article_scene", "quote_or_claim_highlight_scene"}
+SOURCE_BACKED_RENDER_KINDS = {"source_article_scene", "quote_or_claim_highlight_scene", "browser_walkthrough_scene"}
+EVIDENCE_BOUND_RENDER_KINDS = {
+    "simple_explainer_scene",
+    "data_counter_scene",
+    "trend_line_scene",
+    "bar_chart_scene",
+    "bar_race_scene",
+    "ranked_list_scene",
+    "benchmark_delta_scene",
+    "ecosystem_map_scene",
+    "architecture_flow_scene",
+    "process_zoom_scene",
+    "decision_tree_scene",
+    "capability_matrix_scene",
+    "timeline_zoom_scene",
+    "document_stack_scene",
+    "signal_radar_scene",
+    "interface_transform_scene",
+    "entity_compare_scene",
+}
 LOGO_RENDER_KINDS = {"logo_reveal_scene"}
 MEDIA_RENDER_KINDS = {"context_image_scene", "broll_video_scene"}
-TEXT_LIKE_RENDER_KINDS = {"kinetic_type_scene", "bullet_build_scene", "recap_sequence_scene", "transition_stinger_scene"}
 GRAPHIC_RENDER_KINDS = DEFAULT_RENDER_KINDS - SOURCE_BACKED_RENDER_KINDS
-GENERIC_PLACEHOLDER_PHRASES = {
-    "manual process",
-    "old systems",
-    "slow handoffs",
-    "faster workflow",
-    "new ai signal",
-    "process change",
-    "watch next",
-    "decision point",
-    "best fit",
-    "momentum shift",
-    "biggest delta",
-}
 
 
 def run(input_json: dict) -> dict:
@@ -98,6 +110,27 @@ def run(input_json: dict) -> dict:
         run_id=run_id,
         upstream_run_id=script_data.get("run_id"),
     )
+    asset_catalog_result = request.input.asset_catalog or {}
+    asset_catalog_data = asset_catalog_result.get("data") or {}
+    asset_catalog = asset_catalog_data.get("visual_asset_catalog") or {}
+    asset_catalog_provenance = None
+    if asset_catalog:
+        require_matching_run_id(run_id, asset_catalog_data.get("run_id"), "asset_catalog")
+        require_matching_run_id(run_id, asset_catalog.get("run_id"), "visual_asset_catalog")
+        asset_catalog_provenance = validate_artifact_provenance(
+            asset_catalog.get("provenance"),
+            artifact_type="visual_asset_catalog",
+            run_id=run_id,
+            payload=catalog_identity_payload(asset_catalog),
+            label="visual_asset_catalog",
+        )
+        require_parent_fingerprint(
+            asset_catalog_provenance,
+            parent_name="script",
+            expected=script_provenance["script_fingerprint"],
+            label="visual_asset_catalog",
+        )
+    asset_catalog_index = _asset_catalog_index(asset_catalog)
     voiceover_package = _voiceover_package(request.input.voiceover)
     voiceover_provenance = _validate_voiceover_for_script(
         voiceover_package,
@@ -108,6 +141,7 @@ def run(input_json: dict) -> dict:
 
     errors: list[str] = []
     warnings: list[str] = []
+    substantial_repairs: list[dict[str, Any]] = []
     if selected_format and selected_format != SUPPORTED_FORMAT:
         errors.append(f"selected_format={selected_format!r} is not supported; only {SUPPORTED_FORMAT!r} is implemented")
 
@@ -121,12 +155,13 @@ def run(input_json: dict) -> dict:
         scenes_raw = []
     story_sections = _normalize_story_sections(parsed.get("story_sections", []))
 
-    source_index = _build_source_index(video_packet)
+    source_index = _build_source_index(video_packet, script_package)
     allowed_render_kinds = _allowed_render_kinds(request.config.scene_policy, request.config.visual_capabilities)
     scene_timeline = _normalize_scenes(
         scenes=scenes_raw,
         allowed_render_kinds=allowed_render_kinds,
         source_index=source_index,
+        asset_catalog_index=asset_catalog_index,
         errors=errors,
         warnings=warnings,
     )
@@ -150,7 +185,12 @@ def run(input_json: dict) -> dict:
         scene_policy=request.config.scene_policy,
         warnings=warnings,
     )
-    scene_timeline = _reconcile_scene_sections(scene_timeline, story_sections, warnings)
+    scene_timeline = _reconcile_scene_sections(
+        scene_timeline,
+        story_sections,
+        warnings,
+        substantial_repairs,
+    )
     expected_duration = _expected_duration_seconds(request.input.voiceover, script_text)
     scene_timeline = _close_timeline_gaps(
         scenes=scene_timeline,
@@ -158,11 +198,8 @@ def run(input_json: dict) -> dict:
         scene_policy=request.config.scene_policy,
         allowed_render_kinds=allowed_render_kinds,
         warnings=warnings,
-    )
-    scene_timeline = _compact_semantic_scenes(
-        scenes=scene_timeline,
-        scene_policy=request.config.scene_policy,
-        warnings=warnings,
+        substantial_repairs=substantial_repairs,
+        max_automatic_repair_seconds=request.config.max_automatic_timing_repair_seconds,
     )
     scene_timeline = _attach_scene_beats(
         scenes=scene_timeline,
@@ -179,16 +216,23 @@ def run(input_json: dict) -> dict:
         errors=errors,
         warnings=warnings,
     )
-    placeholder_scenes = _generic_placeholder_scenes(scene_timeline)
-    if placeholder_scenes:
-        warnings.append(f"Visual payloads contain generic placeholder labels that may feel disconnected: {placeholder_scenes[:8]}")
+    if request.config.require_real_anchor_per_story:
+        _validate_catalog_story_anchors(
+            scene_timeline,
+            asset_catalog_index=asset_catalog_index,
+            selected_story_ids=source_index["story_ids"],
+            errors=errors,
+        )
     visual_scene_plan = {
         "package_type": PACKAGE_TYPE,
         "selected_format": SUPPORTED_FORMAT,
         "planning_strategy": "chatgpt_visual_scene_plan_handoff",
         "run_id": run_id,
         "generated_at": generated_at,
-        "episode_style": parsed.get("episode_style", {}) if isinstance(parsed.get("episode_style"), dict) else {},
+        "episode_style": {
+            **(parsed.get("episode_style", {}) if isinstance(parsed.get("episode_style"), dict) else {}),
+            **request.config.style,
+        },
         "story_plans": parsed.get("story_plans", []) if isinstance(parsed.get("story_plans"), list) else [],
         "story_sections": story_sections,
         "visual_beat_map": _visual_beat_map(scene_timeline),
@@ -214,16 +258,21 @@ def run(input_json: dict) -> dict:
         "audio_timeline": _audio_timeline(request.input.voiceover, expected_duration),
         "scene_policy": request.config.scene_policy,
         "visual_capabilities": request.config.visual_capabilities,
+        "asset_catalog": asset_catalog,
         "source_context": {
             "selected_story_ids": sorted(source_index["story_ids"]),
             "source_url_count": len(source_index["source_urls"]),
             "source_urls": sorted(source_index["source_urls"]),
         },
         "planner_warnings": warnings,
+        "repair_status": "needs_repair" if substantial_repairs else "clean",
+        "substantial_repairs": substantial_repairs,
     }
     parents = {"script": script_provenance["script_fingerprint"]}
     if voiceover_provenance:
         parents["voiceover"] = voiceover_provenance["voiceover_fingerprint"]
+    if asset_catalog_provenance:
+        parents["asset_catalog"] = asset_catalog_provenance["artifact_fingerprint"]
     visual_scene_plan["provenance"] = build_artifact_provenance(
         artifact_type="visual_plan",
         run_id=run_id,
@@ -231,9 +280,15 @@ def run(input_json: dict) -> dict:
         script_source=script_provenance.get("script_source", ""),
         payload=visual_plan_artifact_payload(visual_scene_plan),
     )
-    checks = {"passed": not errors, "errors": errors, "warnings": warnings}
+    checks = {
+        "passed": not errors,
+        "errors": errors,
+        "warnings": warnings,
+        "requires_repair": bool(substantial_repairs),
+        "substantial_repairs": substantial_repairs,
+    }
     visual_scene_plan["checks"] = checks
-    status = "ok" if checks["passed"] else "failed"
+    status = "failed" if errors else ("needs_repair" if substantial_repairs else "ok")
     summary = _build_summary(
         visual_scene_plan=visual_scene_plan,
         status=status,
@@ -324,6 +379,7 @@ def _normalize_scenes(
     scenes: list[Any],
     allowed_render_kinds: set[str],
     source_index: dict[str, Any],
+    asset_catalog_index: dict[str, Any],
     errors: list[str],
     warnings: list[str],
 ) -> list[dict[str, Any]]:
@@ -340,6 +396,16 @@ def _normalize_scenes(
         if render_kind not in allowed_render_kinds:
             errors.append(f"{scene_id}: unsupported render_kind: {render_kind}")
         payload = dict(scene_obj.get("payload")) if isinstance(scene_obj.get("payload"), dict) else {}
+        catalog_asset = _catalog_asset_for_payload(
+            scene_id=scene_id,
+            story_id=clean_text(scene_obj.get("story_id", "")),
+            render_kind=render_kind,
+            payload=payload,
+            asset_catalog_index=asset_catalog_index,
+            errors=errors,
+        )
+        if catalog_asset:
+            _apply_catalog_asset(payload, catalog_asset)
         start = _safe_float(scene_obj.get("start_seconds"), previous_end)
         end = _safe_float(scene_obj.get("end_seconds"), start)
         if end <= start:
@@ -364,10 +430,56 @@ def _normalize_scenes(
                 payload["url"] = source_url
         elif source_record_key or source_url:
             warnings.append(f"{scene_id}: source fields are ignored for non-source scene {render_kind}.")
-        if render_kind in MEDIA_RENDER_KINDS:
+        if render_kind in MEDIA_RENDER_KINDS and not clean_text(payload.get("asset_id")):
             search_queries = payload.get("search_queries") if isinstance(payload.get("search_queries"), list) else []
             if not any(clean_text(query) for query in search_queries):
                 errors.append(f"{scene_id}: {render_kind} requires payload.search_queries")
+        evidence_keys = [
+            clean_text(key)
+            for key in scene_obj.get("evidence_record_keys", [])
+            if clean_text(key)
+        ] if isinstance(scene_obj.get("evidence_record_keys"), list) else []
+        if source_record_key:
+            evidence_keys.append(source_record_key)
+        evidence_keys = list(dict.fromkeys(evidence_keys))
+        evidence_truth_ids = [
+            clean_text(truth_id)
+            for truth_id in scene_obj.get("evidence_truth_ids", [])
+            if clean_text(truth_id)
+        ] if isinstance(scene_obj.get("evidence_truth_ids"), list) else []
+        evidence_truth_ids = list(dict.fromkeys(evidence_truth_ids))
+        allowed_story_keys = source_index["record_keys_by_story"].get(story_id, set())
+        invalid_evidence_keys = [key for key in evidence_keys if key not in allowed_story_keys]
+        truth_items_by_id = source_index["truth_items_by_id"]
+        valid_truth_items = [
+            truth_items_by_id[truth_id]
+            for truth_id in evidence_truth_ids
+            if truth_id in truth_items_by_id
+            and clean_text(truth_items_by_id[truth_id].get("story_id")) == story_id
+        ]
+        invalid_truth_ids = [
+            truth_id
+            for truth_id in evidence_truth_ids
+            if truth_id not in truth_items_by_id
+            or clean_text(truth_items_by_id[truth_id].get("story_id")) != story_id
+        ]
+        evidence_text = clean_text(scene_obj.get("evidence_text", ""))
+        grounding_basis = clean_text(scene_obj.get("grounding_basis", "")) or "script_beat"
+        grounding_errors: list[str] = []
+        if invalid_evidence_keys:
+            grounding_errors.append(f"evidence_record_keys are not owned by story_id {story_id}: {invalid_evidence_keys}")
+        if invalid_truth_ids:
+            grounding_errors.append(f"evidence_truth_ids are not owned by story_id {story_id}: {invalid_truth_ids}")
+        if render_kind in EVIDENCE_BOUND_RENDER_KINDS:
+            if not evidence_keys and grounding_basis != "script_beat":
+                grounding_errors.append(
+                    "semantic graphic requires evidence_record_keys or grounding_basis='script_beat'"
+                )
+            if not evidence_text:
+                grounding_errors.append("semantic graphic requires evidence_text")
+        grounding_errors.extend(_payload_grounding_errors(render_kind, payload))
+        for grounding_error in grounding_errors:
+            errors.append(f"{scene_id}: {grounding_error}")
         normalized.append(
             {
                 "scene_id": scene_id,
@@ -382,12 +494,25 @@ def _normalize_scenes(
                 "visual_intent": clean_text(scene_obj.get("visual_intent", "")),
                 "payload": payload,
                 "source_record_keys": [source_record_key] if source_record_key else [],
+                "evidence_truth_ids": [clean_text(item.get("truth_id")) for item in valid_truth_items],
                 "source_urls": [source_url] if source_url else [],
+                "semantic_grounding": {
+                    "status": "grounded" if not grounding_errors else "invalid",
+                    "basis": grounding_basis,
+                    "evidence_record_keys": evidence_keys,
+                    "evidence_truth_ids": [clean_text(item.get("truth_id")) for item in valid_truth_items],
+                    "evidence_text": evidence_text,
+                    "errors": grounding_errors,
+                },
                 "covered_unit_orders": scene_obj.get("covered_unit_orders", []) if isinstance(scene_obj.get("covered_unit_orders"), list) else [],
             }
         )
         previous_end = end
     return sorted(normalized, key=lambda scene: (_safe_float(scene.get("start_seconds"), 0), _safe_int(scene.get("scene_order"), 999999)))
+
+
+def _payload_grounding_errors(render_kind: str, payload: dict[str, Any]) -> list[str]:
+    return validate_scene_payload(render_kind, payload)
 
 
 def _normalize_story_sections(raw_sections: Any) -> list[dict[str, Any]]:
@@ -415,7 +540,12 @@ def _normalize_story_sections(raw_sections: Any) -> list[dict[str, Any]]:
     return sorted(sections, key=lambda item: _safe_float(item.get("start_seconds"), 0.0))
 
 
-def _reconcile_scene_sections(scenes: list[dict[str, Any]], story_sections: list[dict[str, Any]], warnings: list[str]) -> list[dict[str, Any]]:
+def _reconcile_scene_sections(
+    scenes: list[dict[str, Any]],
+    story_sections: list[dict[str, Any]],
+    warnings: list[str],
+    substantial_repairs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     if not scenes or not story_sections:
         return scenes
     reconciled: list[dict[str, Any]] = []
@@ -434,6 +564,13 @@ def _reconcile_scene_sections(scenes: list[dict[str, Any]], story_sections: list
         reconciled.append(current)
     if changed:
         warnings.append(f"Reconciled section_type/story_id for {changed} scene(s) using story_sections timing.")
+        substantial_repairs.append(
+            {
+                "repair_type": "section_story_reconciliation",
+                "scene_count": changed,
+                "reason": "The submitted scene ownership disagreed with its submitted story-section timing.",
+            }
+        )
     return reconciled
 
 
@@ -453,13 +590,16 @@ def _close_timeline_gaps(
     scene_policy: dict[str, Any],
     allowed_render_kinds: set[str],
     warnings: list[str],
+    substantial_repairs: list[dict[str, Any]],
+    max_automatic_repair_seconds: float,
 ) -> list[dict[str, Any]]:
     if not scenes:
         return []
     max_scene_seconds = _safe_float(scene_policy.get("max_scene_seconds"), 14.0)
     sorted_scenes = [dict(scene) for scene in sorted(scenes, key=lambda item: (_safe_float(item.get("start_seconds"), 0.0), _safe_int(item.get("scene_order"), 999999)))]
     adjusted_gap_count = 0
-    filler_count = 0
+    unresolved_gap_count = 0
+    substantial_gap_sizes: list[float] = []
     output: list[dict[str, Any]] = []
 
     first = sorted_scenes[0]
@@ -469,15 +609,10 @@ def _close_timeline_gaps(
             first["start_seconds"] = 0.0
             _refresh_scene_duration(first)
             adjusted_gap_count += 1
+            if first_start > max_automatic_repair_seconds:
+                substantial_gap_sizes.append(first_start)
         else:
-            fillers = _gap_filler_scenes(
-                start=0.0,
-                end=first_start,
-                allowed_render_kinds=allowed_render_kinds,
-                index_start=1,
-            )
-            filler_count += len(fillers)
-            output.extend(fillers)
+            unresolved_gap_count += 1
 
     for scene in sorted_scenes:
         start = _safe_float(scene.get("start_seconds"), 0.0)
@@ -490,19 +625,16 @@ def _close_timeline_gaps(
                     prev["end_seconds"] = round(start, 2)
                     _refresh_scene_duration(prev)
                     adjusted_gap_count += 1
+                    if gap > max_automatic_repair_seconds:
+                        substantial_gap_sizes.append(gap)
                 elif _scene_duration(scene) + gap <= max_scene_seconds + 0.01:
                     scene["start_seconds"] = round(prev_end, 2)
                     _refresh_scene_duration(scene)
                     adjusted_gap_count += 1
+                    if gap > max_automatic_repair_seconds:
+                        substantial_gap_sizes.append(gap)
                 else:
-                    fillers = _gap_filler_scenes(
-                        start=prev_end,
-                        end=start,
-                        allowed_render_kinds=allowed_render_kinds,
-                        index_start=filler_count + 1,
-                    )
-                    filler_count += len(fillers)
-                    output.extend(fillers)
+                    unresolved_gap_count += 1
         output.append(scene)
 
     if expected_duration > 0 and output:
@@ -514,77 +646,28 @@ def _close_timeline_gaps(
                 last["end_seconds"] = round(expected_duration, 2)
                 _refresh_scene_duration(last)
                 adjusted_gap_count += 1
+                if gap > max_automatic_repair_seconds:
+                    substantial_gap_sizes.append(gap)
             else:
-                fillers = _gap_filler_scenes(
-                    start=last_end,
-                    end=expected_duration,
-                    allowed_render_kinds=allowed_render_kinds,
-                    index_start=filler_count + 1,
-                )
-                filler_count += len(fillers)
-                output.extend(fillers)
+                unresolved_gap_count += 1
 
     if adjusted_gap_count:
         warnings.append(f"Closed {adjusted_gap_count} visual timeline gap(s) by extending adjacent scenes.")
-    if filler_count:
-        warnings.append(f"Inserted {filler_count} transition filler scene(s) to cover larger visual timeline gaps.")
+    if substantial_gap_sizes:
+        substantial_repairs.append(
+            {
+                "repair_type": "semantic_timeline_extension",
+                "gap_count": len(substantial_gap_sizes),
+                "max_gap_seconds": round(max(substantial_gap_sizes), 2),
+                "automatic_limit_seconds": round(max_automatic_repair_seconds, 2),
+                "reason": "One or more scenes were stretched beyond the safe timing-normalization limit.",
+            }
+        )
+    if unresolved_gap_count:
+        warnings.append(
+            f"Left {unresolved_gap_count} large visual timeline gap(s) unresolved rather than inventing filler content."
+        )
     return _renumber_scenes(output)
-
-
-def _compact_semantic_scenes(
-    *,
-    scenes: list[dict[str, Any]],
-    scene_policy: dict[str, Any],
-    warnings: list[str],
-) -> list[dict[str, Any]]:
-    if not scene_policy.get("compact_per_chunk_scenes", True) or len(scenes) < 2:
-        return _renumber_scenes(scenes)
-    compacted = [dict(scene) for scene in sorted(scenes, key=lambda item: (_safe_float(item.get("start_seconds"), 0.0), _safe_int(item.get("scene_order"), 999999)))]
-    merge_count = 0
-    changed = True
-    while changed:
-        changed = False
-        for index in range(len(compacted) - 1):
-            if _should_merge_semantic_neighbors(compacted[index], compacted[index + 1], scene_policy):
-                compacted[index : index + 2] = [_merge_adjacent_scenes(compacted[index], compacted[index + 1])]
-                merge_count += 1
-                changed = True
-                break
-    if merge_count:
-        warnings.append(f"Compacted {merge_count} tiny/per-chunk scene pair(s) into semantic visual scenes.")
-    return _renumber_scenes(compacted)
-
-
-def _should_merge_semantic_neighbors(first: dict[str, Any], second: dict[str, Any], scene_policy: dict[str, Any]) -> bool:
-    if _is_story_title_interstitial(first) or _is_story_title_interstitial(second):
-        return False
-    if clean_text(first.get("story_id", "")) != clean_text(second.get("story_id", "")):
-        return False
-    if clean_text(first.get("section_type", "")) != clean_text(second.get("section_type", "")):
-        return False
-    first_kind = clean_text(first.get("render_kind", ""))
-    second_kind = clean_text(second.get("render_kind", ""))
-    if first_kind in SOURCE_BACKED_RENDER_KINDS or second_kind in SOURCE_BACKED_RENDER_KINDS:
-        return False
-    start = _safe_float(first.get("start_seconds"), 0.0)
-    end = _safe_float(second.get("end_seconds"), start)
-    combined = max(0.0, end - start)
-    max_seconds = _safe_float(scene_policy.get("max_scene_seconds"), 14.0)
-    min_seconds = _safe_float(scene_policy.get("semantic_min_scene_seconds"), max(5.0, _safe_float(scene_policy.get("min_scene_seconds"), 3.0)))
-    target_seconds = min(max_seconds, max(min_seconds, _safe_float(scene_policy.get("semantic_target_scene_seconds"), 9.0)))
-    if combined > target_seconds + 0.01:
-        return False
-    if first_kind == second_kind and first_kind in TEXT_LIKE_RENDER_KINDS:
-        return True
-    if _scene_headline(first) and _scene_headline(first) == _scene_headline(second):
-        return True
-    if _scene_duration(first) < min_seconds or _scene_duration(second) < min_seconds:
-        return True
-    first_units = [unit for unit in first.get("covered_unit_orders", []) if _safe_int(unit, 0)]
-    second_units = [unit for unit in second.get("covered_unit_orders", []) if _safe_int(unit, 0)]
-    if len(first_units) <= 1 and len(second_units) <= 1 and first_kind in GRAPHIC_RENDER_KINDS and second_kind in GRAPHIC_RENDER_KINDS:
-        return True
-    return False
 
 
 def _insert_story_title_interstitials(
@@ -596,8 +679,12 @@ def _insert_story_title_interstitials(
     errors: list[str],
     warnings: list[str],
 ) -> list[dict[str, Any]]:
-    if "transition_stinger_scene" not in allowed_render_kinds:
-        errors.append("transition_stinger_scene must be allowed for deterministic roundup story titles")
+    if "story_transition_scene" in allowed_render_kinds:
+        title_render_kind = "story_transition_scene"
+    elif "transition_stinger_scene" in allowed_render_kinds:
+        title_render_kind = "transition_stinger_scene"
+    else:
+        errors.append("story_transition_scene must be allowed for deterministic roundup story titles")
         return scenes
     chunks = _voiceover_chunks(voiceover)
     first_beat_by_story: dict[str, dict[str, Any]] = {}
@@ -648,6 +735,26 @@ def _insert_story_title_interstitials(
 
         identity = story.get("story_identity") if isinstance(story.get("story_identity"), dict) else {}
         segment = story.get("video_segment") if isinstance(story.get("video_segment"), dict) else {}
+        story_number = _safe_int(segment.get("segment_order"), inserted + 1)
+        if title_render_kind == "story_transition_scene":
+            title_payload = {
+                "story_number": str(story_number),
+                "eyebrow": f"STORY {story_number}",
+                "headline": _short_text(story.get("story_title") or story.get("title"), 140),
+                "subtitle": _short_text(identity.get("why_it_matters", ""), 110),
+                "accent_words": [],
+                "motion_style": "editorial_wipe",
+                "voice_behavior": "continue",
+            }
+        else:
+            title_payload = {
+                "transition_label": _short_text(story.get("story_title") or story.get("title"), 90),
+                "subtitle": _short_text(identity.get("why_it_matters", ""), 110),
+                "background_motif": "newsroom_grid",
+                "motion_style": "signal_wipe",
+                "eyebrow": f"STORY {story_number}",
+                "voice_behavior": "continue",
+            }
         output.append(
             {
                 "scene_id": "",
@@ -657,19 +764,19 @@ def _insert_story_title_interstitials(
                 "start_seconds": round(start, 2),
                 "end_seconds": round(end, 2),
                 "duration_seconds": round(end - start, 2),
-                "render_kind": "transition_stinger_scene",
+                "render_kind": title_render_kind,
                 "script_excerpt": clean_text(beat.get("text", "")),
                 "visual_intent": "Introduce the story while narration continues.",
-                "payload": {
-                    "transition_label": _short_text(story.get("story_title") or story.get("title"), 90),
-                    "subtitle": _short_text(identity.get("why_it_matters", ""), 110),
-                    "background_motif": "newsroom_grid",
-                    "motion_style": "signal_wipe",
-                    "eyebrow": f"STORY {_safe_int(segment.get('segment_order'), inserted + 1)}",
-                    "voice_behavior": "continue",
-                },
+                "payload": title_payload,
                 "source_record_keys": [],
                 "source_urls": [],
+                "semantic_grounding": {
+                    "status": "grounded",
+                    "basis": "editorial_transition",
+                    "evidence_record_keys": [],
+                    "evidence_text": clean_text(beat.get("text", "")),
+                    "errors": [],
+                },
                 "covered_unit_orders": [_safe_int(beat.get("order"), 0)],
             }
         )
@@ -776,102 +883,11 @@ def _validate_story_title_interstitials(
 def _is_story_title_interstitial(scene: dict[str, Any]) -> bool:
     payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
     return (
-        clean_text(scene.get("render_kind", "")) == "transition_stinger_scene"
+        clean_text(scene.get("render_kind", "")) in {"story_transition_scene", "transition_stinger_scene"}
         and clean_text(payload.get("voice_behavior", "")) == "continue"
     )
 
 
-def _merge_adjacent_scenes(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
-    preferred = _preferred_scene_for_merge(first, second)
-    start = _safe_float(first.get("start_seconds"), 0.0)
-    end = _safe_float(second.get("end_seconds"), start)
-    script_excerpt = _short_text(" ".join([clean_text(first.get("script_excerpt", "")), clean_text(second.get("script_excerpt", ""))]), 420)
-    payload = _merged_payload_for_scene(preferred, first, second, script_excerpt, start)
-    return {
-        **preferred,
-        "start_seconds": round(start, 2),
-        "end_seconds": round(end, 2),
-        "duration_seconds": round(max(0.0, end - start), 2),
-        "script_excerpt": script_excerpt,
-        "payload": payload,
-        "covered_unit_orders": sorted(set(_safe_int(unit, 0) for unit in first.get("covered_unit_orders", [])) | set(_safe_int(unit, 0) for unit in second.get("covered_unit_orders", []))),
-        "source_record_keys": list(dict.fromkeys([*first.get("source_record_keys", []), *second.get("source_record_keys", [])])),
-        "source_urls": list(dict.fromkeys([*first.get("source_urls", []), *second.get("source_urls", [])])),
-    }
-
-
-def _preferred_scene_for_merge(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
-    priority = {
-        "benchmark_delta_scene": 0,
-        "broll_video_scene": 1,
-        "context_image_scene": 2,
-        "bar_chart_scene": 3,
-        "bar_race_scene": 4,
-        "browser_walkthrough_scene": 5,
-        "decision_tree_scene": 6,
-        "capability_matrix_scene": 7,
-        "timeline_zoom_scene": 8,
-        "document_stack_scene": 9,
-        "signal_radar_scene": 10,
-        "interface_transform_scene": 11,
-        "process_zoom_scene": 12,
-        "architecture_flow_scene": 13,
-        "ecosystem_map_scene": 14,
-        "entity_compare_scene": 15,
-        "data_counter_scene": 16,
-        "trend_line_scene": 17,
-        "logo_reveal_scene": 18,
-        "ranked_list_scene": 19,
-        "bullet_build_scene": 20,
-        "kinetic_type_scene": 21,
-        "recap_sequence_scene": 22,
-        "transition_stinger_scene": 23,
-    }
-    first_kind = clean_text(first.get("render_kind", ""))
-    second_kind = clean_text(second.get("render_kind", ""))
-    if priority.get(second_kind, 99) < priority.get(first_kind, 99):
-        return dict(second)
-    return dict(first)
-
-
-def _merged_payload_for_scene(preferred: dict[str, Any], first: dict[str, Any], second: dict[str, Any], script_excerpt: str, scene_start_seconds: float) -> dict[str, Any]:
-    payload = dict(preferred.get("payload", {})) if isinstance(preferred.get("payload"), dict) else {}
-    beats = _merge_scene_beats(first, second, scene_start_seconds)
-    if beats:
-        payload["beats"] = beats
-        payload["beat_count"] = len(beats)
-        payload["covered_text"] = _short_text(" ".join(beat["text"] for beat in beats if beat.get("text")), 320)
-    kind = clean_text(preferred.get("render_kind", ""))
-    if kind == "kinetic_type_scene":
-        payload["phrases"] = [_short_phrase(script_excerpt)]
-    elif kind == "bullet_build_scene":
-        payload["points"] = _points_from_text(script_excerpt, max_points=4, max_chars=64)
-    elif kind == "recap_sequence_scene":
-        payload["recap_items"] = _points_from_text(script_excerpt, max_points=6, max_chars=58)
-        payload["final_takeaway"] = payload.get("final_takeaway") or _short_phrase(script_excerpt)
-    return payload
-
-
-def _merge_scene_beats(first: dict[str, Any], second: dict[str, Any], scene_start_seconds: float) -> list[dict[str, Any]]:
-    merged: list[dict[str, Any]] = []
-    for scene in (first, second):
-        payload = scene.get("payload", {}) if isinstance(scene.get("payload"), dict) else {}
-        beats = payload.get("beats") if isinstance(payload.get("beats"), list) else []
-        for beat in beats:
-            if not isinstance(beat, dict):
-                continue
-            start = _safe_float(beat.get("start_seconds"), _safe_float(scene.get("start_seconds"), scene_start_seconds))
-            end = _safe_float(beat.get("end_seconds"), start)
-            merged.append(
-                {
-                    **beat,
-                    "start_seconds": round(start, 2),
-                    "end_seconds": round(end, 2),
-                    "relative_start_seconds": round(max(0.0, start - scene_start_seconds), 2),
-                    "relative_end_seconds": round(max(0.0, end - scene_start_seconds), 2),
-                }
-            )
-    return sorted(merged, key=lambda beat: (_safe_float(beat.get("start_seconds"), 0.0), _safe_int(beat.get("unit_order"), 0)))
 
 
 def _attach_scene_beats(
@@ -889,6 +905,11 @@ def _attach_scene_beats(
     for scene in scenes:
         current = dict(scene)
         payload = dict(current.get("payload", {})) if isinstance(current.get("payload"), dict) else {}
+        authored_beats = {
+            _safe_int(beat.get("unit_order"), 0): beat
+            for beat in payload.get("beats", [])
+            if isinstance(beat, dict) and _safe_int(beat.get("unit_order"), 0)
+        }
         unit_orders = [_safe_int(order, 0) for order in current.get("covered_unit_orders", []) if _safe_int(order, 0)]
         if not unit_orders:
             unit_orders = [
@@ -907,6 +928,7 @@ def _attach_scene_beats(
             text = clean_text(chunk.get("text", ""))
             if not text:
                 continue
+            authored = authored_beats.get(order, {})
             beats.append(
                 {
                     "unit_order": order,
@@ -917,8 +939,14 @@ def _attach_scene_beats(
                     "relative_start_seconds": round(max(0.0, start - scene_start), 2),
                     "relative_end_seconds": round(max(0.0, end - scene_start), 2),
                     "text": text,
-                    "visual_action": _visual_action_for_beat(text),
-                    "emphasis_words": _meaningful_words(text)[:4],
+                    "visual_action": clean_text(authored.get("visual_action", "")) or "hold_scene",
+                    "emphasis_words": list(
+                        dict.fromkeys(
+                            clean_text(value)
+                            for value in authored.get("emphasis_words", [])
+                            if clean_text(value)
+                        )
+                    )[:4],
                 }
             )
         if beats:
@@ -995,82 +1023,79 @@ def _voiceover_chunks(voiceover: dict[str, Any] | None) -> list[dict[str, Any]]:
     return normalized
 
 
-def _scene_headline(scene: dict[str, Any]) -> str:
-    payload = scene.get("payload", {}) if isinstance(scene.get("payload"), dict) else {}
-    for key in ("headline", "overlay_headline", "companion_text", "transition_label"):
-        value = clean_text(payload.get(key, "")).lower()
-        if value:
-            return value
-    return ""
-
-
-def _short_text(text: str, max_chars: int) -> str:
-    cleaned = clean_text(text)
-    if len(cleaned) <= max_chars:
-        return cleaned
-    return cleaned[: max(0, max_chars - 1)].rstrip(" ,.;:") + "…"
-
-
-def _short_phrase(text: str) -> str:
-    words = clean_text(text).replace(":", " ").split()
-    return " ".join(words[:7]).strip(" ,.;:") or "AI news shift"
-
-
-def _points_from_text(text: str, *, max_points: int, max_chars: int) -> list[str]:
-    normalized = clean_text(text)
-    if not normalized:
-        return []
-    sentences = [clean_text(item) for item in re.split(r"(?<=[.!?])\s+", normalized) if clean_text(item)]
-    points = [_short_text(sentence, max_chars).strip(" ,.;:") for sentence in sentences if len(sentence.split()) >= 3]
-    if len(points) < max_points:
-        parts = re.split(r"\b(?:and|but|while|because|with|where)\b|[,;:]", normalized)
-        points.extend(_short_text(clean_text(part), max_chars).strip(" ,.;:") for part in parts if len(clean_text(part).split()) >= 3)
-    return list(dict.fromkeys(point for point in points if point))[:max_points] or [_short_phrase(normalized)]
-
-
-def _meaningful_words(text: str) -> list[str]:
-    stop = {
-        "about",
-        "after",
-        "again",
-        "because",
-        "before",
-        "being",
-        "between",
-        "could",
-        "from",
-        "have",
-        "into",
-        "more",
-        "over",
-        "that",
-        "their",
-        "there",
-        "they",
-        "this",
-        "what",
-        "when",
-        "where",
-        "which",
-        "with",
-        "would",
-        "your",
+def _asset_catalog_index(catalog: dict[str, Any]) -> dict[str, Any]:
+    assets = {
+        clean_text(asset.get("asset_id")): asset
+        for asset in catalog.get("assets", [])
+        if isinstance(asset, dict) and clean_text(asset.get("asset_id"))
     }
-    words = re.findall(r"[A-Za-z][A-Za-z0-9'-]{2,}", clean_text(text).lower())
-    return [word for word in words if word not in stop][:12]
+    by_story: dict[str, list[dict[str, Any]]] = {}
+    for asset in assets.values():
+        by_story.setdefault(clean_text(asset.get("story_id")), []).append(asset)
+    return {"assets_by_id": assets, "assets_by_story": by_story}
 
 
-def _visual_action_for_beat(text: str) -> str:
-    lowered = clean_text(text).lower()
-    if re.search(r"\$?\d", lowered):
-        return "emphasize_metric"
-    if re.search(r"\b(api|sdk|workflow|pipeline|agent|model|cloud|deploy|integration|system|service)\b", lowered):
-        return "advance_diagram_step"
-    if re.search(r"\b(decide|approval|rules|policy|risk|trust|safety|blocked|preview|access)\b", lowered):
-        return "highlight_decision_path"
-    if re.search(r"\b(signal|watch|trend|pressure|concern|warning|risk)\b", lowered):
-        return "scan_signal"
-    return "reveal_point"
+def _catalog_asset_for_payload(
+    *,
+    scene_id: str,
+    story_id: str,
+    render_kind: str,
+    payload: dict[str, Any],
+    asset_catalog_index: dict[str, Any],
+    errors: list[str],
+) -> dict[str, Any] | None:
+    asset_id = clean_text(payload.get("asset_id"))
+    if not asset_id:
+        return None
+    asset = asset_catalog_index["assets_by_id"].get(asset_id)
+    if not isinstance(asset, dict):
+        errors.append(f"{scene_id}: unknown catalog asset_id {asset_id!r}")
+        return None
+    compatibility = {
+        "source_article_scene": {"source_page"},
+        "quote_or_claim_highlight_scene": {"source_page"},
+        "browser_walkthrough_scene": {"source_page"},
+        "context_image_scene": {"source_image", "official_product_interface", "source_figure"},
+        "broll_video_scene": {"broll_video"},
+        "logo_reveal_scene": {"logo"},
+    }
+    asset_type = clean_text(asset.get("asset_type"))
+    scene_errors: list[str] = []
+    if clean_text(asset.get("story_id")) != story_id:
+        scene_errors.append("catalog asset belongs to another story")
+    if clean_text(asset.get("status")) != "available":
+        scene_errors.append("catalog asset is not available")
+    if asset_type not in compatibility.get(render_kind, set()):
+        scene_errors.append(f"catalog asset type {asset_type!r} is incompatible with {render_kind}")
+    errors.extend(f"{scene_id}: {message}" for message in scene_errors)
+    return asset if not scene_errors else None
+
+
+def _apply_catalog_asset(payload: dict[str, Any], asset: dict[str, Any]) -> None:
+    payload["asset_id"] = clean_text(asset.get("asset_id"))
+    if clean_text(asset.get("asset_type")) == "source_page":
+        payload["source_record_key"] = clean_text(asset.get("source_record_key"))
+        payload["url"] = clean_text(asset.get("source_url") or asset.get("asset_url"))
+    elif clean_text(asset.get("asset_type")) == "logo":
+        payload["primary_entity"] = clean_text(asset.get("title"))
+
+
+def _validate_catalog_story_anchors(
+    scenes: list[dict[str, Any]],
+    *,
+    asset_catalog_index: dict[str, Any],
+    selected_story_ids: set[str],
+    errors: list[str],
+) -> None:
+    anchored = {
+        clean_text(scene.get("story_id"))
+        for scene in scenes
+        if clean_text((scene.get("payload") or {}).get("asset_id"))
+    }
+    for story_id in sorted(selected_story_ids):
+        available = asset_catalog_index["assets_by_story"].get(story_id, [])
+        if available and story_id not in anchored:
+            errors.append(f"{story_id}: visual plan must use at least one verified catalog asset_id")
 
 
 def _visual_beat_map(scene_timeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1101,68 +1126,6 @@ def _visual_beat_map(scene_timeline: list[dict[str, Any]]) -> list[dict[str, Any
                 }
             )
     return sorted(beat_map, key=lambda item: (_safe_float(item.get("start_seconds"), 0.0), _safe_int(item.get("unit_order"), 0)))
-
-
-def _generic_placeholder_scenes(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    flagged: list[dict[str, Any]] = []
-    for scene in scenes:
-        payload = scene.get("payload", {}) if isinstance(scene.get("payload"), dict) else {}
-        text_blob = json.dumps(payload, ensure_ascii=False).lower()
-        hits = sorted(phrase for phrase in GENERIC_PLACEHOLDER_PHRASES if phrase in text_blob)
-        if hits:
-            flagged.append(
-                {
-                    "scene_id": scene.get("scene_id", ""),
-                    "render_kind": scene.get("render_kind", ""),
-                    "placeholders": hits[:4],
-                }
-            )
-    return flagged
-
-
-def _gap_filler_scenes(
-    *,
-    start: float,
-    end: float,
-    allowed_render_kinds: set[str],
-    index_start: int,
-) -> list[dict[str, Any]]:
-    if end <= start:
-        return []
-    render_kind = "transition_stinger_scene" if "transition_stinger_scene" in allowed_render_kinds else "kinetic_type_scene"
-    duration = round(end - start, 2)
-    if render_kind == "transition_stinger_scene":
-        payload = {
-            "transition_label": "signal shift",
-            "subtitle": "next beat",
-            "motion_style": "signal_wipe",
-            "background_motif": "abstract_ai",
-        }
-    else:
-        payload = {
-            "phrases": ["next beat"],
-            "emphasis_words": ["next"],
-            "animation_style": "word_snap",
-            "background_motif": "abstract_ai",
-        }
-    return [
-        {
-            "scene_id": f"scene_gap_{index_start:03d}",
-            "scene_order": 0,
-            "story_id": "",
-            "section_type": "transition",
-            "start_seconds": round(start, 2),
-            "end_seconds": round(end, 2),
-            "duration_seconds": duration,
-            "render_kind": render_kind,
-            "script_excerpt": "",
-            "visual_intent": "Fill a timing gap so rendered visuals remain synchronized with the voiceover.",
-            "payload": payload,
-            "source_record_keys": [],
-            "source_urls": [],
-            "covered_unit_orders": [],
-        }
-    ]
 
 
 def _scene_duration(scene: dict[str, Any]) -> float:
@@ -1352,7 +1315,10 @@ def _build_asset_manifest(scene_timeline: list[dict[str, Any]]) -> dict[str, Any
     }
 
 
-def _build_source_index(video_packet: dict[str, Any]) -> dict[str, Any]:
+def _build_source_index(
+    video_packet: dict[str, Any],
+    script_package: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     stories = video_packet.get("stories")
     if not isinstance(stories, list):
         stories = video_packet.get("selected_stories")
@@ -1360,6 +1326,17 @@ def _build_source_index(video_packet: dict[str, Any]) -> dict[str, Any]:
     record_keys_by_story: dict[str, set[str]] = {}
     source_urls: set[str] = set()
     story_ids: set[str] = set()
+    truth_items_by_id: dict[str, dict[str, Any]] = {}
+    for index in (script_package or {}).get("story_truth_indexes", []):
+        if not isinstance(index, dict):
+            continue
+        indexed_story_id = clean_text(index.get("story_id"))
+        for item in index.get("items", []):
+            if not isinstance(item, dict):
+                continue
+            truth_id = clean_text(item.get("truth_id"))
+            if truth_id and indexed_story_id:
+                truth_items_by_id[truth_id] = {**item, "story_id": indexed_story_id}
     for story in stories if isinstance(stories, list) else []:
         if not isinstance(story, dict):
             continue
@@ -1384,6 +1361,7 @@ def _build_source_index(video_packet: dict[str, Any]) -> dict[str, Any]:
         "record_keys_by_story": record_keys_by_story,
         "source_urls": source_urls,
         "story_ids": story_ids,
+        "truth_items_by_id": truth_items_by_id,
     }
 
 
@@ -1477,6 +1455,14 @@ def _build_summary(
 ) -> dict[str, Any]:
     scenes = visual_scene_plan.get("scene_timeline", [])
     kinds = [clean_text(scene.get("render_kind", "")) for scene in scenes if isinstance(scene, dict)]
+    substantial_repairs = visual_scene_plan.get("substantial_repairs", [])
+    failure_reason = "; ".join(errors[:5])
+    if not failure_reason and substantial_repairs:
+        repair_types = [clean_text(item.get("repair_type", "")) for item in substantial_repairs if isinstance(item, dict)]
+        failure_reason = (
+            "Manual visual plan needs targeted repair before production: "
+            + ", ".join(repair_type for repair_type in repair_types if repair_type)
+        )
     return {
         "status": status,
         "scene_count": len(scenes),
@@ -1484,6 +1470,9 @@ def _build_summary(
         "render_kind_counts": dict(Counter(kinds)),
         "source_backed_scene_count": kinds.count("source_article_scene") + kinds.count("quote_or_claim_highlight_scene"),
         "logo_reveal_scene_count": kinds.count("logo_reveal_scene"),
+        "editorial_text_scene_count": kinds.count("editorial_text_scene"),
+        "simple_explainer_scene_count": kinds.count("simple_explainer_scene"),
+        "story_transition_scene_count": kinds.count("story_transition_scene"),
         "context_image_scene_count": kinds.count("context_image_scene"),
         "broll_video_scene_count": kinds.count("broll_video_scene"),
         "transition_stinger_scene_count": kinds.count("transition_stinger_scene"),
@@ -1491,7 +1480,10 @@ def _build_summary(
         "coverage": visual_scene_plan.get("coverage", {}),
         "error_count": len(errors),
         "warning_count": len(warnings),
-        "failure_reason": "; ".join(errors[:5]),
+        "repair_status": visual_scene_plan.get("repair_status", "clean"),
+        "substantial_repair_count": len(substantial_repairs),
+        "substantial_repairs": substantial_repairs,
+        "failure_reason": failure_reason,
     }
 
 

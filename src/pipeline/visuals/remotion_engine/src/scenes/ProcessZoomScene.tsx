@@ -23,20 +23,13 @@ export const ProcessZoomScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) 
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "Zoom into the workflow";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "PROCESS ZOOM");
-  const steps = stepsFromPayload(payload.steps).length
-    ? stepsFromPayload(payload.steps)
-    : [
-        { label: "Input", detail: "user task" },
-        { label: "Reasoning", detail: "plan the work" },
-        { label: "Tool call", detail: "execute action" },
-        { label: "Result", detail: "return output" },
-      ];
-  const focusLabel = textValue(payload.focus_step_label) || steps[Math.min(1, steps.length - 1)]?.label || "Focus";
+  const steps = stepsFromPayload(payload.steps);
+  const focusLabel = textValue(payload.focus_step_label);
   const focusIndex = Math.max(0, steps.findIndex((step) => step.label === focusLabel));
   const focus = steps[focusIndex] || steps[0];
-  const zoomNote = textValue(payload.zoom_note) || focus.detail || "the step that changes the outcome";
+  const zoomNote = textValue(payload.zoom_note) || focus.detail || "";
   const p = spring({ fps, frame, config: { damping: 18, stiffness: 112, mass: 0.72 } });
 
   return (

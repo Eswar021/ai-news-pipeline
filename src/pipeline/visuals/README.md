@@ -6,39 +6,104 @@
 The subsystem is intentionally split into small stages:
 
 ```text
-planner -> media_discovery -> asset_resolver -> render -> assembly
+asset_catalog -> planner -> media_discovery -> asset_resolver -> render -> assembly -> review
 ```
 
 The stages are intentionally separate:
 
+- `asset_catalog` creates trusted, story-owned asset IDs from selected source
+  pages, source-owned hero images, and resolvable identities before planning.
 - `planner` is the LLM-heavy stage. It converts the script, selected stories,
-  source records, and optional voiceover timing into a renderable scene plan.
-- `media_discovery` searches approved providers for planner-requested contextual
-  images and b-roll, downloads only selected assets, prepares short video clips,
-  and preserves attribution/license metadata.
+  trusted assets, and voiceover timing into a renderable scene plan.
+- `media_discovery` resolves exact catalog media IDs first. Optional external
+  image/B-roll research and semantic verification are separate, explicitly
+  enabled policies rather than the default path.
 - `asset_resolver` is the asset-building stage. It takes that plan and
   materializes screenshots, logo assets, discovered media, and render-ready
   scene records.
 - `render` turns each resolved scene into an MP4 clip.
 - `assembly` concatenates clips and attaches the voiceover.
+- `review` samples the assembled video into a contact sheet for human visual
+  inspection and publish review.
 
 Every production stage carries artifact provenance. The visual plan is bound
-to one script and voiceover fingerprint; media discovery, asset resolution,
-and rendering propagate that lineage. A mismatched or historical artifact is
-rejected before expensive work instead of being selected by modification time.
+to one script, voiceover, and asset-catalog fingerprint; media discovery, asset
+resolution, rendering, assembly, and review propagate that lineage. A
+mismatched or historical artifact is rejected before expensive work instead of
+being selected by modification time.
 
 If story-level LLM planning fails, do not let that silently become a generic
 video. `visuals.planner.allow_deterministic_story_fallbacks` defaults to
-`false`, so structural LLM/schema failures stop at planning. Set it to `true`
-only when you intentionally want fallback visuals for debugging.
+`false`, so structural LLM/schema failures leave that story unresolved and stop
+at planning without creating substitute scenes. Set it to `true` only when you
+intentionally want fallback visuals for debugging.
 
-The notebook owns file orchestration. The modules receive JSON/dict inputs,
-return JSON/dict outputs, and write only the media/package files that belong to
-their stage.
+`scene_policy.allowed_render_kinds` is the operational capability authority.
+The authoring catalog may define additional future or disabled capabilities,
+but neither the native LLM planner nor the ChatGPT handoff may advertise them.
+
+The default production profile uses the `editorial_minimal` style and a compact
+planner vocabulary:
+
+```text
+source_article_scene
+context_image_scene
+logo_reveal_scene
+editorial_text_scene
+simple_explainer_scene
+story_transition_scene  # inserted by the system, not the story LLM
+```
+
+This is intentionally smaller than the renderer's full authoring catalog. The
+legacy charts, matrices, maps, and other specialist motion components remain
+renderable for explicit profiles and historical plans, but they are not shown
+to the production planner by default. Adding a specialist scene to a profile is
+a deliberate editorial choice, not automatic variety.
+
+The visuals stage router or interactive notebook owns file orchestration. The
+modules receive JSON/dict inputs, return JSON/dict outputs, and write only the
+media/package files that belong to their stage.
 
 ## Current Flow
 
-### 1. Planner
+### 1. Trusted Asset Catalog
+
+Entrypoint:
+
+```python
+from src.pipeline.visuals.asset_catalog import run
+```
+
+Purpose:
+
+- read the canonical script and selected video packet
+- convert beat-level `visual_brief` values into story-owned asset requests
+- register every selected source record as a stable `source_page` asset
+- bind source-page screenshot targets to exact canonical beat support truths
+- fetch page metadata and inspect OpenGraph/hero plus bounded in-article image
+  and direct source-video candidates, including lazy-loaded and `srcset` image
+  sources
+- retain only the configured number of structurally valid source-owned images
+  under byte, dimension, and aspect-ratio limits; remove exact and near-visual
+  duplicates while preserving alt text, image role, order, provenance,
+  dimensions, and content hash
+- retain bounded direct source-owned video files when the selected publisher
+  exposes a supported MP4/WebM/MOV asset, then verify its stream with ffprobe
+- register resolvable local/Simple Icons identities without pretending a
+  favicon or text treatment is an official logo
+- treat exact logo identities requested by canonical script visual briefs as
+  additional resolution candidates, while still accepting them only when the
+  configured resolver can verify the identity
+- return `data.visual_asset_catalog` with stable asset IDs, story ownership,
+  source provenance, availability, content hashes, and unresolved requests
+
+The default catalog mode is `trusted_only`. It does not search the open web and
+does not call an LLM or vision model. A selected source page is a real visual
+anchor even when the publisher exposes no usable hero image or direct video.
+Unresolved photo or B-roll briefs remain visible; this stage never substitutes
+an unrelated asset to make the run appear complete.
+
+### 2. Planner
 
 Entrypoint:
 
@@ -48,16 +113,31 @@ from src.pipeline.visuals.planner import run
 
 Purpose:
 
-- read the video packet, script, optional voiceover package, and visual config
+- read the video packet, script, voiceover package, trusted asset catalog, and
+  visual config
 - create an episode-level direction
 - plan renderable scenes per selected story
-- consume canonical beat IDs, visual briefs, source keys, and aligned voice timing
+- consume canonical beat IDs, beat functions, creative devices, visual goals,
+  support truth IDs, source keys, visual briefs, and aligned voice timing
 - insert one moving story-title interstitial over each story's first transition beat
+- require at least one available catalog-backed real anchor for every story
+- optionally run one bounded story-local visual editor pass whose default is
+  keep and whose replacement must pass the same complete scene contract
 - stitch scenes deterministically without allowing the LLM to author raw seconds
 - return `data.visual_scene_plan`
 
-The planner uses LangChain structured output with Pydantic models. Durable
-prompt text lives under:
+The planner uses LangChain structured output with Pydantic models. The strict
+provider schema exposes only the render kinds enabled for that run. Each
+capability includes its exact payload shape, list cardinality, enum values, and
+an example; the dynamic scene payload is then carried as JSON text. App code
+decodes it and applies the shared render-kind payload validator plus source
+grounding. The same payload validator is used by native planning, manual-plan
+parsing, and render preflight so no path can bypass the nested scene contract.
+Missing metrics, values, nodes, edges, process steps, or source references
+trigger bounded targeted replanning. Incomplete numeric graphics are not
+silently converted into screenshots or text unless a profile deliberately
+selects that named degradation mode. Code must not synthesize those semantic
+fields to make a scene renderable. Durable prompt text lives under:
 
 ```text
 src/pipeline/visuals/planner/prompts/
@@ -66,10 +146,47 @@ src/pipeline/visuals/planner/prompts/
 The planner should not generate generic presentation-card outputs. The banned
 old card language is enforced in code and prompts.
 
-The planner output may include an `asset_manifest.requests` section, but those
-are only asset requests. For `context_image_scene` and `broll_video_scene`, the
-planner supplies search intent and visual constraints, never invented asset
-URLs. The planner does not search, download, capture, resolve, or render media.
+The production `visual_editor` receives one story's exact script units,
+normalized scenes, story-owned asset catalog, episode direction, and structural
+quality telemetry. It runs only when named plan problems recommend review; an
+unused asset is not a defect or usage quota. It may keep the plan or return one complete
+replacement through the same strict nested Pydantic story-plan contract used by
+the initial planner. It does not patch individual scenes, does not rewrite
+narration, and does not invent missing media or payload semantics.
+The pass is limited to one and to the configured story-call budget. If the
+editor fails, the explicit production policy keeps an already valid original;
+an invalid original still fails planning rather than becoming generic text.
+
+Selected-source YouTube, X, and Vimeo links/embeds may be resolved through the
+bounded app-local `yt-dlp` adapter when enabled. Provider allowlists, link
+counts, duration, resolution, byte size, and timeouts are config-driven. These
+assets are provenance-trusted, but that trust is recorded separately from
+narration-beat suitability.
+
+Story-title transitions reuse the story planner's semantically selected opening
+image, video, or logo when one exists. The renderer overlays the canonical
+story identity on that moving media; a short clean reset is used only when the
+planner supplied no opening media anchor.
+
+Catalog-backed scenes carry exact `asset_id` values. The planner may use a
+`source_page` ID for a screenshot/proof scene, a `source_image` ID for a
+context image, and a `logo` ID for an identity reveal. The app verifies that
+the ID is available, belongs to the active story, and is compatible with the
+requested scene kind. When the catalog contains a usable real anchor, at least
+one actual scene payload must use an exact story-owned catalog asset ID with its
+compatible render kind. The planner validates the scenes themselves rather than
+a duplicate top-level anchor declaration. Production requests this anchor but
+defaults `real_anchor_failure_mode` to `warn`, because a missing anchor is a
+creative-quality concern rather than a reason to discard an otherwise valid
+story plan. Profiles may explicitly choose `fail` for stricter review runs.
+The planner may still request external media when a
+profile enables that path, but it never invents asset URLs. It does not search,
+download, capture, resolve, or render media.
+
+For `source_article_scene`, the active script unit receives eligible screenshot
+targets containing exact truth IDs and source text. A cited content/title truth
+from the selected record wins over a merely similar page headline, so the
+captured and highlighted article region supports what the narration is saying.
 
 Script input can come from either:
 
@@ -84,15 +201,43 @@ beats, records, source keys, visual briefs, and available asset hints to that
 story's LLM call. Paragraph/entity inference is used only for an intentionally
 unstructured `script_text` test input.
 
-The planner should not treat beats as one-scene-per-beat instructions. Beats
-are semantic timing anchors; one scene may cover adjacent beats when they form
-one understandable visual idea. Scene payloads retain every covered `beat_id`
-and exact timing for internal reveals. A beat longer than the render cap is
-split into balanced visual slices without losing its identity. Title
+`scene_policy.hard_cap_tolerance_seconds` absorbs only subsecond duration
+rounding at a configured hard cap. It is shared by planning and render
+preflight and does not permit genuinely overlong scenes.
+
+The production `one_scene_per_script_unit` assignment mode gives the LLM one
+exact visual slot for each canonical spoken beat. It prevents the model from
+authoring interval arithmetic, combining unrelated beats, or shifting a later
+visual onto earlier narration. When one aligned audio unit exceeds the render
+cap, the contract exposes multiple slots for that same unit and the story
+planner must return distinct semantic treatments. The stitcher divides the
+authoritative audio time across those planned treatments; it never copies one
+screenshot, logo, chart, or text payload into several timing slices or treats
+a changed animation label as a new idea. Intro/closing continuity slices use
+different narration excerpts rather than duplicated full-beat text. Title
 interstitials are protected from compaction and cannot merge into neighboring
 sections.
 
-### 2. Media Discovery
+Adjacent scenes with an identical render kind and effective payload fail plan
+validation. This is an objective duplicate-spec check, not a code-based
+creative-quality score. Text-like mix targets remain visible warnings and LLM
+planning guidance rather than deterministic editorial approval gates.
+
+Numeric scene families are literal. `data_counter_scene` values must contain a
+number or measured quantity and must name exact `evidence_truth_ids` from the
+active story. Native and manual ChatGPT plan paths validate nested renderer
+shape and evidence-ID ownership. They do not compare displayed labels, values,
+quotes, or punctuation against source strings; semantic accuracy remains the
+planner/editor and human review responsibility. Code does not decide whether
+the graphic is the best editorial treatment and never invents missing metrics
+or relationships to make a payload renderable.
+
+Manual ChatGPT plans may author per-beat `visual_action` and `emphasis_words`.
+The parser preserves those fields while replacing only beat text and timing with
+the authoritative voiceover alignment. Missing creative beat guidance receives
+the neutral action `hold_scene`; it is never guessed from narration keywords.
+
+### 3. Media Discovery
 
 Entrypoint:
 
@@ -102,14 +247,48 @@ from src.pipeline.visuals.media_discovery import run
 
 Purpose:
 
-- search only for scenes that request contextual images or b-roll
-- rank candidates using query/title/tag fit, aspect ratio, resolution, clip
-  duration, provider rank, and license metadata
+- copy exact catalog-backed source images requested by the planner
+- optionally search only for unresolved scenes that explicitly request
+  contextual images or b-roll
+- use lexical/provider signals only to build a bounded candidate pool
+- use structured vision output to verify narration fit, visible evidence, and
+  exact named-identity requirements before selecting an asset
+- sample long B-roll videos into bounded windows and use a second structured
+  vision decision to select one supplied window rather than a random offset
 - download the selected image or prepare only the short muted video clip needed
   by the scene
 - preserve candidate metadata and attribution in `data.visual_media_package`
 - explicitly convert an unresolved media request to the configured fallback
   scene instead of hiding a missing file
+
+The active production profile uses `trusted_catalog_only: true`, disables the
+paid semantic verifier, and permits no generic fallback. A scene without a
+usable catalog ID remains unresolved and returns a clear replan requirement;
+keyword overlap never becomes the final semantic selector. This is the current
+cost-conscious path.
+
+When external research is deliberately enabled, semantic verifier failure
+rejects the candidate by default. Any query fallback
+or start-at-zero clip fallback must be explicitly enabled in config and remains
+visible in the returned package. Episode fallback use is capped. A fallback
+may reuse an exact narration-derived phrase, but it must remain unresolved when
+no such phrase exists; production code never inserts generic copy merely to
+make the renderer succeed.
+
+Timeline splitting can produce multiple short image scenes from one script
+beat. When `reuse_equivalent_image_requests` is enabled, media discovery hashes
+the normalized story, beat, query, and visible constraints, searches and
+verifies that logical request once, and exposes the selected asset separately
+for every scene that uses it. The fallback budget is likewise charged once per
+unique media request rather than once per split clip. Configure that budget with
+`max_fallback_requests`; historical frozen profiles using
+`max_fallback_scenes` remain supported. B-roll clips remain
+scene-specific because their extracted duration and start window can differ.
+
+The vision decision field `contains_forbidden_visual` is literal: it is true
+only when the candidate visibly contains an item from `must_avoid`. Exact named
+people, products, interfaces, and events cannot be satisfied by a different
+representative identity.
 
 Wikimedia Commons images are enabled by default and require no API key. Pexels
 and Pixabay adapters are available but disabled until their free API keys are
@@ -119,7 +298,7 @@ time. Do not put API keys in YAML. Wikimedia video support exists for targeted
 experiments, but is off by default because search relevance and large remote
 WebM delivery are not consistent enough for routine full runs.
 
-### 3. Asset Resolver
+### 4. Asset Resolver
 
 Entrypoint:
 
@@ -130,7 +309,11 @@ from src.pipeline.visuals.asset_resolver import run
 Purpose:
 
 - resolve screenshot assets for source-backed scenes
-- resolve logo assets for logo reveal scenes
+- resolve logo assets for logo reveal scenes and report their actual quality
+  class (`verified_logo`, `simple_icon`, `domain_favicon`, or
+  `text_identity_fallback`)
+- report source target-text misses instead of presenting an unrelated page
+  viewport as successful proof
 - validate and attach downloaded contextual image/b-roll assets
 - pass through graphic-only scenes that do not require assets
 - return `data.visual_asset_manifest`
@@ -143,6 +326,9 @@ quote_or_claim_highlight_scene   -> source_screenshot
 context_image_scene              -> context_image
 broll_video_scene                -> broll_video
 logo_reveal_scene                -> logo_asset
+editorial_text_scene             -> none
+simple_explainer_scene           -> none
+story_transition_scene           -> none
 kinetic_type_scene               -> none
 bullet_build_scene               -> none
 entity_compare_scene             -> none
@@ -169,7 +355,18 @@ transition_stinger_scene         -> none
 If a new scene type is added, update the planner contracts, asset resolver
 classification, Remotion render types, and workbench config together.
 
-### 4. Render
+Text-identity fallbacks are explicitly not verified logos. They preserve and
+fit the complete entity name instead of clipping it or substituting an invented
+brand label. The entity name appears as the identity badge while the companion
+idea remains the visual headline, avoiding repeated fake branding. Production
+profiles may disable them or cap their use.
+
+Source screenshot capture can apply a profile-driven focus zoom and target
+highlight after locating a semantic headline/body candidate. Large page
+containers are not accepted merely because they contain the requested words;
+the capture prefers readable headings, paragraphs, and list items.
+
+### 5. Render
 
 Entrypoint:
 
@@ -180,10 +377,20 @@ from src.pipeline.visuals.render import run
 Purpose:
 
 - validate scene durations before rendering
+- treat `scene_policy.max_scene_seconds` as the pacing target and
+  `scene_policy.hard_max_scene_seconds` as the renderer safety limit, so small
+  voiceover timing variation does not trigger unnecessary replanning
+- validate every nested scene payload again before spending render time
 - build the Remotion project once per render run
-- render independent MP4 scene clips with bounded parallel workers
+- render independent MP4 scene clips with bounded persistent-browser workers
+- render scene clips without audio; the authoritative voiceover is attached once
+  during assembly so AAC padding cannot accumulate at scene boundaries
 - cap Remotion frame concurrency inside each scene to avoid CPU/RAM overload
+- restore unchanged clips from a persistent content-addressed cache
+- support scene/story-targeted preview renders without making them assembly-ready
 - retry failed or missing scene outputs serially and preserve attempt logs
+- emit start, cache, batch-progress, retry, and completion events through the
+  lightweight runtime logger when called by orchestration
 - return `data.visual_render_package`
 
 The Remotion source lives under:
@@ -192,25 +399,63 @@ The Remotion source lives under:
 src/pipeline/visuals/remotion_engine/
 ```
 
+All scene components author against a stable 1920x1080 reference canvas. The
+scene root scales and centers that canvas to the configured 16:9 render preset,
+so 720p tests, 1080p production, 2K, and 4K preserve identical composition and
+safe areas. Individual scenes must not position content against the requested
+pixel dimensions directly.
+
 Run `npm install` there on a fresh machine before rendering.
 
-Render concurrency is config-driven:
+Render behavior is config-driven:
 
 ```text
+render_mode           preview or final
+selected_scene_ids    optional focused rerender selection
+selected_story_ids    optional focused rerender selection
 worker_count          scene clips rendered at the same time
 frame_concurrency     Remotion browser tabs used inside each scene render
 max_render_attempts   bounded attempts per scene; retries run serially
+reuse_cached_scenes   restore unchanged clips from the persistent cache
 ```
 
+The renderer bundles Remotion once. With batch rendering enabled, each bounded
+worker keeps one browser alive and renders several scene jobs through it. Ten or
+fifteen workers are not automatically faster: Chromium, ffmpeg, memory
+bandwidth, and encoders become the bottleneck. The profile caps scene workers
+and frame concurrency to improve throughput without making failures more
+likely.
+
+Cache identity includes the scene payload, render settings, resolved asset
+content, and Remotion engine source. A prompt, asset, scene, or renderer change
+therefore invalidates only affected clips. Preview mode uses 720p,
+bitrate-based hardware-friendly encoding, and a fast path; final mode retains
+CRF-based quality and renders the complete scene manifest at delivery quality.
+Focused previews intentionally set `ready_for_video_assembly=false`.
+
+The production notebook keeps preview and final artifacts separate:
+
+```text
+visuals/render_preview/    720p preview clips
+visuals/assembly_preview/  optional full preview with voiceover
+visuals/review_preview/    preview contact sheet
+visuals/render/            complete delivery-quality clips
+visuals/assembly/          canonical final video
+visuals/review/            canonical publish-review artifacts
+```
+
+Preview mode never creates a publish handoff. This prevents a fast 720p pass or
+focused scene test from replacing or masquerading as the delivery render.
+
 Do not start two full render cells at the same time. One render run already
-uses multiple scene workers and browser tabs; overlapping runs compete for the
-same CPU, memory, and encoders and can be slower than one bounded run.
+uses multiple browser workers and ffmpeg encoders; overlapping runs compete for
+the same CPU and memory and can be slower than one bounded run.
 
 The production profile keeps 2K resolution and CRF-based quality while using
 the `veryfast` x264 preset. This favors shorter local render time and somewhat
 larger clips instead of reducing resolution.
 
-### 5. Assembly
+### 6. Assembly
 
 Entrypoint:
 
@@ -222,6 +467,7 @@ Purpose:
 
 - verify script, voiceover, visual-plan, and render fingerprints
 - probe each rendered clip and the WAV before invoking ffmpeg
+- losslessly remove audio from legacy scene clips before concatenation
 - require planned scene IDs/order and real visual duration to match the audio
 - concatenate rendered scene clips
 - attach the selected voiceover WAV
@@ -232,6 +478,25 @@ Purpose:
 Assembly currently uses rendered scene clips plus ffmpeg. A later milestone may
 move final assembly into one full Remotion composition for better transitions,
 captions, and sync control.
+
+### 7. Review
+
+Entrypoint:
+
+```python
+from src.pipeline.visuals.review import run
+```
+
+Purpose:
+
+- verify the selected final-video artifact and its provenance
+- sample configured frames across the complete episode
+- write a contact sheet and review package
+- make human visual review an explicit publish prerequisite
+
+The contact sheet is a navigation aid, not an automatic creative approval.
+Inspect the final video with audio for semantic fit, legibility, repetition,
+timing, and synchronization.
 
 ## Scene Types
 
@@ -246,6 +511,13 @@ Current renderable scene types:
 - `broll_video_scene`: show a muted representative real-world clip while the
   narration remains the authoritative audio.
 - `logo_reveal_scene`: show one or more company/product/model logos.
+- `editorial_text_scene`: punctuate one concise hook, implication, or punchline
+  with expressive serif typography, whitespace, and one restrained accent;
+  never place it inside a decorative card.
+- `simple_explainer_scene`: explain one small relationship or process using two
+  to four large labels and restrained connectors.
+- `story_transition_scene`: introduce each selected story with its complete
+  title in a deterministic, voiceover-aligned editorial transition.
 - `kinetic_type_scene`: show short high-impact phrases or transitions.
 - `bullet_build_scene`: reveal multiple narration points one by one.
 - `entity_compare_scene`: compare two or more entities, products, or models.
@@ -285,12 +557,11 @@ Current renderable scene types:
 - `transition_stinger_scene`: create a short motion bumper between stories or
   dense visual sections without turning it into a title card.
 
-Text-like scene types should support the video, not dominate it. Use
-`kinetic_type_scene`, `bullet_build_scene`, and `recap_sequence_scene` for
-punchlines, transitions, and short summaries. Prefer source, logo, data,
-trend, chart, ranking, delta, map, flow, process-zoom, browser walkthrough,
-decision-tree, matrix, document-stack, radar, interface-transform, contextual
-image, or b-roll visuals when the narration gives enough structure.
+Text-like scene types should support the video, not dominate it. In the default
+profile, `editorial_text_scene` is a short punctuation device between source,
+image, and identity scenes. Specialist profiles may additionally enable
+kinetic type, charts, maps, flows, matrices, or other renderers when the active
+narration and source material genuinely call for them.
 
 Scene payloads may include:
 
@@ -337,14 +608,25 @@ src/pipeline/config/workbench.yaml
 
 Relevant config sections:
 
-- `visuals.planner`: LLM provider/model, scene policy, visual capabilities.
+- `visuals.asset_catalog`: trusted source-page/image/video collection,
+  structural duplicate filtering, logo hints, fetch limits, anchor policy, and
+  contact-sheet settings.
+- `visuals.planner`: LLM provider/model, scene policy, visual capabilities, and
+  the text-supporting visual-mix target.
 - `visuals.media_discovery`: provider enablement, environment-key names,
-  candidate/download limits, minimum quality, video clipping, and explicit
-  fallback behavior.
+  candidate/download limits, semantic verifier and clip-selector models,
+  identity confidence, video clipping, and explicit fallback behavior.
 - `visuals.asset_resolver`: browser, screenshot, logo, and output settings.
 - `visuals.render`: Remotion render settings, quality preset, encoder options,
   worker count, and per-scene caps.
 - `visuals.assembly`: final-video mux/assembly settings.
+- `visuals.review`: contact-sheet sampling and output settings.
+
+`visuals.render.active_mode` selects a named entry from
+`visuals.render.profiles` in the production notebook. Use `preview` while
+iterating and `final` only after the scene plan and representative clips pass
+review. The module itself still receives a fully resolved render config and
+does not read the YAML.
 
 When `visuals.render.quality_preset` is `1080p`, `2k`, or `4k`, the preset is
 authoritative for render dimensions and baseline encoder quality. Use
@@ -362,10 +644,18 @@ Logo scenes resolve assets in this order:
 
 - local logo override from `visuals.asset_resolver.logos.local_logo_dir`
 - Simple Icons aliases for common brands/products
-- generated text-logo fallback
+- domain favicon fallback
+- explicit text-identity fallback when enabled
 
-The fallback is not an official brand logo. Add local overrides for brands that
-must look exact or when Simple Icons does not contain the right mark.
+Favicon and text fallbacks are not official verified brand logos. Their quality
+class travels with the asset. The production profile disables favicon lookup so
+a publication favicon cannot impersonate the narrated company; unresolved
+entities use an explicitly typographic identity treatment. Add local overrides
+when identity must be exact.
+
+Source-proof scenes use `target_miss_policy: failed` in production. Capturing a
+page is not enough when the requested headline, quote, or body target was not
+located.
 
 ## Notebook Usage
 
@@ -377,21 +667,35 @@ notebooks/production/visual_production.ipynb
 
 Visual sections:
 
-- `6. Plan Motion Visual Scenes`
-- `7. Discover Media + Resolve Visual Assets`
-- `8. Render Visual Scene Clips`
-- `9. Assemble Final Video With Voiceover`
+- `1. Build Trusted Asset Catalog And Load Or Generate Visual Plan`
+- `2. Discover Media And Resolve Assets`
+- `3. Render Scene Clips`
+- `4. Assemble Final Video With Voiceover`
+- `5. Build Visual Contact Sheet`
+- `6. Build Manual Publish Review Handoff`
 
-Optional manual ChatGPT visual planning can replace section 6:
+Optional manual ChatGPT visual planning can replace the generated plan in
+section 1:
 
+- build the same trusted asset catalog used by the native planner
 - export a `visual_scene_plan` handoff with `handoffs.chatgpt_exporter`
 - paste the response into a text file
-- parse it with `handoffs.chatgpt_visual_plan_parser`
+- parse it with `handoffs.chatgpt_visual_plan_parser`, which verifies every
+  referenced asset ID and story owner
 - continue from asset resolution using the parsed result
+
+If the parser returns `status="needs_repair"`, repair the semantic ownership or
+timeline problem and parse again. Do not treat a substantially auto-repaired
+manual plan as production-ready.
 
 If section 7 fails with unsupported render kinds, the planner and resolver are
 out of sync. Add the scene type to the resolver classification and render
 contracts instead of removing the scene from the plan.
+
+For fast iteration, keep `VISUAL_RENDER_MODE = "preview"` and optionally set
+`VISUAL_SCENE_IDS` or `VISUAL_STORY_IDS` near the top of the notebook. Clear
+both selections and switch to `final` before assembly. A second unchanged
+preview should report cache hits rather than re-rendering every clip.
 
 For renderer and scene-module development, use:
 

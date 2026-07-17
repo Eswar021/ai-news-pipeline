@@ -1,0 +1,6 @@
+Compare current_bookends with candidate_bookends against episode direction,
+story sequence, review issues, channel voice, and quality criteria.
+
+Choose keep_current unless the candidate is clearly stronger as one episode.
+List concrete material improvements and regressions. If any material regression
+exists, choose keep_current. Do not author alternative wording.

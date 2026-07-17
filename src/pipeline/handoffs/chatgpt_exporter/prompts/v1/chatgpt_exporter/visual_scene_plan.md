@@ -10,16 +10,21 @@ Your job:
 - Group adjacent beats into semantic visual scenes: one scene should usually
   cover one complete visual idea, normally about 6-10 seconds and never longer
   than the configured max scene duration.
+- Cover every aligned beat order exactly once in the episode timeline, except
+  that the parser owns each story's first title-anchor beat. Never skip one beat
+  and assign a later beat's visual idea to the skipped order.
 - Put exact beat-level timing inside `payload.beats` so the renderer can reveal
   sub-points in sync while the scene stays visually coherent.
 - Use only the selected stories, records, URLs, source_record_key values, and
   visual capabilities in the payload.
 - Return a JSON scene plan that our asset resolver and Remotion renderer can
   consume.
-- Prefer source-backed scenes, logo moments, data counters, trend lines,
-  real contextual images, representative b-roll, ecosystem maps, architecture
-  flows, transition stingers, and short kinetic type over generic text-heavy
-  visuals.
+- Treat `visual_context.visual_capabilities` as the complete and authoritative
+  menu for this run. Prefer its richer source, media, explanatory-graphic, and
+  motion capabilities over generic text-heavy visuals.
+- Treat `asset_catalog.assets` as the authoritative real-world media available
+  for this run. Use at least one relevant available catalog asset in every
+  selected story and copy its exact `asset_id` into the scene payload.
 
 Do not:
 - write or revise the narration
@@ -39,40 +44,39 @@ Do not:
   each story's first aligned transition beat
 
 Planning guidance:
-- Use `source_article_scene` or `quote_or_claim_highlight_scene` when the
-  narration cites a source, reported number, caveat, launch claim, or
-  source-specific detail.
-- Use `logo_reveal_scene` when introducing a company, product, model, platform,
-  or lab.
-- Use `context_image_scene` when a real photograph can directly show the
-  concrete person, place, device, lab, office, infrastructure, or physical
-  subject being discussed. Provide two or three `search_queries`, plus
-  `must_show`, `must_avoid`, `shot_style`, and optional short overlay fields.
-- Use `broll_video_scene` for a short representative clip of a concrete action,
-  environment, device, workflow, or infrastructure moment. Never imply generic
-  b-roll depicts the exact reported event. Provide search intent and constraints,
-  not an asset URL.
-- Use `data_counter_scene` for concrete numbers such as funding, valuation,
-  price, dates, percentages, model sizes, speedups, user counts, employee
-  counts, or duration.
-- Use `trend_line_scene` only for conceptual momentum or pressure, not fake
-  precise market data.
-- Use `ecosystem_map_scene` when relationships between companies/products/users
-  matter.
-- Use `architecture_flow_scene` when the narration explains how a system,
-  pipeline, agent workflow, training process, API, SDK, cloud, or deployment
-  works.
-- Use `transition_stinger_scene` for fast story-to-story pivots or section
-  changes.
-- Use `kinetic_type_scene`, `bullet_build_scene`, or `recap_sequence_scene`
-  only when the visual should emphasize short spoken words, a compact list, or
-  the final roundup recap.
+- Never use a render kind absent from `visual_context.visual_capabilities`, even
+  if you remember it from another run or see it in an example elsewhere.
+- For every available capability, read its `best_for`, `avoid_when`,
+  `required_payload_fields`, and `render_notes`; choose the richest capability
+  that directly explains the active narration.
+- Prefer available source or discovery-media capabilities for concrete people,
+  places, devices, environments, and source-specific details.
+- Prefer available explanatory graphics for supported numbers, relationships,
+  comparisons, workflows, ordered choices, evidence stacks, and before/after
+  behavior.
+- A catalog `source_page` may drive a source article, quote highlight, or
+  browser walkthrough. A catalog `source_image` may drive a context image. A
+  catalog `logo` may drive a logo reveal. Never use an asset from another story
+  and never treat an unresolved asset brief as available.
+- Use available text-oriented capabilities only for short spoken emphasis,
+  compact lists, transitions, or cases where no richer available capability is
+  appropriate.
 - Prefer fewer, stronger scenes over many tiny scenes. A source, diagram,
   counter, matrix, or flow scene can cover several neighboring narration chunks
   if the payload includes timed beats.
 - Every non-source visual must be specific to the spoken idea. For example,
   if the narration says an overlay converts A2A messages into legacy API calls,
   the flow labels should say that exact mechanism, not generic "Input/System/Outcome".
+- For every data, trend, comparison, map, flow, process, decision, matrix,
+  timeline, document, radar, or interface scene, include selected-story
+  `evidence_record_keys` and concise `evidence_text` explaining exactly what
+  supports that graphic. Never invent values or relationships to complete a
+  visual. If the evidence is incomplete, use a source, contextual-media, logo,
+  or exact-narration kinetic scene instead.
+- Numeric graphics must also include `evidence_truth_ids` copied from the
+  assigned story's `story_truth_indexes`. Display only exact values carried by
+  those metric truth items. A vague phrase such as "a few years" is not
+  permission to invent a specific number.
 
 Return exactly this top-level section format:
 
@@ -108,6 +112,10 @@ Each `scene_timeline` item must include:
 - `render_kind`: one allowed render kind from `visual_capabilities`
 - `script_excerpt`: the spoken script covered by this scene
 - `visual_intent`: short explanation of why this visual helps
+- `evidence_record_keys`: selected-story record keys supporting semantic graphics; otherwise an empty list
+- `evidence_truth_ids`: exact selected-story truth IDs supporting displayed numbers; otherwise an empty list
+- `evidence_text`: concise support for semantic graphics; otherwise an empty string
+- `grounding_basis`: `selected_record`, `script_beat`, `editorial_transition`, or `context_media`
 - `payload`: render-kind-specific object
 - `covered_unit_orders`: authoritative aligned beat order numbers covered by this scene
 
@@ -116,9 +124,10 @@ start/end seconds from those units and rejects unknown values, so do not guess,
 stretch, or interpolate timing.
 
 For source-backed scene payloads, use only the exact `source_record_key` and
-`url` values from the payload. For contextual image and b-roll payloads, do not
-provide URLs; the media discovery module will search approved providers. For
-no-asset graphics, keep payload text short and readable.
+`url` values from the payload and include the matching catalog `asset_id`.
+In trusted-catalog production mode, use context images only with a supplied
+`source_image` asset_id; do not request generic stock imagery. For no-asset
+graphics, keep payload text short and readable.
 
 For every scene payload, include `beats` when voiceover chunks are available:
 

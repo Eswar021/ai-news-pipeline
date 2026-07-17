@@ -10,10 +10,12 @@ from src.pipeline.apps.metadata_finalizer import run as finalize_metadata
 from src.pipeline.apps.script_generation.formats.roundup.contract import ScriptGenerationResponse
 from src.pipeline.apps.video_packaging.contract import VideoPackagingResponse
 from src.pipeline.contracts import (
+    artifact_fingerprint,
     build_artifact_provenance,
     file_sha256,
     final_video_artifact_payload,
     validate_script_provenance,
+    visual_plan_artifact_payload,
     voiceover_artifact_payload,
 )
 from src.pipeline.handoffs.chatgpt_exporter import run as export_chatgpt_handoff
@@ -23,12 +25,14 @@ from src.pipeline.orchestration import (
     create_run_context,
     load_run_context,
     module_output_dir,
+    render_config_templates,
     resolve_script_result,
     resolve_voiceover_package,
 )
 from src.pipeline.visuals.planner.contract import VisualPlannerResponse
 from src.pipeline.visuals.planner import app as visual_planner_app
 from src.pipeline.visuals.planner.retime import retime_visual_plan_result
+from src.pipeline.visuals.asset_catalog import run as build_visual_asset_catalog
 
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "media_roundup_reference"
@@ -111,11 +115,28 @@ def test_reference_envelopes_match_production_contracts() -> None:
 
 def test_visual_planner_passes_provenance_to_plan_builder_not_episode_director(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     profile = yaml.safe_load(
         (Path(__file__).parents[1] / "src/pipeline/config/workbench.yaml").read_text(encoding="utf-8")
     )["profiles"]["daily_48h_all_sources"]
     captured: dict = {}
+    catalog_config = {
+        **profile["visuals"]["asset_catalog"],
+        "output_dir": str(tmp_path / "catalog"),
+        "page_metadata": {**profile["visuals"]["asset_catalog"]["page_metadata"], "enabled": False},
+        "contact_sheet": {**profile["visuals"]["asset_catalog"]["contact_sheet"], "enabled": False},
+    }
+    asset_catalog = build_visual_asset_catalog(
+        {
+            "run": {"run_id": "fixture_media_roundup_reference"},
+            "config": catalog_config,
+            "input": {
+                "video_packaging": _json("video_packaging_result.json"),
+                "script_generation": _json("script_generation_result.json"),
+            },
+        }
+    )
 
     monkeypatch.setattr(visual_planner_app, "load_prompt_bundle", lambda *args, **kwargs: {})
     monkeypatch.setattr(visual_planner_app, "make_llm", lambda **kwargs: object())
@@ -146,13 +167,21 @@ def test_visual_planner_passes_provenance_to_plan_builder_not_episode_director(
         lambda plan, config: {"passed": True, "errors": [], "warnings": []},
     )
 
+    planner_config = {
+        **profile["visuals"]["planner"],
+        "visual_editor": {
+            **profile["visuals"]["planner"].get("visual_editor", {}),
+            "enabled": False,
+        },
+    }
     result = visual_planner_app.run(
         {
             "run": {"run_id": "fixture_media_roundup_reference"},
-            "config": profile["visuals"]["planner"],
+            "config": planner_config,
             "input": {
                 "video_packaging": _json("video_packaging_result.json"),
                 "script_generation": _json("script_generation_result.json"),
+                "asset_catalog": asset_catalog,
             },
         }
     )
@@ -202,6 +231,34 @@ def test_manual_chatgpt_parser_matches_reference_script() -> None:
         "story",
         "closing",
     ]
+
+
+def test_manual_chatgpt_parser_requires_explicit_production_beats() -> None:
+    response = """CHATGPT_PIPELINE_RESPONSE_V1
+
+[NOTES]
+Fixture with missing audiovisual beats.
+
+[SCRIPT]
+[SCRIPT_SECTIONS_JSON]
+```json
+{"sections": [{"section_id": "section_00_intro", "narration_text": "Hello."}]}
+```
+
+[METADATA]
+title_options: []
+"""
+
+    with pytest.raises(ValueError, match="missing explicit beats"):
+        parse_chatgpt_script(
+            {
+                "run": {"run_id": "fixture_media_roundup_reference"},
+                "input": {
+                    "response_text": response,
+                    "video_packaging": _json("video_packaging_result.json"),
+                },
+            }
+        )
 
 
 def test_script_provenance_rejects_changed_spoken_text() -> None:
@@ -303,14 +360,14 @@ def test_metadata_finalizer_uses_actual_voiceover_section_starts() -> None:
 def test_manual_chatgpt_parser_normalizes_packet_segment_markers() -> None:
     video = _json("video_packaging_result.json")
     response = (FIXTURE_DIR / "chatgpt_response.txt").read_text(encoding="utf-8")
-    response = response.replace("[[SECTION:section_00_intro]]", "[[SECTION:intro]]")
-    response = response.replace("[[SECTION:section_99_closing]]", "[[SECTION:closing]]")
+    response = response.replace('"section_id": "section_00_intro"', '"section_id": "intro"')
+    response = response.replace('"section_id": "section_99_closing"', '"section_id": "closing"')
     for story in video["data"]["video_packet"]["stories"]:
         segment = story["video_segment"]
         canonical_id = f"section_{segment['segment_order']:02d}_{story['story_id']}"
         response = response.replace(
-            f"[[SECTION:{canonical_id}]]",
-            f"[[SECTION:{segment['segment_id']}]]",
+            f'"section_id": "{canonical_id}"',
+            f'"section_id": "{segment["segment_id"]}"',
         )
 
     result = parse_chatgpt_script(
@@ -333,7 +390,7 @@ def test_manual_chatgpt_parser_normalizes_packet_segment_markers() -> None:
         "section_03_story_render",
         "section_99_closing",
     ]
-    assert package["manual_handoff"]["section_parse_mode"] == "inline_markers"
+    assert package["manual_handoff"]["section_parse_mode"] == "structured_json"
     assert "Normalized 5 packet script markers" in result["summary"]["checks"]["warnings"][0]
 
 
@@ -393,6 +450,30 @@ def test_run_context_freezes_profile_and_uses_run_first_layout(tmp_path: Path) -
     assert resumed["profile_config"]["feature"]["enabled"] is True
 
 
+def test_config_template_renderer_preserves_descriptive_schema_braces() -> None:
+    rendered = render_config_templates(
+        {
+            "cache": "{CACHE_ROOT}/models/{RUN_ID}",
+            "render_notes": "metrics use {label, value, unit?, context?}",
+            "nested": ["{PROJECT_ROOT}/src", "{from, to, label}"],
+        },
+        {
+            "PROJECT_ROOT": "/repo",
+            "CACHE_ROOT": "/cache",
+            "RUN_ID": "run_fixture",
+        },
+    )
+
+    assert rendered["cache"] == "/cache/models/run_fixture"
+    assert rendered["render_notes"] == "metrics use {label, value, unit?, context?}"
+    assert rendered["nested"] == ["/repo/src", "{from, to, label}"]
+
+
+def test_config_template_renderer_fails_for_missing_supported_value() -> None:
+    with pytest.raises(KeyError, match="RUN_ID"):
+        render_config_templates("{RUN_ID}/artifact", {"PROJECT_ROOT": "/repo"})
+
+
 def test_script_selection_never_guesses_when_both_sources_exist(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     app_path = run_dir / "script_generation" / "script_generation_result.json"
@@ -445,6 +526,66 @@ def test_chatgpt_exporter_reads_current_video_packet_shape() -> None:
     assert "parser treats section, body, connector" not in payload
 
 
+def test_chatgpt_visual_handoff_hides_disabled_capabilities() -> None:
+    result = export_chatgpt_handoff(
+        {
+            "run": {"run_id": "fixture_media_roundup_reference"},
+            "config": {"profile": "visual_scene_plan", "prompt_version": "v1"},
+            "input": {
+                "manifest": {
+                    "run_id": "fixture_media_roundup_reference",
+                    "run_profile": "fixture",
+                    "profile_config": {},
+                },
+                "artifacts": {
+                    "visual_scene_plan": {
+                        "package_type": "visual_scene_planning_handoff",
+                        "script": {"word_count": 3},
+                        "video_packet": {"stories": []},
+                        "voiceover_timing": {"duration_seconds": 1.0, "chunks": []},
+                        "asset_catalog": {
+                            "assets": [
+                                {
+                                    "asset_id": "asset_source_page_fixture",
+                                    "asset_type": "source_page",
+                                    "story_id": "story_fixture",
+                                    "status": "available",
+                                }
+                            ]
+                        },
+                        "visual_context": {
+                            "scene_policy": {
+                                "max_scene_seconds": 14.0,
+                                "allowed_render_kinds": ["context_image_scene"],
+                            },
+                            "visual_capabilities": {
+                                "context_image_scene": {"description": "enabled"},
+                                "broll_video_scene": {"description": "disabled"},
+                            },
+                        },
+                    }
+                },
+                "summaries": {},
+            },
+        }
+    )
+
+    assert result["status"] == "ok"
+    payload = next(
+        item["content"]
+        for item in result["data"]["handoff_package"]["files"]
+        if item["filename"] == "02_payload.md"
+    )
+    assert '"context_image_scene"' in payload
+    assert '"broll_video_scene"' not in payload
+    instructions = next(
+        item["content"]
+        for item in result["data"]["handoff_package"]["files"]
+        if item["filename"] == "01_instructions.md"
+    )
+    assert "broll_video_scene" not in instructions
+
+
 def test_publish_handoff_uses_current_content_contracts() -> None:
     script_result = _json("script_generation_result.json")
     script_provenance = script_result["data"]["script_package"]["provenance"]
@@ -490,6 +631,8 @@ def test_publish_handoff_uses_current_content_contracts() -> None:
         "scene_ids": [],
         "final_video_sha256": "",
         "audio_encoding": {},
+        "render_mode": "final",
+        "render_settings": {"quality_preset": "1080p", "width": 1920, "height": 1080, "fps": 30},
     }
     final_video_provenance = build_artifact_provenance(
         artifact_type="final_video",
@@ -502,48 +645,79 @@ def test_publish_handoff_uses_current_content_contracts() -> None:
         payload=final_video_artifact_payload(final_video_package),
     )
     final_video_package["provenance"] = final_video_provenance
-    result = build_publish_handoff(
-        {
-            "run": {"run_id": "fixture_media_roundup_reference"},
-            "config": {"require_ready_inputs": True},
-            "input": {
-                "run_context": {"run_id": "fixture_media_roundup_reference", "run_profile": "fixture"},
-                "video_packaging": _json("video_packaging_result.json"),
-                "script_generation": script_result,
-                "metadata_finalizer": {
-                    "status": "ok",
-                    "data": {
-                        "run_id": "fixture_media_roundup_reference",
-                        "metadata_package": {
-                            "package_stage": "final",
-                            "provenance": metadata_provenance,
-                            "youtube_metadata": youtube_metadata,
-                        }
+    publish_input = {
+        "run": {"run_id": "fixture_media_roundup_reference"},
+        "config": {"require_ready_inputs": True},
+        "input": {
+            "run_context": {
+                "run_id": "fixture_media_roundup_reference",
+                "run_profile": "fixture",
+            },
+            "video_packaging": _json("video_packaging_result.json"),
+            "script_generation": script_result,
+            "metadata_finalizer": {
+                "status": "ok",
+                "data": {
+                    "run_id": "fixture_media_roundup_reference",
+                    "metadata_package": {
+                        "package_stage": "final",
+                        "provenance": metadata_provenance,
+                        "youtube_metadata": youtube_metadata,
                     },
-                },
-                "voiceover": {
-                    "status": "ok",
-                    "data": {
-                        "run_id": "fixture_media_roundup_reference",
-                        "voiceover_package": voiceover_package,
-                    },
-                    "summary": {"audio_path": "fixture.wav"},
-                },
-                "video_assembly": {
-                    "status": "ok",
-                    "data": {
-                        "run_id": "fixture_media_roundup_reference",
-                    "final_video_package": final_video_package,
-                    },
-                    "summary": {"final_video_path": "fixture.mp4"},
                 },
             },
-        }
-    )
+            "voiceover": {
+                "status": "ok",
+                "data": {
+                    "run_id": "fixture_media_roundup_reference",
+                    "voiceover_package": voiceover_package,
+                },
+                "summary": {"audio_path": "fixture.wav"},
+            },
+            "video_assembly": {
+                "status": "ok",
+                "data": {
+                    "run_id": "fixture_media_roundup_reference",
+                    "final_video_package": final_video_package,
+                },
+                "summary": {"final_video_path": "fixture.mp4"},
+            },
+        },
+    }
+    result = build_publish_handoff(publish_input)
 
     assert result["status"] == "ok"
     assert result["handoff"]["ready_for_manual_publish_review"] is True
     assert "Manual Publish Review" in result["data"]["publish_handoff_package"]["files"][0]["content"]
+
+    preview_input = json.loads(json.dumps(publish_input))
+    preview_package = preview_input["input"]["video_assembly"]["data"]["final_video_package"]
+    preview_package["render_mode"] = "preview"
+    preview_package["provenance"] = build_artifact_provenance(
+        artifact_type="final_video",
+        run_id="fixture_media_roundup_reference",
+        parents=final_video_provenance["parent_fingerprints"],
+        payload=final_video_artifact_payload(preview_package),
+    )
+    preview_result = build_publish_handoff(preview_input)
+    assert preview_result["status"] == "failed"
+    assert "requires a final-quality video assembly" in preview_result["summary"]["error"]
+
+
+def test_visual_plan_identity_changes_with_asset_catalog_fingerprint() -> None:
+    plan = {
+        "planning_strategy": "episode_director_plus_per_story",
+        "episode_style": {},
+        "story_sections": [],
+        "scene_timeline": [],
+        "asset_catalog": {
+            "provenance": {"artifact_fingerprint": "sha256:" + "1" * 64},
+        },
+    }
+    first = artifact_fingerprint(visual_plan_artifact_payload(plan))
+    plan["asset_catalog"]["provenance"]["artifact_fingerprint"] = "sha256:" + "2" * 64
+    second = artifact_fingerprint(visual_plan_artifact_payload(plan))
+    assert first != second
 
 
 def test_committed_notebooks_are_clean_and_canonical() -> None:

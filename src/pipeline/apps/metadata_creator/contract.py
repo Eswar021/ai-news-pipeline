@@ -48,6 +48,8 @@ class MetadataPolicy(BaseModel):
     thumbnail_text_option_count: int = DEFAULT_THUMBNAIL_TEXT_OPTION_COUNT
     max_tags: int = DEFAULT_MAX_TAGS
     include_source_urls: bool = True
+    chapter_title_max_chars: int = 64
+    blocked_tags: list[str] = Field(default_factory=list)
 
     @field_validator("title_option_count")
     @classmethod
@@ -69,6 +71,24 @@ class MetadataPolicy(BaseModel):
         if value < 1 or value > 50:
             raise ValueError("metadata_policy.max_tags must be between 1 and 50")
         return value
+
+    @field_validator("chapter_title_max_chars")
+    @classmethod
+    def chapter_title_limit_must_be_valid(cls, value: int) -> int:
+        if value < 24 or value > 100:
+            raise ValueError("metadata_policy.chapter_title_max_chars must be between 24 and 100")
+        return value
+
+    @field_validator("blocked_tags")
+    @classmethod
+    def policy_lists_must_contain_strings(cls, value: list[str]) -> list[str]:
+        return list(
+            dict.fromkeys(
+                item.strip().casefold()
+                for item in value
+                if isinstance(item, str) and item.strip()
+            )
+        )
 
 
 class MemoryContext(BaseModel):

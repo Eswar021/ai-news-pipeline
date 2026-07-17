@@ -61,6 +61,16 @@ class SourceScreenshotConfig(BaseModel):
     capture_mode: CaptureMode = "target_text_focus"
     save_full_page_debug: bool = False
     save_raw_capture_debug: bool = True
+    target_miss_policy: Literal["allow", "partial", "failed"] = "failed"
+    focus_zoom: float = 1.3
+    highlight_target: bool = True
+
+    @field_validator("focus_zoom")
+    @classmethod
+    def focus_zoom_must_be_readable(cls, value: float) -> float:
+        if value < 1.0 or value > 1.8:
+            raise ValueError("source_screenshots.focus_zoom must be between 1.0 and 1.8")
+        return value
 
 
 class LogoConfig(BaseModel):
@@ -68,8 +78,16 @@ class LogoConfig(BaseModel):
 
     local_logo_dir: str | None = None
     simple_icons_enabled: bool = True
-    favicon_fallback_enabled: bool = True
+    favicon_fallback_enabled: bool = False
     text_fallback_enabled: bool = True
+    favicon_timeout_seconds: int = 10
+
+    @field_validator("favicon_timeout_seconds")
+    @classmethod
+    def favicon_timeout_must_be_positive(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("logos.favicon_timeout_seconds must be positive")
+        return value
 
 
 class AssetResolverConfig(BaseModel):

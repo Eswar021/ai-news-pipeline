@@ -22,6 +22,8 @@ class ChatGPTScriptParserConfig(BaseModel):
 
     diagnostic_words_per_minute: int = 140
     title_card_seconds: float = 2.8
+    allow_unstructured_recovery: bool = False
+    require_explicit_beats: bool = True
 
     @field_validator("diagnostic_words_per_minute")
     @classmethod

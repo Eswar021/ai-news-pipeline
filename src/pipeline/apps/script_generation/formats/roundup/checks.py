@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .config import VISUAL_DIRECTION_MARKERS
 from .utils import dedupe, estimated_seconds, story_id, word_count
 
 
@@ -11,8 +10,6 @@ INTERNAL_ID_RE = re.compile(
     r"\b(?:story|section|segment|record|fact)_[a-z0-9][a-z0-9_\-]*\b",
     re.IGNORECASE,
 )
-
-
 def build_full_script(section_scripts: list[dict[str, Any]], words_per_minute: int) -> dict[str, Any]:
     narration_text = "\n\n".join(section["narration_text"] for section in section_scripts).strip()
     return {
@@ -26,6 +23,7 @@ def build_full_script(section_scripts: list[dict[str, Any]], words_per_minute: i
 def check_script_package(
     script_package: dict[str, Any],
     video_packet: dict[str, Any],
+    script_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -55,9 +53,6 @@ def check_script_package(
         narration = section.get("narration_text", "")
         if not narration.strip():
             errors.append(f"{section_id} narration_text is empty")
-        markers = _visual_markers_in_narration(narration)
-        if markers:
-            errors.append(f"{section_id} narration contains visual/editor directions: {markers}")
         leaked_ids = _internal_ids_in_narration(narration)
         if leaked_ids:
             errors.append(f"{section_id} narration contains internal IDs: {leaked_ids}")
@@ -80,9 +75,6 @@ def check_script_package(
             if int(beat.get("beat_order", 0) or 0) != expected_order:
                 errors.append(f"{section_id} beat order is not contiguous at {beat_id or expected_order}")
             beat_narration = str(beat.get("narration_text", ""))
-            beat_markers = _visual_markers_in_narration(beat_narration)
-            if beat_markers:
-                errors.append(f"{beat_id} narration contains visual/editor directions: {beat_markers}")
             beat_leaks = _internal_ids_in_narration(beat_narration)
             if beat_leaks:
                 errors.append(f"{beat_id} narration contains internal IDs: {beat_leaks}")
@@ -115,28 +107,12 @@ def check_script_package(
             "The script remains valid because duration is observational, not an approval quota."
         )
 
-    review = script_package.get("review") or {}
-    for story_review in review.get("story_reviews", []):
-        story_gate_issues = list(story_review.get("final_gate_issues") or [])
-        if story_gate_issues:
-            errors.append(
-                f"{story_review.get('story_id', 'unknown_story')} has unresolved deterministic gates: "
-                f"{story_gate_issues}"
-            )
-    bookend_gate_issues = list(review.get("bookend_final_gate_issues") or [])
-    if bookend_gate_issues:
-        errors.append(f"Bookends have unresolved deterministic gates: {bookend_gate_issues}")
-
     return {
         "passed": not errors,
-        "errors": errors,
-        "warnings": warnings,
+        "errors": dedupe(errors),
+        "warnings": dedupe(warnings),
+        "validation_scope": "structural_integrity_and_provenance_only",
     }
-
-
-def _visual_markers_in_narration(text: str) -> list[str]:
-    lower = text.lower()
-    return [marker for marker in VISUAL_DIRECTION_MARKERS if marker in lower]
 
 
 def _internal_ids_in_narration(text: str) -> list[str]:

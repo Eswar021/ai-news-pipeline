@@ -1,32 +1,37 @@
 Create visual scenes for exactly one story.
 
-Important rules:
-- Cover the provided story_section script units from start to finish.
-- Every scene must include start_unit_order and end_unit_order values from the provided script_units list.
-- Use the canonical beat_id, beat_type, source_record_keys, and visual_brief on each script unit to keep the visual tied to what is spoken.
-- Do not return raw start/end seconds; aligned voiceover owns timing.
-- Do not plan a duplicate title scene for the first story transition beat; code inserts that scene.
-- Do not create one scene for every script unit by default. Group adjacent units into a semantic visual scene when they form one complete idea.
-- Aim for scenes around 6-10 seconds when the timing allows, while respecting scene_policy.max_scene_seconds.
-- Use each scene's start_unit_order/end_unit_order to say which units it covers; the system will preserve exact unit-level beat timing later.
-- Every scene must use exactly one allowed render_kind from visual_capabilities.
-- Use source_article_scene when the narration is discussing a specific source-backed detail and a selected source URL exists.
-- Use quote_or_claim_highlight_scene when a source-backed claim, number, caveat, reported detail, or caution needs a screenshot plus callout.
-- Use context_image_scene for a concrete real-world subject or environment that is better shown than described. Provide specific search_queries, must_show, and must_avoid fields; do not provide an asset URL.
-- Use broll_video_scene for a concrete action, environment, device, lab, office, or infrastructure moment that benefits from real motion. Treat it as representative b-roll, never exact event footage, and provide search intent rather than a URL.
-- Use logo_reveal_scene when introducing or contrasting companies, products, models, platforms, or labs.
-- Use entity_compare_scene when two or more companies, models, products, or platforms need a quick contrast.
-- Use data_counter_scene when the narration includes concrete numbers, dates, speedups, costs, percentages, valuations, model sizes, or adoption counts.
-- Use trend_line_scene when the narration implies growth, decline, pressure, competition, momentum, acceleration, or a race heating up. Use conceptual trend labels unless exact data points are provided.
-- Use ecosystem_map_scene when the narration explains relationships among companies, products, platforms, developers, users, clouds, or model providers.
-- Use architecture_flow_scene when the narration explains how an SDK, API, model call, app, agent, training system, or integration path works.
-- Use bullet_build_scene only when the narration has multiple points that are not better shown as a data counter, trend line, ecosystem map, architecture flow, source screenshot, or logo/entity visual.
-- Use recap_sequence_scene for closing, recap, or summary beats if those units are provided.
-- Use kinetic_type_scene only for punchy phrases, transitions, or moments where no richer visual is better.
-- Avoid more than two consecutive scenes with the same render_kind.
-- Keep on-screen text short. Prefer phrases over sentences.
-- Prefer non-text graphics over text containers when both could work.
-- Use story-specific labels. Avoid generic placeholders like Input/System/Outcome, Manual process/Old systems/Slow handoffs, watch next, or Best fit.
-- For source_article_scene and quote_or_claim_highlight_scene, use only source_record_key and url values from this story's records.
-- Do not plan visuals for other stories.
-- Do not create fake footage, generic AI stock-image requests, or generic slide/card scenes.
+Coverage and timing:
+- The first story unit is reserved for the deterministic moving title. Do not create a title scene.
+- Return exactly one scene for every unit_coverage_contract.required_scene_slots entry, using its exact start_unit_order and end_unit_order.
+- Do not combine adjacent units. For multiple slots on one overlong unit, prefer distinct supported treatments; repeating one honest treatment is allowed and becomes a timed continuation.
+- Do not return raw seconds. Aligned voiceover owns timing.
+- For every deterministic_timing_splits entry, return exactly its slice_count. The system assigns exact slice seconds and continuation phases.
+- Never exceed scene_policy.hard_max_scene_seconds with a multi-unit range.
+
+Visual choices:
+- visual_capabilities is the complete menu. Use no render kind that is absent from it.
+- Start with verified_asset_catalog.available_assets. Use a relevant source page, source image, or identity asset when it directly shows the active beat.
+- If real_anchor_contract.required is true, make at least one scene consume an exact available assignment asset_id using its compatible render kind.
+- Copy catalog asset IDs exactly, keep them inside their owning story, and follow the selected capability's compatibility rules.
+- Never treat an unresolved asset brief as available and never invent an asset, URL, record key, quote, logo, or product interface.
+- Use editorial text only for one short hook, implication, or punchline when a real asset is not the clearer visual.
+- Use a simple explainer only for a supported two-to-four-item relationship or process. Keep item labels large, short, and story-specific.
+- Do not repeat one catalog asset or render payload in adjacent scenes.
+- Avoid more than two consecutive scenes of the same kind.
+
+Grounding and payloads:
+- Use each unit's canonical beat_id, beat_type, source_record_keys, visual_brief, and eligible truth items.
+- For a source screenshot, prefer the active unit's eligible_source_screenshot_targets and copy its exact truth_id and source_text. Do not highlight a headline while narrating a different body detail.
+- Every scene must include evidence_truth_ids; use an empty list for editorial transitions and non-factual typography.
+- Use evidence_record_keys owned by this story when supplied. An editorial script beat may use grounding_basis "script_beat" with concise evidence_text.
+- Numeric displays are allowed only when the active unit supplies exact eligible_numeric_truth_items. Preserve their literal value and meaning.
+- Do not invent numbers, rankings, trend directions, relationships, workflow steps, comparisons, or dates.
+- Put only capability-specific fields in payload_json as a non-empty valid JSON object encoded as a string. Follow payload_field_contract types, minimum list sizes, and enum values exactly.
+- A simple_explainer_scene requires two to four item objects shaped {label: string, detail?: string} and a non-empty evidence_text explanation grounded in the active script beat.
+- An editorial_text_scene composition must be editorial_center, editorial_left, or editorial_split; accent_words must be list[str], not a comma-separated string.
+
+Art direction:
+- Use clean editorial composition, expressive large type, generous whitespace, strong media crops, and restrained motion.
+- Keep headlines short and never copy a narration paragraph onto the screen.
+- Avoid decorative cards, dashboard panels, tiny labels, generic AI stock imagery, and visuals that do not explain the active narration.
+- Do not plan visuals for any other story.

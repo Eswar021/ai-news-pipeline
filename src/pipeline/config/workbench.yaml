@@ -2,46 +2,155 @@ default_run_profile: daily_48h_all_sources
 
 profiles:
   daily_48h_all_sources:
+    channel:
+      channel_name: ManiVerse - AI
+      content_promise: Engaging AI news roundups that explain what changed, why it matters, and what to watch next.
+      audience: AI-curious professionals
+      allowed_topics:
+        - AI agents
+        - LLM releases
+        - AI coding tools
+        - AI research
+        - AI product launches
+        - AI safety
+      excluded_topics:
+        - crypto
+        - memecoin
+        - sports
+        - celebrity
+
+    orchestration:
+      logging:
+        level: INFO
+        profile: summary
+        file_enabled: true
+        console_enabled: true
+        max_bytes: 5000000
+        backup_count: 3
+        runtime_logger_name: ai_content_creation.runtime
+        dependency_levels:
+          httpx: WARNING
+          httpcore: WARNING
+          openai: WARNING
+          urllib3: WARNING
+
     evidence_prep:
-      max_research_papers: 12
-      filter_policy: {}
+      content_cleaning:
+        enabled: true
+        strip_html_markup: true
+        rules:
+          - name: times_group_article_chrome
+            domain_suffixes:
+              - economictimes.indiatimes.com
+              - timesofindia.indiatimes.com
+            leading_markers:
+              - TIMESOFINDIA.COM
+            trailing_markers:
+              - Add as a Reliable and Trusted News Source
+              - Read More News on
+              - Prime Exclusives
+            remove_phrases:
+              - Listen to this article in summarized format
+              - Listen Loading...
+              - Live Events
+            remove_patterns:
+              - '(?i)\bALSO READ:\s+.{1,180}?(?=\b(?:Who is|How did|What is|Building |Finding |Since then|Despite|The inspiration|She |He |According to)\b)'
+          - name: the_verge_article_chrome
+            domain_suffixes:
+              - theverge.com
+            leading_markers:
+              - Link Share Gift
+            trailing_markers:
+              - Follow topics and authors from this story
+            remove_phrases:
+              - Previous Next
+            remove_patterns:
+              - "(?is)^.*?\\b[A-Z][A-Za-z .’'-]{2,90}\\s+is\\s+(?:the\\s+Verge(?:’s|'s)\\s+)?[^.]{0,140}\\b(?:editor|reporter|writer|reviewer|correspondent)\\b[^.]{0,180}\\.\\s*"
+              - '(?is)^\s*(?:He|She|They|His|Her|Their)\b[^.]{0,300}\.\s*'
+              - '(?i)\b\d+\s*/\s*\d+\b'
+          - name: techcrunch_article_chrome
+            domain_suffixes:
+              - techcrunch.com
+            trailing_markers:
+              - When you purchase through links in our articles
+              - Topics AI
+            remove_patterns:
+              - '(?i)\bImage Credits?:\s*[^.]{0,180}'
+
+    editorial_triage:
+      enabled: true
+      mode: authoritative
+      provider: openai
+      model: gpt-4o-mini
+      prompt_version: v1
+      temperature: 0.1
+      batch_size: 10
+      max_record_context_chars: 300000
+      max_batch_context_chars: 450000
+      max_attempts: 3
+      story_mapping_actions:
+        - advance
+        - reserve
 
     story_mapping:
       embedding_model: all-MiniLM-L6-v2
       use_llm_story_labels: true
       clustering:
         max_pair_hours: null
-        semantic_primary_threshold: 0.80
-        semantic_supported_threshold: 0.78
-        semantic_title_anchor_threshold: 0.74
-        semantic_merge_groups:
-          - ai_company_blogs
-          - tech_news_apis
-          - youtube_podcast_transcripts
+        candidate_neighbors_per_record: 8
+        candidate_similarity_floor: 0.58
+        fingerprint_chunk_chars: 1800
+        max_fingerprint_chunks_per_record: 128
+        max_candidate_pairs: 2000
+        pair_adjudication:
+          enabled: true
+          provider: openai
+          model: gpt-4o-mini
+          prompt_version: v1
+          temperature: 0.0
+          batch_size: 6
+          worker_count: 2
+          max_attempts: 3
+          max_batch_chars: 180000
+          max_single_pair_chars: 300000
+      ranking:
+        mode: telemetry_only
+      triage_policy:
+        required: true
+        eligible_actions:
+          - advance
+          - reserve
       story_label:
         provider: openai
         model: gpt-4o-mini
         prompt_version: v1
         worker_count: 10
         temperature: 0.15
-        max_records_per_story: 6
+        max_story_context_chars: 500000
 
+    editorial_selection:
+      target_format: roundup
+      provider: openai
+      model: gpt-4o-mini
+      prompt_version: v1
+      temperature: 0.2
+      min_stories: 3
+      max_stories: 5
+      max_candidate_stories: 40
+      screening_shortlist_per_batch: 10
+      max_screening_rounds: 4
+      max_story_context_chars: 500000
+      max_call_context_chars: 650000
+      max_story_context_tokens: 90000
+      max_call_context_tokens: 100000
+      tokenizer_encoding: o200k_base
+      max_attempts: 3
     video_packaging:
       target_format: roundup
       roundup:
-        candidate_limit: 20
         min_stories: 3
         max_stories: 5
         duration_mode: content_driven
-        max_per_entity: 2
-        max_per_product: 1
-        max_per_event_family: 2
-        reject_duplicate_events: true
-        allowed_priority_buckets:
-          - high
-          - medium
-        exclude_noise: true
-        exclude_tutorials: true
 
     script_generation:
       provider: openai
@@ -58,50 +167,113 @@ profiles:
         max_delay_seconds: 30.0
       writing_guidance:
         intro:
-          suggested_words: 70
+          suggested_words: 40
           beat_guidance: Use two or three purposeful beats.
-          editorial_goal: Hook the viewer and preview the episode without listing every headline.
+          editorial_goal: Open on one episode-specific curiosity gap and make one concise promise without listing every headline.
         lead:
-          suggested_words: 240
+          suggested_words: 190
           beat_guidance: Use as many distinct beats as the explanation naturally needs.
-          editorial_goal: Explain the strongest story fully, clearly, and without padding.
+          editorial_goal: Earn lead status through a developed mechanism or conflict, one concrete anchor, and a clear payoff without padding.
         major:
-          suggested_words: 180
+          suggested_words: 135
           beat_guidance: Use a compact sequence of distinct explanatory beats.
-          editorial_goal: Cover what changed, why it matters, and the useful caveat.
+          editorial_goal: Deliver one compact complete mini-arc around the distinctive anchor.
         brief:
-          suggested_words: 120
-          beat_guidance: Use a few focused beats and finish once the takeaway is clear.
-          editorial_goal: Deliver the essential update without stretching limited source material.
+          suggested_words: 85
+          beat_guidance: Use one reveal and one useful interpretation, then leave before the conclusion repeats.
+          editorial_goal: Make one concrete update memorable and remain visibly lighter than lead and major stories.
         closing:
-          suggested_words: 45
+          suggested_words: 25
           beat_guidance: Use one or two concise beats.
-          editorial_goal: Synthesize the episode and end naturally without repeating every story.
-        connector:
-          suggested_words: 8
-          beat_guidance: Use one natural spoken line.
-          editorial_goal: Introduce the next story while its title motion appears.
+          editorial_goal: End on one earned episode-specific observation or a clean signoff, never a reusable AI slogan.
+      connector:
+        suggested_words: 8
+        beat_guidance: Use one natural spoken line.
+        editorial_goal: Introduce the next story while its title motion appears.
       script_style:
         audience: AI-curious professionals
-        tone: clear, energetic, grounded
+        tone: creator-led, clear, energetic, curious, and grounded
         avoid:
           - dry technical reporting
           - overhype
           - fake certainty
           - source-by-source summaries
+          - stock hype phrases used instead of a concrete idea
+          - generic universal conclusions about AI changing everything
+      channel_voice:
+        persona: curious technical friend with a skeptical eyebrow
+        worldview:
+          - optimistic about useful progress
+          - skeptical of marketing
+          - practical consequences over abstract importance
+        energy: energetic but not frantic
+        opinion:
+          allow_first_person_editorial_opinion: true
+          forbid_fabricated_personal_experience: true
+        humor:
+          enabled: true
+          modes:
+            - observational
+            - dry
+            - self_aware
+            - absurd_analogy
+          density: restrained
+          allow_callbacks: true
+          avoid:
+            - forced meme references
+            - cruelty
+            - unsupported accusations
+        language:
+          prefer:
+            - concrete verbs
+            - varied sentence length
+            - plain-language mental models
+          avoid:
+            - corporate press-release language
+            - generic importance claims
+            - article-summary transitions
+          profanity_mode: avoid
+          profanity_terms:
+            - fuck
+            - fucking
+            - shit
+            - bullshit
+      storytelling:
+        require_story_engine: true
+        require_viewer_payoff: true
+        allow_optional_truth_details: true
+        forbid_source_order_summary: true
+        max_must_communicate_truth_items: 4
+        max_optional_truth_items: 10
+      source_context:
+        max_story_context_chars: 500000
+        max_episode_context_chars: 1500000
       source_policy:
         use_selected_stories_only: true
         include_full_records: true
       review:
         enabled: true
         max_revision_passes: 1
+        candidate_selection:
+          enabled: true
+          failure_mode: keep_current
         quality_criteria:
-          - clear spoken explanation
-          - strong viewer value
-          - natural YouTube pacing
-          - no repetition or filler
-          - no hype or fake certainty
-          - visualizable story beats
+          - an immediate story-specific hook
+          - a concrete explanation a smart non-specialist can follow
+          - a memorable creator viewpoint or reaction
+          - natural spoken rhythm with varied sentence length
+          - a satisfying viewer payoff without filler
+          - materially faithful use of the assigned story records
+          - a story-specific concrete anchor rather than a reusable category summary
+          - preservation of source meaning, including combined versus individual evidence and measured versus claimed results
+          - exact quotations and preserved attribution for source opinions, forecasts, allegations, and marketing claims
+          - an honest curated-roundup frame when the selected stories do not share one concrete tension
+          - one focused cold-open idea instead of a three-headline intro list
+          - creative-device labels that are actually expressed in the narration
+          - analogies whose scale and mechanism remain materially truthful
+          - clear lead, major, and brief differentiation without numerical quotas
+          - connectors whose spoken transition and title card introduce the same target story
+          - audiovisual beats that suggest useful visuals
 
     metadata_creator:
       provider: openai
@@ -113,6 +285,11 @@ profiles:
         thumbnail_text_option_count: 5
         max_tags: 20
         include_source_urls: true
+        chapter_title_max_chars: 64
+        blocked_tags:
+          - github.io
+          - unknown
+          - none
       memory_context:
         recent_title_angles: []
 
@@ -121,38 +298,121 @@ profiles:
       first_chapter_tolerance_seconds: 0.25
 
     visuals:
+      asset_catalog:
+        force: true
+        output_dir: ""
+        research_mode: trusted_only
+        require_real_anchor_per_story: true
+        collect_source_pages: true
+        collect_source_images: true
+        collect_source_videos: true
+        collect_resolvable_logos: true
+        local_logo_dir: ""
+        page_metadata:
+          enabled: true
+          request_timeout_seconds: 15
+          max_html_bytes: 2000000
+          max_image_bytes: 20000000
+          max_video_bytes: 120000000
+          worker_count: 4
+          min_image_short_edge: 360
+          min_image_pixel_area: 450000
+          min_image_aspect_ratio: 0.2
+          max_image_aspect_ratio: 5.0
+          near_duplicate_hash_distance: 5
+          max_images_per_record: 12
+          max_image_candidates: 48
+          min_video_width: 720
+          min_video_height: 404
+          max_videos_per_record: 1
+          max_video_candidates: 8
+          ffprobe_path: ffprobe
+          user_agent: "AIContentCreation/2.0 (visual-asset-catalog)"
+        source_linked_video:
+          enabled: true
+          providers:
+            - youtube
+            - vimeo
+            - x
+          yt_dlp_path: yt-dlp
+          download_timeout_seconds: 180
+          max_links_per_record: 3
+          max_duration_seconds: 1800
+          max_height: 1080
+        contact_sheet:
+          enabled: true
+          columns: 3
+          tile_width: 480
+          tile_height: 270
+
       planner:
         provider: openai
         model: gpt-4o-mini
         prompt_version: v1
         temperature: 0.3
+        max_attempts: 2
         diagnostic_words_per_minute: 150
         allow_deterministic_story_fallbacks: false
+        require_asset_catalog: true
+        require_real_anchor_per_story: true
+        real_anchor_failure_mode: warn
+        max_automatic_timing_repair_seconds: 0.5
         style:
-          visual_language: premium YouTube AI news motion graphics
-          motion_style: fast editorial cuts, article zooms, real contextual media, logo reveals, kinetic type
-          color_system: dark graphite newsroom with electric cyan, warm white, and restrained red accents
-          typography: bold broadcast sans, large kinetic phrases, minimal small text
+          style_id: editorial_minimal
+          visual_language: asset-first editorial YouTube visuals with clean typography and generous whitespace
+          motion_style: restrained editorial reveals, purposeful source zooms, subtle parallax, and short chapter wipes
+          color_system: warm paper, near-black ink, and one restrained burnt-orange accent
+          typography: expressive editorial serif headlines with condensed uppercase sans labels
+          background_color: "#f4efe6"
+          text_color: "#171611"
+          accent_color: "#bd4e2f"
+          muted_color: "#6f6a61"
+          editorial_font: Iowan Old Style, Baskerville, Georgia, Times New Roman, serif
+          sans_font: Avenir Next Condensed, Avenir Next, Helvetica Neue, Arial, sans-serif
+          surface_treatment: generous whitespace, subtle paper texture, thin rules, and no dashboard chrome
+          card_policy: no decorative cards; use a surface only when it represents a real browser, document, or interface
           avoid:
             - PPT-style cards
-            - generic timeline cards
+            - dashboard panels and decorative pills
             - static slide-deck layouts
             - walls of text
+            - tiny explanatory labels
+            - decorative charts without source-supported data
+        visual_mix_policy:
+          target_max_text_like_scene_ratio: 0.30
+          target_max_text_like_duration_ratio: 0.30
+          target_max_text_like_scenes_per_story: 2
+          prefer_catalog_assets_for_concrete_subjects: true
+          prefer_explanatory_motion_for_mechanisms: true
+          kinetic_text_is_supporting_only: true
+        visual_editor:
+          enabled: true
+          max_passes: 1
+          max_story_calls: 8
+          review_all_stories: false
+          failure_mode: keep_original
         scene_policy:
           target_aspect_ratio: "16:9"
           max_scenes: 64
           min_scene_seconds: 3
           max_scene_seconds: 14
+          hard_max_scene_seconds: 16
+          hard_cap_tolerance_seconds: 0.25
           semantic_min_scene_seconds: 5
           semantic_target_scene_seconds: 9
           semantic_max_units_per_scene: 4
           compact_per_chunk_scenes: true
+          unit_assignment_mode: one_scene_per_script_unit
+          duplicate_subscene_policy: continue
           min_scenes_per_story: 3
-          max_scenes_per_story: 8
+          max_scenes_per_story: 12
           max_source_article_scenes: 20
           max_context_image_scenes: 14
           max_broll_video_scenes: 4
           max_logo_reveal_scenes: 24
+          max_editorial_text_scenes: 32
+          max_simple_explainer_scenes: 24
+          max_story_transition_scenes: 12
           max_kinetic_type_scenes: 32
           max_bullet_build_scenes: 24
           max_quote_or_claim_highlight_scenes: 18
@@ -179,30 +439,58 @@ profiles:
           allowed_render_kinds:
             - source_article_scene
             - context_image_scene
+            - broll_video_scene
             - logo_reveal_scene
-            - kinetic_type_scene
-            - bullet_build_scene
-            - quote_or_claim_highlight_scene
-            - entity_compare_scene
-            - recap_sequence_scene
-            - data_counter_scene
-            - trend_line_scene
-            - bar_chart_scene
-            - bar_race_scene
-            - ranked_list_scene
-            - benchmark_delta_scene
-            - ecosystem_map_scene
-            - architecture_flow_scene
-            - process_zoom_scene
-            - browser_walkthrough_scene
-            - decision_tree_scene
-            - capability_matrix_scene
-            - timeline_zoom_scene
-            - document_stack_scene
-            - signal_radar_scene
-            - interface_transform_scene
-            - transition_stinger_scene
+            - editorial_text_scene
+            - simple_explainer_scene
+            - story_transition_scene
         visual_capabilities:
+          editorial_text_scene:
+            description: Present one concise editorial idea with large expressive typography, generous whitespace, and one restrained accent.
+            best_for:
+              - short hooks and punchlines
+              - one-sentence implications
+              - clean visual punctuation between richer asset scenes
+            required_payload_fields:
+              - headline
+              - accent_words
+              - composition
+              - motion_style
+            avoid_when:
+              - the narration names a source, product image, or identity that can be shown
+              - more than one visual idea is needed
+              - the headline would repeat a full narration paragraph
+            render_notes: Use a short headline, optional eyebrow/supporting line, and no card container. Keep one visual idea on screen.
+          simple_explainer_scene:
+            description: Explain one relationship or short process with two to four clean labels, restrained connectors, and sequential focus motion.
+            best_for:
+              - small workflows
+              - cause and effect
+              - two-to-four entity relationships
+              - before-to-after conceptual changes
+            required_payload_fields:
+              - headline
+              - items
+              - orientation
+              - motion_style
+            avoid_when:
+              - a real source or product image communicates the beat better
+              - the relationship is not supported by the script beat
+              - more than four nodes are required
+            render_notes: Use 2-4 short item objects with a label and optional detail. Keep labels large and connectors secondary; never build a dashboard.
+          story_transition_scene:
+            description: Introduce the next roundup story with a clean editorial title, optional story number, and a brief transition motion.
+            best_for:
+              - the first aligned beat of each selected story
+              - clear chapter boundaries in a roundup
+            required_payload_fields:
+              - headline
+              - accent_words
+              - motion_style
+            avoid_when:
+              - the scene is not the deterministic first beat of a story
+              - the title would be duplicated elsewhere
+            render_notes: Overlay the complete story title on the story planner's selected opening media when available; otherwise use a short clean reset. Do not use a card.
           source_article_scene:
             description: Show a real source webpage, article, blog, paper, or report as visual proof for a narration beat.
             best_for:
@@ -222,46 +510,52 @@ profiles:
               - no selected source URL exists
               - the narration is a broad transition rather than a source-specific point
               - the scene would become a static slide with too much text
-            render_notes: Use article zooms, headline/body focus, and highlight scans. Never invent URLs or quotes.
+            render_notes: Copy target_text exactly from the selected record's screenshot_target_candidates so browser capture can locate it. Use article zooms, headline/body focus, and highlight scans. When a verified source_page asset exists, include its asset_id. Never invent URLs, asset IDs, or quotes.
           context_image_scene:
-            description: Show a real contextual photograph that directly depicts a concrete subject, environment, device, person, lab, office, infrastructure, or physical concept from the narration.
+            description: Show a verified story-owned source image that directly supports the active narration beat.
             best_for:
               - tangible physical context
               - people using technology
               - labs, offices, devices, hardware, data centers, and cities
               - visual breathing room between dense diagrams and sources
             required_payload_fields:
-              - search_queries
-              - must_show
-              - must_avoid
+              - asset_id
               - shot_style
               - overlay_headline
               - motion_style
               - show_overlay
+            payload_field_contract:
+              asset_id: "optional verified source_image asset id; when present, discovery fields may be empty"
+              search_queries: "list[str] of concrete, camera-depictable subjects or actions"
+              must_show: "list[str] of visible requirements"
+              must_avoid: "list[str] of visible conflicts to reject"
             avoid_when:
+              - no verified source_image asset exists in this story catalog
               - a source article is needed as proof
               - the image would imply an unsupported exact event
               - the request is generic AI stock imagery
-            render_notes: Provide search intent only. The media discovery module selects and records a licensed image.
+              - the visible requirement is a statistic, employee count, internal mental state, or abstract relationship that a photograph cannot directly show
+              - a named software or product interface is required but no exact media for that identity is available
+            render_notes: Use only a relevant verified source_image asset_id in trusted-catalog production mode. Do not request generic external imagery.
           broll_video_scene:
-            description: Show a short representative real-world clip of a concrete action, environment, device, workflow, or infrastructure moment.
+            description: Show a short trusted source-owned video clip of a concrete action, environment, device, workflow, product, or infrastructure moment.
             best_for:
               - server rooms, offices, devices, robotics, labs, manufacturing, and infrastructure
               - physical actions and environments that benefit from real motion
               - short contextual bridges tied directly to narration
             required_payload_fields:
-              - search_queries
-              - must_show
-              - must_avoid
+              - asset_id
               - shot_style
               - overlay_headline
               - motion_style
               - show_overlay
+            payload_field_contract:
+              asset_id: "exact verified source_video asset id from this story catalog"
             avoid_when:
-              - footage would pretend to show the exact reported event
+              - no verified source_video asset exists in this story catalog
+              - footage would imply an event not represented by the selected source
               - a source, chart, metric, logo, or diagram is clearer
-              - the search intent is broad or generic
-            render_notes: Provide search intent only. The media discovery module selects licensed footage and narration remains the only audio.
+            render_notes: Use only a verified story-owned source_video asset_id in trusted-catalog mode. Media discovery prepares a short muted clip and narration remains the only audio.
           logo_reveal_scene:
             description: Use company, product, model, or platform logos/entities as a quick YouTube-style identity moment.
             best_for:
@@ -279,7 +573,7 @@ profiles:
               - the story is about a source claim that needs article grounding
               - the entity is unclear
               - the companion text would duplicate a full sentence from narration
-            render_notes: Prefer short companion text, logo stacks, spotlights, and pop/slide reveals.
+            render_notes: Prefer short companion text, logo stacks, spotlights, and pop/slide reveals. Include the verified logo asset_id when the catalog supplies one.
           kinetic_type_scene:
             description: Animate short phrases from the narration with typewriter, word snap, highlight sweep, or similar motion.
             best_for:
@@ -334,7 +628,7 @@ profiles:
               - no selected source URL exists
               - the narration is a broad transition
               - the claim cannot be tied to a provided source record
-            render_notes: Use source screenshot as the background proof layer with a large editorial callout.
+            render_notes: Copy supporting_text exactly from the selected record's screenshot_target_candidates. Use the source screenshot as the background proof layer with a large editorial callout.
           entity_compare_scene:
             description: Compare two to four companies, products, platforms, or models with logo-style tokens and short contrasting labels.
             best_for:
@@ -387,7 +681,7 @@ profiles:
               - the narration has no meaningful number, date, or measurable scale
               - the value would need to be invented
               - a source screenshot is more important for credibility
-            render_notes: Use animated counters, unit labels, pulse rings, and scale bars. Keep values short and grounded in narration or source records.
+            render_notes: "Use animated counters and scale bars. metrics must contain 1-3 objects shaped {label, value, unit?, context?}. Put exact supporting metric truth IDs in scene.evidence_truth_ids and copy value_text without inference."
           trend_line_scene:
             description: Animate a rising, falling, volatile, or pressure-building trend line for momentum or competition beats.
             best_for:
@@ -405,7 +699,7 @@ profiles:
               - the narration does not imply direction or momentum
               - a precise quantitative chart would be misleading
               - the scene would imply real data points not provided
-            render_notes: Use stylized directional charts, not fake precise market data. Label conceptual trends clearly unless exact values are supplied.
+            render_notes: "Use a stylized direction, not fake data points. trend_direction must be rising, falling, volatile, pressure_building, or flat_then_jump; annotations must be non-empty story-specific strings."
           bar_chart_scene:
             description: Show two to five bars for concrete comparisons such as cost, usage, latency, funding, model size, or adoption.
             best_for:
@@ -423,7 +717,7 @@ profiles:
               - there are no comparable values
               - the values would need to be invented
               - a source screenshot is more important for credibility
-            render_notes: Use bold horizontal bars, large labels, and display values. Keep the chart conceptual unless exact values are provided.
+            render_notes: "bars must contain 2-5 objects shaped {label, value, display_value?, context?}. value must be a source-supported number; never create relative or illustrative numbers."
           bar_race_scene:
             description: Animate ranked bars changing over time or across stages to show a race, rollout, adoption shift, or competitive movement.
             best_for:
@@ -441,7 +735,7 @@ profiles:
             avoid_when:
               - there is no change or ranking implied
               - the bars would suggest precise data not present
-            render_notes: Animate start-to-end values with rank movement. Use synthetic relative values only when clearly conceptual.
+            render_notes: "items must contain 2-5 objects shaped {label, start_value, end_value, display_value?}. Both values must be explicitly supported; never synthesize relative values."
           ranked_list_scene:
             description: Show a fast top-three or top-five ranked list with large rank numbers, compact entity labels, and short details.
             best_for:
@@ -457,7 +751,7 @@ profiles:
             avoid_when:
               - the narration is not actually ranking or ordering items
               - the ranking would imply unsupported certainty
-            render_notes: Use it as a punchy ordered graphic, not as a paragraph list.
+            render_notes: "items must contain 2-5 objects shaped {label, rank?, value?, detail?}. Use this only when the supplied material explicitly orders the items."
           benchmark_delta_scene:
             description: Show before/after or model-vs-model deltas with arrows, percentage changes, and short interpretation labels.
             best_for:
@@ -474,7 +768,7 @@ profiles:
             avoid_when:
               - there is no measurable delta
               - the comparison is not grounded in the script or records
-            render_notes: Use large delta typography and directional arrows. Keep labels short and concrete.
+            render_notes: "benchmarks must contain 1-3 objects shaped {label, before, after, delta, unit?, context?}; before, after, and delta are all required and source-supported."
           ecosystem_map_scene:
             description: Show entities, products, platforms, developers, users, and clouds as connected nodes in a simple motion map.
             best_for:
@@ -492,7 +786,7 @@ profiles:
               - there is only one meaningful entity
               - the relationship would be invented
               - a source screenshot is the clearer visual
-            render_notes: Use animated node reveals, connection pulses, and short role labels. Keep the graph small and readable.
+            render_notes: "nodes must contain 2-6 objects shaped {id, label, role?}; edges must contain objects shaped {from, to, label} using those exact node ids; focus_entity must match a node label."
           architecture_flow_scene:
             description: Show a technical or workflow pipeline as connected steps, such as app to SDK to model to user result.
             best_for:
@@ -510,7 +804,7 @@ profiles:
               - the narration is just a headline or transition
               - the steps would be speculative
               - the sequence has fewer than two concrete stages
-            render_notes: Use animated blocks, moving packets, arrows, and highlighted active stages. Prefer diagrams over explanatory text lists.
+            render_notes: "steps must contain 2-6 objects shaped {label, detail?}; active_step_label must exactly match one step label. Use only a flow stated by the script or records."
           process_zoom_scene:
             description: Zoom into one important step in a workflow or architecture, showing the surrounding process as context and the active step as the hero.
             best_for:
@@ -527,7 +821,7 @@ profiles:
             avoid_when:
               - there is no clear active step
               - the process has fewer than two concrete stages
-            render_notes: Make the active step large and central. Keep surrounding steps visible but secondary.
+            render_notes: "steps must contain 2-6 objects shaped {label, detail?}; focus_step_label must exactly match one step label; zoom_note must explain that supported step."
           browser_walkthrough_scene:
             description: Show a guided webpage or product-page walkthrough with viewport panels, scroll markers, and focused callouts.
             best_for:
@@ -545,7 +839,7 @@ profiles:
               - there is no URL or page context
               - the narration is abstract rather than page-specific
               - a quote highlight is more direct
-            render_notes: Use browser chrome, scroll rails, zoom windows, and step callouts. Treat as guided browsing, not a static article card.
+            render_notes: "Use a selected-record url and source_record_key. walkthrough_steps must contain 2-5 objects shaped {label, detail? or target_text?}; focus_text must identify the supplied page detail."
           decision_tree_scene:
             description: Show branching decisions for routing, safety gates, agent choices, product strategy, or model selection.
             best_for:
@@ -564,7 +858,7 @@ profiles:
             avoid_when:
               - there is no meaningful choice or branch
               - the branching would invent hidden logic
-            render_notes: Use glowing branch paths and one highlighted route. Keep labels short.
+            render_notes: "branches must contain 2-4 objects shaped {label, outcome?, risk?}; selected_path_label must exactly match one branch label or outcome. Never invent hidden choices."
           capability_matrix_scene:
             description: Compare products, models, or platforms across capability dimensions such as speed, cost, context, multimodal support, and tooling.
             best_for:
@@ -582,7 +876,7 @@ profiles:
             avoid_when:
               - there are no comparable dimensions
               - ratings would imply unsupported precision
-            render_notes: Use compact cells, check/pulse states, and one highlighted capability. Avoid dense spreadsheets.
+            render_notes: "columns must contain 2-4 labels; rows must contain 2-5 objects shaped {label, values, highlight?}, where values has exactly one supported value per column."
           timeline_zoom_scene:
             description: Show a short sequence of events, then zoom into the critical event that changes the story.
             best_for:
@@ -600,7 +894,7 @@ profiles:
             avoid_when:
               - the sequence would become a generic timeline
               - there are not at least two meaningful events
-            render_notes: Use a cinematic event rail and zoom into one event. Never make this a static timeline card.
+            render_notes: "events must contain 2-5 objects shaped {label, date?, detail?}; focus_event_label must exactly match an event label and zoom_note must describe that supported event."
           document_stack_scene:
             description: Show reports, papers, release notes, GitHub issues, docs, or source documents as layered evidence cards with parallax motion.
             best_for:
@@ -617,7 +911,7 @@ profiles:
             avoid_when:
               - there is only one source and a source screenshot would be clearer
               - document labels would be invented
-            render_notes: Use layered pages, source labels, and parallax. Keep document cards visual, not text-heavy.
+            render_notes: "documents must contain 1-5 objects shaped {title, source, document_type?, date?, detail?}; focus_document_label must exactly match one document title."
           signal_radar_scene:
             description: Show a scanning radar-like field for emerging signals, companies, topics, risks, or watchlist items.
             best_for:
@@ -634,7 +928,7 @@ profiles:
             avoid_when:
               - the narration needs source proof rather than signal framing
               - signals would be vague labels without context
-            render_notes: Use a radar sweep, pulsing blips, and short labels. This is for attention and sensing moments.
+            render_notes: "signals must contain 2-6 objects shaped {label, strength, detail?}; strength is a source-supported 0-100 value, not an invented confidence score. If no numeric strength exists, use another scene kind."
           interface_transform_scene:
             description: Show a before/after interface or workflow transformation, such as chat to agent workflow or manual process to automated tool loop.
             best_for:
@@ -652,7 +946,7 @@ profiles:
             avoid_when:
               - there is no before/after contrast
               - the visual would imply a real UI that is not shown
-            render_notes: Use two interface panels, connector motion, and transformation glow. Make it conceptual unless real UI assets are supplied.
+            render_notes: "before and after must each be objects shaped {label, items}, with at least two supplied items; transformation_label must state the supported change."
           transition_stinger_scene:
             description: Create a short high-energy motion bumper between stories or visual sections using abstract newsroom graphics, entity hints, and one compact label.
             best_for:
@@ -673,8 +967,7 @@ profiles:
         source_policy:
           use_selected_stories_only: true
           include_full_records: true
-          max_records_per_story_for_prompt: 4
-          max_record_chars_for_prompt: 1200
+          max_story_context_chars: 500000
 
       media_discovery:
         force: true
@@ -693,8 +986,22 @@ profiles:
         min_image_width: 1280
         min_image_height: 720
         preferred_aspect_ratio: 1.7777777778
-        minimum_selection_score: 0.15
-        unresolved_fallback_render_kind: kinetic_type_scene
+        trusted_catalog_only: true
+        allow_query_fallback: false
+        reuse_equivalent_image_requests: true
+        max_fallback_requests: 0
+        unresolved_fallback_render_kind: null
+        semantic_verification:
+          enabled: false
+          provider: openai
+          model: gpt-4o-mini
+          prompt_version: v1
+          temperature: 0.0
+          max_candidates_per_scene: 4
+          max_attempts: 2
+          verify_video_clip_frames: true
+          max_video_sample_frames: 5
+          video_clip_failure_policy: reject
         providers:
           wikimedia:
             enabled: true
@@ -728,16 +1035,28 @@ profiles:
           capture_mode: target_text_focus
           save_full_page_debug: false
           save_raw_capture_debug: true
+          target_miss_policy: failed
+          focus_zoom: 1.3
+          highlight_target: true
         logos:
           local_logo_dir: ""
           simple_icons_enabled: true
-          favicon_fallback_enabled: true
+          favicon_fallback_enabled: false
           text_fallback_enabled: true
+          favicon_timeout_seconds: 10
 
       render:
         force: true
         output_dir: ""
         remotion_engine_dir: ""
+        active_mode: preview
+        render_mode: preview
+        cache_dir: "{PROJECT_ROOT}/.cache/ai_content_creation/visual_renders"
+        reuse_cached_scenes: true
+        batch_renderer_enabled: true
+        hardware_acceleration: if-possible
+        selected_scene_ids: []
+        selected_story_ids: []
         quality_preset: 2k
         width: 2560
         height: 1440
@@ -749,12 +1068,34 @@ profiles:
         video_bitrate: null
         bundle_timeout_seconds: 240
         render_timeout_seconds: 240
-        worker_count: 3
+        worker_count: 4
         frame_concurrency: 2
         max_render_attempts: 2
         keep_render_logs: true
         max_scene_duration_seconds: null
         scene_limit: null
+        profiles:
+          preview:
+            render_mode: preview
+            quality_preset: custom
+            width: 1280
+            height: 720
+            crf: null
+            video_bitrate: 4M
+            x264_preset: null
+            worker_count: 4
+            frame_concurrency: 2
+            max_render_attempts: 1
+          final:
+            render_mode: final
+            quality_preset: 2k
+            width: 2560
+            height: 1440
+            crf: 15
+            x264_preset: veryfast
+            worker_count: 4
+            frame_concurrency: 2
+            max_render_attempts: 2
 
       assembly:
         force: true
@@ -762,7 +1103,9 @@ profiles:
         ffmpeg_path: ffmpeg
         ffprobe_path: ffprobe
         final_video_filename: final_video.mp4
-        video_codec: copy
+        # Independent Remotion clips must be normalized across H.264 boundaries.
+        video_codec: libx264
+        normalize_scene_boundaries: true
         audio_codec: aac
         audio_bitrate: 192k
         audio_sample_rate_hz: 48000
@@ -771,10 +1114,21 @@ profiles:
         movflags_faststart: true
         allow_reencode_fallback: true
         reencode_video_codec: libx264
-        reencode_preset: medium
+        reencode_preset: veryfast
         reencode_crf: 18
         pixel_format: yuv420p
         duration_tolerance_seconds: 2.0
+
+      review:
+        force: true
+        output_dir: ""
+        ffmpeg_path: ffmpeg
+        ffprobe_path: ffprobe
+        sample_count: 20
+        columns: 5
+        thumbnail_width: 420
+        jpeg_quality: 90
+        keep_frames: false
 
     voiceover:
       provider: kokoro_local
@@ -795,6 +1149,25 @@ profiles:
         require_script_beats: true
         beat_pause_seconds: 0.08
         section_pause_seconds: 0.32
+      mastering:
+        enabled: true
+        ffmpeg_path: ffmpeg
+        target_lufs: -16.0
+        true_peak_db: -1.0
+        loudness_range_lu: 7.0
+        two_pass: true
+        measure_output: true
+        keep_raw_audio: false
+        duration_tolerance_seconds: 0.08
+        failure_mode: fail
+      captions:
+        enabled: true
+        formats:
+          - srt
+          - vtt
+        max_chars_per_cue: 48
+        max_words_per_cue: 12
+        min_cue_seconds: 0.8
       chatterbox:
         device: auto
         exaggeration: 0.65

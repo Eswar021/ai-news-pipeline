@@ -23,33 +23,25 @@ const numberValue = (value: unknown, fallback: number) => {
 
 const signalsFromPayload = (value: unknown): SignalItem[] => {
   const objects = objectList<Record<string, unknown>>(value)
-    .map((item, index) => ({
+    .map((item) => ({
       label: textValue(item.label) || textValue(item.name),
       strength: item.strength as number | string | undefined,
-      detail: textValue(item.detail) || textValue(item.description) || `signal ${index + 1}`,
+      detail: textValue(item.detail) || textValue(item.description),
     }))
-    .filter((item) => item.label || item.detail);
+    .filter((item) => item.label && item.strength !== undefined);
   if (objects.length) {
     return objects.slice(0, 6);
   }
-  const list = listValue(value);
-  if (list.length) {
-    return list.slice(0, 6).map((item, index) => ({ label: item, strength: 35 + index * 9 }));
-  }
-  return [
-    { label: "Adoption", strength: 82 },
-    { label: "Developer pull", strength: 68 },
-    { label: "Platform shift", strength: 74 },
-  ];
+  return [];
 };
 
 export const SignalRadarScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "Signals worth watching";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "SIGNAL RADAR");
-  const scanLabel = textValue(payload.scan_label) || "emerging signal";
+  const scanLabel = textValue(payload.scan_label);
   const signals = signalsFromPayload(payload.signals);
   const sweep = interpolate(frame, [0, durationInFrames], [0, 360]);
   const center = { x: 620, y: 390 };
@@ -69,7 +61,7 @@ export const SignalRadarScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) 
         </g>
         {signals.map((signal, index) => {
           const angle = (-120 + index * (240 / Math.max(1, signals.length - 1))) * (Math.PI / 180);
-          const strength = Math.max(0.2, Math.min(1, numberValue(signal.strength, 55) / 100));
+          const strength = Math.max(0.2, Math.min(1, numberValue(signal.strength, 0) / 100));
           const radius = 130 + strength * 245;
           const x = center.x + Math.cos(angle) * radius;
           const y = center.y + Math.sin(angle) * radius;
@@ -79,7 +71,7 @@ export const SignalRadarScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) 
             <g key={`${signal.label}-${index}`} opacity={reveal}>
               <circle cx={x} cy={y} r={18 + strength * 16} fill={`${color}cc`} stroke="rgba(255,255,255,0.72)" strokeWidth="3" />
               <foreignObject x={x + 30} y={y - 36} width="280" height="92">
-                <div style={{ color: palette.text, fontSize: 27, lineHeight: 0.98, fontWeight: 900, letterSpacing: "-0.03em" }}>{signal.label || "Signal"}</div>
+                <div style={{ color: palette.text, fontSize: 27, lineHeight: 0.98, fontWeight: 900, letterSpacing: "-0.03em" }}>{signal.label}</div>
                 {signal.detail && <div style={{ marginTop: 6, color: palette.muted, fontSize: 18, lineHeight: 1.05, fontWeight: 720 }}>{signal.detail}</div>}
               </foreignObject>
             </g>
@@ -87,8 +79,7 @@ export const SignalRadarScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) 
         })}
       </svg>
       <div style={{ position: "absolute", right: 106, top: 380, width: 560, padding: "36px 40px", borderRadius: 42, background: "rgba(8,15,25,0.88)", border: `1px solid ${palette.green}77`, boxShadow: "0 40px 130px rgba(0,0,0,0.46)" }}>
-        <div style={{ color: palette.green, fontSize: 25, fontWeight: 950, letterSpacing: "0.13em", textTransform: "uppercase" }}>Scanning for</div>
-        <div style={{ marginTop: 18, fontSize: 70, lineHeight: 0.9, fontWeight: 950, letterSpacing: "-0.07em" }}>{scanLabel}</div>
+        <div style={{ fontSize: 70, lineHeight: 0.9, fontWeight: 950, letterSpacing: "-0.07em" }}>{scanLabel}</div>
       </div>
     </AbsoluteFill>
   );

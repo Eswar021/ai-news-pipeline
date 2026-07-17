@@ -32,8 +32,8 @@ unaligned manual-text package.
 - `dia_transformers`: experimental dialogue-style local synthesis
 
 Provider, voice, style, speed, provider splitting, beat/section pauses, sample
-rate, and provider settings come from the input config. `llm_client` is not
-involved.
+rate, mastering, captions, and provider settings come from the input config.
+`llm_client` is not involved.
 
 The default profile in `src/pipeline/config/workbench.yaml` uses Kokoro with
 `af_heart`, `general_youtube`, and speed `1.0`. Change those values in YAML
@@ -64,6 +64,8 @@ output/runs/{run_id}/voiceover/{variant}/
 ├── audio/full_voiceover.wav
 ├── audio/chunks/*.wav
 ├── audio/units/*.wav
+├── captions/captions.srt
+├── captions/captions.vtt
 ├── voiceover_package.json
 ├── voiceover_result.json
 └── summary.json
@@ -74,8 +76,15 @@ The package contains:
 - provider chunks retaining `section_id`, `story_id`, and `beat_id`
 - one audio unit for the intro, each selected story, and the closing
 - exact aligned beat start/end times derived from generated WAV durations
-- the full concatenated voiceover WAV
+- a config-driven loudness-mastered full voiceover WAV
+- SRT/VTT captions derived from the same aligned beats
 - script and voiceover fingerprints that bind the WAV to one exact narration
+
+The production profile uses two-pass ffmpeg `loudnorm` targeting `-16 LUFS`
+and `-1 dBTP`. Mastering must preserve duration within the configured tolerance
+because beat timing remains authoritative downstream. Caption and mastering
+paths are excluded from artifact identity; their content hashes and settings
+remain fingerprinted so a run can move without changing identity.
 
 Visual planning consumes `audio_units[].aligned_beats`, not anonymous text
 chunks. This is beat-level alignment; word-level forced alignment inside a

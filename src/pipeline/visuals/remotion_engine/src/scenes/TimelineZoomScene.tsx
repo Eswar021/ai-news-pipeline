@@ -24,21 +24,17 @@ const eventsFromPayload = (value: unknown): TimelineEvent[] => {
   if (items.length) {
     return items.slice(0, 5);
   }
-  return [
-    { time: "First", label: "Signal appears", detail: "A small change becomes visible" },
-    { time: "Then", label: "Momentum builds", detail: "More actors respond" },
-    { time: "Now", label: "Critical moment", detail: "The story becomes actionable" },
-  ];
+  return [];
 };
 
 export const TimelineZoomScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "The key moment in the timeline";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "TIMELINE ZOOM");
   const events = eventsFromPayload(payload.events);
-  const focusLabel = textValue(payload.focus_event_label) || events[Math.min(2, events.length - 1)]?.label || "Now";
+  const focusLabel = textValue(payload.focus_event_label);
   const focusIndex = Math.max(0, events.findIndex((event) => event.label === focusLabel || event.time === focusLabel));
   const focus = events[focusIndex] || events[events.length - 1];
   const p = spring({ fps, frame, config: { damping: 18, stiffness: 112, mass: 0.72 } });
@@ -62,8 +58,8 @@ export const TimelineZoomScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec })
               <circle cx={x} cy="314" r={isFocus ? 30 : 21} fill={color} stroke="rgba(255,255,255,0.75)" strokeWidth="4" />
               <foreignObject x={x - 160} y={index % 2 === 0 ? 70 : 380} width="320" height="190">
                 <div style={{ textAlign: "center", padding: "18px 16px", borderRadius: 26, background: isFocus ? `${palette.amber}20` : "rgba(255,255,255,0.075)", border: `1px solid ${isFocus ? palette.amber : "rgba(255,255,255,0.13)"}` }}>
-                  <div style={{ color, fontSize: 21, fontWeight: 950, letterSpacing: "0.11em", textTransform: "uppercase" }}>{event.time || `T${index + 1}`}</div>
-                  <div style={{ marginTop: 10, color: palette.text, fontSize: isFocus ? 32 : 26, lineHeight: 0.96, fontWeight: 920, letterSpacing: "-0.035em" }}>{event.label || "Event"}</div>
+                  {event.time && <div style={{ color, fontSize: 21, fontWeight: 950, letterSpacing: "0.11em", textTransform: "uppercase" }}>{event.time}</div>}
+                  <div style={{ marginTop: event.time ? 10 : 0, color: palette.text, fontSize: isFocus ? 32 : 26, lineHeight: 0.96, fontWeight: 920, letterSpacing: "-0.035em" }}>{event.label}</div>
                 </div>
               </foreignObject>
             </g>
@@ -72,8 +68,7 @@ export const TimelineZoomScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec })
       </svg>
 
       <div style={{ position: "absolute", right: 108, bottom: 82, width: 660, padding: "38px 42px", borderRadius: 42, background: "rgba(8,15,25,0.93)", border: `2px solid ${palette.amber}88`, boxShadow: "0 42px 140px rgba(0,0,0,0.54)", opacity: clamp01(p), transform: `translateY(${interpolate(p, [0, 1], [52, 0])}px)` }}>
-        <div style={{ color: palette.amber, fontSize: 25, fontWeight: 950, letterSpacing: "0.15em", textTransform: "uppercase" }}>Zoom in</div>
-        <div style={{ marginTop: 18, fontSize: 58, lineHeight: 0.92, fontWeight: 950, letterSpacing: "-0.06em" }}>{focus.label || focus.time || "Critical moment"}</div>
+        <div style={{ fontSize: 58, lineHeight: 0.92, fontWeight: 950, letterSpacing: "-0.06em" }}>{focus.label || focus.time}</div>
         {focus.detail && <div style={{ marginTop: 22, color: "#d9e6f4", fontSize: 27, lineHeight: 1.12, fontWeight: 740 }}>{focus.detail}</div>}
       </div>
     </AbsoluteFill>

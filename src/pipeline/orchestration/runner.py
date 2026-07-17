@@ -1,0 +1,178 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+from typing import Any, Callable
+
+from dotenv import load_dotenv
+
+from .io import load_json
+
+
+StageFunction = Callable[[dict[str, Any]], dict[str, Any]]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    try:
+        _validate_host_runtime(args.stage)
+        request = load_json(Path(args.input_json)) if args.input_json else _request_from_args(args)
+        _load_project_environment(request)
+        stage_function = _stage_function(args.stage)
+        result = stage_function(request)
+    except Exception as exc:
+        result = {
+            "status": "failed",
+            "data": {"stage": args.stage, "run_id": getattr(args, "run_id", None)},
+            "summary": {"failure_reason": f"{type(exc).__name__}: {exc}"},
+            "handoff": {},
+        }
+    print(json.dumps(_console_result(result), indent=2, ensure_ascii=False))
+    return 0 if result.get("status") == "ok" else 1
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python3 -m src.pipeline.orchestration.runner",
+        description="Run one resumable production stage using the canonical pipeline contracts.",
+    )
+    subparsers = parser.add_subparsers(dest="stage", required=True)
+
+    content = subparsers.add_parser("content", help="Collect, select, write, and draft metadata.")
+    _add_common_arguments(content, default_run_id=None)
+    content.add_argument("--profile", dest="run_profile")
+    content.add_argument("--from-module")
+    content.add_argument("--stop-after")
+    content.add_argument("--no-resume", action="store_true")
+
+    voiceover = subparsers.add_parser("voiceover", help="Synthesize the selected script and finalize metadata.")
+    _add_common_arguments(voiceover, default_run_id="current")
+    voiceover.add_argument("--script-source", choices=("auto", "app", "native", "chatgpt"), default="auto")
+    voiceover.add_argument("--variant")
+    voiceover.add_argument("--voiceover-python", default=".venv-voiceover/bin/python")
+    voiceover.add_argument("--no-resume", action="store_true")
+    voiceover.add_argument("--skip-metadata-finalization", action="store_true")
+    voiceover.add_argument(
+        "--config-overrides-json",
+        help="Optional JSON object merged into the frozen voiceover config for this invocation.",
+    )
+
+    visuals = subparsers.add_parser("visuals", help="Plan, resolve, render, assemble, and review visuals.")
+    _add_common_arguments(visuals, default_run_id="current")
+    visuals.add_argument("--script-source", choices=("auto", "app", "native", "chatgpt"), default="auto")
+    visuals.add_argument("--voiceover-variant")
+    visuals.add_argument("--plan-source", choices=("generate", "chatgpt"), default="generate")
+    visuals.add_argument("--render-mode", choices=("preview", "final"), default="preview")
+    visuals.add_argument("--scene-id", action="append", default=[], dest="selected_scene_ids")
+    visuals.add_argument("--story-id", action="append", default=[], dest="selected_story_ids")
+    visuals.add_argument("--from-module")
+    visuals.add_argument("--no-resume", action="store_true")
+    visuals.add_argument("--skip-publish-handoff", action="store_true")
+    return parser
+
+
+def _add_common_arguments(parser: argparse.ArgumentParser, *, default_run_id: str | None) -> None:
+    parser.add_argument(
+        "--input-json",
+        help="Use an exact stage request envelope instead of constructing one from CLI flags.",
+    )
+    parser.add_argument("--run-id", default=default_run_id)
+    parser.add_argument("--project-root", default=".")
+    parser.add_argument("--output-root", default="output")
+    parser.add_argument("--pipeline-config", default="src/pipeline/config/workbench.yaml")
+
+
+def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    request: dict[str, Any] = {
+        "run": {"run_id": args.run_id},
+        "paths": {
+            "project_root": args.project_root,
+            "output_root": args.output_root,
+            "pipeline_config_path": args.pipeline_config,
+        },
+        "config": {},
+        "input": {},
+    }
+    if args.stage == "content":
+        request["run"]["run_profile"] = args.run_profile
+        request["config"] = {
+            "resume_completed": not args.no_resume,
+            "from_module": args.from_module,
+            "stop_after": args.stop_after,
+        }
+    elif args.stage == "voiceover":
+        request["config"] = {
+            "script_source": args.script_source,
+            "variant": args.variant,
+            "voiceover_python": args.voiceover_python,
+            "resume_completed": not args.no_resume,
+            "finalize_metadata": not args.skip_metadata_finalization,
+        }
+        if args.config_overrides_json:
+            overrides = json.loads(args.config_overrides_json)
+            if not isinstance(overrides, dict):
+                raise ValueError("--config-overrides-json must decode to a JSON object")
+            request["input"]["voiceover_config_overrides"] = overrides
+    else:
+        request["config"] = {
+            "script_source": args.script_source,
+            "voiceover_variant": args.voiceover_variant,
+            "plan_source": args.plan_source,
+            "render_mode": args.render_mode,
+            "selected_scene_ids": args.selected_scene_ids,
+            "selected_story_ids": args.selected_story_ids,
+            "resume_completed": not args.no_resume,
+            "from_module": args.from_module,
+            "create_publish_handoff": not args.skip_publish_handoff,
+        }
+    return request
+
+
+def _stage_function(stage: str) -> StageFunction:
+    # Keep CLI help and argument validation fast; stage imports load optional LLM/media dependencies.
+    if stage == "content":
+        from .stages.content import run
+
+        return run
+    if stage == "voiceover":
+        from .stages.voiceover import run
+
+        return run
+    from .stages.visuals import run
+
+    return run
+
+
+def _validate_host_runtime(stage: str) -> None:
+    virtual_env = os.environ.get("VIRTUAL_ENV", "")
+    runtime_paths = (virtual_env, sys.executable, sys.prefix)
+    if any(".venv-voiceover" in path for path in runtime_paths):
+        raise RuntimeError(
+            "The orchestration runner must use the main project Python, not .venv-voiceover. "
+            "Run `deactivate`, then "
+            f"`python3 -m src.pipeline.orchestration.runner {stage} ...`. "
+            "The voiceover stage launches .venv-voiceover internally when synthesis is required."
+        )
+
+
+def _load_project_environment(request: dict[str, Any]) -> None:
+    paths = request.get("paths") if isinstance(request.get("paths"), dict) else {}
+    project_root = Path(str(paths.get("project_root") or ".")).expanduser().resolve()
+    load_dotenv(dotenv_path=project_root / ".env", override=False)
+
+
+def _console_result(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": result.get("status"),
+        "data": result.get("data", {}),
+        "summary": result.get("summary", {}),
+        "handoff": result.get("handoff", {}),
+    }
+
+
+if __name__ == "__main__":
+    sys.exit(main())

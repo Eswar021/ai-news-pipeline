@@ -1,0 +1,1 @@
+Classify the provided candidates for authoritative editorial triage. Be concise but specific in each reason. Use possible_story_keys for short semantic identities that could help later clustering. Reserve uncertain candidates instead of pretending uncertainty is proof of irrelevance.

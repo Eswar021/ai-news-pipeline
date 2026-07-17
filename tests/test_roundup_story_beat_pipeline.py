@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import wave
 from pathlib import Path
 
@@ -17,12 +16,17 @@ from src.pipeline.apps.script_generation.formats.roundup.models import (
     BookendOutput,
     BookendReviewOutput,
     EpisodeDirectorOutput,
+    RevisionSelectionOutput,
     StoryReviewOutput,
     StorySegmentOutput,
+    StorySourceBriefOutput,
+)
+from src.pipeline.apps.script_generation.formats.roundup.source_truth import (
+    build_story_truth_index,
+    compact_truth_index,
 )
 from src.pipeline.apps.script_generation.formats.roundup.sections import build_roundup_section_inputs
-from src.pipeline.apps.script_generation.formats.roundup.writer import _story_gate_issues
-from src.pipeline.apps.video_packaging.formats.roundup import build_roundup_packet, select_roundup_stories
+from src.pipeline.apps.video_packaging.formats.roundup import build_roundup_packet
 from src.pipeline.contracts import (
     build_artifact_provenance,
     validate_artifact_provenance,
@@ -94,10 +98,327 @@ def test_script_llm_models_are_openai_strict_schema_compatible() -> None:
         StoryReviewOutput,
         BookendOutput,
         BookendReviewOutput,
+        RevisionSelectionOutput,
+        StorySourceBriefOutput,
     )
     for model in models:
         schema = convert_to_openai_tool(model, strict=True)["function"]["parameters"]
         assert _strict_schema_failures(schema) == [], model.__name__
+
+
+def test_truth_compaction_preserves_semantic_source_notes_and_values() -> None:
+    story = {
+            "story_id": "story_metrics",
+            "records": [
+                {
+                    "record_key": "record_metrics",
+                    "title": "Measured repair results",
+                    "url": "https://example.com/results",
+                    "source_name": "Example Lab",
+                    "content": (
+                        "The tool responded in 0.1 ms across 2,568 queries with zero false alarms, "
+                        "found an 8× bug, and completed 10/10 repairs. "
+                        "The researcher called it “surprisingly practical in production.”"
+                    ),
+                }
+            ],
+        }
+    source_sentence = story["records"][0]["content"].split(" The researcher", 1)[0]
+    index = build_story_truth_index(
+        story,
+        {
+            "story_id": "story_metrics",
+            "source_synopsis": "A tool reports measured query-analysis and repair results.",
+            "central_event": "The project published a small benchmark.",
+            "source_relationship_summary": "One project-authored source reports every result.",
+            "distinctive_details": [
+                {
+                    "record_key": "record_metrics",
+                    "detail_type": "metric",
+                    "source_note": source_sentence,
+                    "value_text": value,
+                    "claim_frame": "source_claim",
+                    "editorial_use": "A concrete project-reported benchmark detail.",
+                    "visual_role": "counter",
+                    "visual_opportunity": "Show the exact reported value.",
+                }
+                for value in ("0.1 ms", "2,568 queries", "zero false alarms", "8×", "10/10")
+            ]
+            + [
+                {
+                    "record_key": "record_metrics",
+                    "detail_type": "quote",
+                    "source_note": "The researcher called it surprisingly practical in production.",
+                    "value_text": "surprisingly practical in production.",
+                    "claim_frame": "opinion",
+                    "editorial_use": "Memorable source wording.",
+                    "visual_role": "quote",
+                    "visual_opportunity": "Show the exact phrase.",
+                }
+            ],
+            "tensions_and_caveats": ["The results are project-reported."],
+            "creator_opportunities": ["Contrast speed with the small test scope."],
+            "visual_opportunities": ["Animate the reported values."],
+        },
+    )
+
+    compact = compact_truth_index(index)
+    metric_values = [
+        item["value_text"]
+        for item in compact["items"]
+        if item["truth_type"] == "metric"
+    ]
+
+    assert set(metric_values) == {"0.1 ms", "2,568 queries", "zero false alarms", "8×", "10/10"}
+    semantic_items = [item for item in compact["items"] if item["source_field"] == "semantic_source_brief"]
+    assert all(item["classification_basis"] == "llm_semantic_brief" for item in semantic_items)
+    assert [item["value_text"] for item in semantic_items if item["truth_type"] == "quote"] == [
+        "surprisingly practical in production."
+    ]
+
+
+def test_truth_index_does_not_compare_semantic_notes_with_article_wording() -> None:
+    story = {
+        "story_id": "story_scraper_spacing",
+        "records": [
+            {
+                "record_key": "record_scraper_spacing",
+                "title": "A code migration",
+                "url": "https://example.com/migration",
+                "source_name": "Example Lab",
+                "content": (
+                    "Jarred used Claude Code to migrate Bun from Zig to Rust . "
+                    "A million lines of code were produced in less than two weeks."
+                ),
+            }
+        ],
+    }
+    index = build_story_truth_index(
+        story,
+        {
+            "story_id": "story_scraper_spacing",
+            "source_synopsis": "The source describes a code migration.",
+            "central_event": "Bun was migrated from Zig to Rust.",
+            "source_relationship_summary": "One assigned source describes the migration.",
+            "distinctive_details": [
+                {
+                    "record_key": "record_scraper_spacing",
+                    "detail_type": "metric",
+                    "source_note": (
+                        "Jarred used Claude Code to migrate Bun from Zig to Rust. "
+                        "A million lines of code were produced in less than two weeks."
+                    ),
+                    "value_text": "A million lines of code",
+                    "claim_frame": "source_claim",
+                    "editorial_use": "Use the scale and speed as the concrete story anchor.",
+                    "visual_role": "counter",
+                    "visual_opportunity": "Show the source-reported scale.",
+                }
+            ],
+            "tensions_and_caveats": [],
+            "creator_opportunities": ["Contrast the old migration timeline with this source claim."],
+            "visual_opportunities": ["Show the source passage."],
+        },
+    )
+
+    assert len(index.items) == 1
+    assert "Rust. A million lines" in index.items[0].source_text
+    assert index.items[0].source_field == "semantic_source_brief"
+
+
+def test_truth_index_preserves_llm_selected_quote_without_punctuation_matching() -> None:
+    source_quote = (
+        "“Every nation and every company should own and control its intelligence infrastructure. "
+        "Open models make that possible,” said Jensen Huang."
+    )
+    story = {
+        "story_id": "story_embedded_quote",
+        "records": [
+            {
+                "record_key": "record_embedded_quote",
+                "title": "Open models",
+                "url": "https://example.com/open-models",
+                "source_name": "Example Lab",
+                "content": source_quote,
+            }
+        ],
+    }
+    index = build_story_truth_index(
+        story,
+        {
+            "story_id": "story_embedded_quote",
+            "source_synopsis": "The source argues for controllable intelligence infrastructure.",
+            "central_event": "The organization published new open models.",
+            "source_relationship_summary": "One organization-authored source contains the quote.",
+            "distinctive_details": [
+                {
+                    "record_key": "record_embedded_quote",
+                    "detail_type": "quote",
+                    "source_note": source_quote,
+                    "value_text": (
+                        '"Every nation and every company should own and control its intelligence '
+                        'infrastructure. Open models make that possible."'
+                    ),
+                    "claim_frame": "opinion",
+                    "editorial_use": "Use the speaker's framing as memorable source wording.",
+                    "visual_role": "quote",
+                    "visual_opportunity": "Show the source-owned quote.",
+                }
+            ],
+            "tensions_and_caveats": [],
+            "creator_opportunities": ["Explain why infrastructure ownership matters."],
+            "visual_opportunities": ["Show the article quote."],
+        },
+    )
+
+    assert index.items[0].value_text == (
+        '"Every nation and every company should own and control its intelligence infrastructure. '
+        'Open models make that possible."'
+    )
+
+
+def test_truth_index_does_not_apply_metric_text_matching() -> None:
+    story = {
+        "story_id": "story_unverified_value",
+        "records": [
+            {
+                "record_key": "record_unverified_value",
+                "title": "Measured result",
+                "url": "https://example.com/result",
+                "content": "The source reports a 40 percent improvement in its own benchmark.",
+            }
+        ],
+    }
+    index = build_story_truth_index(
+        story,
+        {
+            "story_id": "story_unverified_value",
+            "source_synopsis": "The source reports a benchmark result.",
+            "central_event": "A benchmark result was published.",
+            "source_relationship_summary": "One project source reports the result.",
+            "distinctive_details": [
+                {
+                    "record_key": "record_unverified_value",
+                    "detail_type": "metric",
+                    "source_note": "The source reports a 40 percent improvement in its own benchmark.",
+                    "value_text": "80 percent",
+                    "claim_frame": "source_claim",
+                    "editorial_use": "Explain the project-reported benchmark.",
+                    "visual_role": "counter",
+                    "visual_opportunity": "Show a value only when source-owned.",
+                }
+            ],
+            "tensions_and_caveats": [],
+            "creator_opportunities": ["Explain the benchmark scope."],
+            "visual_opportunities": [],
+        },
+    )
+
+    assert index.items[0].source_text.startswith("The source reports a 40 percent")
+    assert index.items[0].value_text == "80 percent"
+
+
+def test_truth_index_does_not_filter_semantic_details_by_article_text() -> None:
+    story = {
+        "story_id": "story_partial_brief",
+        "records": [
+            {
+                "record_key": "record_partial_brief",
+                "title": "A useful source",
+                "url": "https://example.com/useful-source",
+                "content": "The project published a working prototype for early testers.",
+            }
+        ],
+    }
+    index = build_story_truth_index(
+        story,
+        {
+            "story_id": "story_partial_brief",
+            "source_synopsis": "The source describes a prototype.",
+            "central_event": "A prototype was published.",
+            "source_relationship_summary": "One assigned source describes the release.",
+            "distinctive_details": [
+                {
+                    "record_key": "record_partial_brief",
+                    "detail_type": "event",
+                    "source_note": "The project published a working prototype for early testers.",
+                    "value_text": "",
+                    "claim_frame": "reported_fact",
+                    "editorial_use": "Anchor the story in the prototype release.",
+                    "visual_role": "source_proof",
+                    "visual_opportunity": "Show the release source.",
+                },
+                {
+                    "record_key": "record_partial_brief",
+                    "detail_type": "metric",
+                    "source_note": "The prototype reached one million users overnight.",
+                    "value_text": "one million users",
+                    "claim_frame": "source_claim",
+                    "editorial_use": "This unsupported detail must not reach the writer.",
+                    "visual_role": "counter",
+                    "visual_opportunity": "",
+                },
+            ],
+            "tensions_and_caveats": [],
+            "creator_opportunities": ["Explain what the prototype does."],
+            "visual_opportunities": ["Show the source page."],
+        },
+    )
+
+    assert len(index.items) == 2
+    assert index.items[0].truth_type == "event"
+    assert index.items[1].value_text == "one million users"
+    assert len(index.semantic_source_brief["distinctive_details"]) == 2
+
+
+def test_review_contract_supports_keep_without_a_candidate() -> None:
+    keep = StoryReviewOutput.model_validate(
+        {
+            "rewrite_required": False,
+            "issues": [],
+            "revised_segment": None,
+        }
+    )
+
+    assert keep.rewrite_required is False
+    assert keep.revised_segment is None
+    with pytest.raises(ValueError, match="rewrite_required=false"):
+        StoryReviewOutput.model_validate(
+            {
+                "rewrite_required": False,
+                "issues": [
+                    {
+                        "code": "generic_language",
+                        "explanation": "The opening is generic.",
+                        "affected_beat_ids": ["beat_01"],
+                    }
+                ],
+                "revised_segment": None,
+            }
+        )
+
+
+def test_revision_selector_schema_does_not_override_the_llm_semantic_decision() -> None:
+    accepted = RevisionSelectionOutput.model_validate(
+        {
+            "decision": "accept_candidate",
+            "rationale": "The candidate is a clear net improvement.",
+            "material_improvements": ["The opening uses the story's concrete detail."],
+            "material_regressions": [],
+        }
+    )
+    assert accepted.decision == "accept_candidate"
+
+    mixed = RevisionSelectionOutput.model_validate(
+        {
+            "decision": "accept_candidate",
+            "rationale": "The model judged the candidate to be the better overall script.",
+            "material_improvements": ["The opening is shorter."],
+            "material_regressions": ["One transition is less specific."],
+        }
+    )
+    assert mixed.decision == "accept_candidate"
+    assert mixed.material_regressions == ["One transition is less specific."]
 
 
 def test_llm_call_retries_a_transient_rate_limit(monkeypatch) -> None:
@@ -118,6 +439,8 @@ def test_llm_call_retries_a_transient_rate_limit(monkeypatch) -> None:
                 if self.attempts == 1:
                     raise RateLimitError("Please try again in 26ms")
                 payload = {
+                    "episode_shape": "curated_roundup",
+                    "episode_connection_reason": "The fixture contains one independent story.",
                     "episode_thesis": "A connected episode thesis.",
                     "viewer_promise": "A useful viewer promise.",
                     "hook_strategy": "Open on the consequence.",
@@ -126,12 +449,24 @@ def test_llm_call_retries_a_transient_rate_limit(monkeypatch) -> None:
                     "story_briefs": [
                         {
                             "story_id": "story_one",
+                            "story_engine": "practical_consequence",
                             "story_promise": "Explain the development.",
-                            "angle": "Focus on practical impact.",
-                            "must_cover": [],
+                            "hook_idea": "Open on the practical problem.",
+                            "tension": "The workflow can lose context.",
+                            "reveal_or_payoff": "A stable contract keeps it attached.",
+                            "viewer_stakes": "The final output stays coherent.",
+                            "specific_detail_anchor": "The handoff preserves context between stages.",
+                            "source_meaning_boundary": "A contract preserves supplied context; it does not guarantee creative quality.",
+                            "must_communicate_truth_ids": [],
+                            "optional_truth_ids": [],
+                            "narrator_take": "Structure is the unglamorous advantage.",
+                            "explanation_goal": "Make the workflow easy to picture.",
+                            "analogy_opportunities": [],
+                            "humor_opportunities": [],
+                            "humor_restraint_reason": None,
+                            "transition_relationship": "Begin clearly.",
+                            "visual_payoffs": [],
                             "avoid": [],
-                            "transition_in": "Begin clearly.",
-                            "transition_out": "Move forward.",
                         }
                     ],
                 }
@@ -172,7 +507,7 @@ def test_llm_call_retries_a_transient_rate_limit(monkeypatch) -> None:
     assert calls[0]["metadata"]["retry_errors"][0]["status_code"] == 429
 
 
-def test_roundup_rejects_duplicate_canonical_events() -> None:
+def test_video_packaging_does_not_reapply_semantic_duplicate_rules() -> None:
     stories = _json("video_packaging_result.json")["data"]["video_packet"]["stories"]
     duplicate = json.loads(json.dumps(stories[0]))
     duplicate["story_id"] = "story_duplicate"
@@ -180,26 +515,33 @@ def test_roundup_rejects_duplicate_canonical_events() -> None:
     duplicate["story_title"] = "A second article about the same event"
     stories[1]["rank"] = 3
     stories[2]["rank"] = 4
-    config = {
-        "candidate_limit": 10,
-        "max_stories": 5,
-        "allowed_priority_buckets": ["high", "medium"],
-        "exclude_noise": True,
-        "exclude_tutorials": True,
-        "max_per_entity": 3,
-        "max_per_product": 2,
-        "max_per_event_family": 2,
-        "reject_duplicate_events": True,
-    }
+    selected = [stories[0], duplicate, stories[1], stories[2]]
+    for order, (story, role) in enumerate(zip(selected, ["lead", "major", "brief", "brief"], strict=True), start=1):
+        story["editorial_selection"] = {
+            "story_id": story["story_id"],
+            "role": role,
+            "selection_order": order,
+            "selection_reason": "Selected by the semantic editorial selector.",
+        }
+    result = build_roundup_packet(
+        {
+            "episode_shape": "mixed_news_roundup",
+            "episode_thesis": "",
+            "ordering_rationale": "Selector-owned order.",
+            "selected_stories": selected,
+            "reserve": [],
+            "rejected": [],
+        },
+        {"min_stories": 3, "max_stories": 5, "duration_mode": "content_driven"},
+    )
 
-    selected, stats = select_roundup_stories([stories[0], duplicate, stories[1], stories[2]], config)
-
-    assert [story["story_id"] for story in selected] == [
+    assert result["packet"]["selected_story_ids"] == [
         "story_evidence",
+        "story_duplicate",
         "story_sync",
         "story_render",
     ]
-    assert stats["rejected_story_ids"]["story_duplicate"] == ["duplicate_canonical_event"]
+    assert result["selection_stats"]["selection_authority"] == "editorial_selection_llm"
 
 
 def test_content_driven_section_plan_uses_soft_role_guidance() -> None:
@@ -231,21 +573,24 @@ def test_content_driven_section_plan_uses_soft_role_guidance() -> None:
 
 def test_video_packaging_emits_roles_without_script_timing_allocations() -> None:
     stories = _json("video_packaging_result.json")["data"]["video_packet"]["stories"]
-    config = {
-        "candidate_limit": 10,
-        "max_stories": 5,
-        "duration_mode": "content_driven",
-        "duration_ceiling_seconds": 480,
-        "allowed_priority_buckets": ["high", "medium"],
-        "exclude_noise": True,
-        "exclude_tutorials": True,
-        "max_per_entity": 3,
-        "max_per_product": 2,
-        "max_per_event_family": 2,
-        "reject_duplicate_events": True,
+    for order, story in enumerate(stories, start=1):
+        story["editorial_selection"] = {
+            "story_id": story["story_id"],
+            "role": story["video_segment"]["role"],
+            "selection_order": order,
+            "selection_reason": "Selected by the semantic editorial selector.",
+        }
+    slate = {
+        "episode_shape": "mixed_news_roundup",
+        "episode_thesis": "",
+        "ordering_rationale": "Selector-owned order.",
+        "selected_stories": stories,
+        "reserve": [],
+        "rejected": [],
     }
+    config = {"min_stories": 3, "max_stories": 5, "duration_mode": "content_driven", "duration_ceiling_seconds": 480}
 
-    packet = build_roundup_packet(stories, config)["packet"]
+    packet = build_roundup_packet(slate, config)["packet"]
 
     assert packet["duration_policy"] == {
         "mode": "content_driven",
@@ -257,33 +602,37 @@ def test_video_packaging_emits_roles_without_script_timing_allocations() -> None
     assert "target_duration_seconds" not in packet
 
 
-def test_structural_story_gate_accepts_natural_length() -> None:
-    packet = _json("video_packaging_result.json")["data"]["video_packet"]
-    story = packet["stories"][0]
-    source_key = story["records"][0]["record_key"]
-    concise = {
-        "beats": [
-            {
-                "narration_text": "A concise but complete explanation.",
-                "source_record_keys": [source_key],
-            }
-        ]
-    }
-
-    assert _story_gate_issues(concise, story=story) == []
-
-
 def test_script_checks_do_not_reject_observed_duration_drift() -> None:
     video_packet = _json("video_packaging_result.json")["data"]["video_packet"]
     package = _json("script_generation_result.json")["data"]["script_package"]
     package["review"]["story_reviews"] = []
-    package["review"]["bookend_final_gate_issues"] = []
     package["full_script_stats"]["estimated_duration_seconds"] = 20.0
 
     checks = check_script_package(package, video_packet)
 
     assert checks["passed"] is True
     assert not any("duration drift" in error for error in checks["errors"])
+
+
+def test_script_checks_do_not_apply_semantic_or_craft_scoring() -> None:
+    video_packet = _json("video_packaging_result.json")["data"]["video_packet"]
+    package = _json("script_generation_result.json")["data"]["script_package"]
+    package["review"]["story_reviews"] = [
+        {
+            "story_id": "story_evidence",
+            "passes": [],
+            "final_gate_issues": [],
+            "final_craft_diagnostics": ["generic_story_hook:['in a world where']"],
+        }
+    ]
+    package["review"]["bookend_final_gate_issues"] = []
+    package["review"]["bookend_final_craft_diagnostics"] = ["formulaic_connector_sequence:3"]
+
+    checks = check_script_package(package, video_packet)
+
+    assert checks["passed"] is True
+    assert checks["warnings"] == []
+    assert checks["validation_scope"] == "structural_integrity_and_provenance_only"
 
 
 def test_manual_chatgpt_script_normalizes_to_canonical_beats() -> None:
@@ -294,7 +643,7 @@ def test_manual_chatgpt_script_normalizes_to_canonical_beats() -> None:
     assert result["status"] == "ok"
     assert package["generation_strategy"] == "manual_story_sections_normalized_to_audiovisual_beats"
     assert len(package["sections"]) == 5
-    assert package["full_script_stats"]["beat_count"] == 15
+    assert package["full_script_stats"]["beat_count"] == 12
     assert len(package["audio_plan"]["units"]) == 5
     assert len(package["story_asset_hints"]) == 3
     assert all(item["source_pages"] for item in package["story_asset_hints"])
@@ -319,6 +668,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
     story_ids = [story["story_id"] for story in stories]
     titles = {story["story_id"]: story["story_title"] for story in stories}
     source_keys = {story["story_id"]: story["records"][0]["record_key"] for story in stories}
+    records_by_story = {story["story_id"]: story["records"] for story in stories}
 
     class FakeLLM:
         def with_structured_output(self, model, include_raw=True, **kwargs):
@@ -327,8 +677,45 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
 
             def invoke(prompt):
                 prompt_text = prompt.to_string() if hasattr(prompt, "to_string") else str(prompt)
-                if model is EpisodeDirectorOutput:
+                if model is StorySourceBriefOutput:
+                    task_payload = json.loads(prompt_text.split("Task payload:\n", 1)[1])
+                    context = task_payload["complete_story_context"]
+                    story_id = task_payload["required_story_id"]
+                    assert context["story_id"] == story_id
+                    assert context["records"]
+                    assert context["records"] == records_by_story[story_id]
+                    record = context["records"][0]
                     payload = {
+                        "story_id": story_id,
+                        "source_synopsis": "The source describes one stage in a media workflow.",
+                        "central_event": "A workflow stage passes structured context downstream.",
+                        "source_relationship_summary": "One assigned source provides the fixture context.",
+                        "distinctive_details": [
+                            {
+                                "record_key": record["record_key"],
+                                "detail_type": "event",
+                                "source_note": record["title"],
+                                "value_text": "",
+                                "claim_frame": "reported_fact",
+                                "editorial_use": "Use the exact fixture event as the story anchor.",
+                                "visual_role": "source_proof",
+                                "visual_opportunity": "Show the assigned source title.",
+                            }
+                        ],
+                        "tensions_and_caveats": [],
+                        "creator_opportunities": ["Explain the handoff as a relay."],
+                        "visual_opportunities": ["Show context moving between stages."],
+                    }
+                elif model is EpisodeDirectorOutput:
+                    task_payload = json.loads(prompt_text.split("Task payload:\n", 1)[1])
+                    assert all(item["records"] for item in task_payload["story_context_packets"])
+                    truth_ids = {
+                        item["story_id"]: item["story_truth_index"]["items"][0]["truth_id"]
+                        for item in task_payload["story_context_packets"]
+                    }
+                    payload = {
+                        "episode_shape": "shared_tension",
+                        "episode_connection_reason": "Each fixture story concerns context moving between media stages.",
                         "episode_thesis": "Evidence and timing keep automated media coherent.",
                         "viewer_promise": "See how the pieces connect.",
                         "hook_strategy": "Open on the synchronization problem.",
@@ -337,12 +724,24 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                         "story_briefs": [
                             {
                                 "story_id": story_id,
+                                "story_engine": "practical_consequence",
                                 "story_promise": f"Explain {story_id}.",
-                                "angle": "The practical consequence.",
-                                "must_cover": ["what changed", "why it matters"],
+                                "hook_idea": "Open on the production failure this prevents.",
+                                "tension": "Disconnected stages force downstream guesses.",
+                                "reveal_or_payoff": "A shared contract keeps the active story aligned.",
+                                "viewer_stakes": "The explanation and screen can agree.",
+                                "specific_detail_anchor": "The shared contract keeps one active story attached to its media.",
+                                "source_meaning_boundary": "The contract preserves identity and timing, not the semantic quality of generated content.",
+                                "must_communicate_truth_ids": [truth_ids[story_id]],
+                                "optional_truth_ids": [],
+                                "narrator_take": "Reliable handoffs are more useful than flashy glue code.",
+                                "explanation_goal": "Make the contract handoff easy to picture.",
+                                "analogy_opportunities": ["Treat the contract like a relay baton."],
+                                "humor_opportunities": [],
+                                "humor_restraint_reason": None,
+                                "transition_relationship": "Advance the shared production chain.",
+                                "visual_payoffs": ["Show context moving between stages."],
                                 "avoid": ["hype"],
-                                "transition_in": "Connect from the prior story.",
-                                "transition_out": "Set up the next story.",
                             }
                             for story_id in story_ids
                         ],
@@ -350,14 +749,29 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                 elif model is StorySegmentOutput:
                     task_payload = json.loads(prompt_text.split("Task payload:\n", 1)[1])
                     story_id = task_payload["required_story_id"]
+                    truth_id = task_payload["director_brief"]["must_communicate_truth_ids"][0]
                     assert task_payload["writing_guidance"]["enforcement"] == "soft_editorial_guidance_only"
                     assert "body_beat_contract" not in task_payload
                     assert "body_word_contract" not in task_payload
+                    packet = task_payload["story_context_packet"]
+                    assert packet["story_id"] == story_id
+                    assert packet["semantic_source_brief"]["distinctive_details"]
+                    assert packet["records"] == records_by_story[story_id]
+
+                    function_by_type = {
+                        "what_changed": "reveal",
+                        "explanation": "explanation",
+                        "takeaway": "payoff",
+                    }
 
                     def beat(beat_type: str, narration: str) -> dict:
                         return {
                             "beat_type": beat_type,
+                            "beat_function": function_by_type[beat_type],
                             "narration_text": narration,
+                            "support_truth_ids": [truth_id],
+                            "creative_device": "contrast" if beat_type == "takeaway" else "none",
+                            "visual_goal": "Make the concrete workflow relationship visible.",
                             "source_record_keys": [source_keys[story_id]],
                             "visual_brief": {
                                 "purpose": "Show the concrete mechanism.",
@@ -384,10 +798,15 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                     task_payload = json.loads(prompt_text.split("Task payload:\n", 1)[1])
                     assert task_payload["quality_criteria"]
                     assert "body_word_contract" not in task_payload
+                    assert task_payload["story_context_packet"]["story_id"] in story_ids
+                    assert task_payload["story_context_packet"]["records"]
+                    assert "structural_issues" not in task_payload
+                    assert "craft_diagnostics" not in task_payload
+                    assert task_payload["beat_support_context"]
                     payload = {
-                        "should_apply_revision": False,
-                        "diagnosis": [],
-                        "revised_segment": task_payload["current_segment"],
+                        "rewrite_required": False,
+                        "issues": [],
+                        "revised_segment": None,
                     }
                 elif model is BookendOutput:
                     visual = {
@@ -413,7 +832,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                         ],
                         "story_connectors": [
                             {
-                                "story_id": story_id,
+                                "target_story_id": story_id,
                                 "display_title": titles[story_id],
                                 "transition_line": "Next, another production problem comes into focus.",
                                 "title_card_subtitle": "Evidence to screen",
@@ -434,9 +853,9 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                     assert task_payload["quality_criteria"]
                     assert "intro_budget_contract" not in task_payload
                     payload = {
-                        "should_apply_revision": False,
-                        "diagnosis": [],
-                        "revised_bookends": task_payload["current_bookends"],
+                        "rewrite_required": False,
+                        "issues": [],
+                        "revised_bookends": None,
                     }
                 else:
                     raise AssertionError(f"Unexpected structured output model: {model}")
@@ -477,6 +896,16 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
     assert package["full_script"] == "\n\n".join(section["narration_text"] for section in package["sections"])
     assert len(package["audio_plan"]["units"]) == 5
     assert all(section["beats"] for section in package["sections"])
+    assert len(package["story_truth_indexes"]) == 3
+    assert len(package["story_context_packets"]) == 3
+    assert package["review"]["review_call_count"] == 4
+    assert package["review"]["revision_count"] == 0
+    assert all(index["items"] for index in package["story_truth_indexes"])
+    assert all(
+        beat["beat_function"] and "support_truth_ids" in beat and beat["visual_goal"]
+        for section in package["sections"]
+        for beat in section["beats"]
+    )
     assert all(
         section["title_card"]["voice_behavior"] == "continue"
         for section in package["sections"]
@@ -485,31 +914,24 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
     assert result["summary"]["content_policy"]["word_counts_are_approval_gates"] is False
     assert result["summary"]["content_policy"]["timing_source_of_truth"] == "voiceover"
     modules = [call["module_name"] for call in result["llm_calls"]]
-    assert modules[0] == "roundup_director"
+    assert modules[:3] == ["roundup_source_researcher"] * 3
+    assert modules[3] == "roundup_director"
     assert modules.count("roundup_story_writer") == 3
     assert modules.count("roundup_story_reviewer") == 3
     assert modules[-2:] == ["roundup_bookend_writer", "roundup_bookend_reviewer"]
     assert not {"roundup_full_script_writer", "roundup_script_reviser"} & set(modules)
 
 
-def test_unresolved_script_review_gates_block_downstream_handoff() -> None:
+def test_script_checks_reject_unknown_source_ownership() -> None:
     video_packet = _json("video_packaging_result.json")["data"]["video_packet"]
     package = _json("script_generation_result.json")["data"]["script_package"]
-    package["review"]["story_reviews"] = [
-        {
-            "story_id": "story_evidence",
-            "passes": [],
-            "final_gate_issues": ["overlong_beats:[2]:max_words=35"],
-        }
-    ]
+    story_section = next(section for section in package["sections"] if section["section_type"] == "story")
+    story_section["used_source_record_keys"].append("record_not_selected")
 
-    checks = check_script_package(
-        package,
-        video_packet,
-    )
+    checks = check_script_package(package, video_packet)
 
     assert checks["passed"] is False
-    assert any("unresolved deterministic gates" in error for error in checks["errors"])
+    assert any("unknown source record keys" in error for error in checks["errors"])
 
 
 def test_voiceover_preserves_script_beat_identity(monkeypatch, tmp_path: Path) -> None:
@@ -541,9 +963,11 @@ def test_voiceover_preserves_script_beat_identity(monkeypatch, tmp_path: Path) -
     )
 
     assert resolved["alignment_strategy"] == "script_beats"
-    assert len(resolved["chunks"]) == 15
+    assert len(resolved["chunks"]) == 12
     assert len({chunk["audio_unit_id"] for chunk in resolved["chunks"]}) == 5
-    assert len({chunk["beat_id"] for chunk in resolved["chunks"]}) == 15
+    assert len({chunk["beat_id"] for chunk in resolved["chunks"]}) == 12
+    assert all(chunk["beat_function"] for chunk in resolved["chunks"])
+    assert all("creative_device" in chunk and "visual_goal" in chunk for chunk in resolved["chunks"])
 
     cursor = 0.0
     synthesized = []
@@ -574,7 +998,7 @@ def test_voiceover_preserves_script_beat_identity(monkeypatch, tmp_path: Path) -
     )
 
     assert len(units) == 5
-    assert sum(len(unit["aligned_beats"]) for unit in units) == 15
+    assert sum(len(unit["aligned_beats"]) for unit in units) == 12
     assert all(unit["start_seconds"] < unit["end_seconds"] for unit in units)
     assert all(
         beat["start_seconds"] < beat["end_seconds"]
@@ -816,10 +1240,18 @@ def test_chatgpt_visual_parser_uses_aligned_units_and_inserts_story_titles() -> 
                 "section_type": section["section_type"],
                 "start_seconds": 900 + unit_order,
                 "end_seconds": 901 + unit_order,
-                "render_kind": "recap_sequence_scene" if section["section_type"] == "closing" else "architecture_flow_scene",
+                "render_kind": "kinetic_type_scene",
                 "script_excerpt": section["narration_text"],
                 "visual_intent": "Explain the active section.",
-                "payload": {"headline": section["story_title"] or section["section_type"], "steps": []},
+                "payload": {
+                    "phrases": [section["story_title"] or section["section_type"]],
+                    "emphasis_words": [],
+                    "animation_style": "word_snap",
+                    "background_motif": "newsroom_grid",
+                },
+                "evidence_record_keys": [],
+                "evidence_text": "",
+                "grounding_basis": "script_beat",
                 "covered_unit_orders": section_orders,
             }
         )
@@ -854,7 +1286,7 @@ def test_chatgpt_visual_parser_uses_aligned_units_and_inserts_story_titles() -> 
             "run": {"run_id": "fixture_media_roundup_reference"},
             "config": {
                 "scene_policy": {
-                    "allowed_render_kinds": ["architecture_flow_scene", "recap_sequence_scene", "transition_stinger_scene"],
+                    "allowed_render_kinds": ["kinetic_type_scene", "transition_stinger_scene"],
                     "max_scene_seconds": 14,
                     "min_scene_seconds": 3,
                     "semantic_min_scene_seconds": 5,

@@ -12,18 +12,20 @@ result = run(input_json)
 
 ```text
 video_packet
-  -> deterministic story order and soft role guidance
-  -> roundup director
-  -> parallel story-local writers
+  -> editor-selected story order and role guidance
+  -> one semantic source-research pass per story over complete records
+  -> shared versioned story-context packets with full records and semantic reading notes
+  -> creator-led roundup director and per-story engines
+  -> parallel story-local storytellers
   -> bounded story-local quality reviews
   -> bookend/continuity writer
   -> bounded bookend quality review
   -> deterministic section, beat, full-script, and audio-plan assembly
 ```
 
-No LLM call writes or rewrites the complete episode. Once a story body passes
-its gate, later calls cannot replace it. The bookend writer receives compact
-final story summaries and may write only the intro, short spoken connectors,
+No LLM call writes or rewrites the complete episode. Once a story body is
+accepted, later calls cannot replace it. The bookend writer receives the final
+story narration and may write only the intro, short spoken connectors,
 moving-title copy, and conclusion.
 
 ## Canonical Units
@@ -31,8 +33,9 @@ moving-title copy, and conclusion.
 `sections[].beats` are authoritative. Every beat carries:
 
 - stable `beat_id`, `beat_order`, `beat_type`, and `story_id`
+- an editorial `beat_function`, optional `creative_device`, and `visual_goal`
 - spoken `narration_text`
-- source record keys used by that beat
+- invisible support truth IDs and source record keys used by that beat
 - a typed visual brief describing the viewer-facing visual purpose
 
 `section.narration_text` and `full_script` are deterministic projections of
@@ -43,19 +46,50 @@ story, and the closing. Story sections also contain a title-card contract whose
 ## Guardrails
 
 - selected-story order is preserved from the video packet
-- a story writer receives only its own full records
+- the director receives every complete story packet, and each story-local
+  writer, reviewer, and revision selector receives the same complete packet
+- semantic source briefs add reading notes without replacing
+  or truncating the records
 - source keys outside that story fail validation
+- truth IDs outside that story fail validation; attaching every available truth
+  ID is not a coverage quota
+- truth details, quotes, metrics, and interpretations are selected semantically
+  by the source researcher; code validates only record ownership and stable IDs
+- code never compares an LLM source note, quote, or metric against article text
+- regex metric extraction, lexical sentence classification, and stage-specific
+  truth truncation are not used in the creative prompt boundary
+- configured context limits are resource guards: an oversized complete packet
+  fails clearly rather than being silently shortened
+- truth items preserve source name and relationship; self-published and
+  community-launch context remains visible to the LLM
+- engagement, tone, hook quality, claim interpretation, attribution style,
+  humor, and prose quality are LLM and human editorial judgments, not regex or
+  semantic-overlap approval gates
 - role-specific word suggestions are prompt guidance only, never approval gates
 - writers use as many coherent audiovisual beats as the story naturally needs
+- prompts guide one visual thought per beat and usually one or two spoken
+  sentences, but beat duration and count are not deterministic quotas
 - short complete stories are accepted; writers must not pad them with filler
 - measured word counts and estimated duration remain visible as diagnostics
-- review loops have a strict maximum of two, with one as the default
-- transient provider rate limits and service errors retry only the failed LLM
-  call under the bounded `llm_retry` policy; validation errors are not retried
-- a review candidate is applied only when the model recommends a material
-  editorial improvement and it passes structural/source guardrails
+- review loops have a strict maximum of one
+- transient provider rate limits, service errors, and structured-output parsing
+  retry only the failed LLM call under the bounded `llm_retry` policy
+- reviewers may explicitly keep a good draft with no replacement candidate
+- a proposed rewrite is eligible only when it validates and names supplied
+  review beat IDs; code does not compare its prose or require an exact textual
+  difference in a named beat
+- when `review.candidate_selection.enabled=true`, every structurally valid
+  rewrite is compared semantically with the current draft by a strict
+  keep-current-or-accept-candidate selector; code does not score prose quality
+- selector failure follows the configured bounded policy and production keeps
+  the already valid current draft rather than applying an unjudged rewrite
+- code does not reject generated prose based on corporate-language lists,
+  metric matching, qualifiers, claim-strength words, source-order similarity,
+  or inferred claim states
+- Pydantic shape, story/source ownership, known IDs, canonical order,
+  non-empty narration, and artifact provenance remain hard checks
 - title connectors are short enough to remain moving transitions
-- visual directions and internal IDs are forbidden in spoken narration
+- internal pipeline IDs are forbidden in spoken narration; visual-direction separation is owned by the structured beat contract and writing prompts rather than phrase matching
 - actual voiceover timing, not nominal script duration, drives visual planning
 
 All prompt text is versioned below `prompts/`. `llm_client.py` only constructs

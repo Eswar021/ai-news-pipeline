@@ -1,0 +1,33 @@
+{
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "duration_seconds": 3.5,
+  "codec": "h264",
+  "crf": 22,
+  "x264_preset": "veryfast",
+  "visual_style": {
+    "style_id": "editorial_minimal",
+    "background_color": "#f4efe6",
+    "text_color": "#171611",
+    "accent_color": "#bd4e2f",
+    "muted_color": "#6f6a61",
+    "editorial_font": "Iowan Old Style, Baskerville, Georgia, Times New Roman, serif",
+    "sans_font": "Avenir Next Condensed, Avenir Next, Helvetica Neue, Arial, sans-serif"
+  },
+  "scene": {
+    "scene_id": "editorial_text_preview",
+    "render_kind": "editorial_text_scene",
+    "script_excerpt": "The interesting part is not the launch. It is who controls the workflow after it.",
+    "visual_intent": "Land one concise implication.",
+    "payload": {
+      "eyebrow": "THE BIGGER SHIFT",
+      "headline": "AI is moving from answers to actions",
+      "accent_words": ["actions"],
+      "supporting_text": "The product battle is becoming a workflow battle.",
+      "composition": "editorial_left",
+      "motion_style": "word_reveal"
+    },
+    "resolved_asset": {}
+  }
+}

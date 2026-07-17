@@ -183,7 +183,6 @@ source_groups:
           trust_tier: 2
           source_relationship: "third_party"
           feed_url: "https://techcrunch.com/category/artificial-intelligence/feed/"
-          relevance_filter: true
         - id: "the_verge_ai"
           name: "The Verge"
           enabled: true
@@ -192,8 +191,6 @@ source_groups:
           trust_tier: 2
           source_relationship: "third_party"
           feed_url: "https://www.theverge.com/rss/index.xml"
-          relevance_filter: true
-          search_terms: ["AI", "artificial intelligence", "OpenAI", "Anthropic", "Gemini", "Claude", "LLM", "AI agent", "agentic", "Antigravity"]
         - id: "venturebeat_ai"
           name: "VentureBeat AI"
           enabled: true
@@ -202,7 +199,6 @@ source_groups:
           trust_tier: 2
           source_relationship: "third_party"
           feed_url: "https://venturebeat.com/category/ai/feed/"
-          relevance_filter: true
         - id: "mit_technology_review_ai"
           name: "MIT Technology Review"
           enabled: true
@@ -211,8 +207,6 @@ source_groups:
           trust_tier: 2
           source_relationship: "third_party"
           feed_url: "https://www.technologyreview.com/feed/"
-          relevance_filter: true
-          search_terms: ["AI", "artificial intelligence", "OpenAI", "Anthropic", "Gemini", "Claude", "LLM", "AI agent", "agentic", "Antigravity", "machine learning"]
         - id: "latent_space"
           name: "Latent Space"
           enabled: true
@@ -221,7 +215,6 @@ source_groups:
           trust_tier: 2
           source_relationship: "third_party"
           feed_url: "https://www.latent.space/feed"
-          relevance_filter: true
         - id: "import_ai"
           name: "Import AI"
           enabled: true
@@ -230,7 +223,6 @@ source_groups:
           trust_tier: 2
           source_relationship: "third_party"
           feed_url: "https://jack-clark.net/feed/"
-          relevance_filter: true
 
     research_papers:
       collector: "research_papers"
@@ -342,7 +334,6 @@ source_groups:
           trust_tier: 3
           env_keys: ["GITHUB_TOKEN"]
           max_items: 10
-          min_stars: 50
           search_queries:
             - "hermes agent"
             - "openclaw"

@@ -25,7 +25,7 @@ export const RecapSequenceScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "The bigger shift";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const beats = beatList(payload.beats);
   const explicitItems = listValue(payload.recap_items);
   const beatItems = beats.map((beat) => beat.text || "").filter(Boolean);
@@ -49,7 +49,7 @@ export const RecapSequenceScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }
       </div>
 
       <div style={{ position: "absolute", left: singleItem ? 210 : 124, right: singleItem ? 210 : 124, top: singleItem ? 360 : 292, display: "grid", gridTemplateColumns: singleItem ? "1fr" : "1fr 1fr", gap: "24px 30px" }}>
-        {(items.length ? items : ["AI is moving into infrastructure"]).map((item, index) => {
+        {items.map((item, index) => {
           const beatStartSeconds = beats[index]?.relative_start_seconds;
           const start = typeof beatStartSeconds === "number" ? Math.max(8, Math.round(beatStartSeconds * fps)) : 16 + index * 16;
           const opacity = clamp01(interpolate(frame, [start, start + 12], [0, 1], { extrapolateRight: "clamp" }));

@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from copy import deepcopy
+import json
 import re
 import time
 from typing import Any, Literal
 
 from langchain_core.prompts import PromptTemplate
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .config import (
-    VALID_ACTIONS,
-    VALID_EDITORIAL_VALUES,
-    VALID_STORY_TYPES,
-    VALID_TEMPORAL_RELATIONSHIPS,
-)
-from .fingerprint import build_fingerprint_text
 from .llm_logging import build_llm_call_log
 from .utils import clean_text
 
@@ -76,6 +71,20 @@ class StoryLabelOutput(BaseModel):
     why_it_matters: str = Field(
         description="One complete concise sentence explaining why this may or may not matter."
     )
+
+    @field_validator(
+        "primary_entity",
+        "owning_org",
+        "product_or_project",
+        "canonical_story_key",
+        "one_sentence_story",
+        "why_it_matters",
+    )
+    @classmethod
+    def required_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("story label text fields must not be empty; use 'unknown' when needed")
+        return value
 
 
 def attach_story_labels(
@@ -145,10 +154,27 @@ def _label_one_story(
     llm_calls: list[dict[str, Any]],
     system_prompt: str,
 ) -> dict:
-    story_payload = _build_user_prompt(
+    context_records = [
+        record for record in story.get("records", []) if isinstance(record, dict)
+    ]
+    story_context = _build_story_label_context(
         story=story,
         run_context=run_context,
-        max_records_per_story=int(story_label_cfg["max_records_per_story"]),
+        records=context_records,
+    )
+    serialized_context_chars = len(
+        json.dumps(story_context, ensure_ascii=False, separators=(",", ":"))
+    )
+    configured_limit = int(story_label_cfg["max_story_context_chars"])
+    if serialized_context_chars > configured_limit:
+        raise ValueError(
+            "Complete story-label context exceeds story_label.max_story_context_chars; "
+            "no records were removed or truncated. "
+            f"story_id={story.get('story_id')}, serialized_chars={serialized_context_chars}, "
+            f"configured_limit={configured_limit}"
+        )
+    story_payload = _build_user_prompt(
+        story_context=story_context,
     )
     prompt_inputs = {
         "system_prompt": system_prompt,
@@ -160,6 +186,10 @@ def _label_one_story(
         "record_count": story.get("record_count", 0),
         "story_index": index,
         "story_total": total,
+        "context_record_keys": [clean_text(record.get("record_key")) for record in context_records],
+        "source_context_mode": "complete_normalized_story_records",
+        "records_truncated": False,
+        "serialized_context_chars": serialized_context_chars,
     }
     response_model = _invoke_story_label_chain(
         module_name="story_label",
@@ -172,6 +202,12 @@ def _label_one_story(
     label = validate_story_label(response_model, story)
     next_story = dict(story)
     next_story["story_identity"] = label
+    next_story["story_label_context"] = {
+        "record_keys": [clean_text(record.get("record_key")) for record in context_records],
+        "selection_strategy": "all_complete_story_records",
+        "records_truncated": False,
+        "serialized_context_chars": serialized_context_chars,
+    }
     if label["story_type"] != "unknown":
         next_story["story_type_hint"] = label["story_type"]
     return next_story
@@ -233,41 +269,80 @@ def _invoke_story_label_chain(
     return parsed_model
 
 
-def _build_user_prompt(*, story: dict, run_context: dict, max_records_per_story: int) -> str:
+def _build_user_prompt(
+    *,
+    story_context: dict[str, Any],
+) -> str:
+    return json.dumps(story_context, ensure_ascii=False, indent=2)
+
+
+def _build_story_label_context(
+    *,
+    story: dict[str, Any],
+    run_context: dict[str, Any],
+    records: list[dict[str, Any]],
+) -> dict[str, Any]:
     time_range = story.get("time_range") or {}
     collection_window = run_context.get("collection_window") or {}
-    story_lines = [
-        f"run_window_start: {clean_text(collection_window.get('start', ''))}",
-        f"run_window_end: {clean_text(collection_window.get('end', ''))}",
-        f"run_window_lookback_hours: {collection_window.get('lookback_hours', '')}",
-        f"effective_max_pair_hours: {run_context.get('effective_max_pair_hours', '')}",
-        f"story_id: {clean_text(story.get('story_id', ''))}",
-        f"story_title: {clean_text(story.get('story_title', ''))}",
-        f"record_count: {story.get('record_count', 0)}",
-        f"source_groups: {', '.join(story.get('source_groups', []))}",
-        f"match_reasons: {', '.join(story.get('match_reasons', []))}",
-        f"story_first_seen_at: {clean_text(time_range.get('first_seen_at', ''))}",
-        f"story_last_seen_at: {clean_text(time_range.get('last_seen_at', ''))}",
-        f"story_time_span_hours: {time_range.get('time_span_hours', 0)}",
-    ]
-    record_blocks = []
-    for index, record in enumerate(story.get("records", [])[:max_records_per_story], start=1):
-        source_name = record.get("source_name") or record.get("provider") or record.get("channel_name", "")
-        header = "\n".join(
-            [
-                f"record_{index}_key: {clean_text(record.get('record_key', ''))}",
-                f"record_{index}_source_group: {clean_text(record.get('source_group', ''))}",
-                f"record_{index}_source: {clean_text(record.get('source', ''))}",
-                f"record_{index}_source_name: {clean_text(source_name)}",
-                f"record_{index}_title: {clean_text(record.get('title', ''))}",
-                f"record_{index}_url: {clean_text(record.get('url', ''))}",
-                f"record_{index}_published_at: {clean_text(record.get('published_at', ''))}",
-            ]
-        )
-        record_text = build_fingerprint_text(record)[:1800]
-        record_blocks.append(f"{header}\nrecord_{index}_text:\n{record_text}")
+    return {
+        "run_window": {
+            "start": clean_text(collection_window.get("start")),
+            "end": clean_text(collection_window.get("end")),
+            "lookback_hours": collection_window.get("lookback_hours"),
+            "effective_max_pair_hours": run_context.get("effective_max_pair_hours"),
+        },
+        "story": {
+            "story_id": clean_text(story.get("story_id")),
+            "story_title": clean_text(story.get("story_title")),
+            "record_count": len(records),
+            "source_groups": list(story.get("source_groups") or []),
+            "match_reasons": list(story.get("match_reasons") or []),
+            "time_range": {
+                "first_seen_at": clean_text(time_range.get("first_seen_at")),
+                "last_seen_at": clean_text(time_range.get("last_seen_at")),
+                "time_span_hours": time_range.get("time_span_hours", 0),
+            },
+        },
+        "records": [_complete_record_context(record) for record in records],
+        "context_contract": {
+            "all_story_records_included": True,
+            "records_truncated": False,
+        },
+    }
 
-    return "\n".join(story_lines) + "\n\nSupporting records:\n\n" + "\n\n---\n\n".join(record_blocks)
+
+def _complete_record_context(record: dict[str, Any]) -> dict[str, Any]:
+    content_fields = (
+        "cleaned_content",
+        "content",
+        "transcript",
+        "semantic_content",
+        "raw_content",
+    )
+    context = deepcopy(record)
+    values = {
+        field: str(record.get(field) or "").strip()
+        for field in content_fields
+        if record.get(field) is not None
+    }
+    source_field = next((field for field in content_fields if values.get(field)), "")
+    semantic_content = values.get(source_field, "")
+    raw_content = values.get("raw_content", "")
+    for field in content_fields:
+        context.pop(field, None)
+    context["semantic_content"] = semantic_content
+    if raw_content and raw_content != semantic_content:
+        context["distinct_raw_content"] = raw_content
+    context["semantic_content_provenance"] = {
+        "source_field": source_field,
+        "complete": True,
+        "truncated": False,
+        "distinct_raw_content_included": bool(raw_content and raw_content != semantic_content),
+        "original_field_char_counts": {
+            field: len(value) for field, value in values.items()
+        },
+    }
+    return context
 
 
 def validate_story_label(raw: StoryLabelOutput | BaseModel | dict, story: dict) -> dict:
@@ -278,72 +353,33 @@ def validate_story_label(raw: StoryLabelOutput | BaseModel | dict, story: dict) 
     else:
         raise ValueError(f"Story label response must be a Pydantic model or dict for {story.get('story_id', '')}")
 
-    primary_entity = _clean_label_text(raw_dict.get("primary_entity", "unknown")) or "unknown"
-    owning_org = _clean_label_text(raw_dict.get("owning_org", "unknown")) or "unknown"
-    product_or_project = _clean_label_text(raw_dict.get("product_or_project", "unknown")) or "unknown"
-    story_action = _enum(raw_dict.get("story_action"), VALID_ACTIONS, "unknown")
-    story_type = _enum(raw_dict.get("story_type"), VALID_STORY_TYPES, "unknown")
-    temporal_relationship = _enum(
-        raw_dict.get("temporal_relationship"),
-        VALID_TEMPORAL_RELATIONSHIPS,
-        "unknown",
-    )
-    editorial_value = _enum(raw_dict.get("editorial_value"), VALID_EDITORIAL_VALUES, "medium")
-    is_tutorial = _bool(raw_dict.get("is_tutorial", False))
-    is_event_update = _bool(raw_dict.get("is_event_update", False))
-
-    if story_type in {"community_product_launch", "official_update", "industry_news", "research_result"}:
-        is_tutorial = story_action == "tutorial"
-    if story_type != "event_update":
-        is_event_update = story_action == "event_update"
-
-    canonical_story_key = _normalize_key(raw_dict.get("canonical_story_key", raw_dict.get("merge_identity", "")))
+    parsed = StoryLabelOutput.model_validate(raw_dict)
+    canonical_story_key = _normalize_key(parsed.canonical_story_key)
     if not canonical_story_key:
-        canonical_story_key = _fallback_story_key(
-            primary_entity=primary_entity,
-            product_or_project=product_or_project,
-            story_action=story_action,
-            story_type=story_type,
-            story=story,
+        raise ValueError(
+            f"Story label canonical_story_key normalizes to empty for {story.get('story_id', '')}"
         )
 
     return {
-        "primary_entity": primary_entity,
-        "owning_org": owning_org,
-        "product_or_project": product_or_project,
-        "story_action": story_action,
-        "story_type": story_type,
-        "temporal_relationship": temporal_relationship,
+        "primary_entity": _clean_label_text(parsed.primary_entity),
+        "owning_org": _clean_label_text(parsed.owning_org),
+        "product_or_project": _clean_label_text(parsed.product_or_project),
+        "story_action": parsed.story_action,
+        "story_type": parsed.story_type,
+        "temporal_relationship": parsed.temporal_relationship,
         "canonical_story_key": canonical_story_key,
         "merge_identity": canonical_story_key,
-        "one_sentence_story": _clean_label_text(raw_dict.get("one_sentence_story", "")),
-        "editorial_value": editorial_value,
-        "is_tutorial": is_tutorial,
-        "is_event_update": is_event_update,
-        "is_noise": _bool(raw_dict.get("is_noise", False)),
-        "why_it_matters": _clean_label_text(raw_dict.get("why_it_matters", "")),
+        "one_sentence_story": _clean_label_text(parsed.one_sentence_story),
+        "editorial_value": parsed.editorial_value,
+        "is_tutorial": parsed.is_tutorial,
+        "is_event_update": parsed.is_event_update,
+        "is_noise": parsed.is_noise,
+        "why_it_matters": _clean_label_text(parsed.why_it_matters),
     }
-
-
-def _enum(value, allowed: set[str], default: str) -> str:
-    cleaned = clean_text(str(value or "")).lower()
-    return cleaned if cleaned in allowed else default
 
 
 def _clean_label_text(value) -> str:
     return clean_text(str(value or ""))
-
-
-def _bool(value) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        cleaned = value.strip().lower()
-        if cleaned == "true":
-            return True
-        if cleaned == "false":
-            return False
-    return bool(value)
 
 
 def _normalize_key(value) -> str:
@@ -354,17 +390,3 @@ def _normalize_key(value) -> str:
     cleaned = re.sub(r"\s+", "_", cleaned.strip())
     cleaned = re.sub(r"_*\|_*", "|", cleaned)
     return cleaned[:140]
-
-
-def _fallback_story_key(
-    *,
-    primary_entity: str,
-    product_or_project: str,
-    story_action: str,
-    story_type: str,
-    story: dict,
-) -> str:
-    entity = product_or_project if product_or_project != "unknown" else primary_entity
-    if entity == "unknown":
-        entity = clean_text(story.get("story_title", ""))[:80] or clean_text(story.get("story_id", "unknown"))
-    return _normalize_key(f"{entity}|{story_action}|{story_type}")

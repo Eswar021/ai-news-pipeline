@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from collections import Counter
 import time
 
 from .collectors import (
@@ -15,6 +16,7 @@ from .contract import (
     NewsCollectionResponse,
     NewsCollectionStatus,
 )
+from .utils import build_candidate_decision
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -26,15 +28,37 @@ def run(input_json: dict) -> dict:
     started = time.time()
 
     records: list[dict] = []
+    candidate_ledger: list[dict] = []
     group_summaries: dict[str, dict] = {}
     enabled_groups = list(request.config.enabled_source_groups)
 
     for group_name in enabled_groups:
         cfg = request.config.collectors[group_name].model_dump(mode="python")
         result = _collect_group(group_name, cfg)
+        group_candidates = list(result.get("candidate_ledger", []))
+        candidates_by_key = {
+            item.get("candidate_key"): item
+            for item in group_candidates
+            if item.get("candidate_key")
+        }
         for record in result["records"]:
             record["record_id"] = f"L1_{len(records) + 1:05d}"
             records.append(record)
+            candidate = candidates_by_key.get(record.get("candidate_key"))
+            if candidate is None:
+                candidate = build_candidate_decision(
+                    source_group=record.get("source_group", group_name),
+                    source=record.get("source", ""),
+                    title=record.get("title", ""),
+                    url=record.get("url", ""),
+                    published_at=record.get("published_at", ""),
+                    decision="collected",
+                    reason_code="collector_accepted",
+                )
+                group_candidates.append(candidate)
+            candidate["decision"] = "collected"
+            candidate["record_id"] = record["record_id"]
+        candidate_ledger.extend(group_candidates)
         group_summaries[group_name] = result["summary"]
 
     generated_at = _iso_now()
@@ -44,6 +68,9 @@ def run(input_json: dict) -> dict:
         for group_name, summary in group_summaries.items()
         if summary.get("collected_count", 0) > 0
     ]
+    candidate_decision_counts = dict(
+        Counter(item.get("decision", "unknown") for item in candidate_ledger)
+    )
     response = NewsCollectionResponse(
         status=status,
         data={
@@ -51,6 +78,8 @@ def run(input_json: dict) -> dict:
             "generated_at": generated_at,
             "record_count": len(records),
             "records": records,
+            "candidate_count": len(candidate_ledger),
+            "candidate_ledger": candidate_ledger,
         },
         summary={
             "run_id": run_id,
@@ -61,11 +90,14 @@ def run(input_json: dict) -> dict:
             "successful_source_groups": successful_groups,
             "successful_source_group_count": len(successful_groups),
             "total_records": len(records),
+            "candidate_count": len(candidate_ledger),
+            "candidate_decision_counts": candidate_decision_counts,
             "elapsed_seconds": round(time.time() - started, 2),
             "groups": group_summaries,
         },
         handoff={
             "record_count": len(records),
+            "candidate_count": len(candidate_ledger),
             "ready_for_evidence_prep": status in {"ok", "partial"} and len(records) > 0,
         },
     )

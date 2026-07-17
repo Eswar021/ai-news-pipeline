@@ -28,6 +28,7 @@ class VisualRenderConfig(BaseModel):
     output_dir: str
     force: bool = False
     remotion_engine_dir: str | None = None
+    render_mode: Literal["preview", "final"] = "final"
     quality_preset: Literal["custom", "1080p", "2k", "4k"] = "custom"
     width: int = DEFAULT_WIDTH
     height: int = DEFAULT_HEIGHT
@@ -37,6 +38,7 @@ class VisualRenderConfig(BaseModel):
     video_bitrate: str | None = None
     x264_preset: str | None = None
     pixel_format: str | None = None
+    hardware_acceleration: Literal["disable", "if-possible", "required"] = "if-possible"
     bundle_timeout_seconds: int = 240
     render_timeout_seconds: int = 240
     worker_count: int = 1
@@ -45,6 +47,11 @@ class VisualRenderConfig(BaseModel):
     keep_render_logs: bool = True
     max_scene_duration_seconds: float | None = None
     scene_limit: int | None = None
+    selected_scene_ids: list[str] = Field(default_factory=list)
+    selected_story_ids: list[str] = Field(default_factory=list)
+    cache_dir: str | None = None
+    reuse_cached_scenes: bool = False
+    batch_renderer_enabled: bool = True
 
     @field_validator("output_dir")
     @classmethod
@@ -89,6 +96,21 @@ class VisualRenderConfig(BaseModel):
         if value is not None and (value < 0 or value > 51):
             raise ValueError("config.crf must be between 0 and 51 when provided")
         return value
+
+    @field_validator("selected_scene_ids", "selected_story_ids")
+    @classmethod
+    def selection_values_must_be_clean(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(item.strip() for item in value if item.strip()))
+
+    @model_validator(mode="after")
+    def concurrency_must_be_safe(self) -> "VisualRenderConfig":
+        if self.worker_count > 8:
+            raise ValueError("config.worker_count must not exceed 8; use cache and preview mode before adding workers")
+        if self.frame_concurrency > 4:
+            raise ValueError("config.frame_concurrency must not exceed 4")
+        if self.reuse_cached_scenes and not (self.cache_dir or "").strip():
+            raise ValueError("config.cache_dir is required when reuse_cached_scenes=true")
+        return self
 
 
 class AssetResolverData(BaseModel):

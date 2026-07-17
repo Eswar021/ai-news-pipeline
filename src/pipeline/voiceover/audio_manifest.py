@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.pipeline.contracts import build_artifact_provenance
+from src.pipeline.contracts import build_artifact_provenance, voiceover_artifact_payload
 
 
 def build_voiceover_package(
@@ -24,21 +24,30 @@ def build_voiceover_package(
     alignment_strategy: str,
     script_provenance: dict[str, Any],
     audio_sha256: str,
+    mastering: dict[str, Any] | None = None,
+    captions: dict[str, Any] | None = None,
 ) -> dict:
+    mastering = _portable_mastering_paths(dict(mastering or {}))
+    captions = _portable_caption_paths(dict(captions or {}))
+    identity_package = {
+        "provider": provider,
+        "voice": voice,
+        "style": style,
+        "audio": {
+            "sample_rate_hz": sample_rate_hz,
+            "duration_seconds": round(duration_seconds, 2),
+            "mastering": mastering,
+        },
+        "captions": captions,
+        "audio_units": [_identity_audio_unit(unit) for unit in audio_units],
+        "provenance": {"audio_sha256": audio_sha256},
+    }
     provenance = build_artifact_provenance(
         artifact_type="voiceover",
         run_id=run_id,
         parents={"script": script_provenance["script_fingerprint"]},
         script_source=str(script_provenance.get("script_source", "")),
-        payload={
-            "provider": provider,
-            "voice": voice,
-            "style": style,
-            "sample_rate_hz": sample_rate_hz,
-            "duration_seconds": round(duration_seconds, 2),
-            "audio_sha256": audio_sha256,
-            "audio_units": [_identity_audio_unit(unit) for unit in audio_units],
-        },
+        payload=voiceover_artifact_payload(identity_package),
     )
     provenance["audio_sha256"] = audio_sha256
     return {
@@ -55,7 +64,9 @@ def build_voiceover_package(
             "sample_rate_hz": sample_rate_hz,
             "full_audio_path": _portable_path(full_audio_path),
             "duration_seconds": round(duration_seconds, 2),
+            "mastering": mastering,
         },
+        "captions": captions,
         "input_script": {
             "source": script_source,
             "word_count": script_word_count,
@@ -96,6 +107,9 @@ def build_summary(package: dict) -> dict:
         "voiceover_fingerprint": package.get("provenance", {}).get("voiceover_fingerprint", ""),
         "ready_for_video_assembly": package["handoff"]["ready_for_video_assembly"],
         "requires_manual_audio_review": package["handoff"]["requires_manual_audio_review"],
+        "mastering_status": (package.get("audio", {}).get("mastering") or {}).get("status", ""),
+        "caption_file_count": len((package.get("captions") or {}).get("files", [])),
+        "caption_cue_count": int((package.get("captions") or {}).get("cue_count", 0) or 0),
     }
 
 
@@ -112,6 +126,28 @@ def _portable_audio_unit_paths(unit: dict[str, Any]) -> dict[str, Any]:
     audio_path = normalized.get("audio_path")
     if audio_path:
         normalized["audio_path"] = _portable_path(Path(audio_path))
+    return normalized
+
+
+def _portable_caption_paths(captions: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(captions)
+    files = []
+    for item in normalized.get("files", []):
+        if not isinstance(item, dict):
+            continue
+        next_item = dict(item)
+        if next_item.get("path"):
+            next_item["path"] = _portable_path(Path(next_item["path"]))
+        files.append(next_item)
+    normalized["files"] = files
+    return normalized
+
+
+def _portable_mastering_paths(mastering: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(mastering)
+    for key in ("input_path", "output_path"):
+        if normalized.get(key):
+            normalized[key] = _portable_path(Path(normalized[key]))
     return normalized
 
 

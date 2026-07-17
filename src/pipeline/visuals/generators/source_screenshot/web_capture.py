@@ -15,6 +15,8 @@ def capture_source_viewport(
     timeout_ms: int,
     post_load_wait_ms: int,
     capture_mode: str,
+    focus_zoom: float = 1.3,
+    highlight_target: bool = True,
     raw_capture_path: Path | None = None,
     full_page_debug_path: Path | None = None,
 ) -> dict[str, Any]:
@@ -32,7 +34,12 @@ def capture_source_viewport(
         match = {"target_found": False, "matched_text": "", "match_score": 0, "scroll_error": ""}
         if capture_mode in {"article_viewport", "target_text_focus", "headline_then_body"}:
             try:
-                match = _scroll_near_target(page, clean_text(payload.get("target_text", "")))
+                match = _scroll_near_target(
+                    page,
+                    clean_text(payload.get("target_text", "")),
+                    focus_zoom=focus_zoom,
+                    highlight_target=highlight_target,
+                )
             except Exception as exc:  # noqa: BLE001 - still capture if matching flakes.
                 match = {
                     "target_found": False,
@@ -57,6 +64,7 @@ def capture_source_viewport(
             "target_found": bool(match.get("target_found")),
             "matched_text": clean_text(match.get("matched_text", "")),
             "match_score": match.get("match_score", 0),
+            "focus_zoom": match.get("focus_zoom", focus_zoom),
             "screenshot_bytes": screenshot_bytes,
         }
     except PlaywrightTimeoutError as exc:
@@ -80,15 +88,26 @@ def _dismiss_common_overlays(page) -> None:
             continue
 
 
-def _scroll_near_target(page, target_text: str) -> dict[str, Any]:
+def _scroll_near_target(
+    page,
+    target_text: str,
+    *,
+    focus_zoom: float,
+    highlight_target: bool,
+) -> dict[str, Any]:
     tokens = meaningful_words(target_text)[:12]
     if not tokens:
         _scroll_to_article_top(page)
-        return {"target_found": False, "matched_text": "", "match_score": 0}
+        return {
+            "target_found": False,
+            "matched_text": "",
+            "match_score": 0,
+            "focus_zoom": focus_zoom,
+        }
 
     result = page.evaluate(
         """
-        ({ targetText, tokens }) => {
+        ({ targetText, tokens, focusZoom, highlightTarget }) => {
           const target = (targetText || '').toLowerCase().trim();
           const elements = Array.from(document.querySelectorAll('article, main, h1, h2, h3, p, li, section, div'));
           let best = null;
@@ -102,23 +121,42 @@ def _scroll_near_target(page, target_text: str) -> dict[str, Any]:
             for (const token of tokens) {
               if (lower.includes(token)) score += 1;
             }
+            const tagWeights = { H1: 14, H2: 12, H3: 10, P: 8, LI: 7, ARTICLE: 2, MAIN: 2, SECTION: 0, DIV: -3 };
+            score += tagWeights[element.tagName] || 0;
+            if (text.length > 700) score -= 8;
+            if (text.length > 1200) score -= 12;
             if (score > bestScore) {
               best = element;
               bestScore = score;
             }
           }
           if (best) {
+            const found = bestScore >= Math.min(5, Math.max(2, tokens.length));
+            document.documentElement.style.zoom = String(focusZoom);
             best.scrollIntoView({ block: 'center', inline: 'nearest' });
+            if (found && highlightTarget) {
+              best.dataset.aiCaptureTarget = 'true';
+              best.style.outline = '4px solid rgba(33, 190, 255, 0.92)';
+              best.style.outlineOffset = '8px';
+              best.style.backgroundColor = 'rgba(33, 190, 255, 0.10)';
+              best.style.borderRadius = '8px';
+            }
             return {
-              target_found: bestScore >= Math.min(5, Math.max(2, tokens.length)),
+              target_found: found,
               matched_text: (best.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 500),
-              match_score: bestScore
+              match_score: bestScore,
+              focus_zoom: focusZoom
             };
           }
-          return { target_found: false, matched_text: '', match_score: 0 };
+          return { target_found: false, matched_text: '', match_score: 0, focus_zoom: focusZoom };
         }
         """,
-        {"targetText": target_text, "tokens": tokens},
+        {
+            "targetText": target_text,
+            "tokens": tokens,
+            "focusZoom": focus_zoom,
+            "highlightTarget": highlight_target,
+        },
     )
     if not result.get("matched_text"):
         _scroll_to_article_top(page)
@@ -139,4 +177,3 @@ def _scroll_to_article_top(page) -> None:
         page.wait_for_timeout(250)
     except Exception:
         return
-

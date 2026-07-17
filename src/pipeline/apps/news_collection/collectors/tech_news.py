@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
 
@@ -20,55 +19,13 @@ from ..utils import (
 NON_ARTICLE_HOSTS = {
     "pypi.org",
 }
-WEAK_RELEVANCE_TOKENS = {
-    "launch",
-    "launches",
-    "news",
-    "product",
-    "products",
-    "release",
-    "releases",
-    "research",
-    "tool",
-    "tools",
-}
-HIGH_SIGNAL_RELEVANCE_TOKENS = {
-    "ai",
-    "agentic",
-    "anthropic",
-    "antigravity",
-    "chatgpt",
-    "claude",
-    "codex",
-    "gemini",
-    "gpt",
-    "llm",
-    "mcp",
-    "openai",
-}
-STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "for",
-    "from",
-    "in",
-    "of",
-    "on",
-    "or",
-    "the",
-    "to",
-    "with",
-    "your",
-}
-
-
 def collect(cfg: dict) -> dict:
     timeout = int(cfg.get("request_timeout_seconds", 20))
     window = cfg["collection_window"]
     max_items_per_source = int(cfg.get("runtime", {}).get("max_items_per_source", 8))
 
     records: list[dict] = []
+    candidate_ledger: list[dict] = []
     source_summaries: dict[str, dict] = {}
 
     for source in cfg.get("sources", []):
@@ -100,20 +57,13 @@ def collect(cfg: dict) -> dict:
             continue
 
         for article in raw_articles:
-            if source.get("relevance_filter") and not _is_relevant_article(article, cfg, source):
-                filtered_out_count += 1
-                if len(notes) < 10:
-                    notes.append(f"Filtered low-relevance feed entry: {article.get('title', '')}")
-                continue
-
             url = article.get("url", "")
-            if not _is_article_candidate(url):
-                filtered_out_count += 1
-                notes.append(f"Filtered non-article URL: {url}")
-                continue
+            article_fetch_supported = _is_article_candidate(url)
+            if not article_fetch_supported and len(notes) < 10:
+                notes.append(f"Skipped unsupported article-body fetch: {url}")
 
             article_body = ""
-            if url:
+            if url and article_fetch_supported:
                 try:
                     article_html = request_text(url, timeout=timeout)
                     article_body = extract_article_text(article_html)
@@ -142,6 +92,7 @@ def collect(cfg: dict) -> dict:
                         "trust_tier": source.get("trust_tier"),
                         "content_status": content_status,
                         "source_relationship": source.get("source_relationship", ""),
+                        "article_fetch_supported": article_fetch_supported,
                     },
                 )
             )
@@ -160,6 +111,7 @@ def collect(cfg: dict) -> dict:
 
     return {
         "records": records,
+        "candidate_ledger": candidate_ledger,
         "summary": {
             "collector": "tech_news",
             "status": "partial" if any(item["status"] != "ok" for item in source_summaries.values()) else "ok",
@@ -344,71 +296,3 @@ def _is_article_candidate(url: str) -> bool:
     if host in NON_ARTICLE_HOSTS:
         return False
     return parsed.scheme in {"http", "https"} and bool(host)
-
-
-def _is_relevant_article(article: dict, cfg: dict, source: dict) -> bool:
-    terms = [
-        *cfg.get("query_themes", []),
-        *cfg.get("allowed_topics", []),
-        *source.get("search_terms", []),
-    ]
-    profile = _build_relevance_profile(terms)
-    haystack = " ".join(
-        [
-            clean_text(article.get("title", "")),
-            clean_text(article.get("description", "")),
-            clean_text(article.get("content", "")),
-            clean_text(article.get("source_name", "")),
-            clean_text(article.get("url", "")),
-        ]
-    ).lower()
-    phrase_hits = sum(1 for phrase in profile["phrases"] if _contains_term(haystack, phrase))
-    strong_hits = {
-        token
-        for token in profile["strong_tokens"]
-        if _contains_term(haystack, token)
-    }
-    weak_hits = {
-        token
-        for token in profile["weak_tokens"]
-        if _contains_term(haystack, token)
-    }
-    high_signal_hits = strong_hits & HIGH_SIGNAL_RELEVANCE_TOKENS
-    return phrase_hits >= 1 or bool(high_signal_hits) or len(strong_hits) >= 2 or bool(strong_hits and weak_hits)
-
-
-def _build_relevance_profile(terms: list[str]) -> dict[str, set[str]]:
-    phrases = {
-        clean_text(value).lower()
-        for value in terms
-        if clean_text(value) and (" " in clean_text(value) or clean_text(value).lower() in HIGH_SIGNAL_RELEVANCE_TOKENS)
-    }
-    strong_tokens: set[str] = set()
-    weak_tokens: set[str] = set()
-
-    for phrase in phrases:
-        for token in re.findall(r"[a-z0-9\+\-\.]+", phrase):
-            if token in STOPWORDS:
-                continue
-            if len(token) < 3 and token != "ai":
-                continue
-            if token in WEAK_RELEVANCE_TOKENS:
-                weak_tokens.add(token)
-            else:
-                strong_tokens.add(token)
-
-    return {
-        "phrases": phrases,
-        "strong_tokens": strong_tokens,
-        "weak_tokens": weak_tokens,
-    }
-
-
-def _contains_term(haystack: str, term: str) -> bool:
-    term = clean_text(term).lower()
-    if not term:
-        return False
-    if " " in term:
-        return term in haystack
-    pattern = rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])"
-    return re.search(pattern, haystack) is not None

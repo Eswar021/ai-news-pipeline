@@ -72,7 +72,10 @@ def run(input_json: dict) -> dict:
     _validate_supported_roundup(script_generation.data.selected_format, video_packaging.data.selected_format, video_packet)
 
     sections = _script_sections(script_package)
-    chapters = _build_chapters(sections)
+    chapters = _build_chapters(
+        sections,
+        max_title_chars=int(config["metadata_policy"]["chapter_title_max_chars"]),
+    )
     source_urls = _source_urls(video_packet)
     if script_generation.status != "ok" or not bool(
         script_generation.handoff.get("ready_for_metadata_creation", False)
@@ -302,12 +305,20 @@ def _build_youtube_metadata(
     source_urls: list[str],
 ) -> dict[str, Any]:
     policy = config["metadata_policy"]
-    title_options = _clean_title_options(draft.get("title_options", []), int(policy["title_option_count"]))
+    title_options = _clean_title_options(
+        draft.get("title_options", []),
+        int(policy["title_option_count"]),
+    )
     thumbnail_options = _clean_thumbnail_options(
         draft.get("thumbnail_text_options", []),
         int(policy["thumbnail_text_option_count"]),
     )
-    tags = _build_tags(draft.get("tags", []), video_packet, int(policy["max_tags"]))
+    tags = _build_tags(
+        draft.get("tags", []),
+        video_packet,
+        int(policy["max_tags"]),
+        blocked_tags=list(policy.get("blocked_tags", [])),
+    )
     description = _build_description(
         description_intro=draft.get("description_intro", ""),
         chapters=chapters,
@@ -338,7 +349,10 @@ def _build_youtube_metadata(
     }
 
 
-def _clean_title_options(raw_options: list[Any], limit: int) -> list[dict[str, str]]:
+def _clean_title_options(
+    raw_options: list[Any],
+    limit: int,
+) -> list[dict[str, str]]:
     cleaned = []
     for item in raw_options:
         if isinstance(item, str):
@@ -380,7 +394,11 @@ def _clean_thumbnail_options(raw_options: list[Any], limit: int) -> list[str]:
     return dedupe([clean_thumbnail_text(str(value)) for value in raw_options])[:limit]
 
 
-def _build_chapters(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_chapters(
+    sections: list[dict[str, Any]],
+    *,
+    max_title_chars: int = 64,
+) -> list[dict[str, Any]]:
     chapters = []
     elapsed = 0.0
     for section in sections:
@@ -389,20 +407,27 @@ def _build_chapters(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "timestamp": format_timestamp(elapsed),
                 "start_seconds": int(round(elapsed)),
                 "section_id": section["section_id"],
-                "title": _chapter_title(section),
+                "title": _chapter_title(section, max_title_chars=max_title_chars),
             }
         )
         elapsed += max(1.0, float(section.get("estimated_seconds") or section.get("target_seconds") or 1))
     return chapters
 
 
-def _chapter_title(section: dict[str, Any]) -> str:
+def _chapter_title(section: dict[str, Any], *, max_title_chars: int = 64) -> str:
     section_type = clean_text(section.get("section_type", ""))
     if section_type == "intro":
         return "Intro"
     if section_type == "closing":
         return "Closing"
-    return shorten_title(clean_text(section.get("chapter_title") or section.get("story_title") or section.get("section_id")), 64)
+    title_card = section.get("title_card") or {}
+    title = clean_text(
+        section.get("chapter_title")
+        or title_card.get("display_title")
+        or section.get("story_title")
+        or section.get("section_id")
+    )
+    return shorten_title(title, max_title_chars)
 
 
 def _source_urls(video_packet: dict[str, Any]) -> list[str]:
@@ -444,7 +469,13 @@ def _channel_footer(channel: dict[str, Any]) -> str:
     )
 
 
-def _build_tags(llm_tags: list[Any], video_packet: dict[str, Any], max_tags: int) -> list[str]:
+def _build_tags(
+    llm_tags: list[Any],
+    video_packet: dict[str, Any],
+    max_tags: int,
+    *,
+    blocked_tags: list[str] | None = None,
+) -> list[str]:
     tags = [clean_tag(tag) for tag in llm_tags]
     tags.extend(["AI news", "Artificial Intelligence", "LLM"])
     for story in video_packet.get("stories", []):
@@ -453,7 +484,8 @@ def _build_tags(llm_tags: list[Any], video_packet: dict[str, Any], max_tags: int
             tags.append(clean_tag(identity.get(key, "")))
         for record in story.get("records", []):
             tags.append(clean_tag(record.get("source_name", "")))
-    return dedupe([tag for tag in tags if tag])[:max_tags]
+    blocked = {clean_text(value).casefold() for value in (blocked_tags or []) if clean_text(value)}
+    return dedupe([tag for tag in tags if tag and tag.casefold() not in blocked])[:max_tags]
 
 
 def _check_metadata(metadata: dict[str, Any], sections: list[dict[str, Any]], config: dict[str, Any]) -> dict[str, Any]:

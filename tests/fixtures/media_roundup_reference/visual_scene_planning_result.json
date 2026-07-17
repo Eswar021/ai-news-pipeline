@@ -240,8 +240,8 @@
           "payload": {
             "eyebrow": "STRUCTURE FIRST",
             "headline": "Turn the text wall into sections",
-            "before": {"title": "Before", "elements": ["One text block", "No story boundaries", "Timing is guessed"]},
-            "after": {"title": "After", "elements": ["Intro", "Story sections", "Closing"]},
+            "before": {"label": "Before", "items": ["One text block", "No story boundaries", "Timing is guessed"]},
+            "after": {"label": "After", "items": ["Intro", "Story sections", "Closing"]},
             "transformation_label": "structure makes timing possible",
             "background_motif": "device_glow"
           },

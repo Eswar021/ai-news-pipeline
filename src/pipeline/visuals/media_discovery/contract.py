@@ -64,6 +64,56 @@ class MediaProvidersConfig(BaseModel):
     pixabay: PixabayProviderConfig = Field(default_factory=PixabayProviderConfig)
 
 
+class SemanticVerificationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    provider: Literal["openai"] = "openai"
+    model: str = "gpt-4o-mini"
+    prompt_version: str = "v1"
+    temperature: float = 0.0
+    max_candidates_per_scene: int = 4
+    max_attempts: int = 2
+    verify_video_clip_frames: bool = True
+    max_video_sample_frames: int = 5
+    video_clip_failure_policy: Literal["reject", "start_at_zero"] = "reject"
+
+    @field_validator("model", "prompt_version")
+    @classmethod
+    def required_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("semantic verification model and prompt_version must not be empty")
+        return value
+
+    @field_validator("max_candidates_per_scene")
+    @classmethod
+    def candidate_limit_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 8:
+            raise ValueError("semantic verification max_candidates_per_scene must be between 1 and 8")
+        return value
+
+    @field_validator("max_video_sample_frames")
+    @classmethod
+    def video_sample_limit_must_be_bounded(cls, value: int) -> int:
+        if value < 2 or value > 8:
+            raise ValueError("semantic verification max_video_sample_frames must be between 2 and 8")
+        return value
+
+    @field_validator("max_attempts")
+    @classmethod
+    def attempts_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 4:
+            raise ValueError("semantic verification max_attempts must be between 1 and 4")
+        return value
+
+    @field_validator("temperature")
+    @classmethod
+    def fractional_values_must_be_bounded(cls, value: float) -> float:
+        if value < 0 or value > 1:
+            raise ValueError("semantic verification temperature must be between 0 and 1")
+        return value
+
+
 class VisualMediaConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -83,8 +133,15 @@ class VisualMediaConfig(BaseModel):
     min_image_width: int = 1280
     min_image_height: int = 720
     preferred_aspect_ratio: float = 16 / 9
-    minimum_selection_score: float = 0.15
+    trusted_catalog_only: bool = False
+    allow_query_fallback: bool = False
+    reuse_equivalent_image_requests: bool = True
+    max_fallback_requests: int | None = None
+    max_fallback_scenes: int = 3
     unresolved_fallback_render_kind: Literal["kinetic_type_scene"] | None = "kinetic_type_scene"
+    semantic_verification: SemanticVerificationConfig = Field(
+        default_factory=SemanticVerificationConfig
+    )
     providers: MediaProvidersConfig = Field(default_factory=MediaProvidersConfig)
 
     @field_validator("output_dir", "user_agent")
@@ -111,12 +168,34 @@ class VisualMediaConfig(BaseModel):
             raise ValueError("media discovery integer settings must be positive")
         return value
 
-    @field_validator("preferred_aspect_ratio", "minimum_selection_score")
+    @field_validator("preferred_aspect_ratio")
     @classmethod
     def positive_floats_required(cls, value: float) -> float:
         if value <= 0:
             raise ValueError("media discovery ratio/score settings must be positive")
         return value
+
+    @field_validator("max_fallback_requests", "max_fallback_scenes")
+    @classmethod
+    def fallback_budget_must_be_non_negative(cls, value: int | None) -> int | None:
+        if value is not None and value < 0:
+            raise ValueError("media fallback request budget must be non-negative")
+        return value
+
+    @property
+    def fallback_request_budget(self) -> int:
+        if self.max_fallback_requests is not None:
+            return self.max_fallback_requests
+        return self.max_fallback_scenes
+
+    @model_validator(mode="after")
+    def external_media_requires_semantic_review(self) -> "VisualMediaConfig":
+        if not self.trusted_catalog_only and not self.semantic_verification.enabled:
+            raise ValueError(
+                "External media discovery requires semantic_verification.enabled=true; "
+                "lexical or numeric ranking cannot approve contextual media"
+            )
+        return self
 
     @field_validator("video_clip_padding_seconds")
     @classmethod
@@ -175,13 +254,23 @@ class VisualMediaSummary(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     requested_media_scene_count: int
+    unique_media_request_count: int = 0
+    reused_media_scene_count: int = 0
     selected_media_count: int
+    selected_asset_count: int = 0
     selected_image_count: int
     selected_video_count: int
     fallback_scene_count: int
+    fallback_request_count: int = 0
+    fallback_request_budget: int = 0
     unresolved_scene_count: int
     provider_error_count: int
     download_error_count: int = 0
+    semantic_verified_candidate_count: int = 0
+    semantic_accepted_candidate_count: int = 0
+    semantic_rejected_candidate_count: int = 0
+    semantic_clip_selection_count: int = 0
+    llm_call_count: int = 0
     output_dir: str
     failure_reason: str = ""
 
@@ -196,3 +285,4 @@ class VisualMediaResponse(BaseModel):
     data: VisualMediaData
     summary: VisualMediaSummary
     handoff: VisualMediaHandoff
+    llm_calls: list[dict[str, Any]] = Field(default_factory=list)

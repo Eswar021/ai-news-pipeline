@@ -26,21 +26,17 @@ const docsFromPayload = (value: unknown): DocumentItem[] => {
   if (docs.length) {
     return docs.slice(0, 6);
   }
-  return [
-    { title: "Release note", source: "Company blog", document_type: "docs" },
-    { title: "Developer issue", source: "GitHub", document_type: "repo" },
-    { title: "Research signal", source: "Paper", document_type: "paper" },
-  ];
+  return [];
 };
 
 export const DocumentStackScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "The evidence stack is growing";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "DOCUMENT STACK");
   const docs = docsFromPayload(payload.documents);
-  const focus = textValue(payload.focus_document_label) || docs[0]?.title || "Key source";
+  const focus = textValue(payload.focus_document_label);
   const p = spring({ fps, frame, config: { damping: 18, stiffness: 105, mass: 0.72 } });
 
   return (
@@ -52,16 +48,16 @@ export const DocumentStackScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }
       <div style={{ position: "absolute", right: 130, top: 188, width: 820, height: 760 }}>
         {docs.map((doc, index) => {
           const reveal = clamp01(interpolate(frame, [12 + index * 10, 30 + index * 10], [0, 1], { extrapolateRight: "clamp" }));
-          const active = doc.title === focus || index === 0;
+          const active = doc.title === focus;
           const rotate = -7 + index * 3;
           const y = 76 + index * 66;
           const x = 90 - index * 16;
           const color = active ? palette.cyan : index % 2 === 0 ? palette.amber : palette.green;
           return (
             <div key={`${doc.title}-${index}`} style={{ position: "absolute", left: x, top: y, width: 620, minHeight: 280, padding: "34px 38px", borderRadius: 34, background: active ? "rgba(255,255,255,0.95)" : "rgba(229,238,247,0.88)", border: `3px solid ${active ? color : "rgba(255,255,255,0.6)"}`, color: "#071018", boxShadow: active ? `0 40px 120px ${palette.cyan}28` : "0 26px 80px rgba(0,0,0,0.26)", opacity: reveal, transform: `rotate(${rotate}deg) translateY(${interpolate(reveal, [0, 1], [90, 0])}px) scale(${active ? interpolate(p, [0, 1], [0.98, 1.02]) : 1})`, transformOrigin: "center center" }}>
-              <div style={{ color, fontSize: 23, fontWeight: 950, letterSpacing: "0.13em", textTransform: "uppercase" }}>{doc.document_type || "source"}</div>
-              <div style={{ marginTop: 20, fontSize: active ? 45 : 36, lineHeight: 0.95, fontWeight: 950, letterSpacing: "-0.055em" }}>{doc.title || "Document"}</div>
-              <div style={{ marginTop: 18, color: "#33485f", fontSize: 25, lineHeight: 1.08, fontWeight: 780 }}>{doc.source || "Selected source"}{doc.date ? ` - ${doc.date}` : ""}</div>
+              {doc.document_type && <div style={{ color, fontSize: 23, fontWeight: 950, letterSpacing: "0.13em", textTransform: "uppercase" }}>{doc.document_type}</div>}
+              <div style={{ marginTop: doc.document_type ? 20 : 0, fontSize: active ? 45 : 36, lineHeight: 0.95, fontWeight: 950, letterSpacing: "-0.055em" }}>{doc.title}</div>
+              <div style={{ marginTop: 18, color: "#33485f", fontSize: 25, lineHeight: 1.08, fontWeight: 780 }}>{doc.source}{doc.date ? ` - ${doc.date}` : ""}</div>
               <div style={{ marginTop: 26, height: 10, width: "78%", borderRadius: 999, background: `${color}aa` }} />
               <div style={{ marginTop: 14, height: 10, width: "58%", borderRadius: 999, background: "rgba(7,16,24,0.18)" }} />
             </div>
@@ -69,10 +65,7 @@ export const DocumentStackScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }
         })}
       </div>
 
-      <div style={{ position: "absolute", left: 104, bottom: 92, width: 650, padding: "28px 32px", borderRadius: 36, background: "rgba(8,15,25,0.88)", border: `1px solid ${palette.green}77` }}>
-        <div style={{ color: palette.green, fontSize: 25, fontWeight: 950, letterSpacing: "0.12em", textTransform: "uppercase" }}>Why it matters</div>
-        <div style={{ marginTop: 14, color: "#e3edf8", fontSize: 36, lineHeight: 1.02, fontWeight: 870, letterSpacing: "-0.04em" }}>{textValue(payload.stack_summary) || "Multiple sources make this feel less like a rumor and more like a trend."}</div>
-      </div>
+      {textValue(payload.stack_summary) && <div style={{ position: "absolute", left: 104, bottom: 92, width: 650, padding: "28px 32px", borderRadius: 36, background: "rgba(8,15,25,0.88)", border: `1px solid ${palette.green}77`, color: "#e3edf8", fontSize: 36, lineHeight: 1.02, fontWeight: 870, letterSpacing: "-0.04em" }}>{textValue(payload.stack_summary)}</div>}
     </AbsoluteFill>
   );
 };

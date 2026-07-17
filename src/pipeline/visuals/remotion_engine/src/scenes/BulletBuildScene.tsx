@@ -8,7 +8,7 @@ export const BulletBuildScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) 
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "What changes next";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const beats = beatList(payload.beats);
   const points = (listValue(payload.points).length ? listValue(payload.points) : beats.map((beat) => beat.text || "")).map((point) => shortDisplayText(point, 78)).slice(0, 4);
   const emphasis = [...listValue(payload.emphasis_words), ...beats.flatMap((beat) => beat.emphasis_words || [])];

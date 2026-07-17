@@ -1,8 +1,10 @@
 # Creator-Led AI News Roundup and Grounded Visuals Redesign
 
-Status: Proposed for implementation
+Status: Archived product-design and research record. Do not use this file as
+the active implementation tracker; current work is tracked in
+`docs/build/production_orchestration_and_creative_quality_worklist.md`.
 
-Last updated: 2026-07-13
+Last reviewed: 2026-07-17
 
 Target runtime: src/pipeline/
 
@@ -34,10 +36,26 @@ cannot:
 - Create fitting analogies, observational humor, callbacks, and punchlines.
 - Express a useful editorial opinion without fabricating personal experience.
 - Build curiosity, vary rhythm, and deliver a satisfying payoff.
-- Connect separate stories into an episode with a coherent theme.
+- Connect stories when a genuine relationship exists without inventing one for
+  a heterogeneous roundup.
 
 The system should be source-grounded but creator-led. Those are complementary,
 not competing, goals.
+
+### Current implementation decision
+
+Phase 2.3 supersedes the earlier deterministic prose-scoring proposals in this
+document. Code must not decide whether generated narration is engaging,
+corporate, overclaimed, sufficiently attributed, or semantically similar to a
+source by using keyword lists, regexes, overlap thresholds, or metric matching.
+Those are categorical editorial judgments for the LLM director/reviewer and
+human review.
+
+The runtime keeps only objective integrity checks: schema, selected-story and
+source ownership, known IDs, section/beat order, non-empty narration,
+deterministic projections, bounded review loops, and artifact provenance. The
+older phase descriptions remain below as design history, not current runtime
+requirements.
 
 The reference episode's roughly 4:19 duration is acceptable. A strong two-,
 three-, or four-minute episode is better than a padded eight-minute episode.
@@ -393,7 +411,7 @@ Voiceover duration is measured after the script is accepted.
       -> episode editorial director
       -> one story angle and voice brief per story
       -> parallel per-story audiovisual storytellers
-      -> deterministic truth and structure checks
+      -> deterministic structure, ownership, and provenance checks
       -> conditional craft reviewers
       -> revision acceptance comparator
       -> bookend and continuity storyteller
@@ -407,7 +425,10 @@ Voiceover duration is measured after the script is accepted.
 Script generation remains one public app boundary. Director, storyteller,
 reviewer, and bookend logic are internal modules.
 
-There is no central pipeline runner and no return to numbered layers.
+Production orchestration is exposed through three thin stage routers under
+`src/pipeline/orchestration/stages/` and one CLI dispatcher. This does not
+return to numbered layers: each router calls the same independent app
+contracts and owns only sequencing, state, paths, and logs.
 
 ## 8. Three Input Layers for Story Writing
 
@@ -603,8 +624,10 @@ Rules:
 - Support IDs never appear in spoken narration.
 - A joke may not smuggle in an unsupported factual accusation.
 - The writer can omit optional truth items.
-- The writer must communicate the director's must-communicate ideas, but it may
-  paraphrase, reorder, combine, or explain them naturally.
+- The writer should preserve the director's priority ideas when they improve
+  the story, but missing an internal truth-ID reference is diagnostic rather
+  than an approval quota. It may paraphrase, reorder, combine, or explain them
+  naturally.
 - Beats are semantic audiovisual moments, not one sentence each and not a
   fixed count.
 
@@ -790,11 +813,14 @@ Code applies a candidate only when:
 
 - The review contract is internally consistent.
 - The candidate keeps the same story and valid beat structure.
-- Must-communicate ideas remain present.
+- Existing support truth and source ownership remain stable, except for a
+  bounded unsupported-claim repair using truth from the same story.
+- Every spoken metric is linked to source text containing that exact metric.
+- Metric subjects, upper bounds, and uncertainty qualifiers remain accurate.
 - No new unsupported claim or stronger certainty appears.
-- Article-readout and corporate-language signals do not increase.
 - The candidate fixes at least one named craft issue.
-- The candidate does not lose a working hook, explanation, joke, or payoff.
+- The candidate does not lose a working hook, explanation, creative device, or
+  payoff.
 
 A rejected candidate leaves the initial segment untouched and records exact
 reasons.
@@ -1006,6 +1032,14 @@ Each split must recompute:
 If the visual cannot be split meaningfully, perform a targeted scene replan or
 use a grounded fallback.
 
+Implementation update (2026-07-14): the old stitcher copied one candidate
+payload into every timing slice, which produced exact adjacent duplicates for
+roughly 72 percent of the audited episode duration. The planner contract now
+lists overlong audio units explicitly and requires multiple distinct semantic
+sub-scenes for each one. The stitcher only assigns their authoritative audio
+time. It raises instead of cloning a candidate. Adjacent identical effective
+payloads are rejected before rendering.
+
 ### 12.11 Fallback order
 
 Use:
@@ -1163,6 +1197,11 @@ behavior becomes available.
 
 ### Phase 0: Freeze benchmarks
 
+Implementation status: complete on 2026-07-13.
+
+The compact fixture is in `tests/fixtures/creator_voice_benchmark/`, and the
+human scoring guide is `docs/build/creator_voice_storytelling_rubric.md`.
+
 - Preserve a compact fixture from the reference run.
 - Add the channel-voice config and a human storytelling rubric.
 - Create baseline script evaluations for the current output.
@@ -1171,6 +1210,13 @@ behavior becomes available.
 Exit condition: current weaknesses are reproducible and human-scored.
 
 ### Phase 1: Story engine and creator voice
+
+Implementation status: complete on 2026-07-13.
+
+The native roundup app now builds app-local truth indexes, directs each story
+through an explicit story engine, returns creator-led beat metadata, and emits
+non-blocking article-readout diagnostics. Phase 2 builds the conditional
+keep-or-rewrite reviewer and acceptance safeguards on top of that output.
 
 - Add source_truth.py.
 - Extend the director brief with story engine, tension, payoff, narrator take,
@@ -1186,16 +1232,161 @@ summaries.
 
 ### Phase 2: Conditional craft review
 
+Historical implementation status: superseded by Phase 2.3 on 2026-07-13.
+
+The story and bookend reviewers now use strict nullable keep-or-rewrite
+contracts. A keep decision returns no candidate. A rewrite must name material
+issues against review-local beat IDs, and code rejects identical candidates,
+unrelated edits, lost provenance, lost protected story functions, and newly
+strengthened claim language. Numeric narration is also checked against its
+linked truth text so future subjects, upper bounds, and uncertainty qualifiers
+cannot be silently changed. Review calls remain observable separately from the
+number of revisions actually applied.
+
 - Add the nullable keep-or-rewrite contract.
 - Replace reviewer compliance framing with the storytelling rubric.
 - Add keep and justified-rewrite prompt examples.
 - Implement revision acceptance checks.
 - Keep one maximum revision pass.
 
+Follow-up hardening implemented on 2026-07-16:
+
+- A reviewer rewrite is no longer accepted merely because it is structurally
+  valid. A strict structured selector compares current and candidate narration
+  for the diagnosed craft issue and can keep the stronger current draft.
+- The selector is bounded, config-driven, and uses the existing app-local LLM
+  provider. Production keeps a valid current draft when selector evaluation
+  fails; it never starts another revision loop.
+
 Exit condition: a good segment receives no replacement, and a revision cannot
 remove personality or strengthen claims.
 
+### Phase 2.1: Content-quality hardening
+
+Historical implementation status: partially retained; deterministic prose
+diagnostics were superseded by Phase 2.3 on 2026-07-13.
+
+The fresh-run audit showed that good writing cannot be recovered only inside
+the writer prompt when upstream evidence and source authority are misleading.
+This phase strengthens the existing apps without adding another agent:
+
+- Evidence prep applies profile-configured, domain-scoped article-chrome
+  cleaning before truth indexing. It reports modified records and removed
+  character counts instead of silently changing source text.
+- Evidence prep classifies configured hosted-project domains and community
+  launch title patterns as self-published/community-launch sources.
+- Story mapping scores actual source relationships instead of treating every
+  record delivered through a news API as independent reporting. A single
+  self-published launch receives a configured authority cap and penalty, while
+  a normal independent news story keeps the existing score.
+- Source relationship and source name are carried into each truth item so the
+  writer can attribute project claims naturally.
+- Story and bookend reviewers receive deterministic craft diagnostics for
+  generic hooks, press-release phrases, missing project attribution, generic
+  bookends, and formulaic connector sequences. These remain advisory; only
+  real provenance, metric, structure, and configured language-policy failures
+  are hard gates.
+- Profanity handling is an explicit channel-voice policy. The default broad
+  YouTube profile avoids profanity, including direct source quotes.
+- Metadata filters configured generic title frames and raw-domain tags, and
+  chapters prefer the concise title-card display title rather than cutting a
+  long source headline at an awkward word boundary.
+
+Exit condition: page chrome does not become script truth, self-published
+launches cannot masquerade as independent news through their collector label,
+reviewers see meaningful craft warnings without being forced to rewrite, and
+metadata remains specific to the completed episode.
+
+### Phase 2.2: Claim alignment and prompt-context hardening
+
+Historical implementation status: source cleanup/context bounding retained;
+deterministic claim-alignment gates superseded by Phase 2.3 on 2026-07-13.
+
+The first fresh production run after Phase 2.1 exposed four remaining failure
+modes: an AI-token headline was misclassified as cryptocurrency, page chrome
+from The Verge and TechCrunch still entered truth indexes, the same source text
+was duplicated across large director/writer/reviewer prompts, and ordinary
+non-numeric claims could cite a related truth ID without that truth actually
+supporting the claim.
+
+This phase keeps the same bounded story-wise architecture and fixes those
+failures without adding another agent:
+
+- Evidence prep now uses a profile-configured crypto policy that distinguishes
+  language-model tokens from crypto assets and market language.
+- Domain-scoped cleanup rules remove The Verge and TechCrunch bylines, related
+  links, advertising blocks, and footer navigation before story mapping.
+- Truth indexes prioritize article-body and transcript text over aggregator
+  descriptions, remove configured chrome phrases, and collapse repeated copies
+  of the same source sentence.
+- Director, writer, and reviewer truth menus have separate bounded limits. Full
+  selected records remain canonical input, but the reviewer no longer receives
+  a duplicate full record alongside its focused support context.
+- Semantic support alignment may attach the strongest matching same-story
+  truth to a factual beat. It never introduces another story or source.
+- Hard claim gates reject guarantee language absent from linked source text,
+  dropped embedded attribution, and configured state changes such as converting
+  a job posting into a completed hire or a planned capability into a current
+  feature.
+- Reviewer prompts receive beat-local support text and must repair blocking
+  structural issues while keeping the narration conversational.
+- Generic bookend detection now covers actual production phrases and connector
+  shapes such as `And finally`, repeated `Let's dive`, and mechanical
+  `from X to Y` bridges. Residual craft diagnostics are returned as visible
+  warnings instead of disappearing from the final checks.
+- LLM summaries expose prompt/completion token usage and the frozen per-stage
+  truth-context limits so cost and context growth can be audited per run.
+
+Regression coverage includes the observed Voxa guarantee, `According to Mana`
+attribution, OpenAI job-posting state, Sensor Tower estimate attribution,
+Claude Code token headline, generic bookends, and article-footer contamination.
+
+Exit condition: the known fresh-run claims cannot pass as green, AI-token news
+survives evidence filtering, and each LLM stage receives a bounded,
+source-prioritized truth context.
+
+### Phase 2.3: Creator-first semantic simplification
+
+Implementation status: complete on 2026-07-13.
+
+The generated script is creative language, so categorical quality decisions
+belong to models and people rather than brittle code heuristics.
+
+- Removed corporate-language, generic-hook, source-order, extractive-overlap,
+  metric-support, qualifier, claim-strength, attribution, and claim-state code
+  gates from script approval.
+- Removed deterministic craft diagnostics from writer and reviewer payloads.
+- Kept the conditional reviewer with a hard maximum of one pass. KEEP remains
+  the default; a rewrite must name a supplied beat and actually change it.
+- Gave story reviewers the assigned story records and focused beat support so
+  they can judge material faithfulness and creative quality in context.
+- Updated director prompts to require hook diversity and to allow genuinely
+  heterogeneous roundups without a fabricated universal thesis.
+- Updated story and bookend prompts to prioritize engaging mini-stories,
+  creator viewpoint, clear explanation, rhythm, and payoff.
+- Limited hard script checks to Pydantic structure, selected-story/source
+  ownership, known IDs, canonical order, non-empty narration, spoken-output
+  hygiene, bounded loops, and provenance.
+- Moved roundup-title quality to the metadata LLM prompt. Code only cleans,
+  deduplicates, and bounds title options.
+
+Exit condition: a structurally valid, source-owned script cannot be rejected by
+a keyword or similarity heuristic; creative quality is assessed through the
+bounded LLM review and the human storytelling rubric.
+
+Fresh-run hardening update (2026-07-14): carrying the complete article again in
+every writer and reviewer prompt produced very large prompts and diluted the
+story engine. Full records remain canonical app input and downstream context,
+but LLM story calls now receive a focused truth menu plus a compact record
+identity manifest. Writer and reviewer prompt calibration explicitly treats
+generic press-release language, ignored distinctive details, and multi-purpose
+overlong beats as material craft problems. Beat duration guidance remains soft;
+there is no word-count or prose-keyword approval gate.
+
 ### Phase 3: Optional context enrichment
+
+Implementation status: optional future work. Full selected story records now
+reach each writer, so this is not a blocker for the active production flow.
 
 - Add a bounded research adapter for configured story roles.
 - Restrict source classes and budgets.
@@ -1207,19 +1398,90 @@ open-ended or untraceable research.
 
 ### Phase 4: Storytelling-first visual planner
 
-- Add verified asset catalog generation before final visual planning.
-- Pass final story beats, creative devices, and visual goals.
-- Plan by show, explain, react, compare, emphasize, or transition.
-- Add visual analogy and restrained reaction treatments.
-- Preserve deterministic timing from voiceover alignment.
+Implementation status: active asset-first foundation implemented on 2026-07-14;
+creative analogy/reaction families remain future work.
+
+- A trusted per-story asset catalog now runs before final planning. It derives
+  asset briefs from canonical script beats, registers selected source pages,
+  collects bounded source-owned hero/in-article images and direct page-owned
+  videos when available, and records resolvable identities under stable asset
+  IDs. Lazy image attributes, `srcset`, alt text, dimensions, image/video role,
+  duration, and content hashes are preserved.
+- Structural media cleanup rejects extreme image aspect ratios and exact or
+  perceptual near-duplicates. These checks remove unusable media geometry; they
+  do not make contextual relevance decisions.
+- Source-page assets carry beat-specific screenshot targets derived from exact
+  canonical support truth IDs. Source screenshot normalization gives those
+  truth sentences priority over loose title overlap.
+- Planning uses one episode direction plus bounded story-local structured calls.
+- Canonical script beats, creative devices, visual goals, selected story
+  records, voiceover timing, and the story-owned asset catalog reach the story
+  planner without reconstructing boundaries from prose.
+- Each story plan must reference at least one available real anchor by exact
+  asset ID. App code verifies asset type, availability, story ownership, source
+  key, and URL rather than trusting a model-generated path.
+- Scene capabilities are profile-driven. Code assigns exact timing only after
+  the LLM returns semantic treatments.
+- Rich graphics require complete grounded payloads. Missing semantics trigger
+  bounded targeted replanning, not deterministic invention.
+- Native planning, manual-plan parsing, and render preflight use one shared
+  render-kind payload validator. Renderer components do not carry demo facts
+  or relationships that can silently appear in a production scene.
+- Exact narration kinetic text and exact source proof are the only automatic
+  continuity treatments for otherwise uncovered timing.
+- Overlong voice units now require planner-authored distinct semantic
+  sub-scenes. Deterministic timing code cannot duplicate one scene payload to
+  satisfy the render cap.
+- Numeric counters reject qualitative values, and script-requested logo
+  identities can extend the trusted identity catalog when the resolver
+  recognizes them.
+- One bounded story-local visual editor now reviews complete plans against
+  exact narration units and the trusted asset catalog. Its default is keep; a
+  complete replacement is accepted only after the existing payload, ownership,
+  source, and scene-slot validators pass. There is no generic code fallback.
+
+- Expand planning from the currently implemented show/explain/compare/emphasize
+  treatments into restrained reaction and original visual analogy treatments.
+- Keep deterministic timing from voiceover alignment as those creative
+  treatments are added.
 
 Exit condition: visuals communicate the current story beat and are not
 dominated by cards or proof screenshots.
 
 ### Phase 5: Media and data safety
 
-- Add hard relevance and identity gates.
-- Add local image-text similarity and duplicate detection.
+Implementation status: trusted-source safety and fast iteration implemented;
+external-media semantic verification remains an optional paid profile.
+
+- The default production profile is `trusted_catalog_only`. It uses selected
+  source pages, source-owned images/videos, and resolvable identities without
+  an additional vision-model call. Unresolved external media is not selected
+  by keyword score and is not replaced with generic text.
+- Structured vision verification and B-roll window selection remain available
+  for a deliberately enabled external-research profile. They are deferred by
+  default until evaluation shows their cost improves the final video enough.
+- Numeric, relational, timeline, matrix, and workflow scenes must carry
+  explicit source/script-grounded payloads. Fabricated renderer/planner values
+  were removed.
+- Logo assets expose their actual quality class, screenshot target misses are
+  visible, fallback use is budgeted, and final assembly produces a contact
+  sheet for human review.
+- Text identity fallbacks preserve the complete entity name and are never
+  relabeled as official logos. Media fallbacks require an exact active-script
+  phrase instead of generic filler copy.
+- Remotion renders every scene from one stable 1920x1080 design canvas and
+  scales it uniformly to the selected 16:9 preset, preventing resolution-driven
+  clipping and off-center diagrams.
+- Rendering now has explicit 720p preview and delivery-quality final profiles,
+  scene/story-targeted rerenders, a persistent content-addressed scene cache,
+  one shared Remotion bundle, and bounded persistent-browser batch workers.
+  Unchanged previews restore from cache instead of paying browser and encoder
+  cost again.
+
+- Evaluate whether paid external-media vision review materially improves the
+  video before enabling it in production.
+- Evaluate local image-text similarity separately; structural exact and
+  perceptual duplicate detection is now implemented.
 - Add provider caching, Retry-After handling, and backoff.
 - Make all numeric visuals consume truth references.
 - Remove renderer placeholder values.
@@ -1229,6 +1491,11 @@ Exit condition: the Tang Tan, Instagram lightning, and fabricated chart
 regressions fail before rendering.
 
 ### Phase 6: End-to-end rollout
+
+Implementation status: a fresh run was audited on 2026-07-16 and exposed
+creator-language, loudness, and catalog-variety gaps. The corresponding
+prompt, mastering, caption, and trusted-media hardening is implemented; one
+new coherent production run and human review remain required.
 
 - Run the fixture and one fresh roundup.
 - Compare current and redesigned scripts blindly.

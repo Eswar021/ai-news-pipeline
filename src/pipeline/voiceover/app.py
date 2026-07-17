@@ -9,6 +9,8 @@ from typing import Any
 from src.pipeline.contracts import file_sha256
 
 from .audio_manifest import build_summary, build_voiceover_package
+from .audio_postprocess import master_audio
+from .captions import write_caption_files
 from .config import (
     PROVIDER_CHATTERBOX_LOCAL,
     PROVIDER_DIA_TRANSFORMERS,
@@ -46,6 +48,7 @@ def run(input_json: dict) -> dict:
     package_path = output_dir / "voiceover_package.json"
     summary_path = output_dir / "summary.json"
     full_audio_path = audio_dir / "full_voiceover.wav"
+    raw_audio_path = audio_dir / "raw_voiceover.wav"
 
     if package_path.exists() and not request.config.force:
         raise FileExistsError(f"Voiceover already exists at {package_path}. Set config.force=true to replace it.")
@@ -68,7 +71,7 @@ def run(input_json: dict) -> dict:
         )
         duration_seconds = concatenate_wav_files(
             input_paths=[Path(chunk["audio_path"]) for chunk in synthesized_chunks],
-            output_path=full_audio_path,
+            output_path=raw_audio_path,
             sample_rate_hz=actual_sample_rate_hz,
             pauses_after_seconds=[float(chunk.get("pause_after_seconds", 0.0)) for chunk in synthesized_chunks],
         )
@@ -85,7 +88,7 @@ def run(input_json: dict) -> dict:
         actual_sample_rate_hz = int(synthesized_chunks[0].get("sample_rate_hz", request.config.sample_rate_hz))
         duration_seconds = concatenate_wav_files(
             input_paths=[Path(chunk["audio_path"]) for chunk in synthesized_chunks],
-            output_path=full_audio_path,
+            output_path=raw_audio_path,
             sample_rate_hz=actual_sample_rate_hz,
             pauses_after_seconds=[float(chunk.get("pause_after_seconds", 0.0)) for chunk in synthesized_chunks],
         )
@@ -110,7 +113,7 @@ def run(input_json: dict) -> dict:
         actual_sample_rate_hz = int(synthesized_chunks[0].get("sample_rate_hz", request.config.sample_rate_hz))
         duration_seconds = concatenate_wav_files(
             input_paths=[Path(chunk["audio_path"]) for chunk in synthesized_chunks],
-            output_path=full_audio_path,
+            output_path=raw_audio_path,
             sample_rate_hz=actual_sample_rate_hz,
             pauses_after_seconds=[float(chunk.get("pause_after_seconds", 0.0)) for chunk in synthesized_chunks],
         )
@@ -131,7 +134,7 @@ def run(input_json: dict) -> dict:
         actual_sample_rate_hz = int(synthesized_chunks[0].get("sample_rate_hz", request.config.sample_rate_hz))
         duration_seconds = concatenate_wav_files(
             input_paths=[Path(chunk["audio_path"]) for chunk in synthesized_chunks],
-            output_path=full_audio_path,
+            output_path=raw_audio_path,
             sample_rate_hz=actual_sample_rate_hz,
             pauses_after_seconds=[float(chunk.get("pause_after_seconds", 0.0)) for chunk in synthesized_chunks],
         )
@@ -142,6 +145,18 @@ def run(input_json: dict) -> dict:
         synthesized_chunks=synthesized_chunks,
         output_dir=audio_unit_dir,
         sample_rate_hz=actual_sample_rate_hz,
+    )
+    mastering = master_audio(
+        input_path=raw_audio_path,
+        output_path=full_audio_path,
+        sample_rate_hz=actual_sample_rate_hz,
+        config=request.config.mastering.model_dump(mode="json"),
+    )
+    duration_seconds = float(mastering.get("duration_seconds", duration_seconds))
+    captions = write_caption_files(
+        audio_units=audio_units,
+        output_dir=output_dir / "captions",
+        config=request.config.captions.model_dump(mode="json"),
     )
 
     if not request.config.keep_chunks:
@@ -164,6 +179,8 @@ def run(input_json: dict) -> dict:
         alignment_strategy=script_input["alignment_strategy"],
         script_provenance=script_input["provenance"],
         audio_sha256=file_sha256(full_audio_path),
+        mastering=mastering,
+        captions=captions,
     )
 
     output_dir.mkdir(parents=True, exist_ok=True)

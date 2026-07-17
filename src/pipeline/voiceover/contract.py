@@ -24,9 +24,16 @@ from .config import (
     DEFAULT_F5_SWAY_SAMPLING_COEF,
     DEFAULT_F5_TARGET_RMS,
     DEFAULT_LANGUAGE_CODE,
+    DEFAULT_MASTERING_DURATION_TOLERANCE_SECONDS,
+    DEFAULT_MASTERING_LOUDNESS_RANGE_LU,
+    DEFAULT_MASTERING_TARGET_LUFS,
+    DEFAULT_MASTERING_TRUE_PEAK_DB,
     DEFAULT_PROVIDER,
     DEFAULT_SAMPLE_RATE_HZ,
     DEFAULT_STYLE,
+    DEFAULT_CAPTION_MAX_CHARS,
+    DEFAULT_CAPTION_MAX_WORDS,
+    DEFAULT_CAPTION_MIN_SECONDS,
     KNOWN_PROVIDERS,
     PROVIDER_F5_TTS_LOCAL,
 )
@@ -83,6 +90,89 @@ class AlignmentConfig(BaseModel):
         if value < 0 or value > 2:
             raise ValueError("alignment pause values must be between 0 and 2 seconds")
         return value
+
+
+class AudioMasteringConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    ffmpeg_path: str = "ffmpeg"
+    target_lufs: float = DEFAULT_MASTERING_TARGET_LUFS
+    true_peak_db: float = DEFAULT_MASTERING_TRUE_PEAK_DB
+    loudness_range_lu: float = DEFAULT_MASTERING_LOUDNESS_RANGE_LU
+    two_pass: bool = True
+    measure_output: bool = True
+    keep_raw_audio: bool = False
+    duration_tolerance_seconds: float = DEFAULT_MASTERING_DURATION_TOLERANCE_SECONDS
+    failure_mode: Literal["fail", "use_unmastered"] = "fail"
+
+    @field_validator("ffmpeg_path")
+    @classmethod
+    def ffmpeg_path_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("config.mastering.ffmpeg_path must not be empty")
+        return value.strip()
+
+    @field_validator("target_lufs")
+    @classmethod
+    def target_lufs_must_be_reasonable(cls, value: float) -> float:
+        if value < -30 or value > -5:
+            raise ValueError("config.mastering.target_lufs must be between -30 and -5")
+        return value
+
+    @field_validator("true_peak_db")
+    @classmethod
+    def true_peak_must_be_reasonable(cls, value: float) -> float:
+        if value < -6 or value > 0:
+            raise ValueError("config.mastering.true_peak_db must be between -6 and 0")
+        return value
+
+    @field_validator("loudness_range_lu")
+    @classmethod
+    def loudness_range_must_be_positive(cls, value: float) -> float:
+        if value <= 0 or value > 20:
+            raise ValueError("config.mastering.loudness_range_lu must be between 0 and 20")
+        return value
+
+    @field_validator("duration_tolerance_seconds")
+    @classmethod
+    def duration_tolerance_must_be_non_negative(cls, value: float) -> float:
+        if value < 0 or value > 1:
+            raise ValueError("config.mastering.duration_tolerance_seconds must be between 0 and 1")
+        return value
+
+
+class CaptionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    formats: list[Literal["srt", "vtt"]] = Field(default_factory=lambda: ["srt", "vtt"])
+    max_chars_per_cue: int = DEFAULT_CAPTION_MAX_CHARS
+    max_words_per_cue: int = DEFAULT_CAPTION_MAX_WORDS
+    min_cue_seconds: float = DEFAULT_CAPTION_MIN_SECONDS
+
+    @field_validator("formats")
+    @classmethod
+    def formats_must_not_be_empty(cls, value: list[str]) -> list[str]:
+        unique = list(dict.fromkeys(value))
+        if not unique:
+            raise ValueError("config.captions.formats must contain at least one format")
+        return unique
+
+    @field_validator("max_chars_per_cue", "max_words_per_cue")
+    @classmethod
+    def caption_limits_must_be_positive(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("config.captions cue limits must be positive")
+        return value
+
+    @field_validator("min_cue_seconds")
+    @classmethod
+    def min_cue_seconds_must_be_positive(cls, value: float) -> float:
+        if value <= 0 or value > 5:
+            raise ValueError("config.captions.min_cue_seconds must be between 0 and 5")
+        return value
+
 
 class ChatterboxConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -224,6 +314,8 @@ class VoiceoverConfig(BaseModel):
     output_dir: str
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     alignment: AlignmentConfig = Field(default_factory=AlignmentConfig)
+    mastering: AudioMasteringConfig = Field(default_factory=AudioMasteringConfig)
+    captions: CaptionConfig = Field(default_factory=CaptionConfig)
     chatterbox: ChatterboxConfig = Field(default_factory=ChatterboxConfig)
     f5_tts: F5TTSConfig = Field(default_factory=F5TTSConfig)
     dia: DiaConfig = Field(default_factory=DiaConfig)

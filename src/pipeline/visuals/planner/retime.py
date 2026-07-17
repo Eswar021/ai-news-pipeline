@@ -30,7 +30,11 @@ def retime_visual_plan_result(result: dict[str, Any], target_duration_seconds: f
 
     coverage = plan.setdefault("coverage", {})
     max_scene_duration = max(float(scene["duration_seconds"]) for scene in scenes)
-    configured_cap = (plan.get("scene_policy") or {}).get("max_scene_seconds")
+    scene_policy = plan.get("scene_policy") or {}
+    configured_cap = scene_policy.get(
+        "hard_max_scene_seconds",
+        scene_policy.get("max_scene_seconds"),
+    )
     if configured_cap is not None and max_scene_duration > float(configured_cap) + 0.01:
         raise ValueError(
             f"Retimed scene duration {max_scene_duration:.2f}s exceeds configured cap {float(configured_cap):.2f}s"

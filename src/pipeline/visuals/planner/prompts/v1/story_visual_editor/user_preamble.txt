@@ -1,0 +1,22 @@
+Review exactly one story plan.
+
+First compare each current scene with its active script unit. Then inspect
+plan_quality_context. Revise only when the complete
+replacement is a clear improvement in narration fit, source proof, visual
+variety, or comprehension.
+
+Do not revise merely to consume more available assets. The editor was called
+because plan_quality_context contains one or more explicit review reasons.
+
+If revising:
+- cover every required_scene_slots entry exactly once
+- keep start_unit_order and end_unit_order exact
+- use only active visual_capabilities and story-owned assets/records
+- keep one concise visual idea per scene
+- prefer truth-bound screenshot targets for source details
+- avoid more than two consecutive scenes of the same kind when a genuinely
+  better supported treatment exists
+- never force an available image into a beat it does not depict
+- populate every required field in the complete nested revised_plan contract
+
+Do not return markdown and do not rewrite narration.

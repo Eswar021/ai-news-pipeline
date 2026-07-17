@@ -215,17 +215,25 @@ def validate_artifact_provenance(
 
 
 def visual_plan_artifact_payload(plan: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "planning_strategy": plan.get("planning_strategy", ""),
         "episode_style": plan.get("episode_style", {}),
         "story_sections": plan.get("story_sections", []),
         "scene_timeline": plan.get("scene_timeline", []),
     }
+    catalog = plan.get("asset_catalog") if isinstance(plan.get("asset_catalog"), dict) else {}
+    catalog_provenance = (
+        catalog.get("provenance") if isinstance(catalog.get("provenance"), dict) else {}
+    )
+    catalog_fingerprint = _clean_text(catalog_provenance.get("artifact_fingerprint"))
+    if catalog_fingerprint:
+        payload["asset_catalog_fingerprint"] = catalog_fingerprint
+    return payload
 
 
 def voiceover_artifact_payload(package: dict[str, Any]) -> dict[str, Any]:
     audio = package.get("audio") if isinstance(package.get("audio"), dict) else {}
-    return {
+    payload = {
         "provider": package.get("provider", ""),
         "voice": package.get("voice", ""),
         "style": package.get("style", {}),
@@ -234,14 +242,41 @@ def voiceover_artifact_payload(package: dict[str, Any]) -> dict[str, Any]:
         "audio_sha256": (package.get("provenance") or {}).get("audio_sha256", ""),
         "audio_units": [_identity_audio_unit(unit) for unit in package.get("audio_units", [])],
     }
+    mastering = audio.get("mastering") if isinstance(audio.get("mastering"), dict) else {}
+    captions = package.get("captions") if isinstance(package.get("captions"), dict) else {}
+    if mastering:
+        payload["mastering"] = {
+            key: value
+            for key, value in mastering.items()
+            if key not in {"input_path", "output_path"}
+        }
+    if captions:
+        payload["captions"] = {
+            "enabled": captions.get("enabled", False),
+            "status": captions.get("status", ""),
+            "cue_count": captions.get("cue_count", 0),
+            "files": [
+                {
+                    "format": item.get("format", ""),
+                    "sha256": item.get("sha256", ""),
+                }
+                for item in captions.get("files", [])
+                if isinstance(item, dict)
+            ],
+        }
+    return payload
 
 
 def final_video_artifact_payload(package: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "scene_ids": package.get("scene_ids", []),
         "final_video_sha256": package.get("final_video_sha256", ""),
         "audio_encoding": package.get("audio_encoding", {}),
     }
+    if _clean_text(package.get("render_mode")):
+        payload["render_mode"] = _clean_text(package.get("render_mode"))
+        payload["render_settings"] = package.get("render_settings", {})
+    return payload
 
 
 def _identity_audio_unit(unit: dict[str, Any]) -> dict[str, Any]:

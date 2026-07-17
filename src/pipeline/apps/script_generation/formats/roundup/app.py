@@ -8,11 +8,14 @@ from src.pipeline.contracts import build_script_provenance
 from .assembler import assemble_script
 from .checks import check_script_package
 from .config import (
+    BOOKEND_REVISION_SELECTOR_PROMPT_MODULE,
     BOOKEND_REVIEWER_PROMPT_MODULE,
     BOOKEND_WRITER_PROMPT_MODULE,
     DIRECTOR_PROMPT_MODULE,
     SCRIPT_APP,
     STORY_REVIEWER_PROMPT_MODULE,
+    SOURCE_RESEARCHER_PROMPT_MODULE,
+    STORY_REVISION_SELECTOR_PROMPT_MODULE,
     STORY_WRITER_PROMPT_MODULE,
     SUPPORTED_FORMAT,
 )
@@ -49,11 +52,18 @@ def run(input_json: dict) -> dict:
 
     section_plan = build_roundup_section_inputs(video_packet, config)
     prompt_bundles = {
+        "source_researcher": load_prompt_bundle(SOURCE_RESEARCHER_PROMPT_MODULE, config["prompt_version"]),
         "director": load_prompt_bundle(DIRECTOR_PROMPT_MODULE, config["prompt_version"]),
         "story_writer": load_prompt_bundle(STORY_WRITER_PROMPT_MODULE, config["prompt_version"]),
         "story_reviewer": load_prompt_bundle(STORY_REVIEWER_PROMPT_MODULE, config["prompt_version"]),
+        "story_revision_selector": load_prompt_bundle(
+            STORY_REVISION_SELECTOR_PROMPT_MODULE, config["prompt_version"]
+        ),
         "bookend_writer": load_prompt_bundle(BOOKEND_WRITER_PROMPT_MODULE, config["prompt_version"]),
         "bookend_reviewer": load_prompt_bundle(BOOKEND_REVIEWER_PROMPT_MODULE, config["prompt_version"]),
+        "bookend_revision_selector": load_prompt_bundle(
+            BOOKEND_REVISION_SELECTOR_PROMPT_MODULE, config["prompt_version"]
+        ),
     }
     llm = make_llm(
         provider=config["provider"],
@@ -89,7 +99,7 @@ def run(input_json: dict) -> dict:
         run_id=run_id,
         script_source="native_app",
     )
-    checks = check_script_package(script_package, video_packet)
+    checks = check_script_package(script_package, video_packet, config)
     script_package["checks"] = checks
     status = "ok" if checks["passed"] else "failed"
     failure_reason = "" if status == "ok" else "; ".join(checks["errors"])
@@ -154,6 +164,8 @@ def _build_script_package(
         "generation_strategy": assembled["generation_strategy"],
         "episode_direction": assembled["episode_direction"],
         "story_segments": generated["story_segments"],
+        "story_truth_indexes": generated["story_truth_indexes"],
+        "story_context_packets": generated["story_context_packets"],
         "story_asset_hints": generated["story_asset_hints"],
         "bookends": generated["bookends"],
         "review": generated["review"],
@@ -201,13 +213,15 @@ def _failed_response(
         "generation_strategy": "director_plus_per_story_beats_plus_bookends",
         "episode_direction": {},
         "story_segments": [],
+        "story_truth_indexes": [],
+        "story_context_packets": [],
         "story_asset_hints": [],
         "bookends": {},
         "review": {
             "enabled": bool(config.get("review", {}).get("enabled", True)),
             "story_reviews": [],
             "bookend_reviews": [],
-            "bookend_final_gate_issues": [],
+            "review_call_count": 0,
             "revision_count": 0,
         },
         "full_script": "",
@@ -268,6 +282,19 @@ def _build_summary(
 ) -> dict[str, Any]:
     sections = script_package.get("sections", [])
     stats = script_package.get("full_script_stats", {})
+    context_packets = [
+        packet
+        for packet in script_package.get("story_context_packets", [])
+        if isinstance(packet, dict)
+    ]
+    token_usage = {
+        "prompt_tokens": sum(int((call.get("usage") or {}).get("prompt_tokens", 0) or 0) for call in llm_calls),
+        "completion_tokens": sum(
+            int((call.get("usage") or {}).get("completion_tokens", 0) or 0)
+            for call in llm_calls
+        ),
+        "total_tokens": sum(int((call.get("usage") or {}).get("total_tokens", 0) or 0) for call in llm_calls),
+    }
     return {
         "run_id": run_id,
         "generated_at": generated_at,
@@ -287,8 +314,24 @@ def _build_summary(
             "review_enabled": bool(config.get("review", {}).get("enabled", True)),
             "max_revision_passes": int(config.get("review", {}).get("max_revision_passes", 1)),
             "retry_policy": config.get("llm_retry", {}),
+            "token_usage": token_usage,
+            "source_context": {
+                "mode": "complete_records_plus_semantic_brief",
+                "story_packet_count": len(context_packets),
+                "record_count": sum(
+                    int((packet.get("telemetry") or {}).get("record_count", 0))
+                    for packet in context_packets
+                ),
+                "serialized_char_count": sum(
+                    int((packet.get("telemetry") or {}).get("serialized_char_count", 0))
+                    for packet in context_packets
+                ),
+                "records_truncated": False,
+                "resource_limits": config.get("source_context", {}),
+            },
             "parallelized_steps": ["roundup_story_writer"] if int(config.get("worker_count", 1)) > 1 else [],
             "serial_steps": [
+                "roundup_source_researcher",
                 "roundup_director",
                 "roundup_bookend_writer",
             ],

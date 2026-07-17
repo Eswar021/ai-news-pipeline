@@ -34,18 +34,13 @@ export const BenchmarkDeltaScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec 
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "The benchmark moved";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "DELTA");
   const kicker = textValue(payload.kicker_text) || textValue(payload.winner_label);
   const kickerPosition = textValue(payload.kicker_position) || "hidden";
   const showKicker = Boolean(kicker) && (payload.show_kicker === true || kickerPosition !== "hidden");
   const p = spring({ fps, frame, config: { damping: 16, stiffness: 112, mass: 0.72 } });
-  const benchmarks = benchmarksFromPayload(payload.benchmarks).length
-    ? benchmarksFromPayload(payload.benchmarks)
-    : [
-        { label: "Latency", before: "1.0x", after: "2.0x", delta: "+100%", context: "faster response" },
-        { label: "Cost", before: "$1.00", after: "$0.60", delta: "-40%", context: "lower run cost" },
-      ];
+  const benchmarks = benchmarksFromPayload(payload.benchmarks);
   const isHero = benchmarks.length === 1;
 
   return (
@@ -63,13 +58,13 @@ export const BenchmarkDeltaScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec 
           const context = shortDisplayText(item.context || "", isHero ? 124 : 86);
           return (
             <div key={`${item.label}-${index}`} style={{ opacity: reveal, transform: `translateY(${interpolate(reveal, [0, 1], [46, 0])}px) scale(${interpolate(p, [0, 1], [0.98, 1])})`, minHeight: isHero ? 520 : 420, borderRadius: 42, padding: isHero ? "46px 54px 44px" : "36px 36px 32px", background: "rgba(255,255,255,0.088)", border: "1px solid rgba(255,255,255,0.16)", boxShadow: "0 34px 110px rgba(0,0,0,0.34)" }}>
-              <div style={{ color: accent, fontSize: isHero ? 37 : 30, fontWeight: 920, letterSpacing: "0.08em", textTransform: "uppercase" }}>{shortDisplayText(item.label || "Metric", isHero ? 32 : 22)}</div>
+              <div style={{ color: accent, fontSize: isHero ? 37 : 30, fontWeight: 920, letterSpacing: "0.08em", textTransform: "uppercase" }}>{shortDisplayText(item.label || "", isHero ? 32 : 22)}</div>
               <div style={{ marginTop: isHero ? 44 : 34, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: isHero ? 30 : 18 }}>
-                <div style={{ color: palette.muted, fontSize: isHero ? 64 : 44, lineHeight: 0.9, fontWeight: 900, letterSpacing: "-0.055em" }}>{shortDisplayText(item.before || "before", isHero ? 24 : 16)}</div>
+                <div style={{ color: palette.muted, fontSize: isHero ? 64 : 44, lineHeight: 0.9, fontWeight: 900, letterSpacing: "-0.055em" }}>{shortDisplayText(item.before || "", isHero ? 24 : 16)}</div>
                 <div style={{ color: accent, fontSize: isHero ? 60 : 44, fontWeight: 950 }}>→</div>
-                <div style={{ color: palette.text, fontSize: isHero ? 76 : 52, lineHeight: 0.9, fontWeight: 950, letterSpacing: "-0.065em" }}>{shortDisplayText(item.after || "after", isHero ? 24 : 16)}</div>
+                <div style={{ color: palette.text, fontSize: isHero ? 76 : 52, lineHeight: 0.9, fontWeight: 950, letterSpacing: "-0.065em" }}>{shortDisplayText(item.after || "", isHero ? 24 : 16)}</div>
               </div>
-              <div style={{ marginTop: isHero ? 46 : 34, color: accent, fontSize: readableTitleSize(item.delta || "shift", isHero ? 124 : 86), lineHeight: 0.82, fontWeight: 950, letterSpacing: "-0.09em", textShadow: `0 0 34px ${accent}44` }}>{shortDisplayText(item.delta || "shift", isHero ? 32 : 20)}</div>
+              <div style={{ marginTop: isHero ? 46 : 34, color: accent, fontSize: readableTitleSize(item.delta || "", isHero ? 124 : 86), lineHeight: 0.82, fontWeight: 950, letterSpacing: "-0.09em", textShadow: `0 0 34px ${accent}44` }}>{shortDisplayText(item.delta || "", isHero ? 32 : 20)}</div>
               {context && <div style={{ marginTop: isHero ? 34 : 24, color: "#d5e3f3", fontSize: readableBodySize(context, isHero ? 40 : 31), lineHeight: 1.12, fontWeight: 780, maxWidth: isHero ? 1320 : undefined }}>{context}</div>}
             </div>
           );

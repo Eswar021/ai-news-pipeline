@@ -13,7 +13,7 @@ type WalkthroughStep = {
 const objectList = <T extends Record<string, unknown>>(value: unknown): T[] =>
   Array.isArray(value) ? value.filter((item): item is T => Boolean(item) && typeof item === "object") : [];
 
-const stepsFromPayload = (value: unknown, fallbackText: string): WalkthroughStep[] => {
+const stepsFromPayload = (value: unknown): WalkthroughStep[] => {
   const objects = objectList<Record<string, unknown>>(value)
     .map((item) => ({
       label: textValue(item.label) || textValue(item.title) || textValue(item.step),
@@ -26,26 +26,22 @@ const stepsFromPayload = (value: unknown, fallbackText: string): WalkthroughStep
   }
   const phrases = listValue(value);
   if (phrases.length) {
-    return phrases.slice(0, 5).map((phrase, index) => ({ label: index === 0 ? "Open" : "Focus", detail: phrase }));
+    return phrases.slice(0, 5).map((phrase) => ({ label: phrase }));
   }
-  return [
-    { label: "Open the source", detail: "Start from the page or product surface" },
-    { label: "Find the signal", detail: fallbackText || "Zoom into the line that matters" },
-    { label: "Show the takeaway", detail: "Keep the viewer anchored in the evidence" },
-  ];
+  return [];
 };
 
 export const BrowserWalkthroughScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || textValue(payload.overlay_headline) || "Walk through the source";
+  const headline = textValue(payload.headline) || textValue(payload.overlay_headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "BROWSER WALKTHROUGH");
-  const url = textValue(payload.url) || "example.com/source";
+  const url = textValue(payload.url);
   const host = url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   const focusText = textValue(payload.focus_text) || textValue(payload.target_text) || textValue(payload.overlay_headline);
-  const pageTitle = textValue(payload.browser_title) || textValue(payload.page_title) || focusText || "Source focus";
-  const steps = stepsFromPayload(payload.walkthrough_steps, focusText).slice(0, 5);
+  const pageTitle = textValue(payload.browser_title) || textValue(payload.page_title) || focusText;
+  const steps = stepsFromPayload(payload.walkthrough_steps).slice(0, 5);
   const highlightPhrases = listValue(payload.highlight_phrases).slice(0, 3);
   const progress = clamp01(interpolate(frame, [18, Math.max(60, durationInFrames - 20)], [0, 1], { extrapolateRight: "clamp" }));
   const scrollY = interpolate(progress, [0, 1], [0, -245]);
@@ -63,7 +59,7 @@ export const BrowserWalkthroughScene: React.FC<{ spec: VisualSceneSpec }> = ({ s
           return (
             <div key={`${step.label}-${index}`} style={{ opacity: reveal, transform: `translateX(${interpolate(reveal, [0, 1], [-28, 0])}px)`, padding: "18px 22px", borderRadius: 26, background: index === 1 ? `${palette.cyan}20` : "rgba(255,255,255,0.075)", border: `1px solid ${index === 1 ? palette.cyan : "rgba(255,255,255,0.13)"}` }}>
               <div style={{ color: index === 1 ? palette.cyan : palette.amber, fontSize: 22, fontWeight: 950, letterSpacing: "0.11em", textTransform: "uppercase" }}>{step.label || `Step ${index + 1}`}</div>
-              <div style={{ marginTop: 8, color: "#e5eef8", fontSize: 30, lineHeight: 1.02, fontWeight: 830, letterSpacing: "-0.035em" }}>{step.detail || step.target_text || "Source detail"}</div>
+              {(step.detail || step.target_text) && <div style={{ marginTop: 8, color: "#e5eef8", fontSize: 30, lineHeight: 1.02, fontWeight: 830, letterSpacing: "-0.035em" }}>{step.detail || step.target_text}</div>}
             </div>
           );
         })}
@@ -83,12 +79,12 @@ export const BrowserWalkthroughScene: React.FC<{ spec: VisualSceneSpec }> = ({ s
                 {steps.map((step, index) => (
                   <div key={`page-${index}`} style={{ marginTop: index === 0 ? 0 : 28, padding: 26, borderRadius: 28, background: index === 1 ? "rgba(99,215,255,0.13)" : "rgba(255,255,255,0.07)", border: `1px solid ${index === 1 ? `${palette.cyan}88` : "rgba(255,255,255,0.11)"}` }}>
                     <div style={{ color: index === 1 ? palette.cyan : palette.text, fontSize: 31, fontWeight: 910, letterSpacing: "-0.035em" }}>{step.label || `Section ${index + 1}`}</div>
-                    <div style={{ marginTop: 12, color: "#d7e4f1", fontSize: 25, lineHeight: 1.16, fontWeight: 690 }}>{step.target_text || step.detail || focusText || "A concrete source-backed detail appears here."}</div>
+                    <div style={{ marginTop: 12, color: "#d7e4f1", fontSize: 25, lineHeight: 1.16, fontWeight: 690 }}>{step.target_text || step.detail || focusText}</div>
                   </div>
                 ))}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                {(highlightPhrases.length ? highlightPhrases : ["source", "signal", "takeaway"]).map((item, index) => (
+                {highlightPhrases.map((item, index) => (
                   <div key={`${item}-${index}`} style={{ height: 88, borderRadius: 24, background: "rgba(255,255,255,0.075)", border: "1px solid rgba(255,255,255,0.10)", padding: 20, color: index === 1 ? palette.amber : palette.muted, fontSize: 22, lineHeight: 1.05, fontWeight: 850 }}>{item}</div>
                 ))}
               </div>

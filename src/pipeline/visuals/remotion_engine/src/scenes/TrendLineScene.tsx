@@ -23,8 +23,8 @@ const pointsForDirection = (direction: string) => {
 export const TrendLineScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "Momentum is shifting";
-  const direction = textValue(payload.trend_direction) || "rising";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
+  const direction = textValue(payload.trend_direction);
   const annotations = listValue(payload.annotations).slice(0, 3);
   const progress = clamp01(interpolate(frame, [18, 92], [0, 1], { extrapolateRight: "clamp" }));
   const glow = direction === "falling" ? palette.red : direction === "volatile" ? palette.amber : palette.green;
@@ -70,7 +70,7 @@ export const TrendLineScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) =>
       </svg>
       {payload.show_axis_caption === true && (textValue(payload.y_axis_label) || textValue(payload.x_axis_label)) && (
         <div style={{ position: "absolute", left: 112, bottom: 72, color: palette.muted, fontSize: 25, fontWeight: 760 }}>
-          {textValue(payload.y_axis_label) || "Momentum"} over {textValue(payload.x_axis_label) || "time"}
+          {[textValue(payload.y_axis_label), textValue(payload.x_axis_label)].filter(Boolean).join(" / ")}
         </div>
       )}
     </AbsoluteFill>

@@ -10,7 +10,9 @@ from .config import (
     DEFAULT_LLM_RETRY_INITIAL_DELAY_SECONDS,
     DEFAULT_LLM_RETRY_MAX_ATTEMPTS,
     DEFAULT_LLM_RETRY_MAX_DELAY_SECONDS,
+    DEFAULT_MAX_EPISODE_CONTEXT_CHARS,
     DEFAULT_MAX_REVISION_PASSES,
+    DEFAULT_MAX_STORY_CONTEXT_CHARS,
     DEFAULT_REVIEW_ENABLED,
     DEFAULT_SCRIPT_WORKER_COUNT,
     DEFAULT_TITLE_CARD_SECONDS,
@@ -52,6 +54,117 @@ class ScriptStyle(BaseModel):
     def avoid_items_must_be_strings(cls, value: list[str]) -> list[str]:
         return [item.strip() for item in value if isinstance(item, str) and item.strip()]
 
+
+class OpinionPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allow_first_person_editorial_opinion: bool = True
+    forbid_fabricated_personal_experience: bool = True
+
+
+class HumorPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    modes: list[str] = Field(default_factory=lambda: ["observational", "dry", "self_aware", "absurd_analogy"])
+    density: Literal["none", "restrained", "moderate"] = "restrained"
+    allow_callbacks: bool = True
+    avoid: list[str] = Field(default_factory=lambda: ["forced meme references", "cruelty", "unsupported accusations"])
+
+
+class LanguagePolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prefer: list[str] = Field(
+        default_factory=lambda: ["concrete verbs", "varied sentence length", "plain-language mental models"]
+    )
+    avoid: list[str] = Field(
+        default_factory=lambda: [
+            "corporate press-release language",
+            "generic importance claims",
+            "article-summary transitions",
+        ]
+    )
+    profanity_mode: Literal["avoid", "allow"] = "avoid"
+    profanity_terms: list[str] = Field(default_factory=lambda: ["fuck", "fucking", "shit", "bullshit"])
+
+    @field_validator("profanity_terms")
+    @classmethod
+    def profanity_terms_must_be_strings(cls, value: list[str]) -> list[str]:
+        return list(
+            dict.fromkeys(
+                item.strip().casefold()
+                for item in value
+                if isinstance(item, str) and item.strip()
+            )
+        )
+
+
+class ChannelVoiceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    persona: str = "curious technical friend with a skeptical eyebrow"
+    worldview: list[str] = Field(
+        default_factory=lambda: [
+            "optimistic about useful progress",
+            "skeptical of marketing",
+            "practical consequences over abstract importance",
+        ]
+    )
+    energy: str = "energetic but not frantic"
+    opinion: OpinionPolicy = Field(default_factory=OpinionPolicy)
+    humor: HumorPolicy = Field(default_factory=HumorPolicy)
+    language: LanguagePolicy = Field(default_factory=LanguagePolicy)
+
+    @field_validator("persona", "energy")
+    @classmethod
+    def voice_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("channel_voice persona and energy must not be empty")
+        return value.strip()
+
+
+class StorytellingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    require_story_engine: bool = True
+    require_viewer_payoff: bool = True
+    allow_optional_truth_details: bool = True
+    forbid_source_order_summary: bool = True
+    max_must_communicate_truth_items: int = 4
+    max_optional_truth_items: int = 10
+
+    @field_validator("max_must_communicate_truth_items", "max_optional_truth_items")
+    @classmethod
+    def truth_selection_limits_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 20:
+            raise ValueError("storytelling truth selection limits must be between 1 and 20")
+        return value
+
+
+class SourceContextConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    semantic_brief_max_attempts: int | None = Field(
+        default=None,
+        exclude=True,
+        description="Deprecated frozen-run compatibility field; semantic source content is not code-retried.",
+    )
+    max_story_context_chars: int = DEFAULT_MAX_STORY_CONTEXT_CHARS
+    max_episode_context_chars: int = DEFAULT_MAX_EPISODE_CONTEXT_CHARS
+
+    @field_validator("max_story_context_chars", "max_episode_context_chars")
+    @classmethod
+    def context_limits_must_be_positive(cls, value: int) -> int:
+        if value < 10_000:
+            raise ValueError("source context resource limits must be at least 10000 characters")
+        return value
+
+    @model_validator(mode="after")
+    def episode_limit_must_fit_at_least_one_story(self) -> "SourceContextConfig":
+        if self.max_episode_context_chars < self.max_story_context_chars:
+            raise ValueError("source_context.max_episode_context_chars must be >= max_story_context_chars")
+        return self
 
 class SourcePolicy(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -151,8 +264,15 @@ class WritingGuidance(BaseModel):
     )
 
 
+class CandidateSelectionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    failure_mode: Literal["keep_current", "fail"] = "keep_current"
+
+
 class ReviewConfig(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = DEFAULT_REVIEW_ENABLED
     max_revision_passes: int = DEFAULT_MAX_REVISION_PASSES
@@ -166,14 +286,15 @@ class ReviewConfig(BaseModel):
             "visualizable story beats",
         ]
     )
+    candidate_selection: CandidateSelectionConfig = Field(default_factory=CandidateSelectionConfig)
 
     @field_validator("max_revision_passes")
     @classmethod
     def revision_passes_must_be_bounded(cls, value: int) -> int:
         if value < 0:
             raise ValueError("review.max_revision_passes must be non-negative")
-        if value > 2:
-            raise ValueError("review.max_revision_passes must be <= 2")
+        if value > 1:
+            raise ValueError("review.max_revision_passes must be <= 1")
         return value
 
     @field_validator("quality_criteria")
@@ -183,8 +304,6 @@ class ReviewConfig(BaseModel):
         if not cleaned:
             raise ValueError("review.quality_criteria must contain at least one criterion")
         return cleaned
-
-
 class RoundupScriptConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -199,6 +318,9 @@ class RoundupScriptConfig(BaseModel):
     llm_retry: LLMRetryConfig = Field(default_factory=LLMRetryConfig)
     writing_guidance: WritingGuidance = Field(default_factory=WritingGuidance)
     script_style: ScriptStyle
+    channel_voice: ChannelVoiceConfig = Field(default_factory=ChannelVoiceConfig)
+    storytelling: StorytellingConfig = Field(default_factory=StorytellingConfig)
+    source_context: SourceContextConfig = Field(default_factory=SourceContextConfig)
     source_policy: SourcePolicy
     review: ReviewConfig = Field(default_factory=ReviewConfig)
 
@@ -332,11 +454,40 @@ class ScriptBeatContract(BaseModel):
         "intro",
         "conclusion",
     ]
+    beat_function: Literal[
+        "episode_hook",
+        "episode_setup",
+        "story_hook",
+        "setup",
+        "reveal",
+        "explanation",
+        "example",
+        "reaction",
+        "comic_release",
+        "consequence",
+        "caveat",
+        "payoff",
+        "bridge",
+        "episode_payoff",
+    ] = "explanation"
     story_id: str = ""
     narration_text: str
     word_count: int
     estimated_seconds: float
     source_record_keys: list[str] = Field(default_factory=list)
+    support_truth_ids: list[str] = Field(default_factory=list)
+    support_alignment: Literal["explicit", "unresolved", "not_applicable"] = "not_applicable"
+    creative_device: Literal[
+        "none",
+        "analogy",
+        "contrast",
+        "rhetorical_question",
+        "hypothetical",
+        "observational_humor",
+        "self_aware_humor",
+        "callback",
+    ] = "none"
+    visual_goal: str = "Visually reinforce the active narration beat."
     visual_brief: VisualBriefContract
 
     @field_validator("beat_id", "narration_text")
@@ -438,6 +589,8 @@ class RoundupScriptPackage(BaseModel):
     story_count: int = 0
     selected_story_ids: list[str] = Field(default_factory=list)
     section_plan: list[dict[str, Any]] = Field(default_factory=list)
+    story_truth_indexes: list[dict[str, Any]] = Field(default_factory=list)
+    story_context_packets: list[dict[str, Any]] = Field(default_factory=list)
     story_asset_hints: list[dict[str, Any]] = Field(default_factory=list)
     sections: list[ScriptSectionContract]
     full_script: str

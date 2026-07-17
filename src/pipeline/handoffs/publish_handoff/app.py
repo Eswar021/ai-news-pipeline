@@ -25,6 +25,14 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
         video_packet = request.input.video_packaging.get("data", {}).get("video_packet", {})
         voiceover_package = _voiceover_package(request.input.voiceover)
         final_video_package = request.input.video_assembly.get("data", {}).get("final_video_package", {})
+        render_mode = clean_text(final_video_package.get("render_mode") or "final")
+        if render_mode != "final":
+            raise ValueError(
+                f"Publish handoff requires a final-quality video assembly; received render_mode={render_mode!r}"
+            )
+        visual_review_package = (
+            (request.input.visual_review or {}).get("data", {}).get("visual_review_package", {})
+        )
         require_matching_run_id(request.run.run_id, request.input.run_context.get("run_id"), "run_context")
         require_matching_run_id(
             request.run.run_id,
@@ -45,6 +53,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
             video_assembly=request.input.video_assembly,
             final_video_package=final_video_package,
         )
+        _validate_visual_review(visual_review_package, final_video_package)
 
         content = _build_markdown(
             run_id=request.run.run_id,
@@ -54,6 +63,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
             metadata=metadata,
             voiceover=request.input.voiceover,
             video_assembly=request.input.video_assembly,
+            visual_review=request.input.visual_review,
         )
         files = [{"filename": "publish_review.md", "content_type": "text/markdown", "content": content}]
         script_provenance = script_package["provenance"]
@@ -89,6 +99,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
                 "voiceover_attached": True,
                 "video_attached": True,
                 "chapters_finalized": True,
+                "contact_sheet_attached": bool(visual_review_package),
             },
             "handoff": {"ready_for_write": True, "ready_for_manual_publish_review": True},
         }
@@ -114,6 +125,7 @@ def _build_markdown(
     metadata: dict[str, Any],
     voiceover: dict[str, Any] | None,
     video_assembly: dict[str, Any] | None,
+    visual_review: dict[str, Any] | None,
 ) -> str:
     titles = metadata.get("title_options", [])
     thumbnails = metadata.get("thumbnail_text_options", [])
@@ -131,7 +143,9 @@ def _build_markdown(
         f"- Selected stories: {len(video_packet.get('stories', []))}",
         f"- Script words: {len(clean_text(script_package.get('full_script', '')).split())}",
         f"- Voiceover: {_media_path(voiceover, 'audio_path') or 'not attached'}",
+        f"- Captions: {_caption_paths(voiceover) or 'not attached'}",
         f"- Final video: {_media_path(video_assembly, 'final_video_path') or 'not attached'}",
+        f"- Contact sheet: {_contact_sheet_path(visual_review) or 'not attached'}",
         "",
         "## Title Options",
         "",
@@ -152,9 +166,11 @@ def _build_markdown(
         [
             "- Watch the complete video with headphones.",
             "- Confirm visuals match the active narration beats.",
+            "- Open the contact sheet and scan for wrong identities, repetition, tiny text, and visual drift.",
             "- Confirm names, numbers, and on-screen text.",
             "- Pick one title and thumbnail combination.",
             "- Confirm description, chapters, and source links.",
+            "- Upload the generated captions and verify cue timing.",
             "- Upload manually only after these checks pass.",
             "",
         ]
@@ -176,6 +192,40 @@ def _voiceover_package(value: dict[str, Any]) -> dict[str, Any]:
     if isinstance(value.get("voiceover_package"), dict):
         return value["voiceover_package"]
     return value
+
+
+def _contact_sheet_path(value: dict[str, Any] | None) -> str:
+    if not value:
+        return ""
+    package = (value.get("data") or {}).get("visual_review_package") or {}
+    return clean_text(package.get("contact_sheet_path"))
+
+
+def _caption_paths(value: dict[str, Any] | None) -> str:
+    if not value:
+        return ""
+    package = _voiceover_package(value)
+    files = (package.get("captions") or {}).get("files", [])
+    return ", ".join(
+        clean_text(item.get("path"))
+        for item in files
+        if isinstance(item, dict) and clean_text(item.get("path"))
+    )
+
+
+def _validate_visual_review(
+    visual_review_package: dict[str, Any],
+    final_video_package: dict[str, Any],
+) -> None:
+    if not visual_review_package:
+        return
+    contact_sheet_path = clean_text(visual_review_package.get("contact_sheet_path"))
+    if not contact_sheet_path:
+        raise ValueError("visual_review contact_sheet_path is missing")
+    expected_hash = clean_text(final_video_package.get("final_video_sha256"))
+    reviewed_hash = clean_text(visual_review_package.get("final_video_sha256"))
+    if expected_hash and reviewed_hash != expected_hash:
+        raise ValueError("visual_review was generated from a different final video")
 
 
 def _validate_lineage(

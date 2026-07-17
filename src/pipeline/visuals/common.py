@@ -94,6 +94,21 @@ def dedupe(values: list[str]) -> list[str]:
     return kept
 
 
+def normalize_text_list(value: Any) -> list[str]:
+    """Normalize JSON text-list fields without iterating strings by character."""
+
+    if isinstance(value, str):
+        return dedupe([value])
+    if not isinstance(value, (list, tuple, set)):
+        return []
+    normalized = dedupe([clean_text(item) for item in value])
+    if len(normalized) > 1 and all(len(item) == 1 for item in normalized):
+        # Historical planner output could turn a phrase into a truncated list
+        # of characters. Discard it so beat-level context can replace it.
+        return []
+    return normalized
+
+
 def counter_dict(values: list[str]) -> dict[str, int]:
     return dict(Counter(value for value in values if value))
 
@@ -244,6 +259,12 @@ def _voiceover_aligned_beats(package: dict[str, Any]) -> list[dict[str, Any]]:
                     "beat_id": clean_text(beat.get("beat_id")),
                     "beat_order": safe_int(beat.get("beat_order"), order),
                     "beat_type": clean_text(beat.get("beat_type")),
+                    "beat_function": clean_text(beat.get("beat_function")),
+                    "support_truth_ids": list(beat.get("support_truth_ids", [])),
+                    "creative_device": clean_text(beat.get("creative_device")) or "none",
+                    "visual_goal": clean_text(beat.get("visual_goal")),
+                    "source_record_keys": list(beat.get("source_record_keys", [])),
+                    "visual_brief": dict(beat.get("visual_brief") or {}),
                     "timing_source": "voiceover_aligned_beat",
                 }
             )

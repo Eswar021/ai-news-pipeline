@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from pathlib import Path
 from typing import Any
@@ -38,7 +39,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
     try:
         request = ChatGPTExporterRequest.model_validate(input_json)
         profile = _resolve_profile(request.config.profile, request.input.artifacts)
-        artifact = request.input.artifacts[profile]
+        artifact = _prepare_artifact(profile, request.input.artifacts[profile])
         files = _build_files(
             run_id=request.run.run_id,
             manifest=request.input.manifest,
@@ -109,6 +110,54 @@ def _build_files(
             "content": _build_manifest_context(run_id, manifest, summaries, profile),
         },
     ]
+
+
+def _prepare_artifact(profile: str, artifact: dict[str, Any]) -> dict[str, Any]:
+    prepared = deepcopy(artifact)
+    if profile != "visual_scene_plan":
+        return prepared
+
+    visual_context = prepared.get("visual_context")
+    if not isinstance(visual_context, dict):
+        raise ValueError("visual_scene_plan artifact requires visual_context")
+    scene_policy = visual_context.get("scene_policy")
+    capabilities = visual_context.get("visual_capabilities")
+    asset_catalog = prepared.get("asset_catalog")
+    if not isinstance(scene_policy, dict):
+        raise ValueError("visual_scene_plan artifact requires visual_context.scene_policy")
+    if not isinstance(capabilities, dict):
+        raise ValueError("visual_scene_plan artifact requires visual_context.visual_capabilities")
+    if not isinstance(asset_catalog, dict) or not asset_catalog.get("assets"):
+        raise ValueError("visual_scene_plan artifact requires a non-empty asset_catalog")
+
+    allowed = [
+        clean_text(render_kind)
+        for render_kind in scene_policy.get("allowed_render_kinds", [])
+        if clean_text(render_kind)
+    ]
+    if not allowed:
+        raise ValueError("visual_scene_plan artifact requires non-empty allowed_render_kinds")
+    missing = [render_kind for render_kind in allowed if render_kind not in capabilities]
+    if missing:
+        raise ValueError(f"visual capabilities are missing allowed render kinds: {missing}")
+
+    # The authoring catalog may contain disabled capabilities. The manual
+    # planner sees only user-authored capabilities; story transitions are
+    # inserted deterministically by the parser after the response is returned.
+    system_managed = {"story_transition_scene"}
+    planner_allowed = [render_kind for render_kind in allowed if render_kind not in system_managed]
+    scene_policy["allowed_render_kinds"] = planner_allowed
+    visual_context["visual_capabilities"] = {
+        render_kind: capabilities[render_kind]
+        for render_kind in planner_allowed
+    }
+    visual_context["system_managed_render_kinds"] = sorted(system_managed & set(allowed))
+    visual_context["asset_policy"] = {
+        "catalog_asset_ids_are_authoritative": True,
+        "use_at_least_one_catalog_asset_per_story": True,
+        "unresolved_asset_briefs_are_not_usable_assets": True,
+    }
+    return prepared
 
 
 def _resolve_profile(profile: str, artifacts: dict[str, dict[str, Any]]) -> str:

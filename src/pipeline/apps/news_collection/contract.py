@@ -11,6 +11,13 @@ from .config import (
 
 
 NewsCollectionStatus = Literal["ok", "partial", "failed"]
+CandidateDecision = Literal[
+    "collected",
+    "quarantined",
+    "hard_rejected",
+    "fetch_failed",
+    "not_processed",
+]
 
 
 class NewsCollectionRun(BaseModel):
@@ -78,11 +85,31 @@ class NewsCollectionRequest(BaseModel):
     input: dict[str, Any] = Field(default_factory=dict)
 
 
+class NewsCandidateDecision(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    candidate_key: str
+    source_group: str
+    source: str
+    title: str = ""
+    url: str = ""
+    published_at: str = ""
+    decision: CandidateDecision
+    reason_code: str = ""
+    reason: str = ""
+    decision_owner: Literal["code"] = "code"
+    record_id: str | None = None
+    quality_flags: dict[str, Any] = Field(default_factory=dict)
+    retrieval_hints: dict[str, Any] = Field(default_factory=dict)
+
+
 class NewsCollectionData(BaseModel):
     run_id: str
     generated_at: str
     record_count: int
     records: list[dict[str, Any]]
+    candidate_count: int
+    candidate_ledger: list[NewsCandidateDecision]
 
 
 class NewsCollectionSummary(BaseModel):
@@ -94,12 +121,15 @@ class NewsCollectionSummary(BaseModel):
     successful_source_groups: list[str]
     successful_source_group_count: int
     total_records: int
+    candidate_count: int
+    candidate_decision_counts: dict[str, int]
     elapsed_seconds: float
     groups: dict[str, dict[str, Any]]
 
 
 class NewsCollectionHandoff(BaseModel):
     record_count: int
+    candidate_count: int
     ready_for_evidence_prep: bool
 
 

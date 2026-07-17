@@ -4,20 +4,151 @@ CHATGPT_PIPELINE_RESPONSE_V1
 Reference narration for deterministic media-pipeline testing. No external context was used.
 
 [SCRIPT]
-[[SECTION:section_00_intro]]
-An automated video is only convincing when every stage agrees on what the story is. Here is the short version of how this pipeline moves from scattered source material to narration, synchronized motion, and a finished video.
-
-[[SECTION:section_01_story_evidence]]
-It starts by keeping the evidence attached. Collection brings in articles and transcripts, evidence preparation cleans them, and story mapping groups records that describe the same development. The important part is continuity: when a story moves forward, its source records move with it. The writer gets useful context without guessing, and later tools can still trace each selected idea back to the material that introduced it.
-
-[[SECTION:section_02_story_sync]]
-The next challenge is synchronization. A good script is not one undifferentiated wall of text; it has an intro, clear story sections, and a closing. Voiceover turns those sections into timed audio chunks. The visual planner then converts each chunk into a semantic beat, so a workflow explanation gets a flow diagram while a key contrast gets a focused comparison instead of unrelated decoration.
-
-[[SECTION:section_03_story_render]]
-Finally, validated scene specifications drive reusable motion components. Counters animate numbers, maps explain relationships, process views reveal steps, and kinetic type is saved for moments that truly need emphasis. Each scene stays short, renders independently, and can be retried without rebuilding the whole episode. The clips are stitched to the voiceover timeline, then the original audio is attached to the final video.
-
-[[SECTION:section_99_closing]]
-That separation is the real advantage: evidence, writing, voice, planning, rendering, and assembly can improve independently while the contracts keep the finished story coherent.
+[SCRIPT_SECTIONS_JSON]
+```json
+{
+  "sections": [
+    {
+      "section_id": "section_00_intro",
+      "narration_text": "An automated video is only convincing when every stage agrees on what the story is. Here is the short version of how this pipeline moves from scattered source material to narration, synchronized motion, and a finished video.",
+      "beats": [
+        {
+          "beat_type": "hook",
+          "beat_function": "episode_hook",
+          "narration_text": "An automated video is only convincing when every stage agrees on what the story is.",
+          "source_record_keys": [],
+          "creative_device": "contrast",
+          "visual_goal": "Open on the synchronization problem.",
+          "visual_brief": {"purpose": "Open on the synchronization problem.", "visual_intent": "transition", "preferred_asset_types": ["kinetic_text"], "must_show": [], "on_screen_text": "", "avoid": []}
+        },
+        {
+          "beat_type": "intro",
+          "beat_function": "episode_setup",
+          "narration_text": "Here is the short version of how this pipeline moves from scattered source material to narration, synchronized motion, and a finished video.",
+          "source_record_keys": [],
+          "creative_device": "none",
+          "visual_goal": "Preview the source-to-screen journey.",
+          "visual_brief": {"purpose": "Preview the source-to-screen journey.", "visual_intent": "process_explainer", "preferred_asset_types": ["diagram"], "must_show": ["source to screen flow"], "on_screen_text": "", "avoid": []}
+        }
+      ]
+    },
+    {
+      "section_id": "section_01_story_evidence",
+      "narration_text": "It starts by keeping the evidence attached. Collection brings in articles and transcripts, evidence preparation cleans them, and story mapping groups records that describe the same development. The important part is continuity: when a story moves forward, its source records move with it. The writer gets useful context without guessing, and later tools can still trace each selected idea back to the material that introduced it.",
+      "beats": [
+        {
+          "beat_type": "transition",
+          "beat_function": "bridge",
+          "narration_text": "It starts by keeping the evidence attached.",
+          "source_record_keys": ["record_evidence_contract"],
+          "creative_device": "none",
+          "visual_goal": "Introduce the evidence story while narration continues.",
+          "visual_brief": {"purpose": "Introduce the evidence story while narration continues.", "visual_intent": "story_title", "preferred_asset_types": ["source_page", "logo"], "must_show": [], "on_screen_text": "", "avoid": []}
+        },
+        {
+          "beat_type": "explanation",
+          "beat_function": "explanation",
+          "narration_text": "Collection brings in articles and transcripts, evidence preparation cleans them, and story mapping groups records that describe the same development. The important part is continuity: when a story moves forward, its source records move with it.",
+          "source_record_keys": ["record_evidence_contract"],
+          "creative_device": "none",
+          "visual_goal": "Show evidence moving through the workflow.",
+          "visual_brief": {"purpose": "Show evidence moving through the workflow.", "visual_intent": "process_explainer", "preferred_asset_types": ["diagram", "source_page"], "must_show": ["records moving with the story"], "on_screen_text": "", "avoid": []}
+        },
+        {
+          "beat_type": "takeaway",
+          "beat_function": "payoff",
+          "narration_text": "The writer gets useful context without guessing, and later tools can still trace each selected idea back to the material that introduced it.",
+          "source_record_keys": ["record_evidence_contract"],
+          "creative_device": "none",
+          "visual_goal": "Land the provenance takeaway.",
+          "visual_brief": {"purpose": "Land the provenance takeaway.", "visual_intent": "takeaway", "preferred_asset_types": ["diagram"], "must_show": ["traceable source context"], "on_screen_text": "", "avoid": []}
+        }
+      ]
+    },
+    {
+      "section_id": "section_02_story_sync",
+      "narration_text": "The next challenge is synchronization. A good script is not one undifferentiated wall of text; it has an intro, clear story sections, and a closing. Voiceover turns those sections into timed audio chunks. The visual planner then converts each chunk into a semantic beat, so a workflow explanation gets a flow diagram while a key contrast gets a focused comparison instead of unrelated decoration.",
+      "beats": [
+        {
+          "beat_type": "transition",
+          "beat_function": "bridge",
+          "narration_text": "The next challenge is synchronization.",
+          "source_record_keys": ["record_visual_contract"],
+          "creative_device": "none",
+          "visual_goal": "Introduce the synchronization story.",
+          "visual_brief": {"purpose": "Introduce the synchronization story.", "visual_intent": "story_title", "preferred_asset_types": ["logo", "kinetic_text"], "must_show": [], "on_screen_text": "", "avoid": []}
+        },
+        {
+          "beat_type": "explanation",
+          "beat_function": "explanation",
+          "narration_text": "A good script is not one undifferentiated wall of text; it has an intro, clear story sections, and a closing. Voiceover turns those sections into timed audio chunks.",
+          "source_record_keys": ["record_visual_contract"],
+          "creative_device": "contrast",
+          "visual_goal": "Show section-aware audio timing.",
+          "visual_brief": {"purpose": "Show section-aware audio timing.", "visual_intent": "process_explainer", "preferred_asset_types": ["diagram"], "must_show": ["intro story closing audio units"], "on_screen_text": "", "avoid": []}
+        },
+        {
+          "beat_type": "takeaway",
+          "beat_function": "payoff",
+          "narration_text": "The visual planner then converts each chunk into a semantic beat, so a workflow explanation gets a flow diagram while a key contrast gets a focused comparison instead of unrelated decoration.",
+          "source_record_keys": ["record_visual_contract"],
+          "creative_device": "contrast",
+          "visual_goal": "Contrast aligned explanatory visuals with decoration.",
+          "visual_brief": {"purpose": "Contrast aligned explanatory visuals with decoration.", "visual_intent": "comparison", "preferred_asset_types": ["diagram"], "must_show": ["beat to visual mapping"], "on_screen_text": "", "avoid": []}
+        }
+      ]
+    },
+    {
+      "section_id": "section_03_story_render",
+      "narration_text": "Finally, validated scene specifications drive reusable motion components. Counters animate numbers, maps explain relationships, process views reveal steps, and kinetic type is saved for moments that truly need emphasis. Each scene stays short, renders independently, and can be retried without rebuilding the whole episode. The clips are stitched to the voiceover timeline, then the original audio is attached to the final video.",
+      "beats": [
+        {
+          "beat_type": "transition",
+          "beat_function": "bridge",
+          "narration_text": "Finally, validated scene specifications drive reusable motion components.",
+          "source_record_keys": ["record_render_contract"],
+          "creative_device": "none",
+          "visual_goal": "Introduce the rendering story.",
+          "visual_brief": {"purpose": "Introduce the rendering story.", "visual_intent": "story_title", "preferred_asset_types": ["logo", "kinetic_text"], "must_show": [], "on_screen_text": "", "avoid": []}
+        },
+        {
+          "beat_type": "explanation",
+          "beat_function": "explanation",
+          "narration_text": "Counters animate numbers, maps explain relationships, process views reveal steps, and kinetic type is saved for moments that truly need emphasis. Each scene stays short, renders independently, and can be retried without rebuilding the whole episode.",
+          "source_record_keys": ["record_render_contract"],
+          "creative_device": "none",
+          "visual_goal": "Show reusable motion scene families and independent rendering.",
+          "visual_brief": {"purpose": "Show reusable motion scene families and independent rendering.", "visual_intent": "process_explainer", "preferred_asset_types": ["diagram", "chart"], "must_show": ["short independent scene renders"], "on_screen_text": "", "avoid": []}
+        },
+        {
+          "beat_type": "takeaway",
+          "beat_function": "payoff",
+          "narration_text": "The clips are stitched to the voiceover timeline, then the original audio is attached to the final video.",
+          "source_record_keys": ["record_render_contract"],
+          "creative_device": "none",
+          "visual_goal": "Show scene clips joining the aligned audio timeline.",
+          "visual_brief": {"purpose": "Show scene clips joining the aligned audio timeline.", "visual_intent": "process_explainer", "preferred_asset_types": ["diagram"], "must_show": ["clips plus voiceover assembly"], "on_screen_text": "", "avoid": []}
+        }
+      ]
+    },
+    {
+      "section_id": "section_99_closing",
+      "narration_text": "That separation is the real advantage: evidence, writing, voice, planning, rendering, and assembly can improve independently while the contracts keep the finished story coherent.",
+      "beats": [
+        {
+          "beat_type": "conclusion",
+          "beat_function": "episode_payoff",
+          "narration_text": "That separation is the real advantage: evidence, writing, voice, planning, rendering, and assembly can improve independently while the contracts keep the finished story coherent.",
+          "source_record_keys": [],
+          "creative_device": "none",
+          "visual_goal": "Land the shared-contract takeaway.",
+          "visual_brief": {"purpose": "Land the shared-contract takeaway.", "visual_intent": "takeaway", "preferred_asset_types": ["diagram", "kinetic_text"], "must_show": ["connected stages"], "on_screen_text": "", "avoid": []}
+        }
+      ]
+    }
+  ]
+}
+```
 
 [METADATA]
 title_options:

@@ -15,7 +15,7 @@ export const EntityCompareScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "The players are shifting";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const axis = textValue(payload.comparison_axis);
   const entities = listValue(payload.entities).slice(0, 4);
   const notes = listValue(payload.entity_notes);
@@ -34,7 +34,7 @@ export const EntityCompareScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }
       {axis && <div style={{ position: "absolute", left: 100, top: 236, color: palette.amber, fontSize: 35, fontWeight: 850 }}>{axis}</div>}
 
       <div style={{ position: "absolute", left: 96, right: 96, top: axis ? 328 : 302, display: "grid", gridTemplateColumns: `repeat(${Math.max(2, Math.min(4, entities.length || 2))}, 1fr)`, gap: 28 }}>
-        {(entities.length ? entities : ["AI", "Platform"]).map((entity, index) => {
+        {entities.map((entity, index) => {
           const icon = iconForEntity(entity);
           const start = 20 + index * 14;
           const opacity = clamp01(interpolate(frame, [start, start + 14], [0, 1], { extrapolateRight: "clamp" }));
@@ -51,7 +51,7 @@ export const EntityCompareScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }
                 )}
               </div>
               <div style={{ marginTop: 28, fontSize: 42, lineHeight: 0.96, fontWeight: 950, letterSpacing: "-0.05em" }}>{entity}</div>
-              <div style={{ marginTop: 18, color: "#cbd8e8", fontSize: 25, lineHeight: 1.14, fontWeight: 720 }}>{notes[index] || "Strategic pressure is rising"}</div>
+              {notes[index] && <div style={{ marginTop: 18, color: "#cbd8e8", fontSize: 25, lineHeight: 1.14, fontWeight: 720 }}>{notes[index]}</div>}
             </div>
           );
         })}

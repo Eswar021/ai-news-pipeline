@@ -10,9 +10,37 @@ export const palette = {
   green: "#8df7bd"
 };
 
+// Scene components use one stable design grid. The root renderer scales this
+// canvas to the requested 16:9 output so 720p, 1080p, 2K, and 4K preserve the
+// same composition instead of exposing fixed-coordinate clipping.
+export const designCanvas = {
+  width: 1920,
+  height: 1080,
+};
+
 export const font = {
   family: "Avenir Next, Helvetica Neue, Arial, sans-serif"
 };
+
+export const editorialDefaults = {
+  background: "#f4efe6",
+  text: "#171611",
+  accent: "#bd4e2f",
+  muted: "#6f6a61",
+  editorialFont: "Iowan Old Style, Baskerville, Georgia, Times New Roman, serif",
+  sansFont: "Avenir Next Condensed, Avenir Next, Helvetica Neue, Arial, sans-serif",
+};
+
+export const isEditorialMinimal = (style?: VisualStyleSpec) => style?.style_id === "editorial_minimal";
+
+export const editorialStyle = (style?: VisualStyleSpec) => ({
+  background: style?.background_color || editorialDefaults.background,
+  text: style?.text_color || editorialDefaults.text,
+  accent: style?.accent_color || editorialDefaults.accent,
+  muted: style?.muted_color || editorialDefaults.muted,
+  editorialFont: style?.editorial_font || editorialDefaults.editorialFont,
+  sansFont: style?.sans_font || editorialDefaults.sansFont,
+});
 
 export const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -55,7 +83,12 @@ export const shortDisplayText = (value: string, max = 72) => {
   if (text.length <= max) {
     return text;
   }
-  return `${text.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+  const candidate = text.slice(0, Math.max(0, max - 1)).trimEnd();
+  const wordBoundary = candidate.lastIndexOf(" ");
+  const shortened = wordBoundary >= Math.floor(max * 0.55)
+    ? candidate.slice(0, wordBoundary).trimEnd()
+    : candidate;
+  return `${shortened}…`;
 };
 
 export const readableBodySize = (text: string, base = 34) => {
@@ -91,3 +124,4 @@ export const readableTitleSize = (text: string, base = 92) => {
   }
   return base;
 };
+import type { VisualStyleSpec } from "./types";

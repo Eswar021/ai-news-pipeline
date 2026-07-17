@@ -64,6 +64,9 @@ const run = async () => {
       outputLocation: outputPath,
       inputProps: {sceneSpec},
       overwrite: true,
+      // Scene clips are picture-only. The authoritative voiceover is attached
+      // once during assembly, avoiding AAC padding at every scene boundary.
+      muted: true,
     };
 
     if (sceneSpec.render_concurrency !== null && sceneSpec.render_concurrency !== undefined) {
@@ -81,6 +84,9 @@ const run = async () => {
     }
     if (sceneSpec.pixel_format) {
       renderOptions.pixelFormat = String(sceneSpec.pixel_format);
+    }
+    if (sceneSpec.hardware_acceleration) {
+      renderOptions.hardwareAcceleration = String(sceneSpec.hardware_acceleration);
     }
 
     await renderMedia(renderOptions);

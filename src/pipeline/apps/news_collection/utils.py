@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import hashlib
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
@@ -190,6 +191,52 @@ def normalize_content(content: str, fallback: str = "") -> tuple[str, str]:
     return cleaned or clean_text(fallback), "title_only"
 
 
+def build_candidate_key(*, source_group: str, source: str, title: str, url: str) -> str:
+    basis = "|".join(
+        [
+            clean_text(source_group).casefold(),
+            clean_text(source).casefold(),
+            clean_text(url).casefold(),
+            clean_text(title).casefold(),
+        ]
+    )
+    return f"candidate_{hashlib.sha1(basis.encode('utf-8')).hexdigest()[:12]}"
+
+
+def build_candidate_decision(
+    *,
+    source_group: str,
+    source: str,
+    title: str,
+    url: str,
+    published_at: str = "",
+    decision: str,
+    reason_code: str = "",
+    reason: str = "",
+    quality_flags: dict | None = None,
+    retrieval_hints: dict | None = None,
+) -> dict:
+    return {
+        "candidate_key": build_candidate_key(
+            source_group=source_group,
+            source=source,
+            title=title,
+            url=url,
+        ),
+        "source_group": clean_text(source_group),
+        "source": clean_text(source),
+        "title": clean_text(title),
+        "url": clean_text(url),
+        "published_at": clean_text(published_at),
+        "decision": decision,
+        "reason_code": clean_text(reason_code),
+        "reason": clean_text(reason),
+        "decision_owner": "code",
+        "quality_flags": dict(quality_flags or {}),
+        "retrieval_hints": dict(retrieval_hints or {}),
+    }
+
+
 def build_record(
     *,
     source: str,
@@ -202,6 +249,12 @@ def build_record(
     extra_fields: dict | None = None,
 ) -> dict:
     record = {
+        "candidate_key": build_candidate_key(
+            source_group=source_group,
+            source=source,
+            title=title,
+            url=url,
+        ),
         "source": source,
         "source_group": source_group,
         "source_type": source_type,

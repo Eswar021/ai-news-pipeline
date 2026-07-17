@@ -1,0 +1,1 @@
+Read every complete assigned record. Return a structured semantic source brief for exactly required_story_id. Focus on the most useful story-specific details, relationships, tensions, examples, and creator opportunities rather than copying article text.

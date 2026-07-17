@@ -11,36 +11,32 @@ type Panel = {
 
 const objectValue = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {});
 
-const panelFromPayload = (value: unknown, fallbackTitle: string, fallbackItems: string[]): Panel => {
+const panelFromPayload = (value: unknown): Panel => {
   if (typeof value === "string") {
-    return { title: value, elements: fallbackItems };
+    return { title: value, elements: [] };
   }
   const obj = objectValue(value);
   return {
-    title: textValue(obj.title) || textValue(obj.label) || fallbackTitle,
-    elements: (listValue(obj.elements).length ? listValue(obj.elements) : listValue(obj.points)).slice(0, 4).concat([]).slice(0, 4) || fallbackItems,
+    title: textValue(obj.title) || textValue(obj.label),
+    elements: (listValue(obj.elements).length ? listValue(obj.elements) : listValue(obj.items).length ? listValue(obj.items) : listValue(obj.points)).slice(0, 4),
   };
 };
-
-const defaultElements = (items: string[], fallback: string[]) => (items.length ? items : fallback);
 
 export const InterfaceTransformScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "The workflow changes shape";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "INTERFACE TRANSFORM");
-  const beforePanel = panelFromPayload(payload.before, "Before", ["Manual search", "Copy details", "Wait for handoff"]);
-  const afterPanel = panelFromPayload(payload.after, "After", ["Ask once", "Agent uses tools", "Work lands in the app"]);
-  beforePanel.elements = defaultElements(beforePanel.elements || [], ["Manual search", "Copy details", "Wait for handoff"]);
-  afterPanel.elements = defaultElements(afterPanel.elements || [], ["Ask once", "Agent uses tools", "Work lands in the app"]);
-  const label = textValue(payload.transformation_label) || "from chat to action";
+  const beforePanel = panelFromPayload(payload.before);
+  const afterPanel = panelFromPayload(payload.after);
+  const label = textValue(payload.transformation_label);
   const p = spring({ fps, frame, config: { damping: 18, stiffness: 112, mass: 0.72 } });
   const wipe = clamp01(interpolate(frame, [42, 94], [0, 1], { extrapolateRight: "clamp" }));
 
   const renderPanel = (panel: Panel, color: string, side: "left" | "right") => (
     <div style={{ width: 700, height: 520, borderRadius: 48, padding: "42px 46px", background: side === "left" ? "rgba(255,255,255,0.075)" : `${color}18`, border: `2px solid ${side === "left" ? "rgba(255,255,255,0.16)" : color}`, boxShadow: side === "right" ? `0 40px 140px ${color}25` : "0 34px 110px rgba(0,0,0,0.34)" }}>
-      <div style={{ color, fontSize: 28, fontWeight: 950, letterSpacing: "0.14em", textTransform: "uppercase" }}>{panel.title || (side === "left" ? "Before" : "After")}</div>
+      <div style={{ color, fontSize: 28, fontWeight: 950, letterSpacing: "0.14em", textTransform: "uppercase" }}>{panel.title}</div>
       <div style={{ marginTop: 34, display: "flex", flexDirection: "column", gap: 18 }}>
         {(panel.elements || []).slice(0, 4).map((item, index) => {
           const reveal = clamp01(interpolate(frame, [18 + index * 9 + (side === "right" ? 46 : 0), 34 + index * 9 + (side === "right" ? 46 : 0)], [0, 1], { extrapolateRight: "clamp" }));

@@ -45,6 +45,7 @@ class VideoAssemblyConfig(BaseModel):
     ffprobe_path: str = DEFAULT_FFPROBE_PATH
     final_video_filename: str = DEFAULT_VIDEO_FILENAME
     video_codec: str = DEFAULT_VIDEO_CODEC
+    normalize_scene_boundaries: bool = True
     audio_codec: str = DEFAULT_AUDIO_CODEC
     audio_bitrate: str = DEFAULT_AUDIO_BITRATE
     audio_sample_rate_hz: int = DEFAULT_AUDIO_SAMPLE_RATE_HZ

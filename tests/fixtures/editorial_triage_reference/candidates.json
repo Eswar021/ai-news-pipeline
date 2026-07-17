@@ -1,0 +1,88 @@
+{
+  "records": [
+    {
+      "record_id": "L1_00001",
+      "source": "hackernews",
+      "source_group": "community_signals",
+      "source_type": "community_signal",
+      "title": "Claude Code sends 33k tokens before reading the prompt; OpenCode sends 7k",
+      "url": "https://example.com/claude-token-comparison",
+      "published_at": "2026-07-11T08:00:00Z",
+      "content": "A developer compared AI coding agents and measured how many prompt tokens each tool sends before reading the user's request."
+    },
+    {
+      "record_id": "L1_00002",
+      "source": "github_trending_ai",
+      "source_group": "community_signals",
+      "source_type": "community_signal",
+      "title": "runeward/sandbox",
+      "url": "https://github.com/runeward/sandbox",
+      "published_at": "2026-07-11T10:30:00Z",
+      "content": "An open-source sandbox for isolating AI agents and controlling filesystem and network access.",
+      "stars": 7
+    },
+    {
+      "record_id": "L1_00003",
+      "source": "news_api",
+      "source_group": "tech_news_apis",
+      "source_type": "tech_news_article",
+      "title": "Bitcoin token price surges toward a new high",
+      "url": "https://example.com/bitcoin-price",
+      "published_at": "2026-07-11T11:00:00Z",
+      "content": "Bitcoin trading volume and token price rose as the crypto market approached a new all-time high."
+    },
+    {
+      "record_id": "L1_00004",
+      "source": "openai_news",
+      "source_group": "ai_company_blogs",
+      "source_type": "official_company_blog",
+      "title": "A useful model release with an unresolved publication date",
+      "url": "https://example.com/model-release",
+      "published_at": "",
+      "content": "The release adds a practical capability and includes enough context to review, but the publication timestamp could not be extracted.",
+      "content_source": "entry_summary"
+    },
+    {
+      "record_id": "L1_00005",
+      "source": "rss_news",
+      "source_group": "tech_news_apis",
+      "source_type": "tech_news_article",
+      "title": "Save 40 percent on this Asus tablet today",
+      "url": "https://example.com/asus-deal",
+      "published_at": "2026-07-11T12:00:00Z",
+      "content": "A limited-time consumer electronics deal with a coupon and affiliate purchase link."
+    },
+    {
+      "record_id": "L1_00006",
+      "source": "rss_news",
+      "source_group": "tech_news_apis",
+      "source_type": "tech_news_article",
+      "title": "An older AI launch outside the frozen run window",
+      "url": "https://example.com/old-ai-launch",
+      "published_at": "2026-06-20T12:00:00Z",
+      "content": "This otherwise valid item predates the current collection window."
+    },
+    {
+      "record_id": "L1_00007",
+      "source": "youtube_ai_creator",
+      "source_group": "youtube_podcast_transcripts",
+      "source_type": "video_or_podcast",
+      "title": "How to build durable memory for an AI agent",
+      "url": "https://www.youtube.com/watch?v=fixture-tutorial",
+      "published_at": "2026-07-11T13:00:00Z",
+      "content": "A concrete tutorial explains an agent memory architecture, its failure modes, and a practical implementation that gives viewers a useful mental model."
+    },
+    {
+      "record_id": "L1_00008",
+      "source": "official_ai_blog",
+      "source_group": "ai_company_blogs",
+      "source_type": "official_company_blog",
+      "title": "A new reasoning model enters production",
+      "url": "https://example.com/reasoning-model",
+      "published_at": "2026-07-11T14:00:00Z",
+      "content": "This extracted body discusses an unrelated cloud storage product and appears to come from the wrong page, but the source URL and title remain recoverable.",
+      "content_source": "article_body",
+      "content_integrity_status": "title_mismatch"
+    }
+  ]
+}

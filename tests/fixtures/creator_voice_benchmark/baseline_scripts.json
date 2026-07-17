@@ -1,0 +1,47 @@
+{
+  "rubric_scale": "1-5",
+  "weak_current_style": {
+    "narration_text": "Today, we delve into Sqlsure, a groundbreaking and indispensable tool that could reshape the tech landscape. Sqlsure analyzes each query in approximately 0.1 ms. In a benchmark of 2,568 queries, it flagged 45 issues with zero false alarms. The project identified an 8x performance bug in one query. Its repair mode fixed 10 out of 10 broken examples in the published test. This pivotal innovation is a must-have for modern database teams.",
+    "human_reference_scores": {
+      "hook": 1,
+      "story_engine": 1,
+      "clarity": 3,
+      "selectivity": 1,
+      "personality": 1,
+      "creative_fit": 1,
+      "spoken_rhythm": 2,
+      "viewer_payoff": 2,
+      "originality": 1,
+      "visual_potential": 2
+    },
+    "known_weaknesses": [
+      "corporate press-release language",
+      "source facts repeated in source order",
+      "metric dump without a story engine",
+      "unsupported generic importance claims",
+      "no useful narrator perspective"
+    ]
+  },
+  "creator_led_reference": {
+    "narration_text": "SQL bugs have a talent for introducing themselves in production, which is rude. Sqlsure wants to catch them earlier. The project says its check adds about a tenth of a millisecond, and in one test it found 45 problems across 2,568 queries without a false alarm. Think of it as spell-check for a database query: promising, fast, and still not a magic force field. The useful idea is not that mistakes disappear; it is that a developer gets a chance to meet them before an outage does.",
+    "human_reference_scores": {
+      "hook": 4,
+      "story_engine": 4,
+      "clarity": 5,
+      "selectivity": 5,
+      "personality": 4,
+      "creative_fit": 4,
+      "spoken_rhythm": 4,
+      "viewer_payoff": 4,
+      "originality": 4,
+      "visual_potential": 4
+    },
+    "strengths": [
+      "problem-solution movement",
+      "selective metrics",
+      "plain-language analogy",
+      "restrained observational humor",
+      "natural limitation and viewer payoff"
+    ]
+  }
+}

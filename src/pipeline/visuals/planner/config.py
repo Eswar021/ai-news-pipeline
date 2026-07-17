@@ -5,6 +5,7 @@ PACKAGE_TYPE = "visual_scene_plan"
 SUPPORTED_FORMAT = "roundup"
 EPISODE_DIRECTOR_PROMPT_MODULE = "episode_director"
 STORY_VISUAL_PLANNER_PROMPT_MODULE = "story_visual_planner"
+STORY_VISUAL_EDITOR_PROMPT_MODULE = "story_visual_editor"
 NEXT_MODULE = "visuals.media_discovery"
 
 RENDER_KINDS = [
@@ -12,6 +13,9 @@ RENDER_KINDS = [
     "context_image_scene",
     "broll_video_scene",
     "logo_reveal_scene",
+    "editorial_text_scene",
+    "simple_explainer_scene",
+    "story_transition_scene",
     "kinetic_type_scene",
     "bullet_build_scene",
     "quote_or_claim_highlight_scene",
@@ -49,12 +53,16 @@ OLD_CARD_RENDER_KINDS = {
 DEFAULT_MAX_SCENES = 64
 DEFAULT_MIN_SCENE_SECONDS = 3.0
 DEFAULT_MAX_SCENE_SECONDS = 14.0
+DEFAULT_HARD_MAX_SCENE_SECONDS = 16.0
 DEFAULT_MIN_SCENES_PER_STORY = 3
-DEFAULT_MAX_SCENES_PER_STORY = 8
+DEFAULT_MAX_SCENES_PER_STORY = 12
 DEFAULT_MAX_SOURCE_ARTICLE_SCENES = 20
 DEFAULT_MAX_CONTEXT_IMAGE_SCENES = 16
 DEFAULT_MAX_BROLL_VIDEO_SCENES = 12
 DEFAULT_MAX_LOGO_REVEAL_SCENES = 24
+DEFAULT_MAX_EDITORIAL_TEXT_SCENES = 32
+DEFAULT_MAX_SIMPLE_EXPLAINER_SCENES = 24
+DEFAULT_MAX_STORY_TRANSITION_SCENES = 12
 DEFAULT_MAX_KINETIC_TYPE_SCENES = 32
 DEFAULT_MAX_BULLET_BUILD_SCENES = 24
 DEFAULT_MAX_QUOTE_OR_CLAIM_SCENES = 18
@@ -78,10 +86,67 @@ DEFAULT_MAX_SIGNAL_RADAR_SCENES = 12
 DEFAULT_MAX_INTERFACE_TRANSFORM_SCENES = 12
 DEFAULT_MAX_TRANSITION_STINGER_SCENES = 12
 DEFAULT_MAX_CONSECUTIVE_SAME_KIND = 2
-DEFAULT_MAX_RECORDS_PER_STORY = 4
-DEFAULT_MAX_RECORD_CHARS = 2200
+DEFAULT_MAX_STORY_CONTEXT_CHARS = 500_000
 
 DEFAULT_VISUAL_CAPABILITIES = {
+    "editorial_text_scene": {
+        "description": "Present one concise editorial idea with large expressive typography, generous whitespace, and one restrained accent.",
+        "best_for": [
+            "short hooks and punchlines",
+            "one-sentence implications",
+            "clean visual punctuation between richer asset scenes",
+        ],
+        "required_payload_fields": [
+            "headline",
+            "accent_words",
+            "composition",
+            "motion_style",
+        ],
+        "avoid_when": [
+            "the narration names a source, product image, or identity that can be shown",
+            "more than one visual idea is needed",
+            "the headline would repeat a full narration paragraph",
+        ],
+        "render_notes": "Use a short headline, optional eyebrow/supporting line, and no card container. Keep one visual idea on screen.",
+    },
+    "simple_explainer_scene": {
+        "description": "Explain one relationship or short process with two to four clean labels, restrained connectors, and sequential focus motion.",
+        "best_for": [
+            "small workflows",
+            "cause and effect",
+            "two-to-four entity relationships",
+            "before-to-after conceptual changes",
+        ],
+        "required_payload_fields": [
+            "headline",
+            "items",
+            "orientation",
+            "motion_style",
+        ],
+        "avoid_when": [
+            "a real source or product image communicates the beat better",
+            "the relationship is not supported by the script beat",
+            "more than four nodes are required",
+        ],
+        "render_notes": "Use 2-4 short item objects shaped {label, detail?}. Keep labels large and connectors secondary; never build a dashboard.",
+    },
+    "story_transition_scene": {
+        "description": "Introduce the next roundup story with a clean editorial title, optional story number, and a brief transition motion.",
+        "best_for": [
+            "the first aligned beat of each selected story",
+            "clear chapter boundaries in a roundup",
+        ],
+        "required_payload_fields": [
+            "headline",
+            "accent_words",
+            "motion_style",
+        ],
+        "avoid_when": [
+            "the scene is not the deterministic first beat of a story",
+            "the title would be duplicated elsewhere",
+        ],
+        "render_notes": "Overlay the complete story title on the story planner's selected opening media when available; otherwise use a short clean reset. Do not use a card.",
+    },
     "source_article_scene": {
         "description": "Show a real source webpage, article, blog, paper, or report as visual proof for a narration beat.",
         "best_for": [
@@ -123,6 +188,11 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "motion_style",
             "show_overlay",
         ],
+        "payload_field_contract": {
+            "search_queries": "list[str] of concrete, camera-depictable subjects or actions",
+            "must_show": "list[str] of visible requirements",
+            "must_avoid": "list[str] of visible conflicts to reject",
+        },
         "avoid_when": [
             "a source article is needed as proof",
             "the requested image would imply an event or person not supported by narration",
@@ -131,27 +201,28 @@ DEFAULT_VISUAL_CAPABILITIES = {
         "render_notes": "Plan the subject and composition, not an asset URL. Media discovery selects a licensed file and the renderer uses full-bleed cinematic motion.",
     },
     "broll_video_scene": {
-        "description": "Use a real short b-roll clip to depict a physical action, environment, device, workflow, infrastructure, or human context mentioned in narration.",
+        "description": "Use a trusted story-owned source video to depict a physical action, environment, device, workflow, infrastructure, product, or human context mentioned in narration.",
         "best_for": [
             "server rooms, offices, devices, robotics, labs, manufacturing, city infrastructure, or people using technology",
             "moments where real motion explains more than another text or chart scene",
             "short atmospheric bridges that remain directly related to the spoken idea",
         ],
         "required_payload_fields": [
-            "search_queries",
-            "must_show",
-            "must_avoid",
+            "asset_id",
             "shot_style",
             "overlay_headline",
             "motion_style",
             "show_overlay",
         ],
+        "payload_field_contract": {
+            "asset_id": "exact verified source_video asset id from this story catalog",
+        },
         "avoid_when": [
-            "the clip would pretend to show the exact reported event",
-            "the search is too broad to stay synchronized with narration",
+            "no verified source_video asset exists in this story catalog",
+            "the clip would imply an event not represented by the selected source",
             "a source, diagram, metric, or logo is the clearer visual",
         ],
-        "render_notes": "Plan concrete b-roll subjects only. Media discovery resolves licensed footage; mute it and keep the narration audio authoritative.",
+        "render_notes": "Use only a verified source_video asset_id in trusted-catalog mode. Media discovery prepares a short muted clip and keeps narration authoritative.",
     },
     "logo_reveal_scene": {
         "description": "Use company, product, model, or platform logos/entities as a quick YouTube-style identity moment.",
@@ -305,7 +376,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "the value would need to be invented",
             "a source screenshot is more important for credibility",
         ],
-        "render_notes": "Use animated counters, unit labels, pulse rings, and scale bars. Keep values short and directly grounded in narration or source records.",
+        "render_notes": "metrics must contain 1-3 objects shaped {label, value, unit?, context?}; copy every displayed value from the script or selected records.",
     },
     "trend_line_scene": {
         "description": "Animate a rising, falling, volatile, or pressure-building trend line for momentum or competition beats.",
@@ -327,7 +398,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "a precise quantitative chart would be misleading",
             "the scene would imply real data points not provided",
         ],
-        "render_notes": "Use stylized directional charts, not fake precise market data. Label the trend as conceptual unless exact values are supplied.",
+        "render_notes": "trend_direction must be rising, falling, volatile, pressure_building, or flat_then_jump; annotations must be non-empty story-specific strings; never imply fake data points.",
     },
     "bar_chart_scene": {
         "description": "Show two to five bars for concrete comparisons such as cost, usage, latency, funding, model size, or adoption.",
@@ -349,7 +420,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "the values would need to be invented",
             "a source screenshot is more important for credibility",
         ],
-        "render_notes": "Use bold horizontal bars, large labels, and display values. Keep the chart conceptual unless exact values are provided.",
+        "render_notes": "bars must contain 2-5 objects shaped {label, value, display_value?, context?}; value must be a source-supported number.",
     },
     "bar_race_scene": {
         "description": "Animate ranked bars changing over time or across stages to show a race, rollout, adoption shift, or competitive movement.",
@@ -371,7 +442,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "there is no change or ranking implied",
             "the bars would suggest precise data not present",
         ],
-        "render_notes": "Animate start-to-end values with rank movement. Use synthetic relative values only when clearly conceptual.",
+        "render_notes": "items must contain 2-5 objects shaped {label, start_value, end_value, display_value?}; never synthesize relative values.",
     },
     "ranked_list_scene": {
         "description": "Show a fast top-three or top-five ranked list with large rank numbers, compact entity labels, and short details.",
@@ -391,7 +462,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "the narration is not actually ranking or ordering items",
             "the ranking would imply unsupported certainty",
         ],
-        "render_notes": "Use it as a punchy ordered graphic, not as a paragraph list.",
+        "render_notes": "items must contain 2-5 objects shaped {label, rank?, value?, detail?}; use only an explicit supplied ordering.",
     },
     "benchmark_delta_scene": {
         "description": "Show before/after or model-vs-model deltas with arrows, percentage changes, and short interpretation labels.",
@@ -412,7 +483,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "there is no measurable delta",
             "the comparison is not grounded in the script or records",
         ],
-        "render_notes": "Use large delta typography and directional arrows. Keep labels short and concrete.",
+        "render_notes": "benchmarks must contain 1-3 objects shaped {label, before, after, delta, unit?, context?}; all values must be source-supported.",
     },
     "ecosystem_map_scene": {
         "description": "Show entities, products, platforms, developers, users, and clouds as connected nodes in a simple motion map.",
@@ -434,7 +505,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "the relationship would be invented",
             "a source screenshot is the clearer visual",
         ],
-        "render_notes": "Use animated node reveals, connection pulses, and short role labels. Keep the graph small and readable.",
+        "render_notes": "nodes must be {id, label, role?}; edges must be {from, to, label} using exact node ids; focus_entity must match a node label.",
     },
     "architecture_flow_scene": {
         "description": "Show a technical or workflow pipeline as connected steps, such as app to SDK to model to user result.",
@@ -456,7 +527,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "the steps would be speculative",
             "the sequence has fewer than two concrete stages",
         ],
-        "render_notes": "Use animated blocks, moving packets, arrows, and highlighted active stages. Prefer diagrams over explanatory text lists.",
+        "render_notes": "steps must be 2-6 objects shaped {label, detail?}; active_step_label must exactly match one supplied step label.",
     },
     "process_zoom_scene": {
         "description": "Zoom into one important step in a workflow or architecture, showing the surrounding process as context and the active step as the hero.",
@@ -477,7 +548,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "there is no clear active step",
             "the process has fewer than two concrete stages",
         ],
-        "render_notes": "Make the active step large and central. Keep surrounding steps visible but secondary.",
+        "render_notes": "steps must be 2-6 objects shaped {label, detail?}; focus_step_label must match a step and zoom_note must explain it.",
     },
     "browser_walkthrough_scene": {
         "description": "Show a guided webpage or product-page walkthrough with viewport panels, scroll markers, and focused callouts.",
@@ -499,7 +570,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "the narration is abstract rather than page-specific",
             "a quote highlight is more direct",
         ],
-        "render_notes": "Use browser chrome, scroll rails, zoom windows, and step callouts. Treat as guided browsing, not a static article card.",
+        "render_notes": "Use a selected-record url and source_record_key; walkthrough_steps must be {label, detail? or target_text?}; focus_text must identify a supplied page detail.",
     },
     "decision_tree_scene": {
         "description": "Show branching decisions for routing, safety gates, agent choices, product strategy, or model selection.",
@@ -522,7 +593,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "there is no meaningful choice or branch",
             "the branching would invent hidden logic",
         ],
-        "render_notes": "Use glowing branch paths and one highlighted route. Keep labels short.",
+        "render_notes": "branches must be 2-4 objects shaped {label, outcome?, risk?}; selected_path_label must exactly match one branch label or outcome.",
     },
     "capability_matrix_scene": {
         "description": "Compare products, models, or platforms across capability dimensions such as speed, cost, context, multimodal support, and tooling.",
@@ -544,7 +615,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "there are no comparable dimensions",
             "ratings would imply unsupported precision",
         ],
-        "render_notes": "Use compact cells, check/pulse states, and one highlighted capability. Avoid dense spreadsheets.",
+        "render_notes": "columns must contain 2-4 labels; rows must be {label, values, highlight?}, with exactly one supported value per column.",
     },
     "timeline_zoom_scene": {
         "description": "Show a short sequence of events, then zoom into the critical event that changes the story.",
@@ -566,7 +637,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "the sequence would become a generic timeline",
             "there are not at least two meaningful events",
         ],
-        "render_notes": "Use a cinematic event rail and zoom into one event. Never make this a static timeline card.",
+        "render_notes": "events must be 2-5 objects shaped {label, date?, detail?}; focus_event_label must match an event label and zoom_note must describe it.",
     },
     "document_stack_scene": {
         "description": "Show reports, papers, release notes, GitHub issues, docs, or source documents as layered evidence cards with parallax motion.",
@@ -587,7 +658,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "there is only one source and a source screenshot would be clearer",
             "document labels would be invented",
         ],
-        "render_notes": "Use layered pages, source labels, and parallax. Keep document cards visual, not text-heavy.",
+        "render_notes": "documents must be {title, source, document_type?, date?, detail?}; focus_document_label must exactly match one document title.",
     },
     "signal_radar_scene": {
         "description": "Show a scanning radar-like field for emerging signals, companies, topics, risks, or watchlist items.",
@@ -608,7 +679,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "the narration needs source proof rather than signal framing",
             "signals would be vague labels without context",
         ],
-        "render_notes": "Use a radar sweep, pulsing blips, and short labels. This is for attention and sensing moments.",
+        "render_notes": "signals must be 2-6 objects shaped {label, strength, detail?}; strength must be a source-supported 0-100 value, never an invented confidence score.",
     },
     "interface_transform_scene": {
         "description": "Show a before/after interface or workflow transformation, such as chat to agent workflow or manual process to automated tool loop.",
@@ -630,7 +701,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "there is no before/after contrast",
             "the visual would imply a real UI that is not shown",
         ],
-        "render_notes": "Use two interface panels, connector motion, and transformation glow. Make it conceptual unless real UI assets are supplied.",
+        "render_notes": "before and after must each be {label, items} with at least two supplied items; transformation_label must state the supported change.",
     },
     "transition_stinger_scene": {
         "description": "Create a short high-energy motion bumper between stories or visual sections using abstract newsroom graphics, entity hints, and one compact label.",

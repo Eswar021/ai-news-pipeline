@@ -25,6 +25,15 @@ ALLOWED_VISUAL_INTENTS = {
     "metric_explainer", "process_explainer", "comparison", "context_media",
     "transition", "takeaway",
 }
+ALLOWED_BEAT_FUNCTIONS = {
+    "episode_hook", "episode_setup", "story_hook", "setup", "reveal",
+    "explanation", "example", "reaction", "comic_release", "consequence",
+    "caveat", "payoff", "bridge", "episode_payoff",
+}
+ALLOWED_CREATIVE_DEVICES = {
+    "none", "analogy", "contrast", "rhetorical_question", "hypothetical",
+    "observational_humor", "self_aware_humor", "callback",
+}
 
 
 def run(input_json: dict) -> dict:
@@ -42,6 +51,12 @@ def run(input_json: dict) -> dict:
     )
 
     parsed_response = _parse_response(request.input.response_text)
+    recovery_mode = parsed_response.get("section_parse_mode") == "weighted_paragraph_fallback"
+    if recovery_mode and not bool(config["allow_unstructured_recovery"]):
+        errors.append(
+            "Unstructured script recovery is disabled for production. Return canonical section IDs "
+            "with [SCRIPT_SECTIONS_JSON] or [[SECTION:<section_id>]] markers."
+        )
     section_plan = _build_section_plan(packet)
     sections = _build_sections(parsed_response, section_plan, packet, config, warnings)
     full_script = "\n\n".join(section["narration_text"] for section in sections).strip()
@@ -53,7 +68,22 @@ def run(input_json: dict) -> dict:
     if not full_script:
         errors.append("Parsed script is empty")
 
-    checks = {"passed": not errors, "errors": errors, "warnings": warnings}
+    explicit_beats = bool(parsed_response.get("explicit_beats"))
+    production_media_ready = not recovery_mode and explicit_beats
+    if recovery_mode:
+        warnings.append(
+            "Weighted paragraph recovery is a manual inspection aid only and is not ready for voiceover or visuals."
+        )
+    if not explicit_beats:
+        warnings.append(
+            "Script beats were inferred from prose. This result is inspection-only and cannot drive voiceover or visuals."
+        )
+    checks = {
+        "passed": not errors,
+        "errors": errors,
+        "warnings": warnings,
+        "production_media_ready": production_media_ready,
+    }
     script_package = {
         "package_type": "roundup_script",
         "selected_format": "roundup",
@@ -73,6 +103,7 @@ def run(input_json: dict) -> dict:
             "story_briefs": [],
         },
         "story_segments": [_manual_story_segment(section) for section in sections if section["section_type"] == "story"],
+        "story_truth_indexes": [],
         "story_asset_hints": [_story_asset_hints(story) for story in packet.get("stories", [])],
         "bookends": {
             "source": "manual_chatgpt_handoff",
@@ -83,6 +114,7 @@ def run(input_json: dict) -> dict:
             "enabled": False,
             "story_reviews": [],
             "bookend_reviews": [],
+            "review_call_count": 0,
             "revision_count": 0,
             "note": "Authored and reviewed through the manual ChatGPT handoff.",
         },
@@ -103,6 +135,7 @@ def run(input_json: dict) -> dict:
             "notes": parsed_response.get("notes", ""),
             "metadata_text": parsed_response.get("metadata", ""),
             "section_parse_mode": parsed_response.get("section_parse_mode", "plain_script"),
+            "beat_parse_mode": "explicit" if explicit_beats else "inferred_from_prose",
         },
         "checks": checks,
     }
@@ -136,8 +169,8 @@ def run(input_json: dict) -> dict:
         },
         "handoff": {
             "ready_for_metadata_creation": status == "ok",
-            "ready_for_voiceover": status == "ok",
-            "ready_for_visual_planning": status == "ok",
+            "ready_for_voiceover": status == "ok" and production_media_ready,
+            "ready_for_visual_planning": status == "ok" and production_media_ready,
         },
         "llm_calls": [],
     }
@@ -248,11 +281,13 @@ def _build_sections(
             "Use [[SECTION:<section_id>]] markers for exact story boundaries."
         )
         narration_by_id = _partition_script(parsed_response["script"], section_plan)
+        parsed_response["explicit_beats"] = False
     else:
         aliases = _section_id_aliases(packet, section_plan)
         narration_by_id: dict[str, str] = {}
         supplied_beats_by_id: dict[str, list[dict[str, Any]]] = {}
         normalized_count = 0
+        explicit_beats = True
         for item in provided:
             supplied_id = clean_text(item.get("section_id"))
             if not supplied_id:
@@ -264,6 +299,13 @@ def _build_sections(
                     "return each required marker exactly once"
                 )
             supplied_beats = item.get("beats") if isinstance(item.get("beats"), list) else []
+            if not supplied_beats:
+                explicit_beats = False
+                if bool(config["require_explicit_beats"]):
+                    raise ValueError(
+                        f"ChatGPT response section {supplied_id} is missing explicit beats; "
+                        "production scripts must not reconstruct audiovisual boundaries from prose"
+                    )
             narration = _clean_script(item.get("narration_text", ""))
             if not narration and supplied_beats:
                 narration = " ".join(_clean_script(beat.get("narration_text", "")) for beat in supplied_beats).strip()
@@ -275,6 +317,7 @@ def _build_sections(
             warnings.append(
                 f"Normalized {normalized_count} packet script markers to canonical section IDs."
             )
+        parsed_response["explicit_beats"] = explicit_beats
     expected_ids = {plan["section_id"] for plan in section_plan}
     unexpected = sorted(set(narration_by_id) - expected_ids)
     if unexpected:
@@ -289,7 +332,6 @@ def _build_sections(
         if not narration:
             raise ValueError(f"ChatGPT response is missing narration for {plan['section_id']}")
         used_story_ids = [plan["story_id"]] if plan["section_type"] == "story" else list(plan["allowed_story_ids"])
-        used_source_keys = list(plan["allowed_source_record_keys"]) if plan["section_type"] == "story" else []
         beats = _build_beats(
             narration=narration,
             plan=plan,
@@ -297,6 +339,22 @@ def _build_sections(
             supplied_beats=supplied_beats_by_id.get(plan["section_id"], []),
         )
         normalized_narration = " ".join(beat["narration_text"] for beat in beats).strip()
+        used_source_keys = _dedupe(
+            [
+                key
+                for beat in beats
+                for key in beat.get("source_record_keys", [])
+            ]
+        )
+        if (
+            plan["section_type"] == "story"
+            and plan.get("allowed_source_record_keys")
+            and not used_source_keys
+        ):
+            raise ValueError(
+                f"{plan['section_id']} has no source-owned beat; at least one explicit beat must cite "
+                "a selected record from its assigned story"
+            )
         normalized_words = _word_count(normalized_narration)
         title_card = None
         if plan["section_type"] == "story":
@@ -348,24 +406,43 @@ def _build_beats(
         if not text:
             continue
         raw_keys = draft.get("source_record_keys") if isinstance(draft.get("source_record_keys"), list) else []
-        source_keys = _dedupe(raw_keys or (list(allowed_keys) if plan["section_type"] == "story" else []))
+        source_keys = _dedupe(raw_keys)
         unknown = sorted(set(source_keys) - allowed_keys)
         if unknown:
             raise ValueError(f"{plan['section_id']} beat uses unknown source keys: {unknown}")
         beat_type = clean_text(draft.get("beat_type")) or _default_beat_type(plan["section_type"], order, len(drafts))
         if beat_type not in ALLOWED_BEAT_TYPES:
             raise ValueError(f"{plan['section_id']} returned unsupported beat_type: {beat_type}")
+        beat_function = clean_text(draft.get("beat_function")) or _default_beat_function(
+            plan["section_type"], beat_type
+        )
+        if beat_function not in ALLOWED_BEAT_FUNCTIONS:
+            raise ValueError(f"{plan['section_id']} returned unsupported beat_function: {beat_function}")
+        creative_device = clean_text(draft.get("creative_device")) or "none"
+        if creative_device not in ALLOWED_CREATIVE_DEVICES:
+            raise ValueError(f"{plan['section_id']} returned unsupported creative_device: {creative_device}")
         visual_brief = draft.get("visual_brief") if isinstance(draft.get("visual_brief"), dict) else {}
         output.append(
             {
                 "beat_id": f"{plan['section_id']}_beat_{order:02d}",
                 "beat_order": order,
                 "beat_type": beat_type,
+                "beat_function": beat_function,
                 "story_id": plan.get("story_id", ""),
                 "narration_text": text,
                 "word_count": _word_count(text),
                 "estimated_seconds": _estimated_seconds(_word_count(text), words_per_minute),
                 "source_record_keys": source_keys,
+                "support_alignment": "explicit" if source_keys else "unresolved",
+                "support_truth_ids": _dedupe(
+                    draft.get("support_truth_ids", [])
+                    if isinstance(draft.get("support_truth_ids"), list)
+                    else []
+                ),
+                "creative_device": creative_device,
+                "visual_goal": clean_text(draft.get("visual_goal"))
+                or clean_text(visual_brief.get("purpose"))
+                or "Visually reinforce this exact narration beat.",
                 "visual_brief": _normalize_visual_brief(visual_brief, plan, order),
             }
         )
@@ -418,6 +495,23 @@ def _default_beat_type(section_type: str, order: int, count: int) -> str:
     return "explanation"
 
 
+def _default_beat_function(section_type: str, beat_type: str) -> str:
+    if section_type == "intro":
+        return "episode_hook" if beat_type == "hook" else "episode_setup"
+    if section_type == "closing":
+        return "episode_payoff"
+    return {
+        "hook": "story_hook",
+        "transition": "bridge",
+        "what_changed": "reveal",
+        "explanation": "explanation",
+        "example": "example",
+        "why_it_matters": "consequence",
+        "caveat": "caveat",
+        "takeaway": "payoff",
+    }.get(beat_type, "explanation")
+
+
 def _normalize_visual_brief(raw: dict[str, Any], plan: dict[str, Any], order: int) -> dict[str, Any]:
     story = plan["section_type"] == "story"
     default_intent = "story_title" if story and order == 1 else ("source_proof" if story else "transition")
@@ -432,7 +526,10 @@ def _normalize_visual_brief(raw: dict[str, Any], plan: dict[str, Any], order: in
         "visual_intent": visual_intent,
         "preferred_asset_types": _dedupe(preferred),
         "must_show": _dedupe(raw.get("must_show", []) if isinstance(raw.get("must_show"), list) else []),
-        "on_screen_text": clean_text(raw.get("on_screen_text"))[:90],
+        # Preserve authored meaning at the canonical boundary. The visual planner
+        # can choose a shorter treatment for a specific renderer without losing
+        # the original brief supplied by the writer or operator.
+        "on_screen_text": clean_text(raw.get("on_screen_text")),
         "avoid": _dedupe(raw.get("avoid", []) if isinstance(raw.get("avoid"), list) else []),
     }
 

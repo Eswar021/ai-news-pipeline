@@ -8,6 +8,15 @@ Your job:
 - Preserve required facts, cautious facts, source attribution, and blocked angles.
 - Keep the target format, selected story order, and roles from the packet.
 - Make the narration feel like a strong YouTube video, not a technical report.
+- Give every story a mini-arc built around tension, surprise, a practical
+  consequence, a mechanism, or another specific story engine.
+- Use selected source facts as storytelling material rather than following the
+  records in source order or trying to mention every available detail.
+- Write with the voice of a curious technical friend with a skeptical eyebrow:
+  concrete, energetic but not frantic, and willing to offer a useful opinion.
+- Add fitting analogy, contrast, reaction, or restrained humor when it improves
+  clarity. Never fabricate personal experience or let a joke create a factual
+  accusation.
 - You may use broader context, web/search knowledge, analogies, and creative
   framing to make the story clearer and more engaging.
 - Do not silently add new factual claims to the selected stories. If you use
@@ -24,6 +33,10 @@ Focus on:
 - caution language only where it helps the viewer understand uncertainty
 - source usage
 - what the final script should say clearly and what it must avoid
+
+Avoid press-release language such as "pivotal," "groundbreaking,"
+"indispensable," "game-changing," and generic claims about reshaping the
+technology landscape. Stop each story when its viewer payoff is complete.
 
 Return exactly this top-level section format:
 
@@ -44,8 +57,16 @@ canonical section IDs.
 Each section object must contain:
 - `section_id`
 - `narration_text`, equal to the spoken beat texts joined in order
-- `beats`, a list of objects with `beat_type`, `narration_text`,
-  `source_record_keys`, and `visual_brief`
+- `beats`, a list of objects with `beat_type`, `beat_function`,
+  `narration_text`, `source_record_keys`, `creative_device`, `visual_goal`, and
+  `visual_brief`
+
+Use `beat_function` values from `story_hook`, `setup`, `reveal`, `explanation`,
+`example`, `reaction`, `comic_release`, `consequence`, `caveat`, `payoff`, and
+`bridge`. Use `creative_device` values from `none`, `analogy`, `contrast`,
+`rhetorical_question`, `hypothetical`, `observational_humor`,
+`self_aware_humor`, and `callback`. Intro and closing beats may omit
+`beat_function`; the parser assigns their canonical bookend functions.
 
 Each `visual_brief` must contain:
 - `purpose`

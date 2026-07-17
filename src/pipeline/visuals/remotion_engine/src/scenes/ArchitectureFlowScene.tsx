@@ -48,12 +48,12 @@ export const ArchitectureFlowScene: React.FC<{ spec: VisualSceneSpec }> = ({ spe
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "How the system works";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const steps = stepList(payload.steps).slice(0, 6);
-  const active = textValue(payload.active_step_label) || steps[steps.length - 1]?.label || "Output";
+  const active = textValue(payload.active_step_label);
   const eyebrow = sceneEyebrow(payload, "SYSTEM FLOW");
   const p = spring({ fps, frame, config: { damping: 18, stiffness: 105, mass: 0.72 } });
-  const items = steps.length ? steps : [{ label: "Input" }, { label: "Model" }, { label: "Output" }];
+  const items = steps;
   const layout = layoutFor(items.length);
   const { cardWidth, cardHeight, points } = layout;
 
@@ -93,7 +93,7 @@ export const ArchitectureFlowScene: React.FC<{ spec: VisualSceneSpec }> = ({ spe
           const y = point.y;
           const reveal = clamp01(interpolate(frame, [16 + index * 14, 34 + index * 14], [0, 1], { extrapolateRight: "clamp" }));
           const isActive = step.label === active || index === items.length - 1;
-          const label = shortDisplayText(step.label || `Step ${index + 1}`, items.length <= 4 ? 30 : 24);
+          const label = shortDisplayText(step.label || "", items.length <= 4 ? 30 : 24);
           const detail = shortDisplayText(step.detail || "", items.length <= 4 ? 62 : 48);
           return (
             <g key={`${step.label}-${index}`} opacity={reveal} transform={`translate(${x}, ${y + interpolate(reveal, [0, 1], [38, 0])}) scale(${interpolate(p, [0, 1], [0.98, 1])})`}>

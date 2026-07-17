@@ -22,17 +22,22 @@ def run(input_json: dict) -> dict:
             )
         raise ValueError(f"Unsupported target_format: {target_format}")
 
-    stories = request.input.story_mapping.data.stories
+    selection = request.input.editorial_selection
+    if selection.status != "ok" or not bool(
+        selection.handoff.get("ready_for_video_packaging", False)
+    ):
+        raise ValueError("input.editorial_selection is not ready for video packaging")
+    slate = selection.data.editorial_slate
     generated_at = _iso_now()
     roundup_cfg = request.config.roundup.model_dump(mode="json")
-    built = build_roundup_packet(stories, roundup_cfg)
+    built = build_roundup_packet(slate, roundup_cfg)
     packet = built["packet"]
     selection_stats = built["selection_stats"]
     selected_count = int(selection_stats["selected_story_count"])
     min_stories = int(roundup_cfg["min_stories"])
     status = "ok" if selected_count >= min_stories else "failed"
     failure_reason = "" if status == "ok" else (
-        f"Only {selected_count} story/stories qualified; at least {min_stories} are required for a roundup."
+        f"Editorial slate contains {selected_count} selected story/stories; at least {min_stories} are required."
     )
 
     response = VideoPackagingResponse(

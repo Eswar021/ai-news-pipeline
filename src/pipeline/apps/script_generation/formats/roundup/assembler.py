@@ -16,7 +16,7 @@ def assemble_script(
 ) -> dict[str, Any]:
     segment_by_story = {clean_text(item.get("story_id")): item for item in story_segments}
     connector_by_story = {
-        clean_text(item.get("story_id")): item
+        clean_text(item.get("target_story_id")): item
         for item in bookends.get("story_connectors", [])
     }
     sections: list[dict[str, Any]] = []
@@ -104,8 +104,12 @@ def _normalize_story_beats(
         raw.append(
             {
                 "beat_type": "transition",
+                "beat_function": "bridge",
                 "narration_text": transition,
                 "source_record_keys": [],
+                "support_truth_ids": [],
+                "creative_device": "none",
+                "visual_goal": "Orient the viewer to the next story without interrupting narration flow.",
                 "visual_brief": {
                     "purpose": "Introduce the next story while its title appears and narration continues.",
                     "visual_intent": "story_title",
@@ -138,6 +142,11 @@ def _normalize_bookend_beats(
         {
             **draft,
             "source_record_keys": [],
+            "support_truth_ids": [],
+            "creative_device": "none",
+            "beat_function": _bookend_beat_function(section_type, draft.get("beat_type", "")),
+            "visual_goal": clean_text((draft.get("visual_brief") or {}).get("purpose"))
+            or "Support the episode bookend without adding production language to narration.",
         }
         for draft in drafts
     ]
@@ -167,11 +176,17 @@ def _normalize_beats(
                 "beat_id": f"{section_id}_beat_{order:02d}",
                 "beat_order": order,
                 "beat_type": clean_text(draft.get("beat_type")),
+                "beat_function": clean_text(draft.get("beat_function")) or "explanation",
                 "story_id": story_id,
                 "narration_text": narration,
                 "word_count": word_count(narration),
                 "estimated_seconds": estimated_seconds(narration, words_per_minute),
                 "source_record_keys": dedupe(list(draft.get("source_record_keys") or [])),
+                "support_truth_ids": dedupe(list(draft.get("support_truth_ids") or [])),
+                "creative_device": clean_text(draft.get("creative_device")) or "none",
+                "visual_goal": clean_text(draft.get("visual_goal"))
+                or clean_text(visual_brief.get("purpose"))
+                or "Visually reinforce the active narration beat.",
                 "visual_brief": visual_brief,
             }
         )
@@ -219,3 +234,9 @@ def _audio_unit(section: dict[str, Any]) -> dict[str, Any]:
         "narration_text": section["narration_text"],
         "beat_ids": [beat["beat_id"] for beat in section["beats"]],
     }
+
+
+def _bookend_beat_function(section_type: str, beat_type: str) -> str:
+    if section_type == "intro":
+        return "episode_hook" if clean_text(beat_type) == "hook" else "episode_setup"
+    return "episode_payoff"

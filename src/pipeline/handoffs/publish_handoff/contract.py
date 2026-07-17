@@ -33,6 +33,7 @@ class PublishHandoffInput(BaseModel):
     metadata_finalizer: dict[str, Any]
     voiceover: dict[str, Any]
     video_assembly: dict[str, Any]
+    visual_review: dict[str, Any] | None = None
 
 
 class PublishHandoffRequest(BaseModel):
@@ -48,6 +49,8 @@ class PublishHandoffRequest(BaseModel):
             envelope = getattr(self.input, name)
             if envelope.get("status") != "ok":
                 raise ValueError(f"input.{name}.status must be ok")
+        if self.input.visual_review is not None and self.input.visual_review.get("status") != "ok":
+            raise ValueError("input.visual_review.status must be ok when supplied")
         voiceover = self.input.voiceover
         if voiceover.get("status") == "ok":
             return self

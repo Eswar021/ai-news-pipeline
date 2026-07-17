@@ -38,15 +38,10 @@ export const BarChartScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => 
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "What changed";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "COMPARISON");
-  const bars = barsFromPayload(payload.bars).length
-    ? barsFromPayload(payload.bars)
-    : [
-        { label: "Before", value: 42, display_value: "42", context: "baseline" },
-        { label: "After", value: 88, display_value: "88", context: "new signal" },
-      ];
-  const maxValue = Math.max(...bars.map((bar, index) => Math.max(1, numberValue(bar.value, (index + 1) * 25))));
+  const bars = barsFromPayload(payload.bars);
+  const maxValue = Math.max(...bars.map((bar) => Math.max(1, numberValue(bar.value, 0))), 1);
   const kicker = textValue(payload.kicker_text) || textValue(payload.emphasis_label);
   const kickerPosition = textValue(payload.kicker_position) || "hidden";
   const showKicker = Boolean(kicker) && (payload.show_kicker === true || kickerPosition !== "hidden");
@@ -64,7 +59,7 @@ export const BarChartScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => 
 
       <div style={{ position: "absolute", left: 150, right: 150, top: 300, display: "flex", flexDirection: "column", gap: 28 }}>
         {bars.map((bar, index) => {
-          const value = Math.max(1, numberValue(bar.value, (index + 1) * 25));
+          const value = Math.max(1, numberValue(bar.value, 0));
           const start = 16 + index * 12;
           const reveal = clamp01(interpolate(frame, [start, start + 28], [0, 1], { extrapolateRight: "clamp" }));
           const width = Math.max(0.08, value / maxValue) * reveal;
@@ -72,7 +67,7 @@ export const BarChartScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => 
           return (
             <div key={`${bar.label}-${index}`} style={{ opacity: reveal, transform: `translateY(${interpolate(reveal, [0, 1], [26, 0])}px) scale(${interpolate(p, [0, 1], [0.985, 1])})` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 22, marginBottom: 10 }}>
-                <div style={{ fontSize: 34, lineHeight: 1, fontWeight: 900, letterSpacing: "-0.035em" }}>{bar.label || `Item ${index + 1}`}</div>
+                <div style={{ fontSize: 34, lineHeight: 1, fontWeight: 900, letterSpacing: "-0.035em" }}>{bar.label}</div>
                 <div style={{ color, fontSize: 42, lineHeight: 0.9, fontWeight: 950, letterSpacing: "-0.06em" }}>{bar.display_value || value}{unit && !String(bar.display_value || "").includes(unit) ? <span style={{ color: palette.muted, fontSize: 26, marginLeft: 8 }}>{unit}</span> : null}</div>
               </div>
               <div style={{ position: "relative", height: 56, borderRadius: 999, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", overflow: "hidden" }}>

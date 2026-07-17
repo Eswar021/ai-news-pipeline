@@ -6,6 +6,7 @@
   "scripts": {
     "bundle-engine": "tsx scripts/bundle-engine.ts",
     "render-scene": "tsx scripts/render-scene.ts",
+    "render-batch": "tsx scripts/render-batch.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

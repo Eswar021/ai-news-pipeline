@@ -24,6 +24,9 @@ from .contract import AssetResolverRequest, AssetResolverResponse
 SOURCE_SCREENSHOT_RENDER_KINDS = {"source_article_scene", "quote_or_claim_highlight_scene"}
 DISCOVERED_MEDIA_RENDER_KINDS = {"context_image_scene", "broll_video_scene"}
 NO_ASSET_RENDER_KINDS = {
+    "editorial_text_scene",
+    "simple_explainer_scene",
+    "story_transition_scene",
     "kinetic_type_scene",
     "bullet_build_scene",
     "entity_compare_scene",
@@ -141,6 +144,14 @@ def run(input_json: dict) -> dict:
     for scene in other_scenes:
         if scene.get("render_kind") == "logo_reveal_scene":
             resolved_assets.append(_resolve_logo(scene, request, logos_dir))
+        elif scene.get("render_kind") == "story_transition_scene":
+            background_type = clean_text((scene.get("payload") or {}).get("background_media_type"))
+            if background_type in {"image", "video"}:
+                resolved_assets.append(_resolve_discovered_media(scene, media_selections))
+            elif background_type == "logo":
+                resolved_assets.append(_resolve_logo(scene, request, logos_dir))
+            else:
+                resolved_assets.append(_resolve_no_asset(scene))
         elif scene.get("render_kind") in DISCOVERED_MEDIA_RENDER_KINDS:
             resolved_assets.append(_resolve_discovered_media(scene, media_selections))
         elif scene.get("render_kind") in NO_ASSET_RENDER_KINDS:
@@ -197,12 +208,15 @@ def _resolve_source_screenshot(
 ) -> dict[str, Any]:
     scene_id = clean_text(scene.get("scene_id", "scene_unknown"))
     output_path = screenshots_dir / f"{scene_id}.png"
+    capture_scene = _scene_with_capture_target(scene)
     capture = capture_source_viewport(
         context=context,
-        scene=scene,
+        scene=capture_scene,
         timeout_ms=request.config.browser.timeout_ms,
         post_load_wait_ms=request.config.browser.post_load_wait_ms,
         capture_mode=request.config.source_screenshots.capture_mode,
+        focus_zoom=request.config.source_screenshots.focus_zoom,
+        highlight_target=request.config.source_screenshots.highlight_target,
         raw_capture_path=(
             raw_capture_dir / f"{scene_id}_raw.png"
             if request.config.source_screenshots.save_raw_capture_debug
@@ -216,12 +230,19 @@ def _resolve_source_screenshot(
     )
     if capture.get("ok"):
         output_path.write_bytes(capture["screenshot_bytes"])
+        target_text = clean_text((capture_scene.get("payload") or {}).get("target_text", ""))
+        target_missed = bool(target_text) and not bool(capture.get("target_found"))
+        status = "resolved"
+        error = ""
+        if target_missed and request.config.source_screenshots.target_miss_policy != "allow":
+            status = request.config.source_screenshots.target_miss_policy
+            error = "Screenshot was captured, but the requested target text was not located on the page."
         return _base_asset(scene) | {
             "asset_type": "source_screenshot",
-            "status": "resolved",
+            "status": status,
             "asset_path": str(output_path),
             "capture": {key: value for key, value in capture.items() if key != "screenshot_bytes"},
-            "error": "",
+            "error": error,
         }
     return _base_asset(scene) | {
         "asset_type": "source_screenshot",
@@ -232,15 +253,33 @@ def _resolve_source_screenshot(
     }
 
 
+def _scene_with_capture_target(scene: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(scene.get("payload") or {})
+    payload["target_text"] = clean_text(
+        payload.get("target_text")
+        or payload.get("supporting_text")
+        or payload.get("claim_text")
+    )
+    return {**scene, "payload": payload}
+
+
 def _resolve_logo(scene: dict[str, Any], request: AssetResolverRequest, logos_dir: Path) -> dict[str, Any]:
     local_dir = Path(request.config.logos.local_logo_dir) if request.config.logos.local_logo_dir else None
-    resolution = resolve_logo_asset(scene=scene, output_dir=logos_dir, local_logo_dir=local_dir)
+    resolution = resolve_logo_asset(
+        scene=scene,
+        output_dir=logos_dir,
+        local_logo_dir=local_dir,
+        simple_icons_enabled=request.config.logos.simple_icons_enabled,
+        favicon_fallback_enabled=request.config.logos.favicon_fallback_enabled,
+        text_fallback_enabled=request.config.logos.text_fallback_enabled,
+        favicon_timeout_seconds=request.config.logos.favicon_timeout_seconds,
+    )
     return _base_asset(scene) | {
         "asset_type": "logo_asset",
         "status": resolution["status"],
         "asset_path": resolution.get("logo_path") or resolution.get("fallback_svg_path", ""),
         "logo": resolution,
-        "error": "",
+        "error": clean_text(resolution.get("error", "")),
     }
 
 
@@ -259,7 +298,11 @@ def _resolve_discovered_media(
 ) -> dict[str, Any]:
     scene_id = clean_text(scene.get("scene_id", ""))
     render_kind = clean_text(scene.get("render_kind", ""))
-    expected_type = "video" if render_kind == "broll_video_scene" else "image"
+    expected_type = (
+        clean_text((scene.get("payload") or {}).get("background_media_type"))
+        if render_kind == "story_transition_scene"
+        else ("video" if render_kind == "broll_video_scene" else "image")
+    )
     asset_type = "broll_video" if expected_type == "video" else "context_image"
     selection = media_selections.get(scene_id)
     if not selection:
@@ -381,14 +424,16 @@ def _build_summary(
     failure_reason: str,
 ) -> dict[str, Any]:
     failed = [asset for asset in resolved_assets if asset.get("status") == "failed"]
+    degraded = [asset for asset in resolved_assets if asset.get("status") in {"partial", "fallback"}]
     return {
         "requested_scene_count": requested_scene_count,
-        "resolved_asset_count": len([asset for asset in resolved_assets if asset.get("status") in {"resolved", "ready"}]),
-        "source_screenshot_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "source_screenshot" and asset.get("status") == "resolved"]),
-        "logo_asset_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "logo_asset" and asset.get("status") == "resolved"]),
+        "resolved_asset_count": len([asset for asset in resolved_assets if asset.get("status") in {"resolved", "ready", "partial", "fallback"}]),
+        "source_screenshot_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "source_screenshot" and asset.get("status") in {"resolved", "partial"}]),
+        "logo_asset_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "logo_asset" and asset.get("status") in {"resolved", "fallback"}]),
         "context_image_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "context_image" and asset.get("status") == "resolved"]),
         "broll_video_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "broll_video" and asset.get("status") == "resolved"]),
         "failed_asset_count": len(failed),
+        "degraded_asset_count": len(degraded),
         "asset_type_counts": counter_dict([asset.get("asset_type", "") for asset in resolved_assets]),
         "status_counts": counter_dict([asset.get("status", "") for asset in resolved_assets]),
         "output_dir": output_dir,
@@ -409,6 +454,8 @@ def _status_from_summary(summary: dict[str, Any]) -> str:
     if requested == 0 or failed == requested:
         return "failed"
     if failed:
+        return "partial"
+    if summary.get("degraded_asset_count"):
         return "partial"
     return "ok"
 

@@ -4,12 +4,76 @@ import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
+from html.parser import HTMLParser
+from typing import Any
+from urllib.parse import urlparse
 
 
 PLACEHOLDER_BODIES = {
     "ONLY AVAILABLE IN PAID PLANS",
     "ONLY AVAILABLE IN PAID PLANS.",
 }
+HTML_TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
+BLOCK_TAGS = {
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "br",
+    "div",
+    "figcaption",
+    "figure",
+    "footer",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "li",
+    "main",
+    "nav",
+    "ol",
+    "p",
+    "pre",
+    "section",
+    "table",
+    "td",
+    "th",
+    "tr",
+    "ul",
+}
+
+
+class _HTMLTextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.suppressed_depth = 0
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        lowered = tag.casefold()
+        if lowered in {"script", "style", "noscript", "svg"}:
+            self.suppressed_depth += 1
+            return
+        if not self.suppressed_depth and lowered in BLOCK_TAGS:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        lowered = tag.casefold()
+        if lowered in {"script", "style", "noscript", "svg"} and self.suppressed_depth:
+            self.suppressed_depth -= 1
+            return
+        if not self.suppressed_depth and lowered in BLOCK_TAGS:
+            self.parts.append(" ")
+
+    def handle_data(self, data: str) -> None:
+        if not self.suppressed_depth:
+            self.parts.append(data)
+
+    def text(self) -> str:
+        return "".join(self.parts)
 
 
 def clean_text(value: str | None) -> str:
@@ -19,6 +83,90 @@ def clean_text(value: str | None) -> str:
     text = repair_mojibake(text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def clean_article_content(
+    value: str,
+    *,
+    url: str,
+    config: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    raw_value = str(value or "")
+    original = clean_text(raw_value)
+    html_tag_count = len(HTML_TAG_RE.findall(raw_value))
+    result = {
+        "enabled": bool(config.get("enabled", True)),
+        "applied_rule": "",
+        "modified": False,
+        "original_chars": len(original),
+        "cleaned_chars": len(original),
+        "removed_chars": 0,
+        "html_markup_removed": False,
+        "html_tag_count": html_tag_count,
+    }
+    if not original or not result["enabled"]:
+        return original, result
+
+    cleaned = original
+    if bool(config.get("strip_html_markup", True)) and html_tag_count:
+        parser = _HTMLTextExtractor()
+        parser.feed(raw_value)
+        parser.close()
+        cleaned = clean_text(parser.text())
+        result["html_markup_removed"] = cleaned != original
+
+    hostname = (urlparse(url).hostname or "").casefold().removeprefix("www.")
+    rule = next(
+        (
+            item
+            for item in config.get("rules", [])
+            if _hostname_matches(hostname, item.get("domain_suffixes", []))
+        ),
+        None,
+    )
+    if isinstance(rule, dict):
+        leading_matches = [
+            (cleaned.casefold().find(clean_text(marker).casefold()), clean_text(marker))
+            for marker in rule.get("leading_markers", [])
+            if clean_text(marker)
+        ]
+        leading_matches = [item for item in leading_matches if item[0] >= 0]
+        if leading_matches:
+            index, marker = min(leading_matches, key=lambda item: item[0])
+            cleaned = cleaned[index + len(marker) :]
+
+        trailing_matches = [
+            cleaned.casefold().find(clean_text(marker).casefold())
+            for marker in rule.get("trailing_markers", [])
+            if clean_text(marker)
+        ]
+        trailing_matches = [index for index in trailing_matches if index >= 0]
+        if trailing_matches:
+            cleaned = cleaned[: min(trailing_matches)]
+        for phrase in rule.get("remove_phrases", []):
+            cleaned = re.sub(re.escape(clean_text(phrase)), " ", cleaned, flags=re.IGNORECASE)
+        for pattern in rule.get("remove_patterns", []):
+            cleaned = re.sub(str(pattern), " ", cleaned, flags=re.IGNORECASE)
+
+    cleaned = clean_text(cleaned)
+    result.update(
+        {
+            "applied_rule": clean_text(rule.get("name")) if isinstance(rule, dict) else "generic_html_to_text",
+            "modified": cleaned != original,
+            "cleaned_chars": len(cleaned),
+            "removed_chars": max(0, len(original) - len(cleaned)),
+        }
+    )
+    return cleaned, result
+
+
+def _hostname_matches(hostname: str, suffixes: list[str]) -> bool:
+    return any(
+        hostname == clean_text(suffix).casefold().removeprefix("www.")
+        or hostname.endswith(f".{clean_text(suffix).casefold().removeprefix('www.')}")
+        for suffix in suffixes
+        if clean_text(suffix)
+    )
 
 
 def repair_mojibake(value: str) -> str:

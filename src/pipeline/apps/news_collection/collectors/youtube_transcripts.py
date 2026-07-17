@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import timezone
 
 import requests
 from youtube_transcript_api import YouTubeTranscriptApi
 
-from ..utils import build_record, clean_text, resolve_env
+from ..utils import build_record, clean_text, parse_datetime, resolve_env
 
 SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 LANG_PREF = ["en", "te", "hi", "ta", "kn", "ml", "bn", "mr", "gu", "pa"]
@@ -17,8 +17,6 @@ def collect(cfg: dict) -> dict:
     api_key = resolve_env(cfg["env_keys"])
     window = cfg["collection_window"]
     max_videos_per_channel = int(cfg.get("runtime", {}).get("max_videos_per_channel", 1))
-    days_back = max(1, int(cfg["collection_window"]["lookback_hours"] / 24))
-
     records: list[dict] = []
     channel_summaries: dict[str, dict] = {}
 
@@ -32,7 +30,13 @@ def collect(cfg: dict) -> dict:
         filtered_out_count = 0
         notes: list[str] = []
         try:
-            videos = _search_channel_videos(channel, api_key, days_back, max_videos_per_channel, timeout)
+            videos = _search_channel_videos(
+                channel,
+                api_key,
+                window["start"],
+                max_videos_per_channel,
+                timeout,
+            )
             fetched_count = len(videos)
         except Exception as exc:
             status = "failed"
@@ -47,12 +51,14 @@ def collect(cfg: dict) -> dict:
             continue
 
         for video in videos:
+            transcript_status = "available"
             try:
                 transcript_text = _fetch_transcript(video["video_id"])
             except Exception as exc:
                 notes.append(f"Transcript unavailable for {video['video_id']}: {exc}")
-                filtered_out_count += 1
-                continue
+                transcript_status = "unavailable"
+                transcript_text = clean_text(video.get("description", "")) or video["title"]
+                status = "partial"
 
             records.append(
                 build_record(
@@ -69,6 +75,11 @@ def collect(cfg: dict) -> dict:
                         "channel_id": channel["channel_id"],
                         "video_id": video["video_id"],
                         "trust_tier": 2,
+                        "description": video.get("description", ""),
+                        "transcript_status": transcript_status,
+                        "quality_flags": {
+                            "transcript_unavailable": transcript_status == "unavailable",
+                        },
                     },
                 )
             )
@@ -84,6 +95,7 @@ def collect(cfg: dict) -> dict:
 
     return {
         "records": records,
+        "candidate_ledger": [],
         "summary": {
             "collector": "youtube_transcripts",
             "status": "partial" if any(item["status"] != "ok" for item in channel_summaries.values()) else "ok",
@@ -95,12 +107,17 @@ def collect(cfg: dict) -> dict:
     }
 
 
-def _search_channel_videos(channel: dict, api_key: str, days_back: int, max_results: int, timeout: int) -> list[dict]:
-    from datetime import timedelta, timezone
-
-    published_after = (
-        datetime.now(timezone.utc) - timedelta(days=days_back)
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+def _search_channel_videos(
+    channel: dict,
+    api_key: str,
+    window_start: str,
+    max_results: int,
+    timeout: int,
+) -> list[dict]:
+    parsed_start = parse_datetime(window_start)
+    if parsed_start is None:
+        raise ValueError("collection_window.start must be a valid datetime for YouTube search")
+    published_after = parsed_start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     params = {
         "part": "snippet",
@@ -129,6 +146,7 @@ def _search_channel_videos(channel: dict, api_key: str, days_back: int, max_resu
                 "video_id": video_id,
                 "title": snippet.get("title", ""),
                 "published_at": snippet.get("publishedAt", ""),
+                "description": snippet.get("description", ""),
             }
         )
     return videos

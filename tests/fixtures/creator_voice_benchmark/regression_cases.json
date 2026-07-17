@@ -1,0 +1,46 @@
+{
+  "harmful_review_rewrite": {
+    "supported_original": "The project reported zero false alarms in one published benchmark.",
+    "harmful_candidate": "Sqlsure ensures that database queries are error-free.",
+    "expected_guardrail": "The LLM reviewer and human editorial check must not turn a bounded project result into a universal guarantee."
+  },
+  "review_regressions": [
+    {
+      "case": "empty_issue_rewrite",
+      "bad_behavior": "The reviewer replaces a draft while reporting no material issue.",
+      "expected_guardrail": "A rewrite requires at least one structured issue targeting a supplied beat ID."
+    },
+    {
+      "case": "identical_rewrite",
+      "bad_behavior": "The reviewer requests a rewrite but returns the current segment unchanged.",
+      "expected_guardrail": "An identical candidate is rejected and the original remains active."
+    },
+    {
+      "case": "claim_strengthening",
+      "bad_behavior": "The reviewer changes rising demand and a delayed launch into skyrocketing demand and a stalled launch.",
+      "expected_guardrail": "The reviewer should compare the rewrite with the assigned records and avoid unjustified claim strengthening."
+    },
+    {
+      "case": "future_metric_subject",
+      "bad_behavior": "The script says current M-series chips support 1.5TB when the source says a future M7 Ultra could support up to 1.5TB.",
+      "expected_guardrail": "The reviewer should preserve the metric's subject, upper bound, and uncertainty when they materially affect the story."
+    }
+  ],
+  "visual_mismatches": [
+    {
+      "narration_subject": "Tang Tan and OpenAI leadership",
+      "bad_asset": "A 1916 rural-school photograph",
+      "expected_guardrail": "Named-person or leadership visuals require verified identity and contextual relevance."
+    },
+    {
+      "narration_subject": "Instagram privacy controls",
+      "bad_asset": "A lightning photograph",
+      "expected_guardrail": "Context media must represent the active entity, product, action, or explanatory analogy."
+    },
+    {
+      "narration_subject": "Apple and OpenAI relationship",
+      "bad_asset": "A chart with fabricated values 100 and 80",
+      "expected_guardrail": "Numeric scenes require source-backed values and must not invent comparative magnitudes."
+    }
+  ]
+}

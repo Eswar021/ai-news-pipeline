@@ -16,7 +16,7 @@ from src.pipeline.contracts import (
     voiceover_artifact_payload,
 )
 
-from ..common import clean_text, iso_now, safe_float
+from ..common import clean_text, iso_now, safe_float, slugify
 from .config import PACKAGE_TYPE
 from .contract import VideoAssemblyRequest, VideoAssemblyResponse
 
@@ -49,20 +49,41 @@ def run(input_json: dict) -> dict:
     rendered_scenes = _rendered_scenes(visual_package)
     audio_path = _voiceover_audio_path(voiceover_package)
     failure_reason = _preflight_failure_reason(rendered_scenes, audio_path, visual_package)
+    assembly_scenes = rendered_scenes
+    normalized_video_only_scene_count = 0
     if not failure_reason:
         declared_audio_hash = clean_text(voiceover_provenance.get("audio_sha256"))
         actual_audio_hash = file_sha256(audio_path)
         if declared_audio_hash != actual_audio_hash:
             failure_reason = "Voiceover WAV does not match provenance.audio_sha256"
 
-    audio_duration = _probe_duration(request.config.ffprobe_path, audio_path) if audio_path.exists() else 0.0
+    if not failure_reason:
+        try:
+            assembly_scenes, normalized_video_only_scene_count = _prepare_video_only_scenes(
+                rendered_scenes,
+                output_dir=output_dir,
+                ffmpeg_path=request.config.ffmpeg_path,
+                ffprobe_path=request.config.ffprobe_path,
+            )
+        except Exception as exc:
+            failure_reason = f"Could not prepare video-only scene clips: {exc}"
+
+    audio_duration = (
+        _probe_duration(request.config.ffprobe_path, audio_path, stream_selector="a:0")
+        if audio_path.exists()
+        else 0.0
+    )
     clip_durations = [
-        _probe_duration(request.config.ffprobe_path, Path(clean_text(scene.get("output_path", ""))))
-        for scene in rendered_scenes
+        _probe_duration(
+            request.config.ffprobe_path,
+            Path(clean_text(scene.get("output_path", ""))),
+            stream_selector="v:0",
+        )
+        for scene in assembly_scenes
     ]
     visual_duration = round(sum(clip_durations), 2)
     planned_visual_duration = round(
-        sum(safe_float(scene.get("duration_seconds"), 0.0) for scene in rendered_scenes),
+        sum(safe_float(scene.get("duration_seconds"), 0.0) for scene in assembly_scenes),
         2,
     )
     preflight_delta = abs(visual_duration - audio_duration) if visual_duration and audio_duration else 0.0
@@ -70,7 +91,7 @@ def run(input_json: dict) -> dict:
         failure_reason = f"Could not determine voiceover duration from {audio_path}"
     if not failure_reason and any(duration <= 0 for duration in clip_durations):
         bad = [
-            rendered_scenes[index].get("scene_id")
+            assembly_scenes[index].get("scene_id")
             for index, duration in enumerate(clip_durations)
             if duration <= 0
         ]
@@ -96,7 +117,7 @@ def run(input_json: dict) -> dict:
     ffmpeg_stderr = ""
     fallback_used = False
     if not failure_reason:
-        _write_concat_list(concat_list_path, rendered_scenes)
+        _write_concat_list(concat_list_path, assembly_scenes)
         command = _ffmpeg_command(request, concat_list_path, audio_path, final_video_path, reencode=False)
         run_result = _run_command(command, output_dir)
         ffmpeg_stderr = run_result["stderr"]
@@ -130,7 +151,7 @@ def run(input_json: dict) -> dict:
         output_dir=output_dir,
         final_video_path=final_video_path,
         concat_list_path=concat_list_path,
-        rendered_scenes=rendered_scenes,
+        rendered_scenes=assembly_scenes,
         voiceover_package=voiceover_package,
         command=command,
         fallback_command=fallback_command,
@@ -141,11 +162,13 @@ def run(input_json: dict) -> dict:
             "sample_rate_hz": request.config.audio_sample_rate_hz,
             "channels": request.config.audio_channels,
         },
+        render_settings=visual_package.get("render_settings", {}),
         render_provenance=render_provenance,
         voiceover_provenance=voiceover_provenance,
     )
     summary = {
-        "assembled_scene_count": len(rendered_scenes),
+        "assembled_scene_count": len(assembly_scenes),
+        "normalized_video_only_scene_count": normalized_video_only_scene_count,
         "audio_duration_seconds": round(audio_duration, 2),
         "visual_duration_seconds": visual_duration,
         "planned_visual_duration_seconds": planned_visual_duration,
@@ -154,6 +177,8 @@ def run(input_json: dict) -> dict:
         "duration_delta_seconds": round(delta, 2),
         "output_dir": str(output_dir),
         "final_video_path": str(final_video_path) if final_video_path.exists() else "",
+        "render_mode": clean_text((visual_package.get("render_settings") or {}).get("render_mode"))
+        or "final",
         "failure_reason": failure_reason,
     }
     response = VideoAssemblyResponse(
@@ -257,6 +282,66 @@ def _write_concat_list(path: Path, rendered_scenes: list[dict[str, Any]]) -> Non
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _prepare_video_only_scenes(
+    rendered_scenes: list[dict[str, Any]],
+    *,
+    output_dir: Path,
+    ffmpeg_path: str,
+    ffprobe_path: str,
+) -> tuple[list[dict[str, Any]], int]:
+    """Losslessly remove legacy silent scene audio before concatenation."""
+
+    normalized_dir = output_dir / "video_only_scenes"
+    prepared: list[dict[str, Any]] = []
+    normalized_count = 0
+    for index, scene in enumerate(rendered_scenes, start=1):
+        source_path = Path(clean_text(scene.get("output_path", ""))).resolve()
+        stream_types = _probe_stream_types(ffprobe_path, source_path)
+        if "audio" not in stream_types:
+            prepared.append(dict(scene))
+            continue
+
+        normalized_dir.mkdir(parents=True, exist_ok=True)
+        scene_id = clean_text(scene.get("scene_id")) or f"scene_{index:03d}"
+        output_path = normalized_dir / f"{index:03d}_{slugify(scene_id)}.mp4"
+        command = [
+            ffmpeg_path,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(source_path),
+            "-map",
+            "0:v:0",
+            "-c:v",
+            "copy",
+            "-an",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+        completed = subprocess.run(
+            command,
+            cwd=output_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            reason = clean_text(completed.stderr or completed.stdout or "ffmpeg remux failed")
+            raise RuntimeError(f"{scene_id}: {reason[-1000:]}")
+        normalized_streams = _probe_stream_types(ffprobe_path, output_path)
+        if "video" not in normalized_streams or "audio" in normalized_streams:
+            raise RuntimeError(
+                f"{scene_id}: normalized clip must contain video and no audio; "
+                f"found {sorted(normalized_streams)}"
+            )
+        prepared.append({**scene, "output_path": str(output_path)})
+        normalized_count += 1
+    return prepared, normalized_count
+
+
 def _ffmpeg_command(
     request: VideoAssemblyRequest,
     concat_list_path: Path,
@@ -282,10 +367,15 @@ def _ffmpeg_command(
         "-map",
         "1:a:0",
     ]
-    if reencode:
+    video_codec = (
+        request.config.reencode_video_codec
+        if reencode or request.config.normalize_scene_boundaries
+        else request.config.video_codec
+    )
+    if video_codec != "copy":
         command += [
             "-c:v",
-            request.config.reencode_video_codec,
+            video_codec,
             "-preset",
             request.config.reencode_preset,
             "-crf",
@@ -294,7 +384,7 @@ def _ffmpeg_command(
             request.config.pixel_format,
         ]
     else:
-        command += ["-c:v", request.config.video_codec]
+        command += ["-c:v", "copy"]
     command += [
         "-c:a",
         request.config.audio_codec,
@@ -328,20 +418,22 @@ def _run_command(command: list[str], cwd: Path) -> dict[str, Any]:
     }
 
 
-def _probe_duration(ffprobe_path: str, path: Path) -> float:
+def _probe_duration(
+    ffprobe_path: str,
+    path: Path,
+    *,
+    stream_selector: str | None = None,
+) -> float:
     if not path.exists():
         return 0.0
+    command = [ffprobe_path, "-v", "error"]
+    if stream_selector:
+        command.extend(["-select_streams", stream_selector, "-show_entries", "stream=duration"])
+    else:
+        command.extend(["-show_entries", "format=duration"])
+    command.extend(["-of", "default=noprint_wrappers=1:nokey=1", str(path)])
     completed = subprocess.run(
-        [
-            ffprobe_path,
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(path),
-        ],
+        command,
         capture_output=True,
         text=True,
         check=False,
@@ -436,6 +528,7 @@ def _build_package(
     fallback_command: list[str],
     fallback_used: bool,
     audio_encoding: dict[str, Any],
+    render_settings: dict[str, Any],
     render_provenance: dict[str, Any],
     voiceover_provenance: dict[str, Any],
 ) -> dict[str, Any]:
@@ -454,10 +547,18 @@ def _build_package(
             or (voiceover_package.get("audio") or {}).get("audio_path")
             or ""
         ),
+        "captions": voiceover_package.get("captions", {}),
         "ffmpeg_command": command,
         "fallback_ffmpeg_command": fallback_command,
         "fallback_used": fallback_used,
         "audio_encoding": audio_encoding,
+        "render_mode": clean_text(render_settings.get("render_mode")) or "final",
+        "render_settings": {
+            "quality_preset": render_settings.get("quality_preset"),
+            "width": render_settings.get("width"),
+            "height": render_settings.get("height"),
+            "fps": render_settings.get("fps"),
+        },
     }
     if final_video_path.exists():
         package["final_video_sha256"] = file_sha256(final_video_path)

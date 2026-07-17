@@ -21,7 +21,9 @@ src/pipeline/
 ├── apps/
 │   ├── news_collection/
 │   ├── evidence_prep/
+│   ├── editorial_triage/
 │   ├── story_mapping/
+│   ├── editorial_selection/
 │   ├── video_packaging/
 │   ├── script_generation/
 │   ├── metadata_creator/
@@ -34,8 +36,24 @@ src/pipeline/
 └── config/workbench.yaml
 ```
 
-There is intentionally no central pipeline runner. The contracts are still
-stabilizing and the operator workflows live in focused notebooks:
+Production automation uses one thin CLI router with three explicit stage
+modules:
+
+```text
+src/pipeline/orchestration/runner.py
+src/pipeline/orchestration/stages/content.py
+src/pipeline/orchestration/stages/voiceover.py
+src/pipeline/orchestration/stages/visuals.py
+```
+
+The runner owns sequencing, paths, resumability, run state, and logging. It
+must call existing `run(input_json)` boundaries rather than importing app
+private implementation. Focused notebooks remain interactive operator and
+debugging surfaces:
+
+Launch the stage runner with the main project Python environment.
+`.venv-voiceover` is a specialized synthesis runtime that the voiceover stage
+invokes internally; do not activate it for content or visual orchestration.
 
 ```text
 notebooks/production/content_pipeline.ipynb
@@ -61,7 +79,7 @@ Application rules:
 - return one JSON/dict envelope with `status`, `data`, `summary`, and `handoff`
 - add `llm_calls` when an app uses an LLM
 - keep app-specific config, prompts, contracts, and helpers inside the app
-- keep file I/O, CLI parsing, and output paths in adapters or notebooks
+- keep file I/O, CLI parsing, and output paths in adapters, stage routers, or notebooks
 - do not import one app's private implementation from another app
 - carry forward source context needed by the next app instead of reading older outputs
 - fail clearly when required input, config, prompts, or provider settings are missing
@@ -99,7 +117,9 @@ output/
 │   ├── run_context.json
 │   ├── news_collection/
 │   ├── evidence_prep/
+│   ├── editorial_triage/
 │   ├── story_mapping/
+│   ├── editorial_selection/
 │   ├── video_packaging/
 │   ├── script_generation/
 │   ├── metadata_creator/
@@ -114,7 +134,7 @@ output/
 `output_v2/` is historical generated data only. New code must not write there
 or use it as runtime input by default.
 
-Each notebook-owned module folder should contain its input envelope, canonical
+Each orchestrator-owned module folder should contain its input envelope, canonical
 result, main package/artifact, and summary. Avoid overlapping debug artifacts.
 
 Committed notebooks must have cleared execution counts and outputs. Do not
@@ -126,9 +146,11 @@ The primary state transitions are:
 
 ```text
 raw records
-  -> prepared records
-  -> ranked stories carrying records
-  -> selected video packet carrying stories
+  -> prepared records plus reversible candidate/decision ledgers
+  -> authoritative editorial triage with advance/reserve/quarantine decisions
+  -> semantically mapped stories carrying full records
+  -> LLM-selected editorial roundup slate
+  -> structural video packet carrying the selected stories
   -> section-aware script package
   -> metadata draft and beat-aware voiceover
   -> audio-timed metadata finalization and visual production
@@ -143,8 +165,10 @@ justifies it.
 Current handoffs must name real consumers:
 
 - news collection -> evidence prep
-- evidence prep -> story mapping
-- story mapping -> video packaging
+- news collection and evidence prep -> authoritative editorial triage
+- evidence prep plus editorial triage -> story mapping
+- story mapping -> editorial selection
+- editorial selection plus story mapping -> video packaging
 - video packaging -> script generation
 - script generation -> metadata draft and voiceover
 - voiceover -> metadata finalization and visual planning
@@ -156,19 +180,30 @@ Use LLMs for semantic judgment and code for stable guardrails.
 
 Good LLM responsibilities:
 
+- candidate relevance, uncertainty, and editorial triage
 - story identity and editorial value
+- episode slate selection, diversity, and editorial ordering
 - episode direction, story-local beat writing, bounded targeted repair, and bookend continuity
 - viewer-facing metadata
 - visual direction and semantic scene planning
+- contextual media suitability, identity matching, and B-roll moment selection
 
 Good deterministic responsibilities:
 
 - collection and normalization
 - source and record provenance
-- format routing and selection caps
+- format routing and resource/selection caps after semantic choices are made
 - section order, source ownership, observed timing, and audiovisual alignment checks
 - Pydantic structured-output validation
 - asset resolution, rendering, and assembly
+
+Do not turn categorical script judgments into code gates. Engagement, tone,
+hook quality, attribution style, claim interpretation, humor, and prose quality
+belong to the LLM reviewer and human editorial review. Code may validate
+structure, identity, source ownership, known references, projections,
+provenance, and bounded-loop behavior, but must not approve or reject narration
+with keyword lists, regexes, semantic-overlap thresholds, metric matching, or
+similar prose heuristics.
 
 Use LangChain structured output with Pydantic models where an LLM must return
 structure. Keep `llm_client.py` limited to provider/model construction and keep
@@ -207,11 +242,26 @@ modification time.
 
 Visual planning and asset/render production are separate responsibilities.
 
+- asset cataloging turns selected source pages, source-owned hero images, and resolvable identities into story-owned asset IDs before planning
 - the planner chooses renderable scene kinds against voiceover-aligned script beats; LLMs do not author raw seconds
-- media discovery finds contextual images/video only when requested
+- media discovery first resolves exact catalog asset IDs; optional external image/video research must be explicitly enabled
+- semantic media verification rejects irrelevant or identity-ambiguous external candidates when that paid review path is enabled
 - asset resolution obtains screenshots, logos, and discovered media
 - Remotion renders short independent scene clips
 - assembly joins clips and voiceover into the final video
+- review creates a sampled contact sheet for required human visual inspection
+
+Do not let a keyword search or numeric relevance score make the final semantic
+asset choice. The default production profile is `trusted_only`: use selected
+source pages, source-owned media, and resolvable identities without an extra
+vision call, and leave unavailable external media visibly unresolved. A later
+vision-review profile may be enabled deliberately when its added cost is
+justified.
+
+Visual iteration uses a low-resolution preview profile, persistent scene cache,
+and optional scene/story selection. Final-quality rendering is a separate
+explicit pass. Keep scene and frame concurrency bounded; do not increase worker
+counts merely because more processes are available.
 
 Avoid PPT-style cards, walls of text, decorative charts, tiny labels, and
 visuals unrelated to the active narration beat. Prefer explanatory motion,

@@ -3,6 +3,9 @@ export type RenderKind =
   | "context_image_scene"
   | "broll_video_scene"
   | "logo_reveal_scene"
+  | "editorial_text_scene"
+  | "simple_explainer_scene"
+  | "story_transition_scene"
   | "kinetic_type_scene"
   | "bullet_build_scene"
   | "quote_or_claim_highlight_scene"
@@ -42,6 +45,7 @@ export type ResolvedAsset = {
   };
   logo?: {
     logo_source?: string;
+    quality_class?: string;
     primary_entity?: string;
     simple_icon_export?: string;
     fallback_svg_path?: string;
@@ -50,6 +54,18 @@ export type ResolvedAsset = {
 };
 
 export type VisualScenePayload = Record<string, unknown>;
+
+export type VisualStyleSpec = {
+  style_id?: string;
+  background_color?: string;
+  text_color?: string;
+  accent_color?: string;
+  muted_color?: string;
+  editorial_font?: string;
+  sans_font?: string;
+  surface_treatment?: string;
+  card_policy?: string;
+};
 
 export type VisualSceneSpec = {
   width: number;
@@ -61,6 +77,7 @@ export type VisualSceneSpec = {
   x264_preset?: string | null;
   pixel_format?: string | null;
   duration_seconds: number;
+  visual_style?: VisualStyleSpec;
   scene: {
     scene_id: string;
     scene_order?: number;

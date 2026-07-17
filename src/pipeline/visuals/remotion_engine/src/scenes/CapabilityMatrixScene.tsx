@@ -26,22 +26,15 @@ const rowsFromPayload = (value: unknown, columns: string[]): MatrixRow[] => {
       };
     })
     .filter((item) => item.label || item.values.length);
-  if (objects.length) {
-    return objects.slice(0, 5);
-  }
-  return [
-    { label: "Model A", values: ["fast", "low cost", "tool use"], highlight: "speed" },
-    { label: "Model B", values: ["deeper", "higher cost", "multimodal"], highlight: "reasoning" },
-    { label: "Model C", values: ["balanced", "medium cost", "broad context"], highlight: "fit" },
-  ];
+  return objects.slice(0, 5);
 };
 
 export const CapabilityMatrixScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "Capabilities decide the fit";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "CAPABILITY MATRIX");
-  const columns = (listValue(payload.columns).length ? listValue(payload.columns) : ["Speed", "Cost", "Tooling"]).slice(0, 4);
+  const columns = listValue(payload.columns).slice(0, 4);
   const rows = rowsFromPayload(payload.rows, columns).slice(0, 5);
   const highlightCell = textValue(payload.highlight_cell);
 
@@ -62,9 +55,9 @@ export const CapabilityMatrixScene: React.FC<{ spec: VisualSceneSpec }> = ({ spe
           const reveal = clamp01(interpolate(frame, [24 + rowIndex * 11, 42 + rowIndex * 11], [0, 1], { extrapolateRight: "clamp" }));
           return (
             <div key={`${row.label}-${rowIndex}`} style={{ opacity: reveal, transform: `translateY(${interpolate(reveal, [0, 1], [26, 0])}px)`, display: "grid", gridTemplateColumns: `310px repeat(${columns.length}, 1fr)`, gap: 14, marginTop: 14 }}>
-              <div style={{ minHeight: 96, borderRadius: 26, padding: "22px 24px", background: "rgba(8,15,25,0.82)", border: "1px solid rgba(255,255,255,0.12)", color: palette.text, fontSize: 31, lineHeight: 0.95, fontWeight: 950, letterSpacing: "-0.04em" }}>{row.label || `Option ${rowIndex + 1}`}</div>
+              <div style={{ minHeight: 96, borderRadius: 26, padding: "22px 24px", background: "rgba(8,15,25,0.82)", border: "1px solid rgba(255,255,255,0.12)", color: palette.text, fontSize: 31, lineHeight: 0.95, fontWeight: 950, letterSpacing: "-0.04em" }}>{row.label}</div>
               {columns.map((column, colIndex) => {
-                const value = row.values?.[colIndex] || row.highlight || "watch";
+                const value = row.values?.[colIndex] || "";
                 const isHighlight = Boolean(highlightCell && `${row.label} ${column} ${value}`.toLowerCase().includes(highlightCell.toLowerCase())) || row.highlight === column || row.highlight === value;
                 const color = isHighlight ? palette.green : colIndex % 2 === 0 ? palette.cyan : palette.amber;
                 return (

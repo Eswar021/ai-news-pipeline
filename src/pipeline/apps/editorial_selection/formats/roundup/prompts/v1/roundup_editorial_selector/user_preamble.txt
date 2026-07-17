@@ -1,0 +1,1 @@
+Build a complete editorial slate for the supplied channel and audience. Explain each choice in concrete viewer terms. Preserve a ranked reserve list so packaging can recover from a structural problem without making a semantic choice in code.

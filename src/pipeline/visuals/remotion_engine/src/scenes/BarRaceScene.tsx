@@ -38,24 +38,18 @@ export const BarRaceScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "The race shifts";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "RACE VIEW");
   const unit = textValue(payload.unit);
   const kicker = textValue(payload.kicker_text) || textValue(payload.leader_label);
   const kickerPosition = textValue(payload.kicker_position) || "hidden";
   const showKicker = Boolean(kicker) && (payload.show_kicker === true || kickerPosition !== "hidden");
   const progress = clamp01(interpolate(frame, [16, Math.max(18, durationInFrames - 18)], [0, 1], { extrapolateRight: "clamp" }));
-  const items = itemsFromPayload(payload.items).length
-    ? itemsFromPayload(payload.items)
-    : [
-        { label: "Incumbent", start_value: 70, end_value: 82, display_value: "82" },
-        { label: "Challenger", start_value: 42, end_value: 92, display_value: "92" },
-        { label: "Open source", start_value: 24, end_value: 66, display_value: "66" },
-      ];
+  const items = itemsFromPayload(payload.items);
   const liveItems = items
     .map((item, index) => {
-      const start = numberValue(item.start_value, 20 + index * 12);
-      const end = numberValue(item.end_value, 70 + (items.length - index) * 7);
+      const start = numberValue(item.start_value, 0);
+      const end = numberValue(item.end_value, 0);
       const value = start + (end - start) * progress;
       return { ...item, value, color: index % 3 === 0 ? palette.cyan : index % 3 === 1 ? palette.amber : palette.green };
     })
@@ -77,7 +71,7 @@ export const BarRaceScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
               <div style={{ display: "grid", gridTemplateColumns: "270px 1fr 150px", gap: 24, alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                   <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", background: item.color, color: "#061016", fontSize: 26, fontWeight: 950 }}>{index + 1}</div>
-                  <div style={{ fontSize: 33, lineHeight: 0.98, fontWeight: 900, letterSpacing: "-0.04em" }}>{item.label || `Item ${index + 1}`}</div>
+                  <div style={{ fontSize: 33, lineHeight: 0.98, fontWeight: 900, letterSpacing: "-0.04em" }}>{item.label}</div>
                 </div>
                 <div style={{ height: 62, borderRadius: 999, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", overflow: "hidden" }}>
                   <div style={{ width: `${width * 100}%`, height: "100%", borderRadius: 999, background: `linear-gradient(90deg, ${item.color}, rgba(255,255,255,0.92))`, boxShadow: `0 0 38px ${item.color}66` }} />

@@ -22,8 +22,11 @@ class ChatGPTVisualPlanParserConfig(BaseModel):
 
     scene_policy: dict[str, Any] = Field(default_factory=dict)
     visual_capabilities: dict[str, Any] = Field(default_factory=dict)
+    style: dict[str, Any] = Field(default_factory=dict)
     require_complete_timeline: bool = True
     gap_tolerance_seconds: float = 0.5
+    max_automatic_timing_repair_seconds: float = 0.5
+    require_real_anchor_per_story: bool = False
     output_dir: str | None = None
 
     @field_validator("gap_tolerance_seconds")
@@ -31,6 +34,13 @@ class ChatGPTVisualPlanParserConfig(BaseModel):
     def gap_tolerance_must_be_non_negative(cls, value: float) -> float:
         if value < 0:
             raise ValueError("config.gap_tolerance_seconds must be non-negative")
+        return value
+
+    @field_validator("max_automatic_timing_repair_seconds")
+    @classmethod
+    def automatic_repair_limit_must_be_non_negative(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("config.max_automatic_timing_repair_seconds must be non-negative")
         return value
 
 
@@ -59,6 +69,7 @@ class ParserInput(BaseModel):
     script_generation: dict[str, Any]
     script_source: str | None = None
     voiceover: dict[str, Any] | None = None
+    asset_catalog: dict[str, Any] | None = None
 
     @field_validator("response_text")
     @classmethod
@@ -85,4 +96,15 @@ class ChatGPTVisualPlanParserRequest(BaseModel):
         script_package = (self.input.script_generation.get("data") or {}).get("script_package") or {}
         if not str(script_package.get("full_script", "")).strip():
             raise ValueError("input.script_generation.data.script_package.full_script is missing or empty")
+        return self
+
+    @model_validator(mode="after")
+    def catalog_must_be_ready_when_required(self) -> "ChatGPTVisualPlanParserRequest":
+        if not self.config.require_real_anchor_per_story:
+            return self
+        if not isinstance(self.input.asset_catalog, dict) or self.input.asset_catalog.get("status") != "ok":
+            raise ValueError("input.asset_catalog.status must be ok when real anchors are required")
+        catalog = (self.input.asset_catalog.get("data") or {}).get("visual_asset_catalog")
+        if not isinstance(catalog, dict) or not catalog:
+            raise ValueError("input.asset_catalog.data.visual_asset_catalog is missing")
         return self

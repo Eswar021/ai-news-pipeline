@@ -21,61 +21,99 @@ SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
 def build_fingerprint_text(record: dict) -> str:
+    """Return the complete retrieval text; callers should embed it in chunks."""
+
+    return _compose([*_identity_and_metadata_parts(record), _semantic_body(record)])
+
+
+def build_fingerprint_chunks(
+    record: dict,
+    *,
+    chunk_chars: int,
+    max_chunks: int,
+) -> list[str]:
+    """Represent the complete semantic body without an early-article cutoff."""
+
+    prefix = _compose(_identity_and_metadata_parts(record))
+    body_chunks = _chunk_complete_text(_semantic_body(record), chunk_chars=chunk_chars)
+    chunks = [_compose([prefix, chunk]) for chunk in body_chunks] or [prefix]
+    chunks = [chunk for chunk in chunks if chunk]
+    if len(chunks) > max_chunks:
+        raise ValueError(
+            "Complete story-mapping fingerprint exceeds "
+            "clustering.max_fingerprint_chunks_per_record; no source text was truncated. "
+            f"record_key={clean_text(record.get('record_key'))!r}, "
+            f"chunk_count={len(chunks)}, configured_limit={max_chunks}"
+        )
+    return chunks or [clean_text(record.get("title")) or clean_text(record.get("record_key"))]
+
+
+def _identity_and_metadata_parts(record: dict) -> list[str]:
     source_group = record.get("source_group", "")
     provider = record.get("provider", "")
     identity_parts = _identity_parts(record)
 
     if source_group == "research_papers":
-        return _compose(
-            identity_parts
-            + [
-                record.get("title", ""),
-                record.get("category", ""),
-                _clip_sentences(record.get("content", ""), max_sentences=8, max_chars=1600),
-            ]
-        )
+        return identity_parts + [record.get("title", ""), record.get("category", "")]
 
     if source_group == "youtube_podcast_transcripts":
-        cleaned = _strip_transcript_boilerplate(record.get("content", ""))
-        return _compose(
-            identity_parts
-            + [
-                record.get("title", ""),
-                record.get("channel_name", ""),
-                _clip_sentences(cleaned, max_sentences=8, max_chars=1000),
-            ]
-        )
+        return identity_parts + [record.get("title", ""), record.get("channel_name", "")]
 
     if source_group == "community_signals" and provider == "github":
-        readme_lead = _clean_github_readme(record.get("content", ""))
-        return _compose(
-            identity_parts
-            + [
-                record.get("title", ""),
-                record.get("description", ""),
-                ", ".join(record.get("topics", []) or []),
-                _clip_sentences(readme_lead, max_sentences=8, max_chars=1200),
-            ]
-        )
+        return identity_parts + [
+            record.get("title", ""),
+            record.get("description", ""),
+            ", ".join(record.get("topics", []) or []),
+        ]
 
     if source_group == "community_signals" and provider == "hackernews":
-        base = identity_parts + [
-            record.get("title", ""),
-        ]
-        if record.get("url"):
-            base.append(_clip_sentences(record.get("content", ""), max_sentences=8, max_chars=1000))
-        else:
-            base.append(_clip_sentences(record.get("content", ""), max_sentences=6, max_chars=800))
-        return _compose(base)
+        return identity_parts + [record.get("title", "")]
 
+    return identity_parts + [
+        record.get("title", ""),
+        record.get("description", "") or record.get("summary", ""),
+    ]
+
+
+def _semantic_body(record: dict) -> str:
+    for field in (
+        "cleaned_content",
+        "content",
+        "transcript",
+        "semantic_content",
+        "raw_content",
+    ):
+        value = str(record.get(field) or "").strip()
+        if value:
+            return value
     return _compose(
-        identity_parts
-        + [
+        [
             record.get("title", ""),
-            record.get("description", "") or record.get("summary", ""),
-            _clip_sentences(record.get("content", ""), max_sentences=8, max_chars=1200),
+            record.get("summary", ""),
+            record.get("description", ""),
         ]
     )
+
+
+def _chunk_complete_text(text: str, *, chunk_chars: int) -> list[str]:
+    cleaned = clean_text(text)
+    if not cleaned:
+        return []
+    chunks: list[str] = []
+    cursor = 0
+    while cursor < len(cleaned):
+        end = min(len(cleaned), cursor + chunk_chars)
+        if end < len(cleaned):
+            boundary = cleaned.rfind(" ", cursor, end)
+            if boundary > cursor + chunk_chars // 2:
+                end = boundary
+        chunk = cleaned[cursor:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        cursor = end
+        while cursor < len(cleaned) and cleaned[cursor].isspace():
+            cursor += 1
+    return chunks
 
 
 def tokenize_title(title: str) -> set[str]:

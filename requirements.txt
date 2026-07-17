@@ -2,6 +2,7 @@
 python-dotenv
 pyyaml
 requests
+youtube-transcript-api>=1.2,<2
 google-auth
 google-auth-oauthlib
 pydantic>=2,<3
@@ -12,6 +13,7 @@ pillow
 langchain-openai
 langchain-google-genai
 openai
+tiktoken
 
 # ── Local voiceover ──
 # Kokoro 0.9.x currently supports Python >=3.10,<3.13.

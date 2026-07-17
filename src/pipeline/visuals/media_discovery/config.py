@@ -7,6 +7,7 @@ NEXT_MODULE = "visuals.asset_resolver"
 CONTEXT_IMAGE_RENDER_KIND = "context_image_scene"
 BROLL_VIDEO_RENDER_KIND = "broll_video_scene"
 MEDIA_RENDER_KINDS = {CONTEXT_IMAGE_RENDER_KIND, BROLL_VIDEO_RENDER_KIND}
+STORY_TRANSITION_RENDER_KIND = "story_transition_scene"
 
 DEFAULT_WIKIMEDIA_ENDPOINT = "https://commons.wikimedia.org/w/api.php"
 DEFAULT_PEXELS_PHOTO_ENDPOINT = "https://api.pexels.com/v1/search"

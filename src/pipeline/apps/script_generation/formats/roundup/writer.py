@@ -9,14 +9,31 @@ from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel
 
 from .asset_hints import build_story_asset_hints
+from .config import (
+    BOOKEND_REVISION_SELECTOR_PROMPT_MODULE,
+    STORY_REVISION_SELECTOR_PROMPT_MODULE,
+)
 from .llm_logging import build_llm_call_log
 from .models import (
     BookendOutput,
     BookendReviewOutput,
     EpisodeDirectorOutput,
+    RevisionSelectionOutput,
     StoryReviewOutput,
     StorySegmentOutput,
+    StorySourceBriefOutput,
 )
+from .review_acceptance import (
+    bookend_review_beat_ids,
+    story_review_beat_ids,
+)
+from .source_context import (
+    build_source_research_context,
+    build_story_context_packet,
+    story_context_telemetry,
+    validate_context_resource_limits,
+)
+from .source_truth import build_story_truth_index, compact_truth_index, truth_item_map
 from .utils import clean_text, dedupe, json_dumps, source_record_keys, story_id, story_title
 
 
@@ -37,6 +54,14 @@ def generate_roundup_script(
     llm,
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    stories = _ordered_stories(video_packet)
+    source_briefs, truth_indexes, context_packets = research_story_sources(
+        stories=stories,
+        script_cfg=script_cfg,
+        prompt_bundle=prompt_bundles["source_researcher"],
+        llm=llm,
+        llm_calls=llm_calls,
+    )
     director = direct_episode(
         video_packet=video_packet,
         section_plan=section_plan,
@@ -44,6 +69,7 @@ def generate_roundup_script(
         prompt_bundle=prompt_bundles["director"],
         llm=llm,
         llm_calls=llm_calls,
+        context_packets=context_packets,
     )
     story_segments, story_reviews = write_story_segments(
         video_packet=video_packet,
@@ -52,8 +78,10 @@ def generate_roundup_script(
         script_cfg=script_cfg,
         writer_prompt_bundle=prompt_bundles["story_writer"],
         reviewer_prompt_bundle=prompt_bundles["story_reviewer"],
+        revision_selector_prompt_bundle=prompt_bundles["story_revision_selector"],
         llm=llm,
         llm_calls=llm_calls,
+        context_packets=context_packets,
     )
     bookends, bookend_reviews = write_bookends(
         video_packet=video_packet,
@@ -63,23 +91,113 @@ def generate_roundup_script(
         script_cfg=script_cfg,
         writer_prompt_bundle=prompt_bundles["bookend_writer"],
         reviewer_prompt_bundle=prompt_bundles["bookend_reviewer"],
+        revision_selector_prompt_bundle=prompt_bundles["bookend_revision_selector"],
         llm=llm,
         llm_calls=llm_calls,
+    )
+    story_review_passes = [
+        review_pass
+        for story_review in story_reviews
+        for review_pass in story_review.get("passes", [])
+    ]
+    all_review_passes = [*story_review_passes, *bookend_reviews]
+    selector_call_count = sum(
+        bool((item.get("candidate_selection") or {}).get("selector_used"))
+        for item in all_review_passes
     )
     return {
         "director": director,
         "story_segments": story_segments,
-        "story_asset_hints": [build_story_asset_hints(story) for story in _ordered_stories(video_packet)],
+        "story_truth_indexes": truth_indexes,
+        "story_context_packets": context_packets,
+        "story_source_briefs": source_briefs,
+        "story_asset_hints": [
+            build_story_asset_hints(story, truth_indexes[index])
+            for index, story in enumerate(_ordered_stories(video_packet))
+        ],
         "bookends": bookends,
         "review": {
             "enabled": bool(script_cfg.get("review", {}).get("enabled", True)),
             "max_revision_passes": int(script_cfg.get("review", {}).get("max_revision_passes", 1)),
             "story_reviews": story_reviews,
             "bookend_reviews": bookend_reviews,
-            "bookend_final_gate_issues": _bookend_gate_issues(bookends, video_packet),
-            "revision_count": sum(len(item.get("passes", [])) for item in story_reviews) + len(bookend_reviews),
+            "review_call_count": len(all_review_passes) + selector_call_count,
+            "candidate_selection_call_count": selector_call_count,
+            "revision_count": sum(bool(item.get("applied")) for item in all_review_passes),
         },
     }
+
+
+def research_story_sources(
+    *,
+    stories: list[dict[str, Any]],
+    script_cfg: dict[str, Any],
+    prompt_bundle: dict[str, str],
+    llm,
+    llm_calls: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    source_config = dict(script_cfg.get("source_context") or {})
+    worker_count = min(max(1, int(script_cfg.get("worker_count", 1))), len(stories))
+
+    def research(index: int, story: dict[str, Any]):
+        local_calls: list[dict[str, Any]] = []
+        source_context = build_source_research_context(story)
+        payload = {
+            "task": "Read the complete assigned records and build one semantic source brief without writing narration.",
+            "required_story_id": story_id(story),
+            "complete_story_context": source_context,
+        }
+        response = _invoke_chain(
+            module_name="roundup_source_researcher",
+            output_model=StorySourceBriefOutput,
+            llm=llm,
+            prompt_bundle=prompt_bundle,
+            task_payload=json_dumps(payload),
+            script_cfg=script_cfg,
+            metadata={
+                "story_id": story_id(story),
+                "source_context_mode": "complete_records_plus_semantic_brief",
+                **story_context_telemetry(source_context),
+            },
+            llm_calls=local_calls,
+        )
+        brief = response.model_dump(mode="json")
+        truth_index_model = build_story_truth_index(story, response)
+        truth_index = compact_truth_index(truth_index_model)
+        packet = build_story_context_packet(story, truth_index_model)
+        return index, brief, truth_index, packet, local_calls
+
+    ordered: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]]] | None] = [None] * len(stories)
+    if worker_count == 1:
+        for index, story in enumerate(stories):
+            _, brief, truth_index, packet, calls = research(index, story)
+            ordered[index] = (brief, truth_index, packet, calls)
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {executor.submit(research, index, story): index for index, story in enumerate(stories)}
+            for future in as_completed(futures):
+                index, brief, truth_index, packet, calls = future.result()
+                ordered[index] = (brief, truth_index, packet, calls)
+
+    if any(item is None for item in ordered):
+        raise RuntimeError("Source research completed with missing story packets")
+    briefs: list[dict[str, Any]] = []
+    truth_indexes: list[dict[str, Any]] = []
+    packets: list[dict[str, Any]] = []
+    for item in ordered:
+        if item is None:
+            continue
+        brief, truth_index, packet, calls = item
+        briefs.append(brief)
+        truth_indexes.append(truth_index)
+        packets.append(packet)
+        llm_calls.extend(calls)
+    validate_context_resource_limits(
+        packets,
+        max_story_context_chars=int(source_config.get("max_story_context_chars", 500_000)),
+        max_episode_context_chars=int(source_config.get("max_episode_context_chars", 1_500_000)),
+    )
+    return briefs, truth_indexes, packets
 
 
 def direct_episode(
@@ -90,13 +208,17 @@ def direct_episode(
     prompt_bundle: dict[str, str],
     llm,
     llm_calls: list[dict[str, Any]],
+    context_packets: list[dict[str, Any]],
 ) -> dict[str, Any]:
     payload = {
         "task": "Create the editorial through-line for one roundup episode without writing narration.",
         "script_style": script_cfg["script_style"],
+        "channel_voice": script_cfg["channel_voice"],
+        "storytelling_policy": script_cfg["storytelling"],
         "video_context": _video_context(video_packet),
         "required_story_order": [story_id(story) for story in _ordered_stories(video_packet)],
         "selected_story_summaries": [_director_story(story) for story in _ordered_stories(video_packet)],
+        "story_context_packets": context_packets,
         "section_guidance": _compact_section_plan(section_plan),
     }
     response = _invoke_chain(
@@ -106,7 +228,17 @@ def direct_episode(
         prompt_bundle=prompt_bundle,
         task_payload=json_dumps(payload),
         script_cfg=script_cfg,
-        metadata={"story_count": len(video_packet.get("stories", []))},
+        metadata={
+            "story_count": len(video_packet.get("stories", [])),
+            "truth_item_count": sum(
+                len((packet.get("story_truth_index") or {}).get("items", [])) for packet in context_packets
+            ),
+            "source_record_count": sum(int(packet.get("record_count", 0)) for packet in context_packets),
+            "source_context_char_count": sum(
+                int((packet.get("telemetry") or {}).get("serialized_char_count", 0)) for packet in context_packets
+            ),
+            "source_context_mode": "complete_records_plus_semantic_brief",
+        },
         llm_calls=llm_calls,
     )
     raw = response.model_dump(mode="json")
@@ -119,6 +251,18 @@ def direct_episode(
     brief_ids = [clean_text(item.get("story_id")) for item in raw["story_briefs"]]
     if brief_ids != required_ids:
         raise ValueError(f"roundup_director returned invalid story briefs: {brief_ids} != {required_ids}")
+    truth_by_story = {
+        clean_text(packet.get("story_id")): set(truth_item_map(packet.get("story_truth_index") or {}))
+        for packet in context_packets
+    }
+    for brief in raw["story_briefs"]:
+        sid = clean_text(brief.get("story_id"))
+        available = truth_by_story.get(sid, set())
+        required_truth = set(brief.get("must_communicate_truth_ids") or [])
+        optional_truth = set(brief.get("optional_truth_ids") or [])
+        unknown = sorted((required_truth | optional_truth) - available)
+        if unknown:
+            raise ValueError(f"roundup_director used unknown truth IDs for {sid}: {unknown}")
     return raw
 
 
@@ -130,28 +274,35 @@ def write_story_segments(
     script_cfg: dict[str, Any],
     writer_prompt_bundle: dict[str, str],
     reviewer_prompt_bundle: dict[str, str],
+    revision_selector_prompt_bundle: dict[str, str],
     llm,
     llm_calls: list[dict[str, Any]],
+    context_packets: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     stories = _ordered_stories(video_packet)
     story_plans = {clean_text(item.get("story_id")): item for item in section_plan if item.get("section_type") == "story"}
     briefs = {clean_text(item.get("story_id")): item for item in director.get("story_briefs", [])}
+    packet_by_story = {clean_text(item.get("story_id")): item for item in context_packets}
     worker_count = min(max(1, int(script_cfg.get("worker_count", 1))), len(stories))
 
     def generate(index: int, story: dict[str, Any]) -> tuple[int, dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
         local_calls: list[dict[str, Any]] = []
         sid = story_id(story)
+        brief = briefs[sid]
+        context_packet = packet_by_story[sid]
         segment, review = _write_one_story(
             story=story,
             plan=story_plans[sid],
-            brief=briefs[sid],
+            brief=brief,
             previous_story=stories[index - 1] if index else None,
             next_story=stories[index + 1] if index + 1 < len(stories) else None,
             script_cfg=script_cfg,
             writer_prompt_bundle=writer_prompt_bundle,
             reviewer_prompt_bundle=reviewer_prompt_bundle,
+            revision_selector_prompt_bundle=revision_selector_prompt_bundle,
             llm=llm,
             llm_calls=local_calls,
+            context_packet=context_packet,
         )
         return index, segment, review, local_calls
 
@@ -191,19 +342,26 @@ def _write_one_story(
     script_cfg: dict[str, Any],
     writer_prompt_bundle: dict[str, str],
     reviewer_prompt_bundle: dict[str, str],
+    revision_selector_prompt_bundle: dict[str, str],
     llm,
     llm_calls: list[dict[str, Any]],
+    context_packet: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     sid = story_id(story)
+    truth_index = dict(context_packet.get("story_truth_index") or {})
+    context_telemetry = dict(context_packet.get("telemetry") or {})
+    story_asset_hints = build_story_asset_hints(story, truth_index)
     payload = {
         "task": "Write only this story's body as useful audiovisual narration beats.",
         "required_story_id": sid,
         "story_role": plan.get("role", ""),
         "writing_guidance": plan.get("writing_guidance", {}),
         "script_style": script_cfg["script_style"],
+        "channel_voice": script_cfg["channel_voice"],
+        "storytelling_policy": script_cfg["storytelling"],
         "director_brief": brief,
-        "assigned_story_with_full_records": story,
-        "available_story_assets": build_story_asset_hints(story),
+        "story_context_packet": context_packet,
+        "available_story_assets": story_asset_hints,
         "allowed_source_record_keys": source_record_keys(story),
         "previous_story_preview": _story_preview(previous_story),
         "next_story_preview": _story_preview(next_story),
@@ -212,8 +370,13 @@ def _write_one_story(
             "Treat suggested_words as soft guidance, never as a quota.",
             "Finish when the story is clear; do not add repetition, filler, or generic commentary to make it longer.",
             "Each beat must be a coherent spoken unit that can anchor one or more visuals.",
+            "Prefer one visual thought per beat. A beat is usually one or two spoken sentences and roughly 8-12 seconds, but this is creative guidance rather than a quota.",
+            "Split a beat when the visual job changes, such as moving from source proof to mechanism, comparison, reaction, or payoff.",
             "Use only source_record_keys from this assigned story.",
             "Do not put camera directions inside narration_text.",
+            "Use support_truth_ids and source_record_keys as invisible production metadata; never speak those IDs aloud.",
+            "Stay materially faithful to the assigned records while adding a clear creator viewpoint, analogy, humor, or prediction when it helps.",
+            "Build the mini-story around tension, explanation, and payoff instead of reading the records in source order.",
         ],
     }
     response = _invoke_chain(
@@ -223,31 +386,42 @@ def _write_one_story(
         prompt_bundle=writer_prompt_bundle,
         task_payload=json_dumps(payload),
         script_cfg=script_cfg,
-        metadata={"story_id": sid, "story_role": plan.get("role", "")},
+        metadata={
+            "story_id": sid,
+            "story_role": plan.get("role", ""),
+            "truth_item_count": len(truth_index.get("items", [])),
+            "source_record_count": len(story.get("records", [])),
+            "source_context_mode": "complete_records_plus_semantic_brief",
+            "source_context_char_count": int(context_telemetry.get("serialized_char_count", 0)),
+            "source_record_keys": list(context_telemetry.get("record_keys", [])),
+        },
         llm_calls=llm_calls,
     )
     current = _validate_story_segment(
         response.model_dump(mode="json"),
         story=story,
-        script_cfg=script_cfg,
+        truth_index=truth_index,
     )
     passes: list[dict[str, Any]] = []
-    max_passes = int(script_cfg.get("review", {}).get("max_revision_passes", 1))
-    if not bool(script_cfg.get("review", {}).get("enabled", True)):
+    review_config = dict(script_cfg.get("review", {}))
+    max_passes = int(review_config.get("max_revision_passes", 1))
+    if not bool(review_config.get("enabled", True)):
         max_passes = 0
 
     for pass_index in range(1, max_passes + 1):
-        issues = _story_gate_issues(current, story=story)
         review_payload = {
             "task": "Review and, only when useful, improve this story segment without touching another section.",
             "required_story_id": sid,
             "writing_guidance": plan.get("writing_guidance", {}),
-            "structural_issues": issues,
-            "quality_criteria": list(script_cfg.get("review", {}).get("quality_criteria", [])),
+            "review_beat_ids": story_review_beat_ids(current),
+            "quality_criteria": list(review_config.get("quality_criteria", [])),
             "script_style": script_cfg["script_style"],
+            "channel_voice": script_cfg["channel_voice"],
+            "storytelling_policy": script_cfg["storytelling"],
             "director_brief": brief,
-            "assigned_story_with_full_records": story,
-            "available_story_assets": build_story_asset_hints(story),
+            "story_context_packet": context_packet,
+            "beat_support_context": _beat_support_context(current, truth_index),
+            "available_story_assets": story_asset_hints,
             "allowed_source_record_keys": source_record_keys(story),
             "current_segment": current,
         }
@@ -258,27 +432,67 @@ def _write_one_story(
             prompt_bundle=reviewer_prompt_bundle,
             task_payload=json_dumps(review_payload),
             script_cfg=script_cfg,
-            metadata={"story_id": sid, "pass_index": pass_index, "structural_issues": issues},
+            metadata={
+                "story_id": sid,
+                "pass_index": pass_index,
+                "truth_item_count": len(truth_index.get("items", [])),
+                "source_context_mode": "complete_records_plus_semantic_brief",
+                "source_context_char_count": int(context_telemetry.get("serialized_char_count", 0)),
+                "source_record_keys": list(context_telemetry.get("record_keys", [])),
+            },
             llm_calls=llm_calls,
         ).model_dump(mode="json")
-        candidate = _validate_story_segment(
-            review_response["revised_segment"],
-            story=story,
-            script_cfg=script_cfg,
-        )
-        candidate_issues = _story_gate_issues(candidate, story=story)
-        applied = bool(review_response["should_apply_revision"]) and not candidate_issues
-        if issues and len(candidate_issues) < len(issues):
-            applied = True
-        if applied:
-            current = candidate
+        review_issues = list(review_response.get("issues") or [])
+        if not bool(review_response["rewrite_required"]):
+            passes.append(
+                {
+                    "pass_index": pass_index,
+                    "decision": "keep",
+                    "issues": [],
+                    "model_recommended_rewrite": False,
+                    "candidate_rejection_reasons": [],
+                    "applied": False,
+                }
+            )
+            break
+
+        candidate: dict[str, Any] | None = None
+        rejection_reasons: list[str] = []
+        try:
+            candidate = _validate_story_segment(
+                review_response["revised_segment"],
+                story=story,
+                truth_index=truth_index,
+            )
+        except (TypeError, ValueError) as exc:
+            rejection_reasons = [f"candidate_validation_failed:{exc}"]
+        applied = candidate is not None and not rejection_reasons
+        selection = None
+        if applied and candidate is not None:
+            selection = _select_story_revision(
+                current=current,
+                candidate=candidate,
+                issues=review_issues,
+                story=story,
+                brief=brief,
+                context_packet=context_packet,
+                script_cfg=script_cfg,
+                prompt_bundle=revision_selector_prompt_bundle,
+                llm=llm,
+                llm_calls=llm_calls,
+                pass_index=pass_index,
+            )
+            applied = selection["decision"] == "accept_candidate"
+            if applied:
+                current = candidate
         passes.append(
             {
                 "pass_index": pass_index,
-                "structural_issues": issues,
-                "diagnosis": review_response.get("diagnosis", []),
-                "model_recommended_apply": bool(review_response["should_apply_revision"]),
-                "candidate_structural_issues": candidate_issues,
+                "decision": "rewrite_applied" if applied else "rewrite_rejected",
+                "issues": review_issues,
+                "model_recommended_rewrite": True,
+                "candidate_rejection_reasons": rejection_reasons,
+                "candidate_selection": selection or {},
                 "applied": applied,
             }
         )
@@ -289,8 +503,138 @@ def _write_one_story(
         "story_id": sid,
         "passes": passes,
         "writing_guidance": plan.get("writing_guidance", {}),
-        "final_gate_issues": _story_gate_issues(current, story=story),
     }
+
+
+def _select_story_revision(
+    *,
+    current: dict[str, Any],
+    candidate: dict[str, Any],
+    issues: list[dict[str, Any]],
+    story: dict[str, Any],
+    brief: dict[str, Any],
+    context_packet: dict[str, Any],
+    script_cfg: dict[str, Any],
+    prompt_bundle: dict[str, str],
+    llm,
+    llm_calls: list[dict[str, Any]],
+    pass_index: int,
+) -> dict[str, Any]:
+    selector_config = dict(script_cfg.get("review", {}).get("candidate_selection") or {})
+    if not bool(selector_config.get("enabled", False)):
+        return {
+            "selector_used": False,
+            "decision": "accept_candidate",
+            "rationale": "Candidate selection is disabled by config.",
+            "material_improvements": [],
+            "material_regressions": [],
+        }
+    payload = {
+        "required_story_id": story_id(story),
+        "director_brief": brief,
+        "review_issues": issues,
+        "story_context_packet": context_packet,
+        "current_segment": current,
+        "candidate_segment": candidate,
+        "quality_criteria": list(script_cfg.get("review", {}).get("quality_criteria", [])),
+        "script_style": script_cfg["script_style"],
+        "channel_voice": script_cfg["channel_voice"],
+    }
+    try:
+        selected = _invoke_chain(
+            module_name=STORY_REVISION_SELECTOR_PROMPT_MODULE,
+            output_model=RevisionSelectionOutput,
+            llm=llm,
+            prompt_bundle=prompt_bundle,
+            task_payload=json_dumps(payload),
+            script_cfg=script_cfg,
+            metadata={
+                "story_id": story_id(story),
+                "pass_index": pass_index,
+                "source_context_mode": "complete_records_plus_semantic_brief",
+                "source_context_char_count": int(
+                    (context_packet.get("telemetry") or {}).get("serialized_char_count", 0)
+                ),
+                "source_record_keys": list((context_packet.get("telemetry") or {}).get("record_keys", [])),
+            },
+            llm_calls=llm_calls,
+        ).model_dump(mode="json")
+        return {"selector_used": True, **selected}
+    except Exception as exc:
+        if clean_text(selector_config.get("failure_mode")) == "fail":
+            raise
+        return {
+            "selector_used": True,
+            "decision": "keep_current",
+            "rationale": "Candidate selector failed; retained the already-valid current segment.",
+            "material_improvements": [],
+            "material_regressions": [f"selector_failure:{type(exc).__name__}:{exc}"],
+        }
+
+
+def _select_bookend_revision(
+    *,
+    current: dict[str, Any],
+    candidate: dict[str, Any],
+    issues: list[dict[str, Any]],
+    director: dict[str, Any],
+    story_sequence: list[dict[str, Any]],
+    script_cfg: dict[str, Any],
+    prompt_bundle: dict[str, str],
+    llm,
+    llm_calls: list[dict[str, Any]],
+    pass_index: int,
+) -> dict[str, Any]:
+    selector_config = dict(script_cfg.get("review", {}).get("candidate_selection") or {})
+    if not bool(selector_config.get("enabled", False)):
+        return {
+            "selector_used": False,
+            "decision": "accept_candidate",
+            "rationale": "Candidate selection is disabled by config.",
+            "material_improvements": [],
+            "material_regressions": [],
+        }
+    payload = {
+        "episode_direction": {
+            key: director.get(key, "")
+            for key in (
+                "episode_shape",
+                "episode_connection_reason",
+                "episode_thesis",
+                "viewer_promise",
+                "hook_strategy",
+            )
+        },
+        "review_issues": issues,
+        "story_sequence": story_sequence,
+        "current_bookends": current,
+        "candidate_bookends": candidate,
+        "quality_criteria": list(script_cfg.get("review", {}).get("quality_criteria", [])),
+        "script_style": script_cfg["script_style"],
+        "channel_voice": script_cfg["channel_voice"],
+    }
+    try:
+        selected = _invoke_chain(
+            module_name=BOOKEND_REVISION_SELECTOR_PROMPT_MODULE,
+            output_model=RevisionSelectionOutput,
+            llm=llm,
+            prompt_bundle=prompt_bundle,
+            task_payload=json_dumps(payload),
+            script_cfg=script_cfg,
+            metadata={"pass_index": pass_index},
+            llm_calls=llm_calls,
+        ).model_dump(mode="json")
+        return {"selector_used": True, **selected}
+    except Exception as exc:
+        if clean_text(selector_config.get("failure_mode")) == "fail":
+            raise
+        return {
+            "selector_used": True,
+            "decision": "keep_current",
+            "rationale": "Candidate selector failed; retained the already-valid current bookends.",
+            "material_improvements": [],
+            "material_regressions": [f"selector_failure:{type(exc).__name__}:{exc}"],
+        }
 
 
 def write_bookends(
@@ -302,6 +646,7 @@ def write_bookends(
     script_cfg: dict[str, Any],
     writer_prompt_bundle: dict[str, str],
     reviewer_prompt_bundle: dict[str, str],
+    revision_selector_prompt_bundle: dict[str, str],
     llm,
     llm_calls: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -310,19 +655,30 @@ def write_bookends(
     payload = {
         "task": "Write the episode intro, story connectors, title-card copy, and conclusion after story bodies are fixed.",
         "script_style": script_cfg["script_style"],
+        "channel_voice": script_cfg["channel_voice"],
         "episode_direction": director,
         "intro_writing_guidance": intro_plan.get("writing_guidance", {}),
         "closing_writing_guidance": closing_plan.get("writing_guidance", {}),
         "connector_writing_guidance": script_cfg.get("writing_guidance", {}).get("connector", {}),
         "required_story_ids": [story_id(story) for story in _ordered_stories(video_packet)],
+        "connector_targets": _connector_targets(video_packet),
         "story_sequence": _segments_for_bookends(video_packet, story_segments),
         "rules": [
             "Do not rewrite or repeat the story bodies.",
-            "Connector lines should be short and spoken while the next story title card appears.",
-            "The conclusion should synthesize the episode thesis, not introduce a new fact.",
+            "Every connector is owned by target_story_id and must introduce that exact target story while its matching title card appears.",
+            "Never attach a transition about the following story to the current target_story_id.",
+            "The first connector introduces the first story after the intro; later connectors introduce their own target story after the previous story ends.",
+            "Connector lines should be short and spoken while their target story title card appears.",
+            "Do not force unrelated stories into a universal thesis; an honest roundup promise is enough.",
+            "The conclusion should leave one useful thought or a clean signoff, not introduce a new reported fact.",
             "Treat suggested word counts as soft guidance, never as quotas.",
             "Finish each bookend when it has done its editorial job; never pad it with filler or repetition.",
             "Visual briefs are directions for downstream planning, never spoken narration.",
+            "Vary connector shapes; do not march through First, Next, Now, Then, and Finally.",
+            "Avoid generic technology-collides, AI-is-reshaping-everything, and whirlwind-tour language.",
+            "Do not place a paraphrase inside quotation marks. Use quotation marks only for exact wording already present in the completed story bodies.",
+            "Do not repeat a completed story body's opening sentence verbatim in the intro.",
+            "Follow channel_voice.language.profanity_mode.",
         ],
     }
     response = _invoke_chain(
@@ -337,16 +693,18 @@ def write_bookends(
     )
     current = _validate_bookends(response.model_dump(mode="json"), video_packet)
     passes: list[dict[str, Any]] = []
-    max_passes = int(script_cfg.get("review", {}).get("max_revision_passes", 1))
-    if not bool(script_cfg.get("review", {}).get("enabled", True)):
+    review_config = dict(script_cfg.get("review", {}))
+    max_passes = int(review_config.get("max_revision_passes", 1))
+    if not bool(review_config.get("enabled", True)):
         max_passes = 0
 
     for pass_index in range(1, max_passes + 1):
-        issues = _bookend_gate_issues(current, video_packet)
         review_payload = {
             "task": "Review and, only when useful, improve the bookends and connectors for a stronger YouTube episode.",
             "script_style": script_cfg["script_style"],
-            "quality_criteria": list(script_cfg.get("review", {}).get("quality_criteria", [])),
+            "channel_voice": script_cfg["channel_voice"],
+            "storytelling_policy": script_cfg["storytelling"],
+            "quality_criteria": list(review_config.get("quality_criteria", [])),
             "episode_direction": {
                 key: director.get(key, "")
                 for key in ("episode_thesis", "viewer_promise", "hook_strategy", "pacing_strategy")
@@ -355,19 +713,16 @@ def write_bookends(
             "closing_writing_guidance": closing_plan.get("writing_guidance", {}),
             "connector_writing_guidance": script_cfg.get("writing_guidance", {}).get("connector", {}),
             "required_story_ids": payload["required_story_ids"],
-            "story_sequence": [
-                {
-                    key: item.get(key, "")
-                    for key in ("story_id", "display_title", "story_thesis", "viewer_takeaway")
-                }
-                for item in payload["story_sequence"]
-            ],
-            "structural_issues": issues,
+            "connector_targets": payload["connector_targets"],
+            "story_sequence": payload["story_sequence"],
+            "review_beat_ids": bookend_review_beat_ids(current),
             "current_bookends": current,
             "rules": [
                 "Apply a revision only when it materially improves hook, continuity, clarity, pacing, or concision.",
                 "Do not lengthen a section merely to approach a suggested word count.",
-                "Preserve the required story order and do not introduce new factual claims.",
+                "Preserve the required story order and keep the language faithful to the completed story bodies.",
+                "Verify each connector transition_line and display_title both introduce its target_story_id, not the next item in the list.",
+                "Reject invented or inexact quotations and verbatim intro repetition from a story body.",
             ],
         }
         review_response = _invoke_chain(
@@ -377,23 +732,57 @@ def write_bookends(
             prompt_bundle=reviewer_prompt_bundle,
             task_payload=json_dumps(review_payload),
             script_cfg=script_cfg,
-            metadata={"pass_index": pass_index, "structural_issues": issues},
+            metadata={
+                "pass_index": pass_index,
+            },
             llm_calls=llm_calls,
         ).model_dump(mode="json")
-        candidate = _validate_bookends(review_response["revised_bookends"], video_packet)
-        candidate_issues = _bookend_gate_issues(candidate, video_packet)
-        applied = bool(review_response["should_apply_revision"]) and not candidate_issues
-        if issues and len(candidate_issues) < len(issues):
-            applied = True
-        if applied:
-            current = candidate
+        review_issues = list(review_response.get("issues") or [])
+        if not bool(review_response["rewrite_required"]):
+            passes.append(
+                {
+                    "pass_index": pass_index,
+                    "decision": "keep",
+                    "issues": [],
+                    "model_recommended_rewrite": False,
+                    "candidate_rejection_reasons": [],
+                    "applied": False,
+                }
+            )
+            break
+
+        candidate: dict[str, Any] | None = None
+        rejection_reasons: list[str] = []
+        try:
+            candidate = _validate_bookends(review_response["revised_bookends"], video_packet)
+        except (TypeError, ValueError) as exc:
+            rejection_reasons = [f"candidate_validation_failed:{exc}"]
+        applied = candidate is not None and not rejection_reasons
+        selection = None
+        if applied and candidate is not None:
+            selection = _select_bookend_revision(
+                current=current,
+                candidate=candidate,
+                issues=review_issues,
+                director=director,
+                story_sequence=payload["story_sequence"],
+                script_cfg=script_cfg,
+                prompt_bundle=revision_selector_prompt_bundle,
+                llm=llm,
+                llm_calls=llm_calls,
+                pass_index=pass_index,
+            )
+            applied = selection["decision"] == "accept_candidate"
+            if applied:
+                current = candidate
         passes.append(
             {
                 "pass_index": pass_index,
-                "structural_issues": issues,
-                "diagnosis": review_response.get("diagnosis", []),
-                "model_recommended_apply": bool(review_response["should_apply_revision"]),
-                "candidate_structural_issues": candidate_issues,
+                "decision": "rewrite_applied" if applied else "rewrite_rejected",
+                "issues": review_issues,
+                "model_recommended_rewrite": True,
+                "candidate_rejection_reasons": rejection_reasons,
+                "candidate_selection": selection or {},
                 "applied": applied,
             }
         )
@@ -604,17 +993,28 @@ def _validate_story_segment(
     segment: dict[str, Any],
     *,
     story: dict[str, Any],
-    script_cfg: dict[str, Any],
+    truth_index: dict[str, Any],
 ) -> dict[str, Any]:
     raw = StorySegmentOutput.model_validate(segment).model_dump(mode="json")
     sid = story_id(story)
     if clean_text(raw.get("story_id")) != sid:
         raise ValueError(f"Story writer returned story_id {raw.get('story_id')!r}; expected {sid!r}")
     allowed_keys = set(source_record_keys(story))
+    available_truth = truth_item_map(truth_index)
     used_keys: list[str] = []
     for beat in raw["beats"]:
         beat["narration_text"] = clean_text(beat["narration_text"])
+        beat["support_truth_ids"] = dedupe(list(beat.get("support_truth_ids") or []))
+        unknown_truth = sorted(set(beat["support_truth_ids"]) - set(available_truth))
+        if unknown_truth:
+            raise ValueError(f"Story writer used truth IDs outside {sid}: {unknown_truth}")
+        supported_record_keys = [
+            clean_text(available_truth[truth_id].get("record_key"))
+            for truth_id in beat["support_truth_ids"]
+            if truth_id in available_truth
+        ]
         beat["source_record_keys"] = dedupe(list(beat.get("source_record_keys") or []))
+        beat["source_record_keys"] = dedupe([*beat["source_record_keys"], *supported_record_keys])
         unknown = sorted(set(beat["source_record_keys"]) - allowed_keys)
         if unknown:
             raise ValueError(f"Story writer used source keys outside {sid}: {unknown}")
@@ -628,60 +1028,15 @@ def _validate_story_segment(
 def _validate_bookends(bookends: dict[str, Any], video_packet: dict[str, Any]) -> dict[str, Any]:
     raw = BookendOutput.model_validate(bookends).model_dump(mode="json")
     required_ids = [story_id(story) for story in _ordered_stories(video_packet)]
-    connector_ids = [clean_text(item.get("story_id")) for item in raw["story_connectors"]]
+    connector_ids = [clean_text(item.get("target_story_id")) for item in raw["story_connectors"]]
     if connector_ids != required_ids:
-        raise ValueError(f"Bookend writer connector IDs must match story order: {connector_ids} != {required_ids}")
+        raise ValueError(
+            "Bookend writer connector target IDs must match story order: "
+            f"{connector_ids} != {required_ids}"
+        )
     if not raw["intro_beats"] or not raw["closing_beats"]:
         raise ValueError("Bookend writer must return intro and closing beats")
     return raw
-
-
-def _story_gate_issues(
-    segment: dict[str, Any],
-    *,
-    story: dict[str, Any],
-) -> list[str]:
-    issues: list[str] = []
-    beats = list(segment.get("beats") or [])
-    if not beats:
-        issues.append("story_has_no_narration_beats")
-        return issues
-    allowed_keys = set(source_record_keys(story))
-    used_keys = {
-        clean_text(key)
-        for beat in beats
-        for key in list(beat.get("source_record_keys") or [])
-        if clean_text(key)
-    }
-    if allowed_keys and not used_keys:
-        issues.append("story_has_no_assigned_source_grounding")
-    unknown_keys = sorted(used_keys - allowed_keys)
-    if unknown_keys:
-        issues.append(f"story_uses_unassigned_source_keys:{unknown_keys}")
-    return issues
-
-
-def _bookend_gate_issues(
-    bookends: dict[str, Any],
-    video_packet: dict[str, Any],
-) -> list[str]:
-    issues: list[str] = []
-    if not list(bookends.get("intro_beats") or []):
-        issues.append("missing_intro_beats")
-    if not list(bookends.get("closing_beats") or []):
-        issues.append("missing_closing_beats")
-    required_ids = [story_id(story) for story in _ordered_stories(video_packet)]
-    connectors = list(bookends.get("story_connectors") or [])
-    connector_ids = [clean_text(item.get("story_id")) for item in connectors]
-    if connector_ids != required_ids:
-        issues.append(f"connector_story_order_mismatch:{connector_ids}!={required_ids}")
-    for connector in connectors:
-        sid = clean_text(connector.get("story_id"))
-        if not clean_text(connector.get("display_title")):
-            issues.append(f"missing_connector_display_title:{sid}")
-        if not clean_text(connector.get("transition_line")):
-            issues.append(f"missing_connector_transition:{sid}")
-    return issues
 
 
 def _ordered_stories(video_packet: dict[str, Any]) -> list[dict[str, Any]]:
@@ -740,6 +1095,25 @@ def _story_preview(story: dict[str, Any] | None) -> dict[str, Any]:
     return _director_story(story) if story else {}
 
 
+def _beat_support_context(segment: dict[str, Any], truth_index: dict[str, Any]) -> list[dict[str, Any]]:
+    available = truth_item_map(truth_index)
+    context: list[dict[str, Any]] = []
+    for beat_order, beat in enumerate(segment.get("beats", []), start=1):
+        support_items = [
+            available[truth_id]
+            for truth_id in beat.get("support_truth_ids", [])
+            if truth_id in available
+        ]
+        context.append(
+            {
+                "beat_id": f"beat_{beat_order:02d}",
+                "narration_text": clean_text(beat.get("narration_text")),
+                "support_items": support_items,
+            }
+        )
+    return context
+
+
 def _segments_for_bookends(video_packet: dict[str, Any], segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_id = {clean_text(item.get("story_id")): item for item in segments}
     output: list[dict[str, Any]] = []
@@ -755,10 +1129,31 @@ def _segments_for_bookends(video_packet: dict[str, Any], segments: list[dict[str
                 "beat_summaries": [
                     {
                         "beat_type": beat.get("beat_type", ""),
-                        "narration_preview": clean_text(beat.get("narration_text", ""))[:240],
+                        "beat_function": beat.get("beat_function", ""),
+                        "creative_device": beat.get("creative_device", "none"),
+                        "narration_text": clean_text(beat.get("narration_text", "")),
                     }
                     for beat in segment.get("beats", [])
                 ],
             }
         )
     return output
+
+
+def _connector_targets(video_packet: dict[str, Any]) -> list[dict[str, Any]]:
+    targets: list[dict[str, Any]] = []
+    previous_story: dict[str, Any] | None = None
+    for order, story in enumerate(_ordered_stories(video_packet), start=1):
+        identity = story.get("story_identity") if isinstance(story.get("story_identity"), dict) else {}
+        targets.append(
+            {
+                "connector_order": order,
+                "target_story_id": story_id(story),
+                "target_story_title": story_title(story),
+                "target_primary_entity": clean_text(identity.get("primary_entity")),
+                "previous_story_id": story_id(previous_story) if previous_story else "",
+                "previous_story_title": story_title(previous_story) if previous_story else "episode_intro",
+            }
+        )
+        previous_story = story
+    return targets

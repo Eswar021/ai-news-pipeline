@@ -42,13 +42,13 @@ export const EcosystemMapScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec })
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "How the ecosystem connects";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const nodes = objectList<NodeItem>(payload.nodes).slice(0, 6);
   const edges = objectList<EdgeItem>(payload.edges).slice(0, 8);
-  const focus = textValue(payload.focus_entity) || nodes[0]?.label || "AI";
+  const focus = textValue(payload.focus_entity);
   const eyebrow = sceneEyebrow(payload, "ECOSYSTEM MAP");
   const p = spring({ fps, frame, config: { damping: 18, stiffness: 105, mass: 0.72 } });
-  const displayNodes = nodes.length ? nodes : [{ id: "node_1", label: focus, role: "focus" }];
+  const displayNodes = nodes;
   const positions = positionsFor(displayNodes.length);
 
   return (
@@ -88,7 +88,7 @@ export const EcosystemMapScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec })
           const width = isFocus ? 420 : 340;
           const height = isFocus ? 148 : 126;
           const role = shortDisplayText(textValue(node.role), 22);
-          const label = shortDisplayText(textValue(node.label) || "AI", isFocus ? 34 : 28);
+          const label = shortDisplayText(textValue(node.label), isFocus ? 34 : 28);
           return (
             <g key={`${node.id}-${index}`} opacity={opacity} transform={`translate(${pos.x}, ${pos.y}) scale(${interpolate(p, [0, 1], [0.94, 1])})`}>
               <rect x={-width / 2} y={-height / 2} width={width} height={height} rx={38} fill={isFocus ? `${palette.cyan}30` : "rgba(255,255,255,0.11)"} stroke={isFocus ? palette.cyan : "rgba(255,255,255,0.26)"} strokeWidth={isFocus ? 5 : 3} />

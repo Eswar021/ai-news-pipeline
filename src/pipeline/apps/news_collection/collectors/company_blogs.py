@@ -26,28 +26,12 @@ GENERIC_TITLES = {
     "blog",
     "articles",
 }
-LISTING_PATH_PARTS = (
-    "/category/",
-    "/categories/",
-    "/tag/",
-    "/tags/",
-    "/page/",
-    "/topic/",
-)
-LISTING_EXACT_PATHS = {
-    "/blog",
-    "/en/blog",
-    "/news",
-    "/en/news",
-}
-FULL_ARTICLE_CONTENT_SOURCES = {"article_body", "markdown_article_body"}
-
-
 def collect(cfg: dict) -> dict:
     timeout = int(cfg.get("request_timeout_seconds", 20))
     max_items_per_source = int(cfg.get("runtime", {}).get("max_items_per_source", 4))
 
     all_records: list[dict] = []
+    candidate_ledger: list[dict] = []
     source_summaries: dict[str, dict] = {}
 
     for source in cfg.get("sources", []):
@@ -77,11 +61,6 @@ def collect(cfg: dict) -> dict:
         source_records: list[dict] = []
         for entry in entries:
             fetched_count += 1
-            if _is_listing_entry(entry):
-                filtered_out_count += 1
-                notes.append(f"Filtered listing/category entry: {entry['title']} ({entry['url']})")
-                continue
-
             article_body = ""
             article_html = ""
             resolved_title = entry["title"]
@@ -102,14 +81,9 @@ def collect(cfg: dict) -> dict:
             entry_content = clean_text(entry.get("content", ""))
             content = article_body or entry_content or clean_text(entry.get("summary", ""))
             content_source = "article_body" if article_body else entry.get("content_source", "entry_summary")
-            integrity = _content_integrity(resolved_title, content, content_source)
             source_relationship = _source_relationship(source["id"], entry["url"])
             if entry.get("fetch_note"):
                 notes.append(entry["fetch_note"])
-            if integrity["status"] != "ok":
-                notes.append(
-                    f"Content integrity {integrity['status']}: {resolved_title} ({entry['url']})"
-                )
             extra_fields = {
                 "collector": "company_blogs",
                 "source_name": source["name"],
@@ -117,10 +91,6 @@ def collect(cfg: dict) -> dict:
                 "summary": clean_text(entry.get("summary", "")),
                 "mode": source.get("mode", "rss"),
                 "content_source": content_source,
-                "content_integrity_status": integrity["status"],
-                "content_integrity_reason": integrity["reason"],
-                "content_title_overlap": integrity["title_overlap"],
-                "content_title_coverage": integrity["title_coverage"],
                 **source_relationship,
             }
             if entry.get("article_markdown_url"):
@@ -153,6 +123,7 @@ def collect(cfg: dict) -> dict:
 
     return {
         "records": all_records,
+        "candidate_ledger": candidate_ledger,
         "summary": {
             "collector": "company_blogs",
             "status": "partial" if any(item["status"] != "ok" for item in source_summaries.values()) else "ok",
@@ -212,106 +183,6 @@ def _trim_openai_article_text(text: str) -> str:
             cleaned = cleaned[:index]
             break
     return cleaned
-
-
-def _content_integrity(title: str, content: str, content_source: str) -> dict:
-    if content_source not in FULL_ARTICLE_CONTENT_SOURCES:
-        return {
-            "status": "summary_only",
-            "reason": "article_body_missing",
-            "title_overlap": 0,
-            "title_coverage": 0.0,
-        }
-
-    cleaned_content = clean_text(content)
-    minimum_body_length = 300 if content_source == "markdown_article_body" else 700
-    if len(cleaned_content) < minimum_body_length:
-        status = "wrong_article" if _lead_title_mismatch(title, cleaned_content) else "too_short"
-        return {
-            "status": status,
-            "reason": status,
-            **_title_overlap_stats(title, cleaned_content),
-        }
-
-    if _lead_title_mismatch(title, cleaned_content):
-        return {
-            "status": "title_mismatch",
-            "reason": "article_lead_title_mismatch",
-            **_title_overlap_stats(title, cleaned_content),
-        }
-
-    return {
-        "status": "ok",
-        "reason": "",
-        **_title_overlap_stats(title, cleaned_content),
-    }
-
-
-def _lead_title_mismatch(title: str, content: str) -> bool:
-    title_tokens = _important_title_tokens(title)
-    if len(title_tokens) < 3:
-        return False
-
-    lead = clean_text(content)[:120]
-    if clean_text(title).lower() in clean_text(content).lower()[:500]:
-        return False
-
-    lead_tokens = _important_title_tokens(lead)
-    overlap = title_tokens & lead_tokens
-    coverage = len(overlap) / len(title_tokens)
-    return len(overlap) <= 1 or coverage < 0.22
-
-
-def _title_overlap_stats(title: str, content: str) -> dict:
-    title_tokens = _important_title_tokens(title)
-    lead_tokens = _important_title_tokens(clean_text(content)[:220])
-    overlap = title_tokens & lead_tokens
-    coverage = len(overlap) / len(title_tokens) if title_tokens else 0.0
-    return {
-        "title_overlap": len(overlap),
-        "title_coverage": round(coverage, 3),
-    }
-
-
-def _important_title_tokens(text: str) -> set[str]:
-    stopwords = {
-        "a",
-        "an",
-        "and",
-        "at",
-        "by",
-        "for",
-        "from",
-        "in",
-        "is",
-        "of",
-        "on",
-        "the",
-        "to",
-        "with",
-        "your",
-    }
-    tokens = set()
-    for token in re.findall(r"[a-z0-9]+", clean_text(text).lower()):
-        if len(token) < 3 and token != "ai":
-            continue
-        if token in stopwords:
-            continue
-        tokens.add(token)
-    return tokens
-
-
-def _is_listing_entry(entry: dict) -> bool:
-    title = clean_text(entry.get("title", "")).lower()
-    url = clean_text(entry.get("url", ""))
-    path = urlparse(url).path.lower()
-    if path.rstrip("/") in LISTING_EXACT_PATHS:
-        return True
-    if title in GENERIC_TITLES:
-        return True
-    if title.startswith("page ") and len(title.split()) <= 2:
-        return True
-    return any(part in path for part in LISTING_PATH_PARTS)
 
 
 def _resolve_article_title(entry_title: str, article_html: str, source_id: str) -> str:

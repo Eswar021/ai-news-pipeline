@@ -12,8 +12,8 @@ const defaultSceneSpec: VisualSceneSpec = {
     scene_id: "scene_preview",
     render_kind: "kinetic_type_scene",
     payload: {
-      phrases: ["AI NEWS SHIFT"],
-      emphasis_words: ["AI"],
+      phrases: ["Preview scene"],
+      emphasis_words: ["Preview"],
       animation_style: "typewriter",
       background_motif: "newsroom_grid"
     },

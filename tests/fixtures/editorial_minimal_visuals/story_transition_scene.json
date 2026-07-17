@@ -1,0 +1,32 @@
+{
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "duration_seconds": 3,
+  "codec": "h264",
+  "crf": 22,
+  "x264_preset": "veryfast",
+  "visual_style": {
+    "style_id": "editorial_minimal",
+    "background_color": "#f4efe6",
+    "text_color": "#171611",
+    "accent_color": "#bd4e2f",
+    "muted_color": "#6f6a61"
+  },
+  "scene": {
+    "scene_id": "story_transition_preview",
+    "render_kind": "story_transition_scene",
+    "script_excerpt": "Next, the model race is moving onto the device.",
+    "visual_intent": "Create a clear story boundary.",
+    "payload": {
+      "story_number": "3",
+      "eyebrow": "STORY 3",
+      "headline": "The model race moves onto the device",
+      "subtitle": "Smaller models are changing where AI can run.",
+      "accent_words": ["device"],
+      "motion_style": "editorial_wipe",
+      "voice_behavior": "continue"
+    },
+    "resolved_asset": {}
+  }
+}

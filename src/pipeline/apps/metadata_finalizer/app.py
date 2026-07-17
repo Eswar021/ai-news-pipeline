@@ -222,7 +222,20 @@ def _chapter_title(section: dict[str, Any]) -> str:
         return "Intro"
     if section_type == "closing":
         return "Closing"
-    return clean_text(section.get("chapter_title") or section.get("story_title") or section.get("section_id"))[:64]
+    title = clean_text(
+        section.get("chapter_title")
+        or section.get("story_title")
+        or section.get("section_id")
+    )
+    if len(title) <= 64:
+        return title
+    words: list[str] = []
+    for word in title.split():
+        candidate = " ".join([*words, word])
+        if len(candidate) > 63:
+            break
+        words.append(word)
+    return f"{' '.join(words)}…" if words else title
 
 
 def _chapter_errors(

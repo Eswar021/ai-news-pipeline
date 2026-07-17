@@ -28,19 +28,15 @@ const branchesFromPayload = (value: unknown): Branch[] => {
   if (items.length) {
     return items.slice(0, 4).map((item) => ({ label: item }));
   }
-  return [
-    { label: "Route to model", outcome: "fast answer" },
-    { label: "Call a tool", outcome: "grounded action" },
-    { label: "Ask for approval", outcome: "safe handoff" },
-  ];
+  return [];
 };
 
 export const DecisionTreeScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "The decision path matters";
-  const rootLabel = textValue(payload.root_label) || "Incoming task";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
+  const rootLabel = textValue(payload.root_label);
   const selectedPath = textValue(payload.selected_path_label);
   const branches = branchesFromPayload(payload.branches);
   const eyebrow = sceneEyebrow(payload, "DECISION TREE");
@@ -76,14 +72,13 @@ export const DecisionTreeScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec })
                 {shortDisplayText(rootLabel, 36)}
               </div>
             </foreignObject>
-            <text textAnchor="middle" y="60" fill={palette.cyan} fontSize="24" fontWeight="850">decision point</text>
           </g>
           {branches.map((branch, index) => {
             const pos = coords[index] || coords[0];
             const reveal = clamp01(interpolate(frame, [20 + index * 12, 40 + index * 12], [0, 1], { extrapolateRight: "clamp" }));
-            const isSelected = selectedPath ? branch.label === selectedPath || branch.outcome === selectedPath : index === 1;
+            const isSelected = branch.label === selectedPath || branch.outcome === selectedPath;
             const color = isSelected ? palette.green : index % 2 === 0 ? palette.cyan : palette.amber;
-            const label = shortDisplayText(branch.label || `Option ${index + 1}`, 30);
+            const label = shortDisplayText(branch.label || "", 30);
             const outcome = shortDisplayText(branch.outcome || "", 54);
             const risk = shortDisplayText(branch.risk || "", 42);
             return (

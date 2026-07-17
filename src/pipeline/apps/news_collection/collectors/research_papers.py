@@ -92,6 +92,7 @@ def collect(cfg: dict) -> dict:
 
     return {
         "records": records,
+        "candidate_ledger": [],
         "summary": {
             "collector": "research_papers",
             "status": "partial" if any(item["status"] != "ok" for item in category_summaries.values()) else "ok",

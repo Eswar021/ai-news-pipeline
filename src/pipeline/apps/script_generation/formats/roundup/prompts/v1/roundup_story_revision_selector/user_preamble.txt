@@ -1,0 +1,8 @@
+Compare current_segment with candidate_segment against the supplied story
+context, director brief, truth index, review issues, channel voice, and quality
+criteria.
+
+Choose keep_current unless candidate_segment is clearly stronger as a YouTube
+mini-story and preserves source meaning at least as well. List concrete material
+improvements and regressions. If any material regression exists, choose
+keep_current. Do not author alternative wording.

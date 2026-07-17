@@ -1,0 +1,287 @@
+from __future__ import annotations
+
+from copy import deepcopy
+import json
+from pathlib import Path
+
+import pytest
+import yaml
+from pydantic import ValidationError
+
+from src.pipeline.handoffs.chatgpt_exporter.app import _prepare_artifact
+from src.pipeline.visuals.asset_resolver.app import NO_ASSET_RENDER_KINDS
+from src.pipeline.visuals.payload_validation import validate_scene_payload
+from src.pipeline.visuals.planner.app import (
+    _normalize_provider_scene_fields,
+    _story_visual_edit_output_model,
+    _story_visual_plan_output_model,
+    _visual_capabilities_for_prompt,
+)
+from src.pipeline.visuals.planner.contract import VisualPlannerConfig
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _planner_config() -> dict:
+    workbench = yaml.safe_load(
+        (PROJECT_ROOT / "src/pipeline/config/workbench.yaml").read_text(encoding="utf-8")
+    )
+    return deepcopy(workbench["profiles"]["daily_48h_all_sources"]["visuals"]["planner"])
+
+
+def test_production_profile_exposes_compact_editorial_vocabulary() -> None:
+    config = VisualPlannerConfig.model_validate(_planner_config()).model_dump(mode="json")
+
+    assert config["style"]["style_id"] == "editorial_minimal"
+    assert config["scene_policy"]["allowed_render_kinds"] == [
+        "source_article_scene",
+        "context_image_scene",
+        "broll_video_scene",
+        "logo_reveal_scene",
+        "editorial_text_scene",
+        "simple_explainer_scene",
+        "story_transition_scene",
+    ]
+
+
+def test_story_planner_prompt_hides_system_managed_transition() -> None:
+    config = VisualPlannerConfig.model_validate(_planner_config()).model_dump(mode="json")
+    capabilities = _visual_capabilities_for_prompt(config, include_system_managed=False)
+
+    assert "story_transition_scene" not in capabilities
+    assert set(capabilities) == {
+        "source_article_scene",
+        "context_image_scene",
+        "broll_video_scene",
+        "logo_reveal_scene",
+        "editorial_text_scene",
+        "simple_explainer_scene",
+    }
+    explainer_contract = capabilities["simple_explainer_scene"][
+        "payload_field_contract"
+    ]
+    assert "2-4 objects" in explainer_contract["required"]["items"]
+    assert "example" not in explainer_contract
+    assert "asset_source_image_example" not in json.dumps(capabilities)
+    assert (
+        "required concise explanation"
+        in capabilities["simple_explainer_scene"]["common_scene_field_contract"][
+            "evidence_text"
+        ]
+    )
+
+
+def test_story_provider_schema_exposes_only_active_user_plannable_kinds() -> None:
+    output_model = _story_visual_plan_output_model(
+        [
+            "source_article_scene",
+            "editorial_text_scene",
+            "simple_explainer_scene",
+            "story_transition_scene",
+        ]
+    )
+    assert "anchor_asset_id" not in output_model.model_fields
+    assert "anchor_scene_order" not in output_model.model_fields
+    base_scene = {
+        "order": 1,
+        "start_unit_order": 2,
+        "end_unit_order": 2,
+        "script_excerpt": "A canonical script beat.",
+        "visual_intent": "Explain the beat.",
+        "evidence_record_keys": [],
+        "evidence_truth_ids": [],
+        "evidence_text": "A canonical script beat.",
+        "grounding_basis": "script_beat",
+        "payload_json": json.dumps({"headline": "A clear idea"}),
+        "reason": "Useful visual support.",
+    }
+
+    accepted = output_model.model_validate(
+        {
+            "story_id": "story_test",
+            "visual_strategy": "Use clean editorial visuals.",
+            "key_entities": [],
+            "scene_timeline": [
+                {**base_scene, "render_kind": "editorial_text_scene"}
+            ],
+            "warnings": [],
+        }
+    )
+    assert accepted.scene_timeline[0].render_kind == "editorial_text_scene"
+
+    with pytest.raises(ValidationError):
+        output_model.model_validate(
+            {
+                "story_id": "story_test",
+                "visual_strategy": "Use clean editorial visuals.",
+                "key_entities": [],
+                "scene_timeline": [
+                    {**base_scene, "render_kind": "kinetic_type_scene"}
+                ],
+                "warnings": [],
+            }
+        )
+
+
+def test_visual_editor_uses_the_same_nested_plan_contract_and_rejects_system_transitions() -> None:
+    story_plan_model = _story_visual_plan_output_model(
+        [
+            "source_article_scene",
+            "editorial_text_scene",
+            "story_transition_scene",
+        ]
+    )
+    editor_model = _story_visual_edit_output_model(story_plan_model)
+    scene = {
+        "order": 1,
+        "start_unit_order": 2,
+        "end_unit_order": 2,
+        "render_kind": "editorial_text_scene",
+        "script_excerpt": "The active narration beat.",
+        "visual_intent": "Emphasize one clear implication.",
+        "evidence_record_keys": [],
+        "evidence_truth_ids": [],
+        "evidence_text": "The active narration beat.",
+        "grounding_basis": "script_beat",
+        "payload_json": json.dumps({"headline": "One clear implication"}),
+        "reason": "The current plan used unrelated media.",
+    }
+    accepted = editor_model.model_validate(
+        {
+            "revision_required": True,
+            "diagnosis": ["The current visual does not match the active narration."],
+            "revised_plan": {
+                "story_id": "story_test",
+                "visual_strategy": "Use one grounded editorial treatment.",
+                "key_entities": [],
+                "scene_timeline": [scene],
+                "warnings": [],
+            },
+        }
+    )
+    assert accepted.revised_plan.scene_timeline[0].render_kind == "editorial_text_scene"
+
+    with pytest.raises(ValidationError):
+        editor_model.model_validate(
+            {
+                "revision_required": True,
+                "diagnosis": ["Add another title transition."],
+                "revised_plan": {
+                    "story_id": "story_test",
+                    "visual_strategy": "Duplicate the system transition.",
+                    "key_entities": [],
+                    "scene_timeline": [
+                        {**scene, "render_kind": "story_transition_scene"}
+                    ],
+                    "warnings": [],
+                },
+            }
+        )
+
+
+def test_provider_scene_formatting_is_canonicalized_without_semantic_fallback() -> None:
+    scene, repairs = _normalize_provider_scene_fields(
+        {
+            "render_kind": "simple_explainer_scene",
+            "start_unit_order": 4,
+            "end_unit_order": 4,
+            "grounding_basis": "script_beat",
+            "evidence_text": "",
+            "payload_json": json.dumps(
+                {
+                    "headline": "Before and after",
+                    "items": [
+                        {"label": "Before", "value": "Manual"},
+                        {"label": "After", "detail": "Assisted"},
+                    ],
+                    "orientation": "horizontal",
+                    "motion_style": "sequential_focus",
+                }
+            ),
+        },
+        section={
+            "script_units": [
+                {
+                    "order": 4,
+                    "text": "The workflow moves from manual review to assisted review.",
+                }
+            ]
+        },
+    )
+
+    payload = json.loads(scene["payload_json"])
+    assert scene["evidence_text"] == (
+        "The workflow moves from manual review to assisted review."
+    )
+    assert payload["items"][0]["detail"] == "Manual"
+    assert repairs == [
+        "mapped explainer item value to visible detail",
+        "bound empty evidence_text to exact active script unit",
+    ]
+
+
+def test_one_item_explainer_becomes_lossless_editorial_emphasis() -> None:
+    scene, repairs = _normalize_provider_scene_fields(
+        {
+            "render_kind": "simple_explainer_scene",
+            "start_unit_order": 8,
+            "end_unit_order": 8,
+            "grounding_basis": "script_beat",
+            "evidence_text": "A reported total of 570 vulnerabilities.",
+            "payload_json": json.dumps(
+                {
+                    "headline": "570 vulnerabilities",
+                    "items": [{"label": "Reported total", "detail": "570"}],
+                    "orientation": "horizontal",
+                    "motion_style": "sequential_focus",
+                }
+            ),
+        },
+        section={"script_units": []},
+        allowed_render_kinds={"simple_explainer_scene", "editorial_text_scene"},
+    )
+
+    payload = json.loads(scene["payload_json"])
+    assert scene["render_kind"] == "editorial_text_scene"
+    assert payload["headline"] == "570 vulnerabilities"
+    assert payload["supporting_text"] == "570"
+    assert repairs == [
+        "converted one-item explainer to lossless editorial emphasis"
+    ]
+
+
+def test_chatgpt_handoff_hides_system_managed_transition() -> None:
+    config = VisualPlannerConfig.model_validate(_planner_config()).model_dump(mode="json")
+    artifact = {
+        "visual_context": {
+            "scene_policy": deepcopy(config["scene_policy"]),
+            "visual_capabilities": deepcopy(config["visual_capabilities"]),
+        },
+        "asset_catalog": {"assets": [{"asset_id": "asset_source"}]},
+    }
+
+    prepared = _prepare_artifact("visual_scene_plan", artifact)
+
+    assert "story_transition_scene" not in prepared["visual_context"]["scene_policy"][
+        "allowed_render_kinds"
+    ]
+    assert prepared["visual_context"]["system_managed_render_kinds"] == [
+        "story_transition_scene"
+    ]
+
+
+def test_editorial_code_scenes_require_no_external_asset() -> None:
+    assert {
+        "editorial_text_scene",
+        "simple_explainer_scene",
+        "story_transition_scene",
+    } <= NO_ASSET_RENDER_KINDS
+
+
+def test_editorial_scene_payloads_are_structurally_renderable() -> None:
+    fixture_dir = PROJECT_ROOT / "tests/fixtures/editorial_minimal_visuals"
+    for path in sorted(fixture_dir.glob("*.json")):
+        spec = yaml.safe_load(path.read_text(encoding="utf-8"))
+        scene = spec["scene"]
+        assert validate_scene_payload(scene["render_kind"], scene["payload"]) == []

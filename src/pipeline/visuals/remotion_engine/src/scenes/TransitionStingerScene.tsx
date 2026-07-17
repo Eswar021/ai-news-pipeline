@@ -2,14 +2,14 @@ import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { MotionBackground } from "./Background";
 import { VisualSceneSpec } from "./types";
-import { clamp01, font, palette, sceneEyebrow, textValue } from "./style";
+import { clamp01, font, palette, readableBodySize, readableTitleSize, sceneEyebrow, textValue } from "./style";
 
 export const TransitionStingerScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const label = textValue(payload.transition_label) || textValue(payload.headline) || "NEXT SIGNAL";
-  const subtitle = textValue(payload.subtitle) || "what changes next";
+  const label = textValue(payload.transition_label) || textValue(payload.headline) || spec.scene.script_excerpt || "";
+  const subtitle = textValue(payload.subtitle);
   const motif = textValue(payload.background_motif) || "abstract_ai";
   const motionStyle = textValue(payload.motion_style) || "signal_wipe";
   const eyebrow = sceneEyebrow(payload, "SIGNAL SHIFT");
@@ -70,7 +70,7 @@ export const TransitionStingerScene: React.FC<{ spec: VisualSceneSpec }> = ({ sp
           position: "absolute",
           left: 120,
           right: 120,
-          top: 322,
+          top: 284,
           textAlign: "center",
           opacity: 1 - exit,
           transform: `translateY(${interpolate(entrance, [0, 1], [46, 0])}px) scale(${interpolate(entrance, [0, 1], [0.94, 1])})`,
@@ -81,10 +81,10 @@ export const TransitionStingerScene: React.FC<{ spec: VisualSceneSpec }> = ({ sp
             {eyebrow}
           </div>
         )}
-        <div style={{ marginTop: eyebrow ? 24 : 0, fontSize: 96, lineHeight: 0.88, fontWeight: 950, letterSpacing: "-0.07em", textTransform: "uppercase" }}>
+        <div style={{ margin: `${eyebrow ? 24 : 0}px auto 0`, maxWidth: 1500, fontSize: readableTitleSize(label, 102), lineHeight: 0.92, fontWeight: 950, letterSpacing: "-0.06em" }}>
           {label}
         </div>
-        <div style={{ margin: "28px auto 0", width: 720, maxWidth: "74%", color: "#dce8f6", fontSize: 31, lineHeight: 1.12, fontWeight: 760 }}>
+        <div style={{ margin: "30px auto 0", width: 1120, maxWidth: "78%", color: "#dce8f6", fontSize: readableBodySize(subtitle, 38), lineHeight: 1.12, fontWeight: 760 }}>
           {subtitle}
         </div>
       </div>

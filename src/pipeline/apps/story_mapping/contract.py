@@ -5,11 +5,17 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .config import (
-    DEFAULT_MAX_RECORDS_PER_STORY_LABEL,
-    DEFAULT_SEMANTIC_MERGE_GROUPS,
-    DEFAULT_SEMANTIC_PRIMARY_THRESHOLD,
-    DEFAULT_SEMANTIC_SUPPORTED_THRESHOLD,
-    DEFAULT_SEMANTIC_TITLE_ANCHOR_THRESHOLD,
+    DEFAULT_CANDIDATE_NEIGHBORS_PER_RECORD,
+    DEFAULT_CANDIDATE_SIMILARITY_FLOOR,
+    DEFAULT_FINGERPRINT_CHUNK_CHARS,
+    DEFAULT_MAX_FINGERPRINT_CHUNKS_PER_RECORD,
+    DEFAULT_MAX_STORY_LABEL_CONTEXT_CHARS,
+    DEFAULT_MAX_CANDIDATE_PAIRS,
+    DEFAULT_PAIR_ADJUDICATION_BATCH_SIZE,
+    DEFAULT_PAIR_ADJUDICATION_MAX_ATTEMPTS,
+    DEFAULT_PAIR_ADJUDICATION_MAX_BATCH_CHARS,
+    DEFAULT_PAIR_ADJUDICATION_MAX_SINGLE_PAIR_CHARS,
+    DEFAULT_PAIR_ADJUDICATION_WORKER_COUNT,
     DEFAULT_STORY_LABEL_PROMPT_VERSION,
     DEFAULT_STORY_LABEL_TEMPERATURE,
     DEFAULT_STORY_LABEL_WORKER_COUNT,
@@ -70,20 +76,50 @@ class ClusteringConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     max_pair_hours: float | None = None
-    semantic_primary_threshold: float = DEFAULT_SEMANTIC_PRIMARY_THRESHOLD
-    semantic_supported_threshold: float = DEFAULT_SEMANTIC_SUPPORTED_THRESHOLD
-    semantic_title_anchor_threshold: float = DEFAULT_SEMANTIC_TITLE_ANCHOR_THRESHOLD
-    semantic_merge_groups: list[str] = Field(default_factory=lambda: list(DEFAULT_SEMANTIC_MERGE_GROUPS))
-
-    @field_validator(
-        "semantic_primary_threshold",
-        "semantic_supported_threshold",
-        "semantic_title_anchor_threshold",
+    candidate_neighbors_per_record: int = DEFAULT_CANDIDATE_NEIGHBORS_PER_RECORD
+    candidate_similarity_floor: float = DEFAULT_CANDIDATE_SIMILARITY_FLOOR
+    fingerprint_chunk_chars: int = DEFAULT_FINGERPRINT_CHUNK_CHARS
+    max_fingerprint_chunks_per_record: int = DEFAULT_MAX_FINGERPRINT_CHUNKS_PER_RECORD
+    max_candidate_pairs: int = DEFAULT_MAX_CANDIDATE_PAIRS
+    pair_adjudication: "PairAdjudicationConfig" = Field(
+        default_factory=lambda: PairAdjudicationConfig()
     )
+
+    @field_validator("candidate_neighbors_per_record")
     @classmethod
-    def threshold_must_be_probability(cls, value: float) -> float:
-        if value < 0 or value > 1:
-            raise ValueError("semantic thresholds must be between 0 and 1")
+    def neighbor_count_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 40:
+            raise ValueError("config.clustering.candidate_neighbors_per_record must be between 1 and 40")
+        return value
+
+    @field_validator("candidate_similarity_floor")
+    @classmethod
+    def similarity_floor_must_be_valid(cls, value: float) -> float:
+        if value < -1 or value > 1:
+            raise ValueError("config.clustering.candidate_similarity_floor must be between -1 and 1")
+        return value
+
+    @field_validator("fingerprint_chunk_chars")
+    @classmethod
+    def fingerprint_chunk_size_must_be_bounded(cls, value: int) -> int:
+        if value < 500 or value > 8_000:
+            raise ValueError("config.clustering.fingerprint_chunk_chars must be between 500 and 8000")
+        return value
+
+    @field_validator("max_fingerprint_chunks_per_record")
+    @classmethod
+    def fingerprint_chunk_limit_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 512:
+            raise ValueError(
+                "config.clustering.max_fingerprint_chunks_per_record must be between 1 and 512"
+            )
+        return value
+
+    @field_validator("max_candidate_pairs")
+    @classmethod
+    def max_candidate_pairs_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 5000:
+            raise ValueError("config.clustering.max_candidate_pairs must be between 1 and 5000")
         return value
 
     @field_validator("max_pair_hours")
@@ -93,15 +129,72 @@ class ClusteringConfig(BaseModel):
             raise ValueError("config.clustering.max_pair_hours must be positive when provided")
         return value
 
-    @field_validator("semantic_merge_groups")
+
+class PairAdjudicationConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool = False
+    provider: Literal["openai", "gemini", "lmstudio"] = "openai"
+    model: str = "gpt-4o-mini"
+    base_url: str | None = None
+    prompt_version: str = "v1"
+    temperature: float = 0.0
+    batch_size: int = DEFAULT_PAIR_ADJUDICATION_BATCH_SIZE
+    worker_count: int = DEFAULT_PAIR_ADJUDICATION_WORKER_COUNT
+    max_attempts: int = DEFAULT_PAIR_ADJUDICATION_MAX_ATTEMPTS
+    max_batch_chars: int = DEFAULT_PAIR_ADJUDICATION_MAX_BATCH_CHARS
+    max_single_pair_chars: int = DEFAULT_PAIR_ADJUDICATION_MAX_SINGLE_PAIR_CHARS
+
+    @field_validator("model", "prompt_version")
     @classmethod
-    def merge_groups_must_be_non_empty_strings(cls, value: list[str]) -> list[str]:
-        if not value:
-            raise ValueError("config.clustering.semantic_merge_groups must not be empty")
-        for group in value:
-            if not isinstance(group, str) or not group.strip():
-                raise ValueError("config.clustering.semantic_merge_groups must contain non-empty strings")
+    def text_fields_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("pair_adjudication model and prompt_version must not be empty")
         return value
+
+    @field_validator("batch_size")
+    @classmethod
+    def batch_size_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 30:
+            raise ValueError("pair_adjudication.batch_size must be between 1 and 30")
+        return value
+
+    @field_validator("worker_count")
+    @classmethod
+    def worker_count_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 8:
+            raise ValueError("pair_adjudication.worker_count must be between 1 and 8")
+        return value
+
+    @field_validator("max_attempts")
+    @classmethod
+    def attempts_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 5:
+            raise ValueError("pair_adjudication.max_attempts must be between 1 and 5")
+        return value
+
+    @field_validator("max_batch_chars", "max_single_pair_chars")
+    @classmethod
+    def context_char_limits_must_be_bounded(cls, value: int) -> int:
+        if value < 10_000 or value > 500_000:
+            raise ValueError("pair_adjudication context limits must be between 10000 and 500000")
+        return value
+
+    @model_validator(mode="after")
+    def single_pair_limit_must_cover_batch_target(self):
+        if self.max_single_pair_chars < self.max_batch_chars:
+            raise ValueError("pair_adjudication.max_single_pair_chars must be >= max_batch_chars")
+        return self
+
+    @field_validator("temperature")
+    @classmethod
+    def temperature_must_be_valid(cls, value: float) -> float:
+        if value < 0 or value > 2:
+            raise ValueError("pair_adjudication.temperature must be between 0 and 2")
+        return value
+
+
+ClusteringConfig.model_rebuild()
 
 
 class StoryLabelConfig(BaseModel):
@@ -113,7 +206,7 @@ class StoryLabelConfig(BaseModel):
     prompt_version: str = DEFAULT_STORY_LABEL_PROMPT_VERSION
     worker_count: int = DEFAULT_STORY_LABEL_WORKER_COUNT
     temperature: float = DEFAULT_STORY_LABEL_TEMPERATURE
-    max_records_per_story: int = DEFAULT_MAX_RECORDS_PER_STORY_LABEL
+    max_story_context_chars: int = DEFAULT_MAX_STORY_LABEL_CONTEXT_CHARS
 
     @field_validator("model", "prompt_version")
     @classmethod
@@ -122,11 +215,20 @@ class StoryLabelConfig(BaseModel):
             raise ValueError("story_label model and prompt_version must not be empty")
         return value
 
-    @field_validator("worker_count", "max_records_per_story")
+    @field_validator("worker_count")
     @classmethod
     def positive_int_fields(cls, value: int) -> int:
         if value < 1:
-            raise ValueError("story_label worker_count and max_records_per_story must be at least 1")
+            raise ValueError("story_label.worker_count must be at least 1")
+        return value
+
+    @field_validator("max_story_context_chars")
+    @classmethod
+    def story_context_limit_must_be_bounded(cls, value: int) -> int:
+        if value < 10_000 or value > 2_000_000:
+            raise ValueError(
+                "story_label.max_story_context_chars must be between 10000 and 2000000"
+            )
         return value
 
     @field_validator("temperature")
@@ -137,6 +239,30 @@ class StoryLabelConfig(BaseModel):
         return value
 
 
+class RankingConfig(BaseModel):
+    """Objective measurements only; editorial ordering belongs to editorial_selection."""
+
+    model_config = ConfigDict(extra="allow")
+
+    mode: Literal["telemetry_only"] = "telemetry_only"
+
+
+class TriagePolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    required: bool = False
+    eligible_actions: list[Literal["advance", "reserve"]] = Field(
+        default_factory=lambda: ["advance", "reserve"]
+    )
+
+    @field_validator("eligible_actions")
+    @classmethod
+    def actions_must_not_be_empty(cls, value: list[str]) -> list[str]:
+        actions = list(dict.fromkeys(value))
+        if not actions:
+            raise ValueError("config.triage_policy.eligible_actions must not be empty")
+        return actions
+
 class StoryMappingConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -144,6 +270,8 @@ class StoryMappingConfig(BaseModel):
     collection_window: CollectionWindow
     use_llm_story_labels: bool
     clustering: ClusteringConfig = Field(default_factory=ClusteringConfig)
+    ranking: RankingConfig = Field(default_factory=RankingConfig)
+    triage_policy: TriagePolicy = Field(default_factory=TriagePolicy)
     story_label: StoryLabelConfig | None = None
 
     @field_validator("embedding_model")
@@ -180,6 +308,28 @@ class EvidencePrepEnvelope(BaseModel):
 
 class StoryMappingInput(BaseModel):
     evidence_prep: EvidencePrepEnvelope
+    editorial_triage: "EditorialTriageEnvelope | None" = None
+
+
+class EditorialTriageData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    run_id: str | None = None
+    mode: str | None = None
+    decisions: list[dict[str, Any]] = Field(default_factory=list)
+    pools: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class EditorialTriageEnvelope(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str | None = None
+    data: EditorialTriageData
+    summary: dict[str, Any] = Field(default_factory=dict)
+    handoff: dict[str, Any] = Field(default_factory=dict)
+
+
+StoryMappingInput.model_rebuild()
 
 
 class StoryMappingRequest(BaseModel):
@@ -204,18 +354,30 @@ class StoryMappingSummary(BaseModel):
     single_record_story_count: int
     multi_record_story_count: int
     semantic_merge_count: int
-    dropped_singleton_count: int
+    semantic_candidate_pair_count: int = 0
+    adjudicated_pair_count: int = 0
+    unadjudicated_pair_count: int = 0
+    time_eligible_pair_count: int = 0
+    top_neighbor_pair_count: int = 0
+    triage_key_pair_count: int = 0
+    similarity_floor_pair_count: int = 0
+    candidate_covered_record_count: int = 0
+    truncated_candidate_pair_count: int = 0
+    transitive_merge_rejection_count: int = 0
+    pair_relationship_counts: dict[str, int] = Field(default_factory=dict)
     effective_max_pair_hours: float
+    ranking_authority: str
     priority_bucket_counts: dict[str, int]
     source_group_mix: dict[str, int]
     llm_runtime: dict[str, Any]
     top_story_quality_flags: dict[str, int]
     top_stories: list[dict[str, Any]]
+    triage: dict[str, Any] = Field(default_factory=dict)
 
 
 class StoryMappingHandoff(BaseModel):
     story_count: int
-    ready_for_video_packaging: bool
+    ready_for_editorial_selection: bool
 
 
 class StoryMappingResponse(BaseModel):
@@ -224,3 +386,4 @@ class StoryMappingResponse(BaseModel):
     summary: StoryMappingSummary
     handoff: StoryMappingHandoff
     llm_calls: list[dict[str, Any]] = Field(default_factory=list)
+    DEFAULT_CANDIDATE_NEIGHBORS_PER_RECORD,

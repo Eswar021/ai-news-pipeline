@@ -30,19 +30,13 @@ export const RankedListScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) =
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || "What matters most";
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
   const eyebrow = sceneEyebrow(payload, "RANKED");
   const kicker = textValue(payload.kicker_text) || textValue(payload.emphasis_label);
   const kickerPosition = textValue(payload.kicker_position) || "hidden";
   const showKicker = Boolean(kicker) && (payload.show_kicker === true || kickerPosition !== "hidden");
   const p = spring({ fps, frame, config: { damping: 17, stiffness: 118, mass: 0.72 } });
-  const items = itemsFromPayload(payload.items).length
-    ? itemsFromPayload(payload.items)
-    : [
-        { rank: 1, label: "Speed", value: "now", detail: "faster product cycles" },
-        { rank: 2, label: "Cost", value: "down", detail: "more teams can deploy" },
-        { rank: 3, label: "Control", value: "up", detail: "workflow ownership matters" },
-      ];
+  const items = itemsFromPayload(payload.items);
 
   return (
     <AbsoluteFill style={{ fontFamily: font.family, color: palette.text }}>
@@ -60,7 +54,7 @@ export const RankedListScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) =
             <div key={`${item.label}-${index}`} style={{ opacity: reveal, transform: `translateX(${interpolate(reveal, [0, 1], [56, 0])}px) scale(${interpolate(p, [0, 1], [0.985, 1])})`, display: "grid", gridTemplateColumns: "110px 1fr 240px", gap: 26, alignItems: "center", padding: "23px 28px", borderRadius: 34, background: index === 0 ? "rgba(255,207,112,0.13)" : "rgba(255,255,255,0.078)", border: `1px solid ${index === 0 ? "rgba(255,207,112,0.34)" : "rgba(255,255,255,0.14)"}`, boxShadow: "0 24px 90px rgba(0,0,0,0.26)" }}>
               <div style={{ width: 82, height: 82, borderRadius: 26, display: "flex", alignItems: "center", justifyContent: "center", background: accent, color: "#061016", fontSize: 42, fontWeight: 950, letterSpacing: "-0.06em" }}>{item.rank}</div>
               <div>
-                <div style={{ fontSize: 46, lineHeight: 0.95, fontWeight: 940, letterSpacing: "-0.055em" }}>{item.label || `Item ${index + 1}`}</div>
+                <div style={{ fontSize: 46, lineHeight: 0.95, fontWeight: 940, letterSpacing: "-0.055em" }}>{item.label}</div>
                 {item.detail && <div style={{ marginTop: 10, color: "#d5e3f3", fontSize: 26, lineHeight: 1.06, fontWeight: 730 }}>{item.detail}</div>}
               </div>
               {item.value && <div style={{ color: accent, textAlign: "right", fontSize: 50, lineHeight: 0.9, fontWeight: 950, letterSpacing: "-0.06em" }}>{item.value}</div>}
