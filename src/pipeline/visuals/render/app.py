@@ -23,12 +23,27 @@ from src.pipeline.contracts import (
 
 from ..common import clean_text, counter_dict, iso_now, safe_float
 from ..payload_validation import validate_scene_payload
-from .config import NEXT_MODULE, PACKAGE_TYPE, QUALITY_PRESETS, default_remotion_engine_dir
+from .config import (
+    NEXT_MODULE,
+    PACKAGE_TYPE,
+    QUALITY_PRESETS,
+    default_hyperframes_engine_dir,
+    default_remotion_engine_dir,
+)
 from .contract import VisualRenderRequest, VisualRenderResponse
 
 
 _RETRY_LOCK = Lock()
 _LOGGER = logging.getLogger("ai_content_creation.runtime.visual_render")
+_HYPERFRAMES_RENDER_KINDS = {
+    "source_article_scene",
+    "context_image_scene",
+    "broll_video_scene",
+    "logo_reveal_scene",
+    "editorial_text_scene",
+    "simple_explainer_scene",
+    "story_transition_scene",
+}
 
 
 def run(input_json: dict) -> dict:
@@ -64,17 +79,30 @@ def run(input_json: dict) -> dict:
     if request.config.scene_limit:
         render_scenes = render_scenes[: request.config.scene_limit]
     duration_cap = _max_scene_duration_cap(manifest, request)
-    engine_dir = Path(request.config.remotion_engine_dir or default_remotion_engine_dir())
+    if request.config.backend == "hyperframes":
+        engine_dir = Path(
+            request.config.hyperframes_engine_dir or default_hyperframes_engine_dir()
+        )
+    else:
+        engine_dir = Path(
+            request.config.remotion_engine_dir or default_remotion_engine_dir()
+        )
     _LOGGER.info(
-        "RENDER start scenes=%d mode=%s preset=%s workers=%d cache=%s",
+        "RENDER start scenes=%d backend=%s mode=%s preset=%s workers=%d cache=%s",
         len(render_scenes),
+        request.config.backend,
         request.config.render_mode,
         request.config.quality_preset,
         request.config.worker_count,
         request.config.reuse_cached_scenes,
     )
     render_started = monotonic()
-    rendered_scenes = _render_scenes(
+    renderer = (
+        _render_scenes_hyperframes
+        if request.config.backend == "hyperframes"
+        else _render_scenes
+    )
+    rendered_scenes = renderer(
         render_scenes=render_scenes,
         engine_dir=engine_dir,
         specs_dir=specs_dir,
@@ -274,6 +302,343 @@ def _render_scenes(
                     rendered_by_index[job["index"]] = result
 
     return [rendered_by_index[index] for index in range(len(render_scenes))]
+
+
+def _render_scenes_hyperframes(
+    *,
+    render_scenes: list[dict[str, Any]],
+    engine_dir: Path,
+    specs_dir: Path,
+    scenes_dir: Path,
+    request: VisualRenderRequest,
+    render_settings: dict[str, Any],
+    duration_cap: float | None,
+    visual_style: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Render isolated scene compositions through the pinned HyperFrames CLI."""
+
+    if not render_scenes:
+        return []
+    logs_dir = specs_dir.parent / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir = Path(request.config.cache_dir).resolve() if request.config.cache_dir else None
+    if cache_dir:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+    template_path = engine_dir / "index.template.html"
+    binary_path = engine_dir / "node_modules" / ".bin" / "hyperframes"
+    missing = [
+        str(path)
+        for path in (template_path, binary_path, engine_dir / "hyperframes.json")
+        if not path.exists()
+    ]
+    engine_error = ""
+    if missing:
+        engine_error = (
+            "HyperFrames engine is not installed or incomplete. Missing: "
+            + ", ".join(missing)
+            + f". Run `npm install` in {engine_dir}."
+        )
+
+    engine_fingerprint = _engine_fingerprint(engine_dir)
+    rendered_by_index: dict[int, dict[str, Any]] = {}
+    jobs: list[dict[str, Any]] = []
+    for index, scene in enumerate(render_scenes):
+        scene_id = clean_text(scene.get("scene_id", "scene_unknown"))
+        spec_path = specs_dir / f"{scene_id}.json"
+        output_path = scenes_dir / f"{scene_id}.mp4"
+        scene_duration = safe_float(scene.get("duration_seconds"), 0.0)
+        if duration_cap is not None and scene_duration > duration_cap + 0.01:
+            rendered_by_index[index] = _failed_scene(
+                scene,
+                spec_path,
+                output_path,
+                f"scene duration {scene_duration:.2f}s exceeds render cap {duration_cap:.2f}s",
+            )
+            continue
+        render_kind = clean_text(scene.get("render_kind"))
+        if render_kind not in _HYPERFRAMES_RENDER_KINDS:
+            rendered_by_index[index] = _failed_scene(
+                scene,
+                spec_path,
+                output_path,
+                f"HyperFrames backend does not support render_kind {render_kind!r}",
+            )
+            continue
+        if engine_error:
+            rendered_by_index[index] = _failed_scene(
+                scene,
+                spec_path,
+                output_path,
+                engine_error,
+            )
+            continue
+        try:
+            scene_for_spec = {**scene, "_visual_style": visual_style or {}}
+            spec = _scene_render_spec(scene_for_spec, request, render_settings)
+            spec_path.write_text(
+                json.dumps(spec, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            rendered_by_index[index] = _failed_scene(
+                scene,
+                spec_path,
+                output_path,
+                f"could not prepare scene render spec: {exc}",
+            )
+            continue
+
+        cache_key = _scene_cache_key(spec, engine_fingerprint)
+        cache_path = cache_dir / f"{cache_key}.mp4" if cache_dir else None
+        if (
+            request.config.reuse_cached_scenes
+            and cache_path is not None
+            and _is_valid_rendered_video(cache_path)
+        ):
+            _link_or_copy(cache_path, output_path)
+            rendered_by_index[index] = _rendered_scene(
+                scene,
+                spec_path,
+                output_path,
+                spec,
+                "Restored unchanged scene from the persistent render cache.",
+                attempt_count=0,
+                cache_status="hit",
+                cache_key=cache_key,
+                render_elapsed_seconds=0.0,
+            )
+            continue
+        jobs.append(
+            {
+                "index": index,
+                "scene": scene,
+                "spec": spec,
+                "spec_path": spec_path,
+                "output_path": output_path,
+                "cache_key": cache_key,
+                "cache_path": cache_path,
+            }
+        )
+
+    _LOGGER.info(
+        "RENDER prepared backend=hyperframes requested=%d pending=%d cache_hits=%d preparation_failures=%d",
+        len(render_scenes),
+        len(jobs),
+        sum(item.get("cache_status") == "hit" for item in rendered_by_index.values()),
+        sum(item.get("status") == "failed" for item in rendered_by_index.values()),
+    )
+    if jobs:
+        with TemporaryDirectory(prefix="pipeline-hyperframes-render-") as runtime_value:
+            runtime_root = Path(runtime_value)
+            worker_count = max(1, min(int(request.config.worker_count), len(jobs)))
+            frame_workers = _hyperframes_frame_workers(request)
+            _LOGGER.info(
+                "RENDER jobs start backend=hyperframes scenes=%d workers=%d frame_workers=%d",
+                len(jobs),
+                worker_count,
+                frame_workers,
+            )
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                futures = {
+                    executor.submit(
+                        _render_hyperframes_scene,
+                        job=job,
+                        engine_dir=engine_dir,
+                        runtime_root=runtime_root,
+                        logs_dir=logs_dir,
+                        request=request,
+                    ): job
+                    for job in jobs
+                }
+                completed_count = 0
+                for future in as_completed(futures):
+                    job = futures[future]
+                    try:
+                        result = future.result()
+                    except Exception as exc:
+                        result = _failed_scene(
+                            job["scene"],
+                            job["spec_path"],
+                            job["output_path"],
+                            f"HyperFrames render worker failed: {type(exc).__name__}: {exc}",
+                        )
+                    cache_path = job.get("cache_path")
+                    if result.get("status") == "rendered" and isinstance(cache_path, Path):
+                        _link_or_copy(job["output_path"], cache_path)
+                        result["cache_status"] = "stored"
+                        result["cache_key"] = job["cache_key"]
+                    rendered_by_index[job["index"]] = result
+                    completed_count += 1
+                    _LOGGER.info(
+                        "RENDER progress backend=hyperframes completed=%d/%d scene=%s status=%s",
+                        completed_count,
+                        len(jobs),
+                        clean_text(job["scene"].get("scene_id")),
+                        result.get("status", "unknown"),
+                    )
+
+    return [rendered_by_index[index] for index in range(len(render_scenes))]
+
+
+def _render_hyperframes_scene(
+    *,
+    job: dict[str, Any],
+    engine_dir: Path,
+    runtime_root: Path,
+    logs_dir: Path,
+    request: VisualRenderRequest,
+) -> dict[str, Any]:
+    scene = job["scene"]
+    spec = json.loads(json.dumps(job["spec"]))
+    scene_id = clean_text(scene.get("scene_id")) or "scene_unknown"
+    project_dir = runtime_root / _safe_filename(scene_id)
+    _write_hyperframes_project(
+        project_dir=project_dir,
+        engine_dir=engine_dir,
+        spec=spec,
+    )
+    output_path: Path = job["output_path"]
+    log_paths: list[str] = []
+    scene_started = monotonic()
+    last_error = "HyperFrames did not render the scene."
+    binary = engine_dir / "node_modules" / ".bin" / "hyperframes"
+
+    for attempt in range(1, int(request.config.max_render_attempts) + 1):
+        retry_context = _RETRY_LOCK if attempt > 1 else nullcontext()
+        with retry_context:
+            output_path.unlink(missing_ok=True)
+            command = [
+                str(binary),
+                "render",
+                str(project_dir),
+                "--output",
+                str(output_path),
+                "--fps",
+                str(spec["fps"]),
+                "--quality",
+                request.config.hyperframes_quality,
+                "--workers",
+                str(_hyperframes_frame_workers(request)),
+                "--no-best-effort",
+                "--quiet",
+            ]
+            if request.config.hyperframes_strict:
+                command.append("--strict")
+            if spec.get("crf") is not None:
+                command.extend(["--crf", str(spec["crf"])])
+            elif clean_text(spec.get("video_bitrate")):
+                command.extend(["--video-bitrate", clean_text(spec["video_bitrate"])])
+
+            completed: subprocess.CompletedProcess[str] | None = None
+            process_error = ""
+            try:
+                completed = subprocess.run(
+                    command,
+                    cwd=engine_dir,
+                    check=True,
+                    timeout=request.config.render_timeout_seconds,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as exc:
+                process_error = _process_error_text(exc)
+            except subprocess.TimeoutExpired as exc:
+                process_error = (
+                    f"HyperFrames render timeout after {exc.timeout} seconds\n"
+                    f"{_process_error_text(exc)}"
+                ).strip()
+            log_path = _write_attempt_log(
+                logs_dir=logs_dir,
+                scene_id=scene_id,
+                attempt=attempt,
+                command=command,
+                completed=completed,
+                error=process_error,
+                enabled=request.config.keep_render_logs,
+            )
+            if log_path:
+                log_paths.append(str(log_path))
+            if _is_valid_rendered_video(output_path):
+                warning = ""
+                if process_error:
+                    warning = (
+                        "HyperFrames reported an error but the output validated: "
+                        + clean_text(process_error[-500:])
+                    )
+                elif attempt > 1:
+                    warning = f"Rendered successfully on retry attempt {attempt}."
+                return _rendered_scene(
+                    scene,
+                    job["spec_path"],
+                    output_path,
+                    spec,
+                    warning,
+                    attempt_count=attempt,
+                    log_paths=log_paths,
+                    cache_status="miss",
+                    cache_key=clean_text(job.get("cache_key")),
+                    render_elapsed_seconds=round(monotonic() - scene_started, 2),
+                )
+            last_error = process_error or "HyperFrames completed but output video was not created or is invalid."
+
+    return _failed_scene(
+        scene,
+        job["spec_path"],
+        output_path,
+        last_error,
+        attempt_count=int(request.config.max_render_attempts),
+        log_paths=log_paths,
+    )
+
+
+def _write_hyperframes_project(
+    *,
+    project_dir: Path,
+    engine_dir: Path,
+    spec: dict[str, Any],
+) -> None:
+    project_dir.mkdir(parents=True, exist_ok=True)
+    assets_dir = project_dir / "assets"
+    assets_dir.mkdir(exist_ok=True)
+    node_modules = project_dir / "node_modules"
+    if not node_modules.exists():
+        node_modules.symlink_to(engine_dir / "node_modules", target_is_directory=True)
+    shutil.copy2(engine_dir / "hyperframes.json", project_dir / "hyperframes.json")
+
+    scene = spec.get("scene") if isinstance(spec.get("scene"), dict) else {}
+    asset = scene.get("resolved_asset") if isinstance(scene.get("resolved_asset"), dict) else {}
+    source_path_text = clean_text(asset.get("asset_path"))
+    if source_path_text:
+        source_path = Path(source_path_text)
+        if source_path.exists() and source_path.is_file():
+            filename = f"{_safe_filename(clean_text(scene.get('scene_id')) or 'scene')}{source_path.suffix}"
+            shutil.copy2(source_path, assets_dir / filename)
+            asset["asset_render_url"] = f"assets/{filename}"
+
+    serialized = json.dumps(spec, ensure_ascii=False, separators=(",", ":"))
+    serialized = serialized.replace("</script", "<\\/script").replace("<!--", "<\\!--")
+    template = (engine_dir / "index.template.html").read_text(encoding="utf-8")
+    html = (
+        template.replace("__WIDTH__", str(int(spec["width"])))
+        .replace("__HEIGHT__", str(int(spec["height"])))
+        .replace("__FPS__", str(int(spec["fps"])))
+        .replace("__DURATION__", f"{float(spec['duration_seconds']):.2f}")
+        .replace("__SCENE_SPEC_JSON__", serialized)
+    )
+    (project_dir / "index.html").write_text(html, encoding="utf-8")
+
+
+def _safe_filename(value: str) -> str:
+    return "".join(character if character.isalnum() or character in "_-" else "_" for character in value)
+
+
+def _hyperframes_frame_workers(request: VisualRenderRequest) -> int:
+    # Avoid nested process multiplication: scene-level concurrency is already
+    # active whenever more than one scene worker is configured.
+    if request.config.worker_count > 1:
+        return 1
+    return max(1, int(request.config.frame_concurrency))
 
 
 def _render_prepared_jobs(
@@ -858,6 +1223,7 @@ def _resolved_render_settings(request: VisualRenderRequest) -> dict[str, Any]:
         width = request.config.width
         height = request.config.height
     return {
+        "backend": request.config.backend,
         "render_mode": request.config.render_mode,
         "quality_preset": request.config.quality_preset,
         "width": int(width),
@@ -872,6 +1238,8 @@ def _resolved_render_settings(request: VisualRenderRequest) -> dict[str, Any]:
         "max_render_attempts": int(request.config.max_render_attempts),
         "bundle_strategy": "shared_once_per_run",
         "batch_renderer_enabled": bool(request.config.batch_renderer_enabled),
+        "hyperframes_quality": request.config.hyperframes_quality,
+        "hyperframes_strict": bool(request.config.hyperframes_strict),
         "cache_enabled": bool(request.config.reuse_cached_scenes),
     }
 
@@ -1108,7 +1476,13 @@ def _selected_render_scenes(
 def _engine_fingerprint(engine_dir: Path) -> str:
     if not engine_dir.exists():
         return "missing-engine"
-    files = [engine_dir / "package.json", engine_dir / "package-lock.json", engine_dir / "tsconfig.json"]
+    files = [
+        engine_dir / "package.json",
+        engine_dir / "package-lock.json",
+        engine_dir / "tsconfig.json",
+        engine_dir / "hyperframes.json",
+        engine_dir / "index.template.html",
+    ]
     files.extend(sorted((engine_dir / "src").rglob("*")))
     files.extend(sorted((engine_dir / "scripts").rglob("*")))
     digest = hashlib.sha256()

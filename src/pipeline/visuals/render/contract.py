@@ -27,7 +27,11 @@ class VisualRenderConfig(BaseModel):
 
     output_dir: str
     force: bool = False
+    backend: Literal["remotion", "hyperframes"] = "remotion"
     remotion_engine_dir: str | None = None
+    hyperframes_engine_dir: str | None = None
+    hyperframes_quality: Literal["draft", "standard", "high"] = "standard"
+    hyperframes_strict: bool = True
     render_mode: Literal["preview", "final"] = "final"
     quality_preset: Literal["custom", "1080p", "2k", "4k"] = "custom"
     width: int = DEFAULT_WIDTH

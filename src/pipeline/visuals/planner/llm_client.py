@@ -17,12 +17,17 @@ def make_llm(
     model: str,
     temperature: float = 0.3,
     base_url: str | None = None,
+    provider_options: dict[str, Any] | None = None,
 ):
     provider = provider.lower().strip()
+    options = dict(provider_options or {})
+    request_timeout_seconds = float(options.pop("request_timeout_seconds", 300.0))
     if provider == "openai":
         kwargs: dict[str, Any] = {
             "model": model,
             "api_key": _resolve_env(["OPENAI_API_KEY", "OPENAI_API_KEY_A_C_C"]),
+            "max_retries": 0,
+            "timeout": request_timeout_seconds,
         }
         if _model_supports_temperature(model):
             kwargs["temperature"] = temperature
@@ -33,6 +38,8 @@ def make_llm(
             "model": model,
             "api_key": os.getenv("LMSTUDIO_API_KEY", "lm-studio"),
             "base_url": base_url or os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1"),
+            "max_retries": 0,
+            "timeout": request_timeout_seconds,
         }
         if _model_supports_temperature(model):
             kwargs["temperature"] = temperature
@@ -45,7 +52,29 @@ def make_llm(
             temperature=temperature,
         )
 
-    raise ValueError(f"Unknown LLM provider: {provider}. Use 'openai', 'lmstudio', or 'gemini'.")
+    if provider == "moonshot":
+        thinking = options.pop("thinking", None)
+        omit_temperature = bool(options.pop("omit_temperature", False))
+        if options:
+            unknown = ", ".join(sorted(options))
+            raise ValueError(f"Unknown Moonshot provider option(s): {unknown}")
+
+        kwargs = {
+            "model": model,
+            "api_key": _resolve_env(["MOONSHOT_API_KEY", "KIMI_API_KEY"]),
+            "base_url": base_url or os.getenv("MOONSHOT_BASE_URL", "https://api.moonshot.ai/v1"),
+            "max_retries": 0,
+            "timeout": request_timeout_seconds,
+        }
+        if not omit_temperature:
+            kwargs["temperature"] = temperature
+        if thinking:
+            kwargs["extra_body"] = {"thinking": {"type": thinking}}
+        return ChatOpenAI(**kwargs)
+
+    raise ValueError(
+        f"Unknown LLM provider: {provider}. Use 'openai', 'lmstudio', 'gemini', or 'moonshot'."
+    )
 
 
 def _resolve_env(keys: list[str]) -> str:
@@ -58,4 +87,3 @@ def _resolve_env(keys: list[str]) -> str:
 
 def _model_supports_temperature(model: str) -> bool:
     return not model.lower().strip().startswith("gpt-5")
-

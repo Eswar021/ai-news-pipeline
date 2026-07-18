@@ -51,6 +51,7 @@ from src.pipeline.visuals.planner.app import (
     _story_coverage_contract,
     _story_draft_errors,
     _story_for_prompt,
+    _story_allowed_render_kinds,
     _story_visual_quality_context,
     _story_scene_timing_errors,
     _truth_bound_screenshot_target,
@@ -480,6 +481,68 @@ def test_visual_prompt_capabilities_only_include_allowed_render_kinds() -> None:
     assert "broll_video_scene" not in prompt_text
 
 
+def test_story_capabilities_hide_catalog_kinds_without_compatible_assets() -> None:
+    config = {
+        "scene_policy": {
+            "allowed_render_kinds": [
+                "source_article_scene",
+                "context_image_scene",
+                "broll_video_scene",
+                "editorial_text_scene",
+                "story_transition_scene",
+            ]
+        },
+        "asset_availability_policy": {
+            "catalog_asset_required_render_kinds": [
+                "context_image_scene",
+                "broll_video_scene",
+            ]
+        },
+    }
+    story_catalog = {
+        "available_assets": [
+            {
+                "asset_id": "asset_source_image_1",
+                "asset_type": "source_image",
+                "review_status": "accepted",
+            }
+        ]
+    }
+
+    allowed = _story_allowed_render_kinds(config, story_catalog)
+
+    assert allowed == [
+        "source_article_scene",
+        "context_image_scene",
+        "editorial_text_scene",
+    ]
+
+
+def test_story_capabilities_keep_broll_when_source_video_exists() -> None:
+    config = {
+        "scene_policy": {
+            "allowed_render_kinds": ["broll_video_scene", "editorial_text_scene"]
+        },
+        "asset_availability_policy": {
+            "catalog_asset_required_render_kinds": ["broll_video_scene"]
+        },
+    }
+    story_catalog = {
+        "available_assets": [
+            {
+                "asset_id": "asset_source_video_1",
+                "asset_type": "source_video",
+                "review_status": "accepted",
+            }
+        ]
+    }
+
+    assert _story_allowed_render_kinds(config, story_catalog) == [
+        "broll_video_scene",
+        "editorial_text_scene",
+    ]
+
+
 def test_visual_editor_is_not_triggered_only_because_catalog_assets_are_unused() -> None:
     quality = _story_visual_quality_context(
         story_id="story_apple",
@@ -866,7 +929,7 @@ def test_story_coverage_contract_reserves_title_and_requires_remaining_units() -
     ] == [(15, 15), (16, 16), (17, 17), (18, 18), (19, 19)]
 
 
-def test_unknown_context_media_asset_id_is_removed_without_asset_substitution() -> None:
+def test_unknown_context_media_asset_id_is_preserved_for_explicit_validation() -> None:
     normalized, repairs = _normalize_catalog_scene_reference(
         {
             "render_kind": "context_image_scene",
@@ -879,11 +942,9 @@ def test_unknown_context_media_asset_id_is_removed_without_asset_substitution() 
         allowed_render_kinds={"context_image_scene"},
     )
 
-    assert "asset_id" not in normalized
+    assert normalized["asset_id"] == "asset_source_image_example"
     assert normalized["search_queries"] == ["Built Technologies document workflow"]
-    assert repairs == [
-        "removed unknown catalog asset reference 'asset_source_image_example' from media brief"
-    ]
+    assert repairs == []
 
 
 def test_story_title_echo_and_missing_real_anchor_are_quality_warnings_by_default() -> None:
@@ -1473,7 +1534,7 @@ def test_story_prompt_exposes_only_each_beats_eligible_metrics() -> None:
     assert units[2]["numeric_graphics_allowed"] is False
 
 
-def test_catalog_asset_type_selects_the_matching_render_kind() -> None:
+def test_catalog_asset_type_does_not_rewrite_the_selected_render_kind() -> None:
     scene = _prepare_story_scene_draft(
         {
             "order": 1,
@@ -1511,9 +1572,10 @@ def test_catalog_asset_type_selects_the_matching_render_kind() -> None:
         },
     )
 
-    assert scene["render_kind"] == "logo_reveal_scene"
-    assert scene["primary_entity"] == "Apple"
-    assert "mapped context_image_scene to logo_reveal_scene" in scene["contract_repairs"][0]
+    assert scene["render_kind"] == "context_image_scene"
+    assert scene["asset_id"] == "asset_logo_apple"
+    assert "primary_entity" not in scene
+    assert "contract_repairs" not in scene
 
 
 def test_numeric_scene_is_not_semantically_rejected_by_literal_matching_code() -> None:

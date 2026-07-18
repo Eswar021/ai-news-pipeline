@@ -15,6 +15,7 @@ from src.pipeline.visuals.asset_resolver.app import NO_ASSET_RENDER_KINDS
 from src.pipeline.visuals.payload_validation import validate_scene_payload
 from src.pipeline.visuals.planner.app import (
     _normalize_provider_scene_fields,
+    _resolved_llm_configs,
     _story_visual_edit_output_model,
     _story_visual_plan_output_model,
     _visual_capabilities_for_prompt,
@@ -43,6 +44,30 @@ def test_production_profile_exposes_compact_editorial_vocabulary() -> None:
         "simple_explainer_scene",
         "story_transition_scene",
     ]
+
+
+def test_visual_planner_supports_role_specific_provider_routes() -> None:
+    config = VisualPlannerConfig.model_validate(_planner_config()).model_dump(mode="json")
+    config["llm_roles"]["story_visual_planner"] = {
+        "provider": "moonshot",
+        "model": "kimi-k3",
+        "temperature": 1.0,
+        "base_url": None,
+        "provider_options": {
+            "thinking": None,
+            "omit_temperature": True,
+            "request_timeout_seconds": 480.0,
+        },
+        "structured_output": {"method": "json_schema", "strict": True},
+    }
+    routes = _resolved_llm_configs(config)
+
+    assert routes["episode_director"]["provider"] == "openai"
+    assert routes["episode_director"]["model"] == "gpt-4o-mini"
+    assert routes["story_visual_planner"]["provider"] == "moonshot"
+    assert routes["story_visual_planner"]["model"] == "kimi-k3"
+    assert routes["story_visual_editor"]["provider"] == "openai"
+    assert routes["story_visual_editor"]["model"] == "gpt-4o-mini"
 
 
 def test_story_planner_prompt_hides_system_managed_transition() -> None:
@@ -93,7 +118,14 @@ def test_story_provider_schema_exposes_only_active_user_plannable_kinds() -> Non
         "evidence_truth_ids": [],
         "evidence_text": "A canonical script beat.",
         "grounding_basis": "script_beat",
-        "payload_json": json.dumps({"headline": "A clear idea"}),
+        "payload_json": json.dumps(
+            {
+                "headline": "A clear idea",
+                "accent_words": ["clear"],
+                "composition": "editorial_center",
+                "motion_style": "word_reveal",
+            }
+        ),
         "reason": "Useful visual support.",
     }
 
@@ -123,6 +155,30 @@ def test_story_provider_schema_exposes_only_active_user_plannable_kinds() -> Non
             }
         )
 
+    with pytest.raises(ValidationError, match="at least 2 object item"):
+        output_model.model_validate(
+            {
+                "story_id": "story_test",
+                "visual_strategy": "Use clean editorial visuals.",
+                "key_entities": [],
+                "scene_timeline": [
+                    {
+                        **base_scene,
+                        "render_kind": "simple_explainer_scene",
+                        "payload_json": json.dumps(
+                            {
+                                "headline": "Only one idea",
+                                "items": [{"label": "One"}],
+                                "orientation": "horizontal",
+                                "motion_style": "sequential_focus",
+                            }
+                        ),
+                    }
+                ],
+                "warnings": [],
+            }
+        )
+
 
 def test_visual_editor_uses_the_same_nested_plan_contract_and_rejects_system_transitions() -> None:
     story_plan_model = _story_visual_plan_output_model(
@@ -144,7 +200,14 @@ def test_visual_editor_uses_the_same_nested_plan_contract_and_rejects_system_tra
         "evidence_truth_ids": [],
         "evidence_text": "The active narration beat.",
         "grounding_basis": "script_beat",
-        "payload_json": json.dumps({"headline": "One clear implication"}),
+        "payload_json": json.dumps(
+            {
+                "headline": "One clear implication",
+                "accent_words": ["clear"],
+                "composition": "editorial_center",
+                "motion_style": "word_reveal",
+            }
+        ),
         "reason": "The current plan used unrelated media.",
     }
     accepted = editor_model.model_validate(
@@ -180,7 +243,7 @@ def test_visual_editor_uses_the_same_nested_plan_contract_and_rejects_system_tra
         )
 
 
-def test_provider_scene_formatting_is_canonicalized_without_semantic_fallback() -> None:
+def test_provider_scene_formatting_is_preserved_without_code_rewriting() -> None:
     scene, repairs = _normalize_provider_scene_fields(
         {
             "render_kind": "simple_explainer_scene",
@@ -211,17 +274,12 @@ def test_provider_scene_formatting_is_canonicalized_without_semantic_fallback() 
     )
 
     payload = json.loads(scene["payload_json"])
-    assert scene["evidence_text"] == (
-        "The workflow moves from manual review to assisted review."
-    )
-    assert payload["items"][0]["detail"] == "Manual"
-    assert repairs == [
-        "mapped explainer item value to visible detail",
-        "bound empty evidence_text to exact active script unit",
-    ]
+    assert scene["evidence_text"] == ""
+    assert payload["items"][0] == {"label": "Before", "value": "Manual"}
+    assert repairs == []
 
 
-def test_one_item_explainer_becomes_lossless_editorial_emphasis() -> None:
+def test_one_item_explainer_is_rejected_instead_of_changed_into_another_scene() -> None:
     scene, repairs = _normalize_provider_scene_fields(
         {
             "render_kind": "simple_explainer_scene",
@@ -243,11 +301,11 @@ def test_one_item_explainer_becomes_lossless_editorial_emphasis() -> None:
     )
 
     payload = json.loads(scene["payload_json"])
-    assert scene["render_kind"] == "editorial_text_scene"
+    assert scene["render_kind"] == "simple_explainer_scene"
     assert payload["headline"] == "570 vulnerabilities"
-    assert payload["supporting_text"] == "570"
-    assert repairs == [
-        "converted one-item explainer to lossless editorial emphasis"
+    assert repairs == []
+    assert validate_scene_payload(scene["render_kind"], payload) == [
+        "payload.items requires at least 2 object item(s)"
     ]
 
 

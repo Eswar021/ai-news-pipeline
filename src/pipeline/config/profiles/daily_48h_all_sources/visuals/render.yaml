@@ -1,6 +1,10 @@
 force: true
 output_dir: ''
+backend: remotion
 remotion_engine_dir: ''
+hyperframes_engine_dir: ''
+hyperframes_quality: standard
+hyperframes_strict: true
 active_mode: preview
 render_mode: preview
 cache_dir: '{PROJECT_ROOT}/.cache/ai_content_creation/visual_renders'
@@ -38,6 +42,7 @@ profiles:
     worker_count: 4
     frame_concurrency: 2
     max_render_attempts: 1
+    hyperframes_quality: draft
   final:
     render_mode: final
     quality_preset: 2k
@@ -48,3 +53,4 @@ profiles:
     worker_count: 4
     frame_concurrency: 2
     max_render_attempts: 2
+    hyperframes_quality: high

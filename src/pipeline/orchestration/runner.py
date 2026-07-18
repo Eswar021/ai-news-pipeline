@@ -9,6 +9,9 @@ Run from the project root with the main project Python, not `.venv-voiceover`::
     python3 -m src.pipeline.orchestration.runner visuals \
       --run-id current --plan-source generate --render-mode preview
 
+Use ``--render-backend hyperframes`` for the optional HyperFrames renderer;
+omit it to use the profile's configured backend.
+
 Module configs are reloaded from their stage YAML immediately before execution
 by default. Use ``--config-mode frozen`` only when reproducing the exact config
 captured when the run was created. Resume from a module with ``--from-module``;
@@ -84,6 +87,7 @@ def _build_parser() -> argparse.ArgumentParser:
     visuals.add_argument("--voiceover-variant")
     visuals.add_argument("--plan-source", choices=("generate", "chatgpt"), default="generate")
     visuals.add_argument("--render-mode", choices=("preview", "final"), default="preview")
+    visuals.add_argument("--render-backend", choices=("remotion", "hyperframes"))
     visuals.add_argument("--scene-id", action="append", default=[], dest="selected_scene_ids")
     visuals.add_argument("--story-id", action="append", default=[], dest="selected_story_ids")
     visuals.add_argument("--from-module")
@@ -152,6 +156,7 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
             "voiceover_variant": args.voiceover_variant,
             "plan_source": args.plan_source,
             "render_mode": args.render_mode,
+            "render_backend": args.render_backend,
             "selected_scene_ids": args.selected_scene_ids,
             "selected_story_ids": args.selected_story_ids,
             "resume_completed": not args.no_resume,

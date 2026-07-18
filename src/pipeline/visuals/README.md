@@ -48,6 +48,7 @@ planner vocabulary:
 ```text
 source_article_scene
 context_image_scene
+broll_video_scene
 logo_reveal_scene
 editorial_text_scene
 simple_explainer_scene
@@ -127,21 +128,34 @@ Purpose:
 - return `data.visual_scene_plan`
 
 The planner uses LangChain structured output with Pydantic models. The strict
-provider schema exposes only the render kinds enabled for that run. Each
-capability includes its exact payload shape, list cardinality, enum values, and
-an example; the dynamic scene payload is then carried as JSON text. App code
-decodes it and applies the shared render-kind payload validator plus source
-grounding. The same payload validator is used by native planning, manual-plan
+provider schema exposes only the render kinds enabled for that story. A
+catalog-backed render kind is omitted when the active story has no compatible
+available asset, so an image-only story cannot request invented source video.
+The available asset IDs form a closed enum in the story prompt; they are not
+examples. Each
+capability includes its exact payload shape, list cardinality, and enum values;
+the dynamic scene payload is then carried as JSON text. Pydantic decodes and
+validates its render-family structure before the story plan is accepted, and
+app code applies the same shared payload validator plus source grounding. The
+same payload validator is used by native planning, manual-plan
 parsing, and render preflight so no path can bypass the nested scene contract.
-Missing metrics, values, nodes, edges, process steps, or source references
-trigger bounded targeted replanning. Incomplete numeric graphics are not
-silently converted into screenshots or text unless a profile deliberately
-selects that named degradation mode. Code must not synthesize those semantic
-fields to make a scene renderable. Durable prompt text lives under:
+Missing values, item structure, or source references trigger bounded targeted
+replanning. Code does not delete invented asset IDs, substitute a different
+asset, change the scene family, or synthesize semantic payload fields to make a
+scene renderable. The only post-plan expansion is structural timing
+continuation when one authored treatment covers an audio unit longer than the
+render cap. Durable prompt text lives under:
 
 ```text
 src/pipeline/visuals/planner/prompts/
 ```
+
+The episode director, story planner, and visual editor each have an independent
+`llm_roles` provider/model route in `visuals/planner.yaml`. The daily profile
+uses GPT-4o-mini for all three. Moonshot/Kimi K3 is supported through the same
+structured boundary, but remains opt-in: the first same-input full-context K3
+benchmark exceeded roughly ten minutes without completing, while the verified
+GPT route completed all five stories without fallback.
 
 The planner should not generate generic presentation-card outputs. The banned
 old card language is enforced in code and prompts.
@@ -381,11 +395,13 @@ Purpose:
   `scene_policy.hard_max_scene_seconds` as the renderer safety limit, so small
   voiceover timing variation does not trigger unnecessary replanning
 - validate every nested scene payload again before spending render time
-- build the Remotion project once per render run
+- select one explicit rendering backend; never silently cross-fallback
+- build the Remotion project once per Remotion run, or generate one isolated
+  HyperFrames composition per scene
 - render independent MP4 scene clips with bounded persistent-browser workers
 - render scene clips without audio; the authoritative voiceover is attached once
   during assembly so AAC padding cannot accumulate at scene boundaries
-- cap Remotion frame concurrency inside each scene to avoid CPU/RAM overload
+- cap browser/frame concurrency inside each scene to avoid CPU/RAM overload
 - restore unchanged clips from a persistent content-addressed cache
 - support scene/story-targeted preview renders without making them assembly-ready
 - retry failed or missing scene outputs serially and preserve attempt logs
@@ -393,10 +409,11 @@ Purpose:
   lightweight runtime logger when called by orchestration
 - return `data.visual_render_package`
 
-The Remotion source lives under:
+The renderer backends live under:
 
 ```text
 src/pipeline/visuals/remotion_engine/
+src/pipeline/visuals/hyperframes_engine/
 ```
 
 All scene components author against a stable 1920x1080 reference canvas. The
@@ -405,29 +422,44 @@ so 720p tests, 1080p production, 2K, and 4K preserve identical composition and
 safe areas. Individual scenes must not position content against the requested
 pixel dimensions directly.
 
-Run `npm install` there on a fresh machine before rendering.
+Run `npm install` in the selected engine directory on a fresh machine before
+rendering.
 
 Render behavior is config-driven:
 
 ```text
 render_mode           preview or final
+backend               remotion or hyperframes
 selected_scene_ids    optional focused rerender selection
 selected_story_ids    optional focused rerender selection
 worker_count          scene clips rendered at the same time
-frame_concurrency     Remotion browser tabs used inside each scene render
+frame_concurrency     bounded browser/frame workers inside a scene render
 max_render_attempts   bounded attempts per scene; retries run serially
 reuse_cached_scenes   restore unchanged clips from the persistent cache
 ```
 
-The renderer bundles Remotion once. With batch rendering enabled, each bounded
+The default production backend remains Remotion. It bundles once, and with
+batch rendering enabled each bounded
 worker keeps one browser alive and renders several scene jobs through it. Ten or
 fifteen workers are not automatically faster: Chromium, ffmpeg, memory
 bandwidth, and encoders become the bottleneck. The profile caps scene workers
 and frame concurrency to improve throughput without making failures more
 likely.
 
+HyperFrames is an explicit opt-in backend for the compact production scene
+vocabulary: source article, context image, trusted B-roll, logo/identity,
+editorial text, simple explainer, and story transition. It uses pinned local
+dependencies, strict composition checks, isolated per-scene projects, and the
+same cache/provenance envelope. Selecting an unsupported scene fails before
+rendering; it never falls back to Remotion. When scene-level concurrency is
+active, each HyperFrames render uses one internal frame worker to avoid nested
+process multiplication. The current upstream `hyperframes@0.7.64` dependency
+has an unresolved high-severity `adm-zip` denial-of-service advisory, so this
+backend is not the default and should process only pipeline-owned compositions
+and trusted local assets until upstream ships a fix.
+
 Cache identity includes the scene payload, render settings, resolved asset
-content, and Remotion engine source. A prompt, asset, scene, or renderer change
+content, and selected engine source. A prompt, asset, scene, or renderer change
 therefore invalidates only affected clips. Preview mode uses 720p,
 bitrate-based hardware-friendly encoding, and a fast path; final mode retains
 CRF-based quality and renders the complete scene manifest at delivery quality.
@@ -600,10 +632,11 @@ and redesign it around a real motion purpose.
 
 ## Config
 
-Workbench defaults live in:
+The profile manifest and module authoring config live in:
 
 ```text
 src/pipeline/config/workbench.yaml
+src/pipeline/config/profiles/{profile}/visuals/*.yaml
 ```
 
 Relevant config sections:
@@ -611,14 +644,15 @@ Relevant config sections:
 - `visuals.asset_catalog`: trusted source-page/image/video collection,
   structural duplicate filtering, logo hints, fetch limits, anchor policy, and
   contact-sheet settings.
-- `visuals.planner`: LLM provider/model, scene policy, visual capabilities, and
-  the text-supporting visual-mix target.
+- `visuals.planner`: default and role-specific LLM provider/model routes,
+  structured-output policy, scene policy, visual capabilities, and the
+  text-supporting visual-mix target.
 - `visuals.media_discovery`: provider enablement, environment-key names,
   candidate/download limits, semantic verifier and clip-selector models,
   identity confidence, video clipping, and explicit fallback behavior.
 - `visuals.asset_resolver`: browser, screenshot, logo, and output settings.
-- `visuals.render`: Remotion render settings, quality preset, encoder options,
-  worker count, and per-scene caps.
+- `visuals.render`: explicit backend, backend paths, quality preset, encoder
+  options, worker count, cache, and per-scene caps.
 - `visuals.assembly`: final-video mux/assembly settings.
 - `visuals.review`: contact-sheet sampling and output settings.
 

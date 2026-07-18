@@ -48,7 +48,12 @@ from .config import (
 
 
 VisualPlannerStatus = Literal["ok", "failed"]
-LLMProvider = Literal["openai", "gemini", "lmstudio"]
+LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot"]
+VisualLLMRole = Literal[
+    "episode_director",
+    "story_visual_planner",
+    "story_visual_editor",
+]
 RenderKind = Literal[
     "source_article_scene",
     "context_image_scene",
@@ -172,6 +177,70 @@ class VisualEditorConfig(BaseModel):
         if value < 1 or value > 20:
             raise ValueError("visual_editor.max_story_calls must be between 1 and 20")
         return value
+
+
+class ProviderOptions(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    thinking: Literal["enabled", "disabled"] | None = None
+    omit_temperature: bool = False
+    request_timeout_seconds: float = Field(default=300.0, ge=10.0, le=1800.0)
+
+
+class StructuredOutputConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method: Literal["json_schema", "function_calling", "json_mode"] = "json_schema"
+    strict: bool = True
+
+
+class RoleLLMConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: LLMProvider
+    model: str
+    temperature: float = 0.3
+    base_url: str | None = None
+    provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
+    structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
+
+    @field_validator("model")
+    @classmethod
+    def model_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("llm_roles model must not be empty")
+        return value.strip()
+
+    @field_validator("temperature")
+    @classmethod
+    def temperature_must_be_valid(cls, value: float) -> float:
+        if value < 0 or value > 2:
+            raise ValueError("llm_roles temperature must be between 0 and 2")
+        return value
+
+
+class AssetAvailabilityPolicyConfig(BaseModel):
+    """Declare scene families that require a real story-owned catalog asset."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    catalog_asset_required_render_kinds: list[RenderKind] = Field(
+        default_factory=lambda: ["context_image_scene", "broll_video_scene"]
+    )
+
+    @field_validator("catalog_asset_required_render_kinds")
+    @classmethod
+    def required_kinds_must_be_unique(
+        cls,
+        value: list[RenderKind],
+    ) -> list[RenderKind]:
+        if len(value) != len(set(value)):
+            raise ValueError(
+                "asset_availability_policy.catalog_asset_required_render_kinds "
+                "must not contain duplicates"
+            )
+        return value
+
 
 class ScenePolicyConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -309,6 +378,9 @@ class VisualPlannerConfig(BaseModel):
     provider: LLMProvider
     model: str
     base_url: str | None = None
+    provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
+    structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
+    llm_roles: dict[VisualLLMRole, RoleLLMConfig] = Field(default_factory=dict)
     prompt_version: str
     temperature: float = 0.3
     max_attempts: int = 2
@@ -320,6 +392,9 @@ class VisualPlannerConfig(BaseModel):
     style: VisualStyleConfig = Field(default_factory=VisualStyleConfig)
     visual_mix_policy: VisualMixPolicyConfig = Field(default_factory=VisualMixPolicyConfig)
     visual_editor: VisualEditorConfig = Field(default_factory=VisualEditorConfig)
+    asset_availability_policy: AssetAvailabilityPolicyConfig = Field(
+        default_factory=AssetAvailabilityPolicyConfig
+    )
     scene_policy: ScenePolicyConfig = Field(default_factory=ScenePolicyConfig)
     source_policy: SourcePolicyConfig = Field(default_factory=SourcePolicyConfig)
     visual_capabilities: dict[str, VisualCapabilityConfig] = Field(default_factory=default_visual_capabilities)

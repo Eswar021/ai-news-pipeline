@@ -102,7 +102,7 @@ flowchart LR
         visualPlan[visual_planner<br/>generate or load canonical visual plan]
         discover[Resolve catalog media<br/>or deliberate external research]
         resolve[Capture screenshots and resolve assets]
-        render[visual_render<br/>render independent Remotion scene clips]
+        render[visual_render<br/>render independent scene clips<br/>Remotion or explicit HyperFrames]
         assemble[video_assembly<br/>assemble clips with authoritative WAV]
         review[visual_review<br/>create review package and contact sheet]
         publish[publish_handoff<br/>final mode only]
@@ -387,7 +387,7 @@ profiles and visual-lab tests.
 | ------------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------- |
 | Content apps, LLM planning, orchestration, metadata    | Main project Python             | Canonical Pydantic/LangChain application environment                    |
 | Hosted and local TTS synthesis                         | `.venv-voiceover` Python 3.12 | Keeps one stable synthesis boundary for API and local speech providers  |
-| Scene rendering                                        | Node, Remotion, Chromium        | Renders each validated scene specification into an MP4 clip             |
+| Scene rendering                                        | Node, Chromium, Remotion or explicit HyperFrames | Renders each validated scene specification into an MP4 clip without changing its semantic plan |
 | Audio/video probing, mastering, clipping, and assembly | `ffmpeg` and `ffprobe`      | Provides deterministic media transformation and verification            |
 | External model calls and enabled news sources          | Configured APIs                 | Credentials are loaded from`.env` and never copied into run artifacts |
 
@@ -592,11 +592,35 @@ component catalog remains available only to explicit specialist profiles; it
 is not the production planner's default menu. The planner may not substitute
 an unrelated stock image for an unresolved request. Provider-facing structured
 output carries dynamic scene payloads as validated JSON text; the app decodes
-them, verifies them through one shared render-kind payload contract, verifies
+them, Pydantic enforces the selected render-family shape, and the app verifies
+them through one shared render-kind payload contract, verifies
 asset/story/source ownership, and rejects incomplete rich graphics rather than
 inventing metrics, chart values, relationships, or process steps in code.
 Native planning, manual ChatGPT parsing, visual editing, and render preflight
 all use that same nested validator.
+
+Before each story-level call, the planner derives a resource-availability
+capability view from that story's trusted catalog. Catalog-required scene kinds
+without a compatible asset are omitted from both the Pydantic schema and the
+prompt. Available asset IDs are a closed story-owned set. Provider mistakes are
+returned to the bounded retry; code does not strip IDs, choose replacement
+assets, or convert one semantic scene family into another.
+
+Episode direction, per-story planning, and visual editing have independent
+provider/model routes in the planner module config. The daily profile keeps
+GPT-4o-mini for all three after a same-input Kimi K3 comparison exceeded roughly
+ten minutes without completing. Moonshot/K3 remains a supported config-only
+experiment rather than a hidden fallback or automatic escalation.
+
+Visual rendering has one stable JSON contract and two explicit engines.
+Remotion remains the default production engine and supports the complete
+historical scene catalog. HyperFrames supports the compact active vocabulary
+and can be selected per run with `--render-backend hyperframes`; unsupported
+scene kinds fail before render and never cross-fallback. Both paths preserve
+scene timing, parent fingerprints, content-addressed cache identity, video-only
+clip validation, assembly, and review. HyperFrames remains opt-in while its
+pinned upstream package carries an unresolved transitive ZIP denial-of-service
+advisory.
 
 When one aligned audio unit is longer than the configured scene cap, the story
 planner must return multiple distinct semantic treatments for that same unit.

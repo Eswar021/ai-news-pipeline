@@ -200,6 +200,33 @@ def test_runner_builds_voiceover_envelope_and_accepts_config_overrides(monkeypat
     assert console["handoff"]["ready_for_visuals"] is True
 
 
+def test_runner_builds_explicit_visual_backend_override(monkeypatch, capsys) -> None:
+    captured: dict = {}
+
+    def fake_stage(request: dict) -> dict:
+        captured.update(request)
+        return {
+            "status": "ok",
+            "data": {"run_id": request["run"]["run_id"]},
+            "summary": {},
+            "handoff": {"ready_for_manual_review": True},
+        }
+
+    monkeypatch.setattr(runner, "_stage_function", lambda _stage: fake_stage)
+    exit_code = runner.main(
+        [
+            "visuals",
+            "--run-id",
+            "run_test",
+            "--render-backend",
+            "hyperframes",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured["config"]["render_backend"] == "hyperframes"
+
+
 def test_runner_returns_a_structured_cli_failure(monkeypatch, capsys) -> None:
     def fail_stage(_request: dict) -> dict:
         raise ValueError("bad fixture request")

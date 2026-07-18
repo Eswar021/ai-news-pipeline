@@ -69,6 +69,7 @@ class VisualsOptions(BaseModel):
     voiceover_variant: str | None = None
     plan_source: str = "generate"
     render_mode: str = "preview"
+    render_backend: Literal["remotion", "hyperframes"] | None = None
     selected_scene_ids: list[str] = Field(default_factory=list)
     selected_story_ids: list[str] = Field(default_factory=list)
     resume_completed: bool = True
@@ -412,12 +413,16 @@ def _run_stage(
         if options.render_mode not in profiles:
             raise KeyError(f"visuals.render.profiles is missing {options.render_mode!r}")
         base.update(profiles[options.render_mode])
+        if options.render_backend:
+            base["backend"] = options.render_backend
         base["output_dir"] = str(render_dir)
         base["render_mode"] = options.render_mode
         base["selected_scene_ids"] = list(options.selected_scene_ids)
         base["selected_story_ids"] = list(options.selected_story_ids)
         if not base.get("remotion_engine_dir"):
             base["remotion_engine_dir"] = str(project_root / "src" / "pipeline" / "visuals" / "remotion_engine")
+        if not base.get("hyperframes_engine_dir"):
+            base["hyperframes_engine_dir"] = str(project_root / "src" / "pipeline" / "visuals" / "hyperframes_engine")
         render_input = {
             "run": {"run_id": run_id, "generated_at": now_iso()},
             "config": base,

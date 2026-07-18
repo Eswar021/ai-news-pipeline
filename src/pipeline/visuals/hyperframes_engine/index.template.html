@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__WIDTH__, height=__HEIGHT__" />
+    <script src="node_modules/gsap/dist/gsap.min.js"></script>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: __WIDTH__px; height: __HEIGHT__px; overflow: hidden; }
+      body { background: #f4efe6; color: #171611; font-family: Inter, sans-serif; }
+      #stage { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--paper); }
+      #stage::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        opacity: .24;
+        background-image: linear-gradient(rgba(23,22,17,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(23,22,17,.025) 1px, transparent 1px);
+        background-size: 72px 72px;
+      }
+      .accent-rule { position: absolute; left: 5.4%; top: 7%; width: 8%; height: 7px; background: var(--accent); transform-origin: left center; }
+      .eyebrow { color: var(--accent); font-size: clamp(18px, 1.35vw, 27px); font-weight: 850; letter-spacing: .17em; text-transform: uppercase; }
+      .headline { margin: 0; font-family: "EB Garamond", Georgia, serif; font-size: clamp(64px, 6.4vw, 124px); line-height: .9; letter-spacing: -.052em; font-weight: 700; text-wrap: balance; }
+      .headline.small { font-size: clamp(54px, 4.8vw, 94px); }
+      .support { color: var(--muted); font-size: clamp(25px, 2vw, 39px); line-height: 1.15; font-weight: 560; text-wrap: balance; }
+      .media-fill { width: 100%; height: 100%; object-fit: cover; }
+      .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(18,16,13,.80), rgba(18,16,13,.12) 58%, rgba(18,16,13,.04)); }
+      .source-credit { position: absolute; right: 3.2%; bottom: 3.4%; padding: 8px 12px; color: #fffaf2; background: rgba(23,22,17,.86); font-size: clamp(14px, 1vw, 20px); font-weight: 750; letter-spacing: .04em; }
+      .full-copy { position: absolute; left: 7.2%; top: 17%; width: 66%; z-index: 4; }
+      .full-copy .support { margin-top: 30px; max-width: 82%; }
+      .split-media { position: absolute; inset: 0 0 0 40%; overflow: hidden; clip-path: polygon(11% 0,100% 0,100% 100%,0 100%); }
+      .split-copy { position: absolute; left: 5.4%; top: 14%; bottom: 10%; width: 47%; z-index: 4; display: flex; flex-direction: column; justify-content: center; }
+      .split-copy .headline { margin-top: 34px; }
+      .split-copy .support { margin-top: 28px; max-width: 88%; }
+      .browser { position: absolute; left: 4.2%; right: 4.2%; top: 18%; bottom: 6%; overflow: hidden; border: 1px solid rgba(23,22,17,.25); border-radius: 12px; background: #fffdfa; box-shadow: 0 28px 80px rgba(42,35,25,.18); }
+      .browser-bar { height: 54px; display: flex; align-items: center; gap: 12px; padding: 0 22px; color: var(--muted); background: #e9e1d5; border-bottom: 1px solid rgba(23,22,17,.16); font-size: clamp(14px, 1.05vw, 21px); font-weight: 700; }
+      .dot { width: 15px; height: 15px; border-radius: 50%; }
+      .browser-image { width: 100%; height: calc(100% - 54px); object-fit: cover; object-position: center 24%; }
+      .source-title { position: absolute; left: 5%; top: 5%; right: 5%; z-index: 4; display: flex; justify-content: space-between; gap: 40px; align-items: flex-start; }
+      .source-title .headline { max-width: 82%; font-size: clamp(43px, 3.5vw, 68px); }
+      .highlight { position: absolute; left: 7%; right: 7%; bottom: 8%; z-index: 6; padding: 18px 28px; color: var(--ink); background: rgba(255,253,250,.95); border-left: 8px solid var(--accent); box-shadow: 0 14px 42px rgba(42,35,25,.18); font-size: clamp(21px, 1.7vw, 33px); line-height: 1.12; font-weight: 700; text-align: center; }
+      .identity { position: absolute; right: 8.5%; top: 25%; width: 24%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 50%; background: rgba(255,253,248,.76); box-shadow: 0 30px 80px rgba(45,34,22,.16); text-align: center; }
+      .identity-name { width: 82%; font-family: "EB Garamond", Georgia, serif; font-size: clamp(42px, 4vw, 78px); line-height: .93; letter-spacing: -.045em; font-weight: 700; }
+      .identity img { width: 58%; height: 58%; object-fit: contain; }
+      .explainer { position: absolute; inset: 0; padding: 8% 7%; }
+      .explainer .headline { width: 76%; font-size: clamp(52px, 4.4vw, 86px); }
+      .flow { position: absolute; left: 7%; right: 7%; top: 43%; display: flex; align-items: center; justify-content: center; gap: 2.2%; }
+      .flow-item { position: relative; min-width: 17%; max-width: 23%; text-align: center; }
+      .flow-label { font-family: "EB Garamond", Georgia, serif; font-size: clamp(32px, 2.7vw, 53px); line-height: .96; font-weight: 700; }
+      .flow-detail { margin-top: 14px; color: var(--muted); font-size: clamp(18px, 1.35vw, 27px); line-height: 1.1; font-weight: 650; }
+      .connector { width: 9%; height: 3px; background: var(--accent); transform-origin: left center; }
+      .story-number { color: var(--accent); font-size: clamp(22px, 1.6vw, 31px); font-weight: 850; letter-spacing: .18em; text-transform: uppercase; }
+      .transition-copy { position: absolute; left: 6.5%; right: 6.5%; top: 17%; bottom: 13%; z-index: 5; display: flex; flex-direction: column; justify-content: center; }
+      .transition-copy .headline { max-width: 82%; }
+      .transition-media .transition-copy { color: #fffaf2; width: 64%; }
+      .transition-media .headline { text-shadow: 0 8px 38px rgba(0,0,0,.56); }
+      .grain { position: absolute; inset: 0; z-index: 20; pointer-events: none; opacity: .11; mix-blend-mode: multiply; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.24'/%3E%3C/svg%3E"); }
+    </style>
+  </head>
+  <body>
+    <main id="stage" data-composition-id="main" data-start="0" data-duration="__DURATION__" data-width="__WIDTH__" data-height="__HEIGHT__" data-fps="__FPS__"></main>
+    <script id="scene-spec" type="application/json">__SCENE_SPEC_JSON__</script>
+    <script>
+      const spec = JSON.parse(document.querySelector("#scene-spec").textContent);
+      const scene = spec.scene || {};
+      const payload = scene.payload || {};
+      const asset = scene.resolved_asset || {};
+      const style = spec.visual_style || {};
+      const stage = document.querySelector("#stage");
+      const text = (value, fallback = "") => typeof value === "string" && value.trim() ? value.trim() : fallback;
+      const list = (value) => Array.isArray(value) ? value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()) : [];
+      const node = (tag, className, value = "") => {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (value) element.textContent = value;
+        return element;
+      };
+      const append = (parent, ...children) => children.filter(Boolean).forEach((child) => parent.appendChild(child));
+      const assetUrl = text(asset.asset_render_url) || text(asset.asset_data_uri);
+      const headline = text(payload.headline) || text(payload.overlay_headline) || text(payload.companion_text) || text(scene.script_excerpt, "Untitled story");
+      const support = text(payload.supporting_text) || text(payload.companion_text);
+      const sourceLabel = text(payload.source_label) || text(asset.capture && asset.capture.domain);
+
+      stage.style.setProperty("--paper", text(style.background_color, "#f4efe6"));
+      stage.style.setProperty("--ink", text(style.text_color, "#171611"));
+      stage.style.setProperty("--accent", text(style.accent_color, "#bd4e2f"));
+      stage.style.setProperty("--muted", text(style.muted_color, "#6f6a61"));
+
+      const addGrain = () => stage.appendChild(node("div", "grain"));
+      const addRule = () => stage.appendChild(node("div", "accent-rule hf-rule"));
+      const addCredit = (label) => label && stage.appendChild(node("div", "source-credit hf-enter", label));
+      const addImage = (parent, className = "media-fill hf-media") => {
+        if (!assetUrl) return null;
+        const image = node("img", className);
+        image.src = assetUrl;
+        image.alt = text(asset.alt_text, text(payload.primary_entity, "Story visual"));
+        parent.appendChild(image);
+        return image;
+      };
+
+      const renderEditorial = () => {
+        addRule();
+        const copy = node("section", "full-copy");
+        const eyebrow = node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE POINT"));
+        const title = node("h1", "headline hf-enter", headline);
+        const body = support ? node("div", "support hf-enter", support) : null;
+        append(copy, eyebrow, title, body);
+        stage.appendChild(copy);
+      };
+
+      const renderContextMedia = (video = false) => {
+        const mediaWrap = node("div", "hf-media-wrap");
+        mediaWrap.style.position = "absolute";
+        mediaWrap.style.inset = "0";
+        if (video && assetUrl) {
+          const media = node("video", "media-fill hf-media");
+          media.src = assetUrl;
+          media.muted = true;
+          media.preload = "auto";
+          media.setAttribute("playsinline", "");
+          mediaWrap.appendChild(media);
+        } else {
+          addImage(mediaWrap);
+        }
+        stage.appendChild(mediaWrap);
+        stage.appendChild(node("div", "shade"));
+        if (payload.show_overlay === true && headline) {
+          const copy = node("section", "full-copy");
+          copy.style.color = "#fffaf2";
+          copy.style.top = "56%";
+          append(copy, node("h1", "headline small hf-enter", headline));
+          stage.appendChild(copy);
+        }
+        addCredit(sourceLabel || text(asset.media && asset.media.attribution));
+      };
+
+      const renderSource = () => {
+        const titleRow = node("section", "source-title");
+        append(titleRow, node("h1", "headline hf-enter", text(payload.overlay_headline, headline)));
+        stage.appendChild(titleRow);
+        const browser = node("section", "browser hf-enter");
+        const bar = node("div", "browser-bar");
+        [["#ff5f57"], ["#ffbd2e"], ["#28c840"]].forEach(([color]) => {
+          const dot = node("span", "dot"); dot.style.background = color; bar.appendChild(dot);
+        });
+        bar.appendChild(node("span", "", text(payload.url).replace(/^https?:\/\//, "").slice(0, 92)));
+        browser.appendChild(bar);
+        addImage(browser, "browser-image hf-media");
+        stage.appendChild(browser);
+        const target = text(payload.target_text);
+        if (target) stage.appendChild(node("div", "highlight hf-enter", target.slice(0, 190)));
+      };
+
+      const renderLogo = () => {
+        addRule();
+        const copy = node("section", "split-copy");
+        append(
+          copy,
+          node("div", "eyebrow hf-enter", text(payload.eyebrow, "IDENTITY")),
+          node("h1", "headline hf-enter", support || headline),
+        );
+        stage.appendChild(copy);
+        const identity = node("div", "identity hf-enter");
+        if (assetUrl) addImage(identity, "");
+        else identity.appendChild(node("div", "identity-name", text(payload.primary_entity, headline)));
+        stage.appendChild(identity);
+      };
+
+      const renderExplainer = () => {
+        const wrap = node("section", "explainer");
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "HOW IT WORKS")), node("h1", "headline hf-enter", headline));
+        const flow = node("div", "flow");
+        const items = Array.isArray(payload.items) ? payload.items.slice(0, 4) : [];
+        items.forEach((item, index) => {
+          if (index) flow.appendChild(node("div", "connector hf-connector"));
+          const itemNode = node("div", "flow-item hf-item");
+          const label = typeof item === "object" && item ? text(item.label, `Step ${index + 1}`) : text(item, `Step ${index + 1}`);
+          const detail = typeof item === "object" && item ? text(item.detail) : "";
+          append(itemNode, node("div", "flow-label", label), detail ? node("div", "flow-detail", detail) : null);
+          flow.appendChild(itemNode);
+        });
+        wrap.appendChild(flow);
+        stage.appendChild(wrap);
+      };
+
+      const renderTransition = () => {
+        if (assetUrl) {
+          stage.classList.add("transition-media");
+          const media = node("div", "hf-media-wrap");
+          media.style.position = "absolute"; media.style.inset = "0";
+          addImage(media);
+          stage.appendChild(media);
+          stage.appendChild(node("div", "shade"));
+        } else addRule();
+        const copy = node("section", "transition-copy");
+        const ordinal = text(payload.story_number) || (scene.scene_order ? `Story ${scene.scene_order}` : "Next story");
+        append(copy, node("div", "story-number hf-enter", ordinal), node("h1", "headline hf-enter", headline));
+        stage.appendChild(copy);
+      };
+
+      const renderers = {
+        source_article_scene: renderSource,
+        context_image_scene: () => renderContextMedia(false),
+        broll_video_scene: () => renderContextMedia(true),
+        logo_reveal_scene: renderLogo,
+        editorial_text_scene: renderEditorial,
+        simple_explainer_scene: renderExplainer,
+        story_transition_scene: renderTransition,
+      };
+      if (!renderers[scene.render_kind]) throw new Error(`Unsupported HyperFrames render_kind: ${scene.render_kind}`);
+      renderers[scene.render_kind]();
+      addGrain();
+
+      window.__timelines = window.__timelines || {};
+      const timeline = gsap.timeline({ paused: true });
+      timeline.fromTo(".hf-rule", { scaleX: 0 }, { scaleX: 1, duration: .55, ease: "power3.out" }, .1);
+      timeline.fromTo(".hf-enter", { y: 48, opacity: 0 }, { y: 0, opacity: 1, duration: .72, stagger: .12, ease: "power3.out" }, .18);
+      timeline.fromTo(".hf-item", { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: .56, stagger: .18, ease: "power3.out" }, .75);
+      timeline.fromTo(".hf-connector", { scaleX: 0 }, { scaleX: 1, duration: .38, stagger: .18, ease: "power2.out" }, .9);
+      timeline.fromTo(".hf-media-wrap", { opacity: .15 }, { opacity: 1, duration: .85, ease: "power2.out" }, 0);
+      timeline.fromTo(".hf-media", { scale: 1.065 }, { scale: 1.0, duration: Math.max(2, Number(spec.duration_seconds || 6)), ease: "none" }, 0);
+      window.__timelines.main = timeline;
+    </script>
+  </body>
+</html>

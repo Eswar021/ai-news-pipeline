@@ -2,7 +2,40 @@ provider: openai
 model: gpt-4o-mini
 prompt_version: v1
 temperature: 0.3
-max_attempts: 2
+provider_options:
+  request_timeout_seconds: 300
+structured_output:
+  method: json_schema
+  strict: true
+llm_roles:
+  episode_director:
+    provider: openai
+    model: gpt-4o-mini
+    temperature: 0.3
+    provider_options:
+      request_timeout_seconds: 300
+    structured_output:
+      method: json_schema
+      strict: true
+  story_visual_planner:
+    provider: openai
+    model: gpt-4o-mini
+    temperature: 0.3
+    provider_options:
+      request_timeout_seconds: 300
+    structured_output:
+      method: json_schema
+      strict: true
+  story_visual_editor:
+    provider: openai
+    model: gpt-4o-mini
+    temperature: 0.3
+    provider_options:
+      request_timeout_seconds: 300
+    structured_output:
+      method: json_schema
+      strict: true
+max_attempts: 3
 diagnostic_words_per_minute: 150
 allow_deterministic_story_fallbacks: false
 require_asset_catalog: true
@@ -43,6 +76,10 @@ visual_editor:
   max_story_calls: 8
   review_all_stories: false
   failure_mode: keep_original
+asset_availability_policy:
+  catalog_asset_required_render_kinds:
+  - context_image_scene
+  - broll_video_scene
 scene_policy:
   target_aspect_ratio: '16:9'
   max_scenes: 64

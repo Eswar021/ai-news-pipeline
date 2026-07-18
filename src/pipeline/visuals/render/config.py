@@ -37,3 +37,7 @@ QUALITY_PRESETS = {
 
 def default_remotion_engine_dir() -> str:
     return str(Path(__file__).resolve().parents[1] / "remotion_engine")
+
+
+def default_hyperframes_engine_dir() -> str:
+    return str(Path(__file__).resolve().parents[1] / "hyperframes_engine")

@@ -53,6 +53,102 @@ def test_render_config_bounds_attempts() -> None:
         VisualRenderConfig(output_dir="render", max_render_attempts=6)
 
 
+def test_render_config_selects_hyperframes_explicitly() -> None:
+    config = VisualRenderConfig(
+        output_dir="render",
+        backend="hyperframes",
+        hyperframes_quality="high",
+    )
+
+    assert config.backend == "hyperframes"
+    assert config.hyperframes_quality == "high"
+
+
+def test_hyperframes_project_copies_media_and_embeds_scene_spec(tmp_path: Path) -> None:
+    engine_dir = tmp_path / "engine"
+    engine_dir.mkdir()
+    (engine_dir / "node_modules").mkdir()
+    (engine_dir / "hyperframes.json").write_text("{}", encoding="utf-8")
+    (engine_dir / "index.template.html").write_text(
+        "__WIDTH__ __HEIGHT__ __FPS__ __DURATION__ "
+        '<script type="application/json">__SCENE_SPEC_JSON__</script>',
+        encoding="utf-8",
+    )
+    image = tmp_path / "source image.jpg"
+    image.write_bytes(b"fixture-image")
+    spec = {
+        "width": 1280,
+        "height": 720,
+        "fps": 30,
+        "duration_seconds": 6.25,
+        "scene": {
+            "scene_id": "scene/001",
+            "render_kind": "context_image_scene",
+            "payload": {},
+            "resolved_asset": {"asset_path": str(image)},
+        },
+    }
+
+    project_dir = tmp_path / "project"
+    render_app._write_hyperframes_project(
+        project_dir=project_dir,
+        engine_dir=engine_dir,
+        spec=spec,
+    )
+
+    html = (project_dir / "index.html").read_text(encoding="utf-8")
+    assert "1280 720 30 6.25" in html
+    assert '"asset_render_url":"assets/scene_001.jpg"' in html
+    assert (project_dir / "assets" / "scene_001.jpg").read_bytes() == b"fixture-image"
+
+
+def test_hyperframes_rejects_unsupported_scene_before_render(tmp_path: Path) -> None:
+    request = _request(tmp_path, backend="hyperframes")
+    specs_dir = tmp_path / "specs"
+    scenes_dir = tmp_path / "scenes"
+    specs_dir.mkdir()
+    scenes_dir.mkdir()
+
+    result = render_app._render_scenes_hyperframes(
+        render_scenes=[
+            {
+                "scene_id": "scene_legacy",
+                "scene_order": 1,
+                "render_kind": "architecture_flow_scene",
+                "duration_seconds": 5,
+                "payload": {"headline": "Legacy specialist visual"},
+            }
+        ],
+        engine_dir=tmp_path / "missing-engine",
+        specs_dir=specs_dir,
+        scenes_dir=scenes_dir,
+        request=request,
+        render_settings={"width": 1280, "height": 720, "fps": 30},
+        duration_cap=14,
+    )
+
+    assert result[0]["status"] == "failed"
+    assert "does not support render_kind" in result[0]["error"]
+
+
+def test_hyperframes_avoids_nested_worker_multiplication(tmp_path: Path) -> None:
+    parallel_request = _request(
+        tmp_path,
+        backend="hyperframes",
+        worker_count=4,
+        frame_concurrency=3,
+    )
+    focused_request = _request(
+        tmp_path,
+        backend="hyperframes",
+        worker_count=1,
+        frame_concurrency=3,
+    )
+
+    assert render_app._hyperframes_frame_workers(parallel_request) == 1
+    assert render_app._hyperframes_frame_workers(focused_request) == 3
+
+
 def test_scene_render_retries_once_and_keeps_logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     request = _request(tmp_path)
     scene = {

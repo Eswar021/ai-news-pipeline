@@ -1,9 +1,9 @@
 # Production Orchestration and Creative Quality Worklist
 
-Status: Active implementation tracker. Q-01 through Q-17 are implemented and
+Status: Active implementation tracker. Q-01 through Q-20 are implemented and
 now require a fresh production episode plus human quality review.
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 Target runtime: `src/pipeline/`
 
@@ -486,6 +486,51 @@ with seven section audio units, 39 aligned beats, two caption files, monotonic
 chunk timing, and exact decoded-WAV/package duration agreement. The prior
 Kokoro variant remains available at 585.33 seconds for human A/B listening.
 
+### Q-18: Provider-neutral beat delivery (`P1`, implemented 2026-07-19)
+
+Canonical script beats now carry provider-neutral delivery intent rather than
+vendor tags embedded in narration. Voiceover adapters translate that intent
+into OpenAI instructions, Gemini performance markup, or plain local synthesis
+input while preserving the exact spoken text, beat IDs, section IDs, and
+fingerprints. This keeps expressive direction reusable when the configured TTS
+provider changes and prevents synthesis-specific syntax from leaking into
+captions or script review.
+
+### Q-19: Story-scoped visual capability contracts (`P0`, implemented and real-run tested 2026-07-19)
+
+The visual planner now derives a strict provider schema separately for each
+story from that story's available catalog assets. Asset-backed render kinds are
+omitted when the required asset type does not exist, and provider-selected
+asset IDs form a closed story-owned set. Code no longer substitutes unknown
+assets, rewrites render kinds, fills semantic payloads, or hides failed story
+plans behind generic text. Pydantic validates the selected render family's
+payload shape, including explainer item cardinality, before a plan is accepted.
+Deterministic code only binds exact catalog identity and expands long aligned
+audio units into short timing continuations.
+
+The frozen production input from
+`run_2026_07_18_184808_daily_48h_all_sources` completed with five of five story
+plans, 56 renderable scenes, 39 of 39 aligned units covered, no fallback, no
+parse or payload-validation failures, and no editor failure. It produced 15
+source-proof scenes and held text-like duration to about 25.5 percent. Planner
+LLM roles are provider/model configurable. A controlled Kimi K3 comparison was
+stopped after roughly ten minutes without completing, so GPT-4o-mini remains
+the daily visual-planning default and K3 remains an opt-in quality experiment.
+
+### Q-20: Explicit HyperFrames render backend (`P2`, implemented as opt-in 2026-07-19)
+
+Visual rendering now has an explicit `remotion|hyperframes` backend boundary.
+The optional HyperFrames adapter supports the compact production vocabulary,
+isolates one generated project per scene, copies only resolved local assets,
+uses bounded scene/frame concurrency, participates in cache identity, and
+never silently falls back to Remotion. Seven real scene-family smokes rendered
+successfully; a five-scene 720p batch completed in 17.7 seconds with three scene
+workers. Remotion remains the production default because the current
+HyperFrames dependency graph contains an unresolved high-severity `adm-zip`
+denial-of-service advisory. HyperFrames must process pipeline-owned
+compositions and trusted local assets only until upstream dependencies are
+fixed.
+
 ### Standing Semantic Policy (`KEEP`)
 
 Engagement, humor, hook quality, claim interpretation, tone, visual meaning,
@@ -508,7 +553,7 @@ pass human review.
 
 ## 6. Next Evaluation Gate
 
-Q-01 through Q-17 are implemented. The next gate is a fresh production episode
+Q-01 through Q-20 are implemented. The next gate is a fresh production episode
 from evidence preparation onward, followed by artifact inspection rather than
 summary-only review. External provider search and paid vision verification stay
 disabled during this evaluation so source-context, grouping, script quality,
@@ -545,7 +590,7 @@ Visual review:
 
 ## 7. Other Deferred Work
 
-After the validated Q-01 through Q-17 foundation, keep these operational and
+After the validated Q-01 through Q-20 foundation, keep these operational and
 product tasks visible without mixing them into the current evaluation:
 
 - Keep Wikimedia, Pexels, Pixabay, and paid frame-level vision verification
@@ -553,12 +598,14 @@ product tasks visible without mixing them into the current evaluation:
   accepted. Re-enable them only through an explicit profile and human-reviewed
   cost/quality comparison.
 
-- Investigate the generated visual-plan failure in
-  `run_2026_07_18_184808_daily_48h_all_sources`: asset cataloging completed,
-  but story-level planning failed for
-  `story_20260717_agility_robotics_plants_its_flag_in_tesl_4eb6ec`. Preserve
-  its planner diagnostics and address it after the voiceover provider work;
-  do not hide it behind a generic text fallback.
+- Keep Kimi K3 available as a role-level visual-planning experiment, but do not
+  promote it until a bounded same-input comparison completes and materially
+  improves beat relevance or asset use over GPT-4o-mini. The first full-context
+  comparison exceeded roughly ten minutes without producing a plan.
+
+- Reassess the HyperFrames backend after its transitive `adm-zip` advisory is
+  fixed upstream. Until then, keep Remotion as production default and run
+  HyperFrames only on pipeline-owned compositions and trusted local assets.
 
 - Compare the verified OpenAI `gpt-4o-mini-tts` baseline against a
   non-deprecated hosted speech path before production lock. The model still
@@ -616,6 +663,18 @@ python -m src.pipeline.orchestration.runner visuals \
   --run-id current \
   --plan-source generate \
   --render-mode preview
+```
+
+Compare the opt-in HyperFrames renderer after a valid plan and resolved assets
+already exist:
+
+```bash
+python -m src.pipeline.orchestration.runner visuals \
+  --run-id current \
+  --plan-source generate \
+  --render-mode preview \
+  --render-backend hyperframes \
+  --from-module visual_render
 ```
 
 After manual preview approval, render final delivery media:

@@ -9,7 +9,7 @@ import time
 from typing import Any, Literal
 
 from langchain_core.prompts import PromptTemplate
-from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
 
 from src.pipeline.contracts import (
     build_artifact_provenance,
@@ -55,6 +55,7 @@ from .config import (
     STORY_VISUAL_EDITOR_PROMPT_MODULE,
     STORY_VISUAL_PLANNER_PROMPT_MODULE,
     SUPPORTED_FORMAT,
+    VISUAL_LLM_ROLES,
 )
 from .contract import VisualPlannerRequest, VisualPlannerResponse
 from .llm_client import make_llm
@@ -245,6 +246,14 @@ class ProviderSceneDraft(BaseModel):
             raise ValueError("payload_json must encode a JSON object")
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
+    @model_validator(mode="after")
+    def payload_must_match_render_contract(self) -> "ProviderSceneDraft":
+        payload = json.loads(self.payload_json)
+        errors = validate_scene_payload(self.render_kind, payload)
+        if errors:
+            raise ValueError("; ".join(errors))
+        return self
+
 
 class StoryVisualPlanDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -334,6 +343,76 @@ def _story_visual_edit_output_model(story_plan_model: type[BaseModel]) -> type[B
     )
 
 
+def _resolved_llm_configs(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    default_config = {
+        "provider": config["provider"],
+        "model": config["model"],
+        "temperature": float(config["temperature"]),
+        "base_url": config.get("base_url"),
+        "provider_options": dict(config.get("provider_options") or {}),
+        "structured_output": dict(config.get("structured_output") or {}),
+        "max_attempts": int(config.get("max_attempts", 2)),
+    }
+    overrides = dict(config.get("llm_roles") or {})
+    resolved: dict[str, dict[str, Any]] = {}
+    for role in VISUAL_LLM_ROLES:
+        role_config = dict(default_config)
+        override = dict(overrides.get(role) or {})
+        if override:
+            role_config.update(
+                {
+                    "provider": override["provider"],
+                    "model": override["model"],
+                    "temperature": float(override["temperature"]),
+                    "base_url": override.get("base_url"),
+                    "provider_options": dict(override.get("provider_options") or {}),
+                    "structured_output": dict(override.get("structured_output") or {}),
+                }
+            )
+        resolved[role] = role_config
+    return resolved
+
+
+def _build_llm_runtimes(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    runtimes: dict[str, dict[str, Any]] = {}
+    for role, role_config in _resolved_llm_configs(config).items():
+        runtimes[role] = {
+            "config": role_config,
+            "llm": make_llm(
+                provider=role_config["provider"],
+                model=role_config["model"],
+                temperature=float(role_config["temperature"]),
+                base_url=role_config.get("base_url"),
+                provider_options=role_config.get("provider_options"),
+            ),
+        }
+    return runtimes
+
+
+def _structured_llm(llm, output_model, llm_config: dict[str, Any]):
+    structured = dict(llm_config.get("structured_output") or {})
+    return llm.with_structured_output(
+        output_model,
+        include_raw=True,
+        method=clean_text(structured.get("method")) or "json_schema",
+        strict=bool(structured.get("strict", True)),
+    )
+
+
+def _llm_route_summary(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        role: {
+            "provider": route["provider"],
+            "model": route["model"],
+            "structured_output": route["structured_output"],
+            "request_timeout_seconds": (
+                route.get("provider_options") or {}
+            ).get("request_timeout_seconds"),
+        }
+        for role, route in _resolved_llm_configs(config).items()
+    }
+
+
 def run(input_json: dict) -> dict:
     request = VisualPlannerRequest.model_validate(input_json)
     generated_at = iso_now()
@@ -402,12 +481,7 @@ def run(input_json: dict) -> dict:
     story_editor_prompt_bundle = load_prompt_bundle(
         STORY_VISUAL_EDITOR_PROMPT_MODULE, config["prompt_version"]
     )
-    llm = make_llm(
-        provider=config["provider"],
-        model=config["model"],
-        temperature=float(config["temperature"]),
-        base_url=config.get("base_url"),
-    )
+    llm_runtimes = _build_llm_runtimes(config)
 
     episode_direction = _generate_episode_direction(
         script_units=script_units,
@@ -417,7 +491,8 @@ def run(input_json: dict) -> dict:
         story_sections=story_sections,
         config=config,
         prompt_bundle=episode_prompt_bundle,
-        llm=llm,
+        llm=llm_runtimes[EPISODE_DIRECTOR_PROMPT_MODULE]["llm"],
+        llm_config=llm_runtimes[EPISODE_DIRECTOR_PROMPT_MODULE]["config"],
         llm_calls=llm_calls,
     )
     story_drafts = _generate_story_visual_plans(
@@ -429,7 +504,8 @@ def run(input_json: dict) -> dict:
         episode_direction=episode_direction,
         config=config,
         prompt_bundle=story_prompt_bundle,
-        llm=llm,
+        llm=llm_runtimes[STORY_VISUAL_PLANNER_PROMPT_MODULE]["llm"],
+        llm_config=llm_runtimes[STORY_VISUAL_PLANNER_PROMPT_MODULE]["config"],
         llm_calls=llm_calls,
     )
     preliminary_scene_plan = _build_visual_scene_plan(
@@ -464,7 +540,8 @@ def run(input_json: dict) -> dict:
         episode_direction=episode_direction,
         config=config,
         prompt_bundle=story_editor_prompt_bundle,
-        llm=llm,
+        llm=llm_runtimes[STORY_VISUAL_EDITOR_PROMPT_MODULE]["llm"],
+        llm_config=llm_runtimes[STORY_VISUAL_EDITOR_PROMPT_MODULE]["config"],
         llm_calls=llm_calls,
     )
     visual_scene_plan = _build_visual_scene_plan(
@@ -602,11 +679,56 @@ def _catalog_for_story_prompt(
     }
 
 
+def _story_allowed_render_kinds(
+    config: dict[str, Any],
+    story_catalog: dict[str, Any],
+) -> list[str]:
+    """Limit asset-backed scene families to assets this story can actually use."""
+
+    configured = [
+        clean_text(kind)
+        for kind in config["scene_policy"]["allowed_render_kinds"]
+        if clean_text(kind) and clean_text(kind) != "story_transition_scene"
+    ]
+    required_assets = {
+        clean_text(kind)
+        for kind in (
+            config.get("asset_availability_policy", {}).get(
+                "catalog_asset_required_render_kinds", []
+            )
+        )
+        if clean_text(kind)
+    }
+    available_types = {
+        clean_text(asset.get("asset_type"))
+        for asset in story_catalog.get("available_assets", [])
+        if isinstance(asset, dict)
+        and clean_text(asset.get("review_status")) not in {"rejected", "blocked"}
+    }
+    allowed = [
+        kind
+        for kind in configured
+        if kind not in required_assets
+        or bool(CATALOG_ASSET_TYPES_BY_RENDER_KIND.get(kind, set()) & available_types)
+    ]
+    if not allowed:
+        raise ValueError(
+            "No story-plannable render kinds remain after catalog availability routing"
+        )
+    return allowed
+
+
 def _real_anchor_contract_for_prompt(
     story_catalog: dict[str, Any],
     config: dict[str, Any],
+    *,
+    allowed_render_kinds: list[str] | None = None,
 ) -> dict[str, Any]:
-    allowed = set(config["scene_policy"]["allowed_render_kinds"])
+    allowed = set(
+        allowed_render_kinds
+        if allowed_render_kinds is not None
+        else config["scene_policy"]["allowed_render_kinds"]
+    )
     options = []
     for asset in story_catalog.get("available_assets", []):
         render_kind = CATALOG_RENDER_KIND_BY_ASSET_TYPE.get(
@@ -706,22 +828,17 @@ def _prepare_story_scene_draft(
     config: dict[str, Any],
 ) -> dict[str, Any]:
     scene = _expand_provider_scene_draft(raw_scene)
-    repairs: list[str] = []
-    scene, common_repairs = _normalize_provider_scene_fields(
+    scene, _ = _normalize_provider_scene_fields(
         scene,
         section=section,
         allowed_render_kinds=set(config["scene_policy"]["allowed_render_kinds"]),
     )
-    repairs.extend(common_repairs)
-    scene, catalog_repairs = _normalize_catalog_scene_reference(
+    scene, _ = _normalize_catalog_scene_reference(
         scene,
         story_id=story_id,
         catalog_index=asset_catalog_index,
         allowed_render_kinds=set(config["scene_policy"]["allowed_render_kinds"]),
     )
-    repairs.extend(catalog_repairs)
-    if repairs:
-        scene["contract_repairs"] = dedupe(repairs)
     return scene
 
 
@@ -731,95 +848,10 @@ def _normalize_provider_scene_fields(
     section: dict[str, Any],
     allowed_render_kinds: set[str] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
-    """Canonicalize lossless provider formatting without changing visual meaning."""
+    """Preserve provider semantics; downstream code validates the declared shape."""
 
-    normalized = dict(scene)
-    repairs: list[str] = []
-    try:
-        payload = json.loads(clean_text(scene.get("payload_json")) or "{}")
-    except json.JSONDecodeError:
-        payload = {}
-    if not isinstance(payload, dict):
-        payload = {}
-    render_kind = clean_text(normalized.get("render_kind"))
-
-    if render_kind == "editorial_text_scene":
-        composition_aliases = {
-            "center": "editorial_center",
-            "centered": "editorial_center",
-            "left": "editorial_left",
-            "left_aligned": "editorial_left",
-            "split": "editorial_split",
-        }
-        composition = clean_text(payload.get("composition")).casefold()
-        if composition in composition_aliases:
-            payload["composition"] = composition_aliases[composition]
-            normalized["composition"] = composition_aliases[composition]
-            repairs.append("canonicalized editorial composition alias")
-        accent_words = payload.get("accent_words")
-        if isinstance(accent_words, str):
-            payload["accent_words"] = [
-                item.strip() for item in accent_words.split(",") if item.strip()
-            ]
-            normalized["accent_words"] = payload["accent_words"]
-            repairs.append("canonicalized accent_words to list[str]")
-
-    if render_kind == "simple_explainer_scene" and isinstance(payload.get("items"), list):
-        rows = []
-        changed = False
-        for item in payload["items"]:
-            if not isinstance(item, dict):
-                rows.append(item)
-                continue
-            row = dict(item)
-            if not clean_text(row.get("detail")) and clean_text(row.get("value")):
-                row["detail"] = clean_text(row.get("value"))
-                changed = True
-            rows.append(row)
-        if changed:
-            payload["items"] = rows
-            normalized["items"] = rows
-            repairs.append("mapped explainer item value to visible detail")
-        object_rows = [item for item in rows if isinstance(item, dict)]
-        if (
-            len(object_rows) == 1
-            and "editorial_text_scene" in (allowed_render_kinds or set())
-        ):
-            row = object_rows[0]
-            headline = clean_text(payload.get("headline")) or clean_text(row.get("label"))
-            supporting_text = clean_text(row.get("detail") or row.get("value"))
-            payload = {
-                "eyebrow": "",
-                "headline": headline,
-                "accent_words": meaningful_words(headline)[:2],
-                "supporting_text": supporting_text,
-                "composition": "editorial_center",
-                "motion_style": "word_reveal",
-            }
-            normalized.update(payload)
-            normalized["render_kind"] = "editorial_text_scene"
-            render_kind = "editorial_text_scene"
-            repairs.append(
-                "converted one-item explainer to lossless editorial emphasis"
-            )
-
-    if render_kind in EVIDENCE_BOUND_RENDER_KINDS:
-        basis = clean_text(normalized.get("grounding_basis")) or "script_beat"
-        if basis == "script_beat" and not clean_text(normalized.get("evidence_text")):
-            start = safe_int(normalized.get("start_unit_order"), 0)
-            end = safe_int(normalized.get("end_unit_order"), start)
-            excerpt = _section_unit_excerpt(section, start, end)
-            if excerpt:
-                normalized["evidence_text"] = excerpt
-                repairs.append("bound empty evidence_text to exact active script unit")
-
-    if payload:
-        normalized["payload_json"] = json.dumps(
-            payload,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-    return normalized, repairs
+    del section, allowed_render_kinds
+    return dict(scene), []
 
 
 def _normalize_catalog_scene_reference(
@@ -829,85 +861,27 @@ def _normalize_catalog_scene_reference(
     catalog_index: dict[str, Any],
     allowed_render_kinds: set[str],
 ) -> tuple[dict[str, Any], list[str]]:
+    del allowed_render_kinds
     normalized = dict(scene)
-    repairs: list[str] = []
     asset_id = clean_text(normalized.get("asset_id"))
-    asset = catalog_index.get("assets_by_id", {}).get(asset_id) if asset_id else None
-
-    if isinstance(asset, dict):
-        asset_type = clean_text(asset.get("asset_type"))
-        current_kind = clean_text(normalized.get("render_kind"))
-        compatible = asset_type in CATALOG_ASSET_TYPES_BY_RENDER_KIND.get(current_kind, set())
-        replacement = CATALOG_RENDER_KIND_BY_ASSET_TYPE.get(asset_type, "")
-        if (
-            not compatible
-            and current_kind in CATALOG_ASSET_TYPES_BY_RENDER_KIND
-            and replacement in allowed_render_kinds
-            and clean_text(asset.get("story_id")) == story_id
-            and clean_text(asset.get("status")) == "available"
-        ):
-            normalized["render_kind"] = replacement
-            repairs.append(
-                f"mapped {current_kind} to {replacement} for catalog asset type {asset_type}"
-            )
-        normalized = _scene_with_catalog_asset(normalized, asset)
-        return normalized, repairs
-
-    if asset_id and clean_text(normalized.get("render_kind")) in MEDIA_KINDS:
-        # Context media can still be resolved from its semantic brief. Remove an
-        # invented catalog reference without selecting replacement media in code.
-        normalized.pop("asset_id", None)
-        repairs.append(
-            f"removed unknown catalog asset reference {asset_id!r} from media brief"
-        )
-        return normalized, repairs
-
-    if asset_id:
-        return normalized, repairs
-
+    if not asset_id:
+        return normalized, []
+    asset = catalog_index.get("assets_by_id", {}).get(asset_id)
+    if not isinstance(asset, dict):
+        return normalized, []
     render_kind = clean_text(normalized.get("render_kind"))
-    accepted_types = CATALOG_ASSET_TYPES_BY_RENDER_KIND.get(render_kind, set())
-    if not accepted_types:
-        return normalized, repairs
-    candidates = [
-        item
-        for item in catalog_index.get("assets_by_story", {}).get(story_id, [])
-        if clean_text(item.get("status")) == "available"
-        and clean_text(item.get("asset_type")) in accepted_types
-    ]
-    requested_key = clean_text(normalized.get("source_record_key"))
-    if not requested_key:
-        requested_key = next(
-            (
-                clean_text(key)
-                for key in normalized.get("evidence_record_keys", [])
-                if clean_text(key)
-            ),
-            "",
-        )
-    if requested_key:
-        matching = [
-            item
-            for item in candidates
-            if clean_text(item.get("source_record_key")) == requested_key
-        ]
-        if matching:
-            candidates = matching
-    if render_kind == "logo_reveal_scene" and len(candidates) > 1:
-        entity = clean_text(normalized.get("primary_entity")).casefold()
-        matching = [
-            item
-            for item in candidates
-            if entity and entity in clean_text(item.get("title")).casefold()
-        ]
-        if matching:
-            candidates = matching
-    if len(candidates) == 1:
-        normalized = _scene_with_catalog_asset(normalized, candidates[0])
-        repairs.append(
-            f"bound {render_kind} to matching catalog asset {candidates[0].get('asset_id')}"
-        )
-    return normalized, repairs
+    compatible = clean_text(asset.get("asset_type")) in CATALOG_ASSET_TYPES_BY_RENDER_KIND.get(
+        render_kind, set()
+    )
+    if (
+        compatible
+        and clean_text(asset.get("story_id")) == story_id
+        and clean_text(asset.get("status")) == "available"
+    ):
+        # Canonical metadata for an exact provider-selected ID is identity binding,
+        # not a semantic asset or scene-family substitution.
+        normalized = _scene_with_catalog_asset(normalized, asset)
+    return normalized, []
 
 
 def _updated_payload_json(scene: dict[str, Any], updates: dict[str, Any]) -> str:
@@ -931,9 +905,10 @@ def _generate_episode_direction(
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
     llm,
+    llm_config: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    structured_llm = llm.with_structured_output(EpisodeDirectorDraft, include_raw=True)
+    structured_llm = _structured_llm(llm, EpisodeDirectorDraft, llm_config)
     chain = TASK_PROMPT | structured_llm
     total_duration = _total_duration(script_units, voiceover_package, video_packet)
     timed_script = _episode_script_context(script_units)
@@ -962,7 +937,7 @@ def _generate_episode_direction(
         chain=chain,
         prompt_bundle=prompt_bundle,
         task_payload=payload,
-        config=config,
+        config=llm_config,
         metadata={
             "story_count": len(stories),
             "script_unit_count": len(script_units),
@@ -984,13 +959,9 @@ def _generate_story_visual_plans(
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
     llm,
+    llm_config: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    output_model = _story_visual_plan_output_model(
-        config["scene_policy"]["allowed_render_kinds"]
-    )
-    structured_llm = llm.with_structured_output(output_model, include_raw=True)
-    chain = TASK_PROMPT | structured_llm
     stories_by_id = {clean_text(story.get("story_id", "")): story for story in stories}
     drafts: dict[str, dict[str, Any]] = {}
     for section in story_sections:
@@ -1014,6 +985,15 @@ def _generate_story_visual_plans(
             ),
         )
         story_catalog = _catalog_for_story_prompt(asset_catalog_index, story_id)
+        story_allowed_render_kinds = _story_allowed_render_kinds(config, story_catalog)
+        story_config = deepcopy(config)
+        story_config["scene_policy"] = {
+            **config["scene_policy"],
+            "allowed_render_kinds": story_allowed_render_kinds,
+        }
+        output_model = _story_visual_plan_output_model(story_allowed_render_kinds)
+        structured_llm = _structured_llm(llm, output_model, llm_config)
+        chain = TASK_PROMPT | structured_llm
         story_context = _story_for_prompt(
             story,
             source_index,
@@ -1025,14 +1005,19 @@ def _generate_story_visual_plans(
             "selected_format": SUPPORTED_FORMAT,
             "episode_direction": episode_direction,
             "visual_mix_policy": config.get("visual_mix_policy", {}),
-            "scene_policy": config["scene_policy"],
-            "visual_capabilities": _visual_capabilities_for_prompt(config, include_system_managed=False),
+            "scene_policy": story_config["scene_policy"],
+            "visual_capabilities": _visual_capabilities_for_prompt(
+                story_config,
+                include_system_managed=False,
+                allowed_render_kinds=story_allowed_render_kinds,
+            ),
             "story": story_context,
             "available_story_assets": script_asset_hints.get(story_id, {}),
             "verified_asset_catalog": story_catalog,
             "real_anchor_contract": _real_anchor_contract_for_prompt(
                 story_catalog,
-                config,
+                story_config,
+                allowed_render_kinds=story_allowed_render_kinds,
             ),
             "story_section": _section_for_prompt(section),
             "script_units": _script_units_for_story_prompt(
@@ -1041,7 +1026,7 @@ def _generate_story_visual_plans(
                 story_id=story_id,
             ),
             "unit_coverage_contract": coverage_contract,
-            "allowed_render_kinds": config["scene_policy"]["allowed_render_kinds"],
+            "allowed_render_kinds": story_allowed_render_kinds,
             "banned_visual_language": sorted(OLD_CARD_RENDER_KINDS),
             "required_behavior": {
                 "plan_only_this_story": True,
@@ -1074,6 +1059,12 @@ def _generate_story_visual_plans(
             "script_unit_count": len(section.get("script_units", [])),
             "source_record_count": len(source_index["record_keys_by_story"].get(story_id, [])),
             "source_context": story_context["context_telemetry"],
+            "allowed_render_kinds": story_allowed_render_kinds,
+            "available_asset_ids": [
+                clean_text(asset.get("asset_id"))
+                for asset in story_catalog.get("available_assets", [])
+                if clean_text(asset.get("asset_id"))
+            ],
         }
         try:
             draft = _invoke_chain_with_attempts(
@@ -1082,7 +1073,7 @@ def _generate_story_visual_plans(
                 chain=chain,
                 prompt_bundle=prompt_bundle,
                 task_payload=payload,
-                config=config,
+                config=llm_config,
                 metadata=metadata,
                 llm_calls=llm_calls,
                 validate_output=lambda candidate: _story_draft_errors(
@@ -1091,7 +1082,7 @@ def _generate_story_visual_plans(
                     section=section,
                     source_index=source_index,
                     asset_catalog_index=asset_catalog_index,
-                    config=config,
+                    config=story_config,
                 ),
             )
         except Exception as exc:
@@ -1159,6 +1150,7 @@ def _edit_story_visual_plans(
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
     llm,
+    llm_config: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     editor_config = dict(config.get("visual_editor") or {})
@@ -1172,12 +1164,6 @@ def _edit_story_visual_plans(
             "stories": [],
         }
 
-    story_plan_model = _story_visual_plan_output_model(
-        config["scene_policy"]["allowed_render_kinds"]
-    )
-    output_model = _story_visual_edit_output_model(story_plan_model)
-    structured_llm = llm.with_structured_output(output_model, include_raw=True)
-    chain = TASK_PROMPT | structured_llm
     stories_by_id = {clean_text(story.get("story_id")): story for story in stories}
     sections_by_story = {
         clean_text(section.get("story_id")): section
@@ -1200,13 +1186,20 @@ def _edit_story_visual_plans(
         current = edited.get(story_id, {})
         if not story_id or not section or reviewed >= call_limit:
             continue
+        story_catalog = _catalog_for_story_prompt(asset_catalog_index, story_id)
+        story_allowed_render_kinds = _story_allowed_render_kinds(config, story_catalog)
+        story_config = deepcopy(config)
+        story_config["scene_policy"] = {
+            **config["scene_policy"],
+            "allowed_render_kinds": story_allowed_render_kinds,
+        }
         current_errors = _story_draft_errors(
             current,
             story_id=story_id,
             section=section,
             source_index=source_index,
             asset_catalog_index=asset_catalog_index,
-            config=config,
+            config=story_config,
         )
         current_scenes = scenes_by_story.get(story_id, [])
         quality_context = _story_visual_quality_context(
@@ -1231,7 +1224,10 @@ def _edit_story_visual_plans(
                 config["scene_policy"].get("unit_assignment_mode", "one_scene_per_script_unit")
             ),
         )
-        story_catalog = _catalog_for_story_prompt(asset_catalog_index, story_id)
+        story_plan_model = _story_visual_plan_output_model(story_allowed_render_kinds)
+        output_model = _story_visual_edit_output_model(story_plan_model)
+        structured_llm = _structured_llm(llm, output_model, llm_config)
+        chain = TASK_PROMPT | structured_llm
         story_context = _story_for_prompt(
             story,
             source_index,
@@ -1243,14 +1239,20 @@ def _edit_story_visual_plans(
             "episode_direction": episode_direction,
             "style": config["style"],
             "visual_mix_policy": config.get("visual_mix_policy", {}),
-            "scene_policy": config["scene_policy"],
+            "scene_policy": story_config["scene_policy"],
             "visual_capabilities": _visual_capabilities_for_prompt(
-                config, include_system_managed=False
+                story_config,
+                include_system_managed=False,
+                allowed_render_kinds=story_allowed_render_kinds,
             ),
             "story": story_context,
             "available_story_assets": script_asset_hints.get(story_id, {}),
             "verified_asset_catalog": story_catalog,
-            "real_anchor_contract": _real_anchor_contract_for_prompt(story_catalog, config),
+            "real_anchor_contract": _real_anchor_contract_for_prompt(
+                story_catalog,
+                story_config,
+                allowed_render_kinds=story_allowed_render_kinds,
+            ),
             "story_section": _section_for_prompt(section),
             "script_units": _script_units_for_story_prompt(
                 section.get("script_units", []),
@@ -1299,7 +1301,7 @@ def _edit_story_visual_plans(
                 section=section,
                 source_index=source_index,
                 asset_catalog_index=asset_catalog_index,
-                config=config,
+                config=story_config,
             )
 
         try:
@@ -1309,13 +1311,19 @@ def _edit_story_visual_plans(
                 chain=chain,
                 prompt_bundle=prompt_bundle,
                 task_payload=payload,
-                config=config,
+                config=llm_config,
                 metadata={
                     "story_id": story_id,
                     "story_title": clean_text(story.get("story_title")),
                     "current_plan_valid": not current_errors,
                     "review_reasons": quality_context["review_reasons"],
                     "source_context": story_context["context_telemetry"],
+                    "allowed_render_kinds": story_allowed_render_kinds,
+                    "available_asset_ids": [
+                        clean_text(asset.get("asset_id"))
+                        for asset in story_catalog.get("available_assets", [])
+                        if clean_text(asset.get("asset_id"))
+                    ],
                 },
                 llm_calls=llm_calls,
                 validate_output=validate_editor_output,
@@ -1444,8 +1452,25 @@ def _invoke_chain_with_attempts(
             payload["repair_context"] = {
                 "attempt": attempt,
                 "previous_error": last_error,
-                "instruction": "Return a corrected complete structured response.",
+                "instruction": (
+                    "Return a corrected complete structured response. Do not repair an "
+                    "unavailable asset by inventing another ID or changing it into an "
+                    "uncataloged media request. Use an exact listed assignment with its "
+                    "compatible render kind, or choose an asset-free render kind from the "
+                    "active capability registry."
+                ),
             }
+            anchor_contract = task_payload.get("real_anchor_contract")
+            if isinstance(anchor_contract, dict):
+                payload["repair_context"]["exact_asset_assignments"] = list(
+                    anchor_contract.get("available_assignments", [])
+                )
+            payload["repair_context"]["active_render_kinds"] = list(
+                task_payload.get("allowed_render_kinds", [])
+                or (task_payload.get("scene_policy") or {}).get(
+                    "allowed_render_kinds", []
+                )
+            )
             coverage_contract = task_payload.get("unit_coverage_contract")
             if isinstance(coverage_contract, dict):
                 payload["repair_context"]["unit_coverage_contract"] = coverage_contract
@@ -1891,7 +1916,8 @@ def _invoke_chain(
                 parse_error=str(parsing_error),
             )
         )
-        error = ValueError(f"LLM structured output failed for {module_name}")
+        detail = clean_text(str(parsing_error)) or "parsed output was empty"
+        error = ValueError(f"LLM structured output failed for {module_name}: {detail}")
         if isinstance(parsing_error, BaseException):
             raise error from parsing_error
         raise error
@@ -1956,6 +1982,7 @@ def _build_visual_scene_plan(
             if (visual_editor_report or {}).get("enabled")
             else "episode_director_plus_per_story"
         ),
+        "llm_routes": _llm_route_summary(config),
         "run_id": run_id,
         "generated_at": generated_at,
         "episode_style": _episode_style(episode_direction, config),
@@ -2139,7 +2166,6 @@ def _normalize_story_candidate_scenes(
                 "source_urls": [url] if url else [],
                 "semantic_grounding": grounding,
                 "reason": clean_text(draft.get("reason", "")),
-                "contract_repairs": list(draft.get("contract_repairs", [])),
             }
         )
     title_card = section.get("title_card") if isinstance(section.get("title_card"), dict) else None
@@ -2433,12 +2459,6 @@ def _timing_continuation_variants(
             payload["shot_style"] = "wide" if index == 1 else "detail"
             payload["motion_style"] = "slow_push" if index == 1 else "detail_zoom"
         variant["payload"] = payload
-        variant["contract_repairs"] = dedupe(
-            [
-                *list(candidate.get("contract_repairs", [])),
-                "converted repeated overlong-unit slice into a timed visual continuation",
-            ]
-        )
         variants.append(variant)
     return variants
 
@@ -2901,7 +2921,6 @@ def _scene_from_candidate_slice(candidate: dict[str, Any], unit_slice: dict[str,
         "source_urls": candidate.get("source_urls", []),
         "semantic_grounding": candidate.get("semantic_grounding", {}),
         "reason": clean_text(candidate.get("reason", "")),
-        "contract_repairs": list(candidate.get("contract_repairs", [])),
     }
 
 
@@ -4134,10 +4153,22 @@ def _visual_capabilities_for_prompt(
     config: dict[str, Any],
     *,
     include_system_managed: bool = True,
+    allowed_render_kinds: list[str] | None = None,
 ) -> dict[str, Any]:
-    allowed = set(config["scene_policy"]["allowed_render_kinds"])
+    allowed = set(
+        allowed_render_kinds
+        if allowed_render_kinds is not None
+        else config["scene_policy"]["allowed_render_kinds"]
+    )
     if not include_system_managed:
         allowed.discard("story_transition_scene")
+    catalog_required = {
+        clean_text(kind)
+        for kind in config.get("asset_availability_policy", {}).get(
+            "catalog_asset_required_render_kinds", []
+        )
+        if clean_text(kind)
+    }
     capabilities = config.get("visual_capabilities", {})
     prompt_capabilities: dict[str, Any] = {}
     for key, value in capabilities.items():
@@ -4145,6 +4176,21 @@ def _visual_capabilities_for_prompt(
             continue
         capability = dict(value)
         structural_contract = prompt_payload_contract(key)
+        if key in catalog_required and structural_contract:
+            required = dict(structural_contract.get("required") or {})
+            optional = dict(structural_contract.get("optional") or {})
+            required["asset_id"] = (
+                "exact available story-owned catalog asset ID compatible with this render kind"
+            )
+            optional.pop("asset_id", None)
+            optional.pop("search_queries", None)
+            optional.pop("must_show", None)
+            optional.pop("must_avoid", None)
+            structural_contract["required"] = required
+            if optional:
+                structural_contract["optional"] = optional
+            else:
+                structural_contract.pop("optional", None)
         configured_contract = capability.get("payload_field_contract")
         if isinstance(configured_contract, dict):
             capability["configured_payload_notes"] = configured_contract
@@ -4812,20 +4858,36 @@ def _build_summary(visual_scene_plan: dict[str, Any], llm_calls: list[dict[str, 
         for plan in visual_scene_plan.get("story_plans", [])
         if isinstance(plan, dict) and clean_text(plan.get("planning_failure_reason", ""))
     ]
-    contract_repairs = [
-        {
-            "scene_id": clean_text(scene.get("scene_id", "")),
-            "story_id": clean_text(scene.get("story_id", "")),
-            "repairs": [
-                clean_text(item)
-                for item in scene.get("contract_repairs", [])
-                if clean_text(item)
-            ],
-        }
+    timing_continuation_scenes = [
+        scene
         for scene in scenes
-        if isinstance(scene.get("contract_repairs"), list)
-        and any(clean_text(item) for item in scene.get("contract_repairs", []))
+        if safe_int(
+            (scene.get("payload") if isinstance(scene.get("payload"), dict) else {}).get(
+                "continuation_count"
+            ),
+            0,
+        )
+        > 1
     ]
+    timing_continuation_groups = dedupe(
+        [
+            clean_text(
+                (
+                    scene.get("payload")
+                    if isinstance(scene.get("payload"), dict)
+                    else {}
+                ).get("continuation_group_id")
+            )
+            for scene in timing_continuation_scenes
+            if clean_text(
+                (
+                    scene.get("payload")
+                    if isinstance(scene.get("payload"), dict)
+                    else {}
+                ).get("continuation_group_id")
+            )
+        ]
+    )
     editor_report = (
         visual_scene_plan.get("visual_editor")
         if isinstance(visual_scene_plan.get("visual_editor"), dict)
@@ -4894,8 +4956,8 @@ def _build_summary(visual_scene_plan: dict[str, Any], llm_calls: list[dict[str, 
         "story_planner_parse_error_count": len(story_planner_parse_errors),
         "story_planner_validation_failure_count": len(story_planner_validation_failures),
         "story_planner_validation_failures": story_planner_validation_failures,
-        "contract_repair_scene_count": len(contract_repairs),
-        "contract_repairs": contract_repairs,
+        "timing_continuation_scene_count": len(timing_continuation_scenes),
+        "timing_continuation_group_count": len(timing_continuation_groups),
         "render_kind_counts": counter_dict(kinds),
         "coverage": coverage,
         "failure_reason": failure_reason,
@@ -5485,6 +5547,7 @@ def _planning_calls_from_llm_calls(llm_calls: list[dict[str, Any]]) -> list[dict
             {
                 "call_order": index,
                 "module_name": call.get("module_name"),
+                "provider": call.get("provider"),
                 "model": call.get("model"),
                 "metadata": call.get("metadata", {}),
                 "duration_seconds": call.get("duration_seconds"),
