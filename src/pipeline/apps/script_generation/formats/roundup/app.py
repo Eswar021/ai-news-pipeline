@@ -8,14 +8,13 @@ from src.pipeline.contracts import build_script_provenance
 from .assembler import assemble_script
 from .checks import check_script_package
 from .config import (
-    BOOKEND_REVISION_SELECTOR_PROMPT_MODULE,
     BOOKEND_REVIEWER_PROMPT_MODULE,
     BOOKEND_WRITER_PROMPT_MODULE,
     DIRECTOR_PROMPT_MODULE,
     SCRIPT_APP,
+    SCRIPT_LLM_ROLES,
     STORY_REVIEWER_PROMPT_MODULE,
     SOURCE_RESEARCHER_PROMPT_MODULE,
-    STORY_REVISION_SELECTOR_PROMPT_MODULE,
     STORY_WRITER_PROMPT_MODULE,
     SUPPORTED_FORMAT,
 )
@@ -56,30 +55,28 @@ def run(input_json: dict) -> dict:
         "director": load_prompt_bundle(DIRECTOR_PROMPT_MODULE, config["prompt_version"]),
         "story_writer": load_prompt_bundle(STORY_WRITER_PROMPT_MODULE, config["prompt_version"]),
         "story_reviewer": load_prompt_bundle(STORY_REVIEWER_PROMPT_MODULE, config["prompt_version"]),
-        "story_revision_selector": load_prompt_bundle(
-            STORY_REVISION_SELECTOR_PROMPT_MODULE, config["prompt_version"]
-        ),
         "bookend_writer": load_prompt_bundle(BOOKEND_WRITER_PROMPT_MODULE, config["prompt_version"]),
         "bookend_reviewer": load_prompt_bundle(BOOKEND_REVIEWER_PROMPT_MODULE, config["prompt_version"]),
-        "bookend_revision_selector": load_prompt_bundle(
-            BOOKEND_REVISION_SELECTOR_PROMPT_MODULE, config["prompt_version"]
-        ),
     }
-    llm = make_llm(
-        provider=config["provider"],
-        model=config["model"],
-        temperature=float(config["temperature"]),
-        base_url=config.get("base_url"),
-        max_retries=0,
-    )
-    generated = generate_roundup_script(
-        video_packet=video_packet,
-        section_plan=section_plan,
-        script_cfg=config,
-        prompt_bundles=prompt_bundles,
-        llm=llm,
-        llm_calls=llm_calls,
-    )
+    try:
+        llm_runtimes = _build_llm_runtimes(config)
+        generated = generate_roundup_script(
+            video_packet=video_packet,
+            section_plan=section_plan,
+            script_cfg=config,
+            prompt_bundles=prompt_bundles,
+            llm_runtimes=llm_runtimes,
+            llm_calls=llm_calls,
+        )
+    except Exception as exc:
+        return _failed_response(
+            run_id=run_id,
+            generated_at=generated_at,
+            video_packet=video_packet,
+            config=config,
+            reason=f"{type(exc).__name__}: {exc}",
+            llm_calls=llm_calls,
+        )
     assembled = assemble_script(
         section_plan=section_plan,
         director=generated["director"],
@@ -295,6 +292,14 @@ def _build_summary(
         ),
         "total_tokens": sum(int((call.get("usage") or {}).get("total_tokens", 0) or 0) for call in llm_calls),
     }
+    usage_by_model = _usage_by_model(llm_calls)
+    worker_count = int(config.get("worker_count", 1))
+    parallelized_steps = []
+    serial_steps = ["roundup_director", "roundup_bookend_writer"]
+    if worker_count > 1:
+        parallelized_steps.extend(["roundup_source_researcher", "roundup_story_writer"])
+    else:
+        serial_steps[:0] = ["roundup_source_researcher", "roundup_story_writer"]
     return {
         "run_id": run_id,
         "generated_at": generated_at,
@@ -310,11 +315,13 @@ def _build_summary(
             "provider": config.get("provider", ""),
             "model": config.get("model", ""),
             "prompt_version": config.get("prompt_version", ""),
-            "worker_count": int(config.get("worker_count", 1)),
+            "worker_count": worker_count,
             "review_enabled": bool(config.get("review", {}).get("enabled", True)),
             "max_revision_passes": int(config.get("review", {}).get("max_revision_passes", 1)),
             "retry_policy": config.get("llm_retry", {}),
+            "role_routes": _llm_route_summary(config),
             "token_usage": token_usage,
+            "usage_by_model": usage_by_model,
             "source_context": {
                 "mode": "complete_records_plus_semantic_brief",
                 "story_packet_count": len(context_packets),
@@ -329,12 +336,8 @@ def _build_summary(
                 "records_truncated": False,
                 "resource_limits": config.get("source_context", {}),
             },
-            "parallelized_steps": ["roundup_story_writer"] if int(config.get("worker_count", 1)) > 1 else [],
-            "serial_steps": [
-                "roundup_source_researcher",
-                "roundup_director",
-                "roundup_bookend_writer",
-            ],
+            "parallelized_steps": parallelized_steps,
+            "serial_steps": serial_steps,
         },
         "content_policy": {
             "mode": "content_driven",
@@ -351,6 +354,86 @@ def _build_summary(
 
 def _iso_now() -> str:
     return datetime.now(IST).isoformat()
+
+
+def _build_llm_runtimes(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    runtimes: dict[str, dict[str, Any]] = {}
+    for role, role_config in _resolved_llm_configs(config).items():
+        runtimes[role] = {
+            "config": role_config,
+            "llm": make_llm(
+                provider=role_config["provider"],
+                model=role_config["model"],
+                temperature=float(role_config["temperature"]),
+                base_url=role_config.get("base_url"),
+                max_retries=0,
+                provider_options=role_config.get("provider_options"),
+            ),
+        }
+    return runtimes
+
+
+def _resolved_llm_configs(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    default_config = {
+        "provider": config["provider"],
+        "model": config["model"],
+        "temperature": float(config["temperature"]),
+        "base_url": config.get("base_url"),
+        "provider_options": dict(config.get("provider_options") or {}),
+        "structured_output": dict(config.get("structured_output") or {}),
+        "llm_retry": dict(config.get("llm_retry") or {}),
+    }
+    overrides = dict(config.get("llm_roles") or {})
+    resolved: dict[str, dict[str, Any]] = {}
+    for role in SCRIPT_LLM_ROLES:
+        override = dict(overrides.get(role) or {})
+        if not override:
+            resolved[role] = {
+                key: dict(value) if isinstance(value, dict) else value
+                for key, value in default_config.items()
+            }
+            continue
+        role_config = {
+            "provider": override["provider"],
+            "model": override["model"],
+            "temperature": float(override["temperature"]),
+            "base_url": override.get("base_url"),
+            "provider_options": dict(override.get("provider_options") or {}),
+            "structured_output": dict(override.get("structured_output") or {}),
+            "llm_retry": dict(override.get("llm_retry") or default_config["llm_retry"]),
+        }
+        resolved[role] = role_config
+    return resolved
+
+
+def _llm_route_summary(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        role: {
+            "provider": role_config["provider"],
+            "model": role_config["model"],
+            "structured_output": role_config["structured_output"],
+            "request_timeout_seconds": (
+                role_config.get("provider_options") or {}
+            ).get("request_timeout_seconds"),
+        }
+        for role, role_config in _resolved_llm_configs(config).items()
+    }
+
+
+def _usage_by_model(llm_calls: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    usage: dict[str, dict[str, int]] = {}
+    for call in llm_calls:
+        key = f"{call.get('provider', '')}/{call.get('model', '')}"
+        bucket = usage.setdefault(
+            key,
+            {"call_count": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        )
+        call_usage = call.get("usage") or {}
+        bucket["call_count"] += 1
+        bucket["prompt_tokens"] += int(call_usage.get("prompt_tokens", 0) or 0)
+        bucket["completion_tokens"] += int(call_usage.get("completion_tokens", 0) or 0)
+        bucket["total_tokens"] += int(call_usage.get("total_tokens", 0) or 0)
+    return usage
 
 
 def _duration_policy(video_packet: dict[str, Any]) -> dict[str, Any]:

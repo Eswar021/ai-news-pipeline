@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .config import (
     DEFAULT_MAX_TAGS,
@@ -12,7 +12,7 @@ from .config import (
 
 
 MetadataStatus = Literal["ok", "failed"]
-LLMProvider = Literal["openai", "gemini", "lmstudio"]
+LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot"]
 
 
 class MetadataRun(BaseModel):
@@ -97,12 +97,52 @@ class MemoryContext(BaseModel):
     recent_title_angles: list[Any] = Field(default_factory=list)
 
 
+class ProviderOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    thinking: Literal["enabled", "disabled"] | None = None
+    omit_temperature: bool = False
+    request_timeout_seconds: float = Field(default=300.0, ge=10.0, le=1800.0)
+
+
+class StructuredOutputConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method: Literal["json_schema", "function_calling", "json_mode"] = "json_schema"
+    strict: bool = True
+
+
+class MetadataLLMRetryConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    max_attempts: int = 2
+    max_structured_output_attempts: int = 2
+    initial_delay_seconds: float = 1.0
+    max_delay_seconds: float = 10.0
+
+    @model_validator(mode="after")
+    def retry_policy_must_be_bounded(self) -> "MetadataLLMRetryConfig":
+        if self.max_attempts < 1 or self.max_attempts > 5:
+            raise ValueError("llm_retry.max_attempts must be between 1 and 5")
+        if self.max_structured_output_attempts < 1 or self.max_structured_output_attempts > 3:
+            raise ValueError("llm_retry.max_structured_output_attempts must be between 1 and 3")
+        if self.initial_delay_seconds < 0.1 or self.initial_delay_seconds > 30:
+            raise ValueError("llm_retry.initial_delay_seconds must be between 0.1 and 30")
+        if self.max_delay_seconds < self.initial_delay_seconds or self.max_delay_seconds > 120:
+            raise ValueError("llm_retry.max_delay_seconds must be between initial_delay_seconds and 120")
+        return self
+
+
 class MetadataConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     provider: LLMProvider
     model: str
     base_url: str | None = None
+    provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
+    structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
+    llm_retry: MetadataLLMRetryConfig = Field(default_factory=MetadataLLMRetryConfig)
     prompt_version: str
     temperature: float = 0.4
     channel: ChannelConfig

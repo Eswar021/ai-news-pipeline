@@ -2,7 +2,7 @@
 
 Status: Canonical runtime reference
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 ## Runtime
 
@@ -198,12 +198,11 @@ flowchart TD
         truth[Build app-local semantic source-detail indexes]
         director[Episode director]
         writers[Per-story writers<br/>parallel and story-local]
-        review[Conditional story reviewers]
-        choose[Revision selectors<br/>keep current or accept candidate]
+        review[Conditional story reviewers<br/>keep or return focused revision]
         bookends[Intro, connectors, closing]
-        bookendReview[Conditional bookend review and selector]
+        bookendReview[Conditional bookend review<br/>keep or return focused revision]
         assembly[Deterministic script assembly]
-        truth --> director --> writers --> review --> choose --> bookends --> bookendReview --> assembly
+        truth --> director --> writers --> review --> bookends --> bookendReview --> assembly
     end
 
     metadata[metadata_creator<br/>title, thumbnail text, description, tags,<br/>provisional chapters and source URLs]
@@ -223,16 +222,26 @@ flowchart TD
     packaging --> metadata
 ```
 
-| Module                  | Main input                                                        | Main responsibility                                                 | Canonical output                           |
-| ----------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
-| `news_collection`     | Frozen collection profile, source config, environment credentials | Collect and normalize all enabled source groups                     | Raw records and collector candidate ledger |
-| `evidence_prep`       | News collection result                                            | Clean article content, retain reversible flags and provenance       | Prepared records and decision ledger       |
-| `editorial_triage`    | Raw and prepared records plus channel policy                      | Make semantic advance/reserve/quarantine decisions                  | Authoritative editorial decisions          |
+Script-generation model routing is role-specific and frozen into each run
+context. GPT-4o handles source research and episode direction because those
+calls were accurate and comparatively fast in the frozen-packet evaluation.
+Kimi K3 handles the per-story writer and reviewer plus the bookend writer and
+reviewer, because those calls directly author or replace viewer-facing prose.
+The metadata creator also uses one Kimi K3 call for titles, thumbnail text,
+description copy, tags, and complete chapter labels; code still owns chapter
+timestamps and source URLs. High-volume triage, story mapping, and editorial
+selection remain on their configured fast models.
+
+| Module                  | Main input                                                        | Main responsibility                                                                                                                           | Canonical output                           |
+| ----------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `news_collection`     | Frozen collection profile, source config, environment credentials | Collect and normalize all enabled source groups                                                                                               | Raw records and collector candidate ledger |
+| `evidence_prep`       | News collection result                                            | Clean article content, retain reversible flags and provenance                                                                                 | Prepared records and decision ledger       |
+| `editorial_triage`    | Raw and prepared records plus channel policy                      | Make semantic advance/reserve/quarantine decisions                                                                                            | Authoritative editorial decisions          |
 | `story_mapping`       | Prepared records plus triage decisions                            | Nominate related records, extract candidate event identities, adjudicate one pair at a time, reconcile semantic components, and label stories | Stories carrying their full records        |
-| `editorial_selection` | All mapped stories                                                | Semantically screen, choose, deduplicate, and order the roundup slate | Editorial slate plus reserve               |
-| `video_packaging`     | Editorial slate                                                   | Apply roundup structure without writing narration                   | Video packet with selected stories         |
-| `script_generation`   | Video packet and full selected records                            | Direct, write, conditionally review, and assemble story-aware beats | Canonical`script_package`                |
-| `metadata_creator`    | Script package plus video packet                                  | Draft viewer-facing metadata                                        | Metadata draft package                     |
+| `editorial_selection` | All mapped stories                                                | Semantically screen, choose, deduplicate, and order the roundup slate                                                                         | Editorial slate plus reserve               |
+| `video_packaging`     | Editorial slate                                                   | Apply roundup structure without writing narration                                                                                             | Video packet with selected stories         |
+| `script_generation`   | Video packet and full selected records                            | Direct, write, conditionally review, and assemble story-aware beats                                                                           | Canonical`script_package`                |
+| `metadata_creator`    | Script package plus video packet                                  | Draft viewer-facing metadata                                                                                                                  | Metadata draft package                     |
 
 ### Story Identity And Slate Reconciliation
 
@@ -279,6 +288,15 @@ Both paths must produce the same script contract. If both app and ChatGPT
 scripts exist, `script_source=auto` deliberately fails instead of choosing the
 newest file. The operator must select `app` or `chatgpt`.
 
+Native source research carries explicit semantic meaning boundaries for
+material current-versus-planned state, attribution, claim strength, causality,
+and terminology. Those LLM-authored boundaries remain in the complete story
+packet used by the director, writer, reviewer, and metadata creator. Production
+applies one structurally valid reviewer revision directly when the reviewer sets
+`rewrite_required=true`. There is no second A/B selector: the reviewer is the
+single semantic revision authority, while code checks only the revised object's
+schema, stable IDs, source ownership, and section order.
+
 ### Voiceover Stage
 
 ```mermaid
@@ -286,7 +304,7 @@ flowchart TD
     script[Selected canonical script<br/>with script fingerprint]
     variant[Resolve provider, voice, style,<br/>speed, and deterministic variant]
     py312[Launch .venv-voiceover Python 3.12]
-    provider[Kokoro, Chatterbox, F5-TTS, or Dia]
+    provider[OpenAI, Gemini, Kokoro, Chatterbox, F5-TTS, or Dia]
     chunks[Provider audio chunks<br/>retaining section, story, beat IDs]
     units[Section-aware audio units<br/>with aligned beat timing]
     raw[Concatenated raw WAV]
@@ -365,7 +383,7 @@ profiles and visual-lab tests.
 | Work                                                   | Runtime                         | Why                                                                     |
 | ------------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------- |
 | Content apps, LLM planning, orchestration, metadata    | Main project Python             | Canonical Pydantic/LangChain application environment                    |
-| Local TTS synthesis                                    | `.venv-voiceover` Python 3.12 | Isolates Kokoro and optional local speech-model dependencies            |
+| Hosted and local TTS synthesis                         | `.venv-voiceover` Python 3.12 | Keeps one stable synthesis boundary for API and local speech providers  |
 | Scene rendering                                        | Node, Remotion, Chromium        | Renders each validated scene specification into an MP4 clip             |
 | Audio/video probing, mastering, clipping, and assembly | `ffmpeg` and `ffprobe`      | Provides deterministic media transformation and verification            |
 | External model calls and enabled news sources          | Configured APIs                 | Credentials are loaded from`.env` and never copied into run artifacts |
@@ -463,10 +481,8 @@ The roundup generation flow is:
       -> roundup director
       -> parallel creator-led story storytellers
       -> one conditional keep-or-rewrite craft review per story
-      -> one keep-current-or-accept-candidate comparison for proposed story rewrites
       -> bookend and continuity writer
       -> one conditional keep-or-rewrite bookend review
-      -> one keep-current-or-accept-candidate comparison for a proposed bookend rewrite
       -> deterministic assembly
 
 The director explicitly chooses `shared_tension` or `curated_roundup`. It also
@@ -492,22 +508,14 @@ valid source/truth references, absence of production IDs in spoken narration,
 and artifact provenance. Review output may refer only to supplied beat IDs, and
 a proposed candidate must pass the same Pydantic and ownership contract as the
 current draft. Code does not compare wording, punctuation, semantic overlap, or
-whether a named beat changed; the revision-selector LLM makes the qualitative
-keep-or-accept decision. The loop has a config-driven maximum of one pass.
-
-When a reviewer proposes a structurally valid rewrite, an app-local structured
-comparison call chooses `keep_current` or `accept_candidate` after seeing both
-versions and the review diagnosis. This semantic comparison exists because a
-valid rewrite can still weaken specificity, meaning, personality, or flow.
-Code does not attempt to make that categorical decision with word lists or
-similarity scores. Selector failure follows the explicit frozen-profile policy;
-production keeps the already valid current draft rather than applying an
-unreviewed candidate.
+whether a named beat changed. The reviewer returns either KEEP or a complete
+replacement and is the single semantic revision authority. The loop has a
+config-driven maximum of one pass.
 
 Script generation uses one versioned story-context packet per selected story.
 The packet preserves complete cleaned source records and adds a
 semantic source brief produced from those same records. The director, writer,
-reviewer, and revision selector must consume that shared packet rather than
+and reviewer must consume that shared packet rather than
 independently rebuilding capped regex- or keyword-ranked source menus. Prompt
 payload telemetry records packet version, record keys, and character counts so
 context loss can be diagnosed without logging API secrets.

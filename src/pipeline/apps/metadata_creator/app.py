@@ -5,8 +5,8 @@ import json
 import time
 from typing import Any, Literal
 
-from langchain_core.prompts import PromptTemplate
-from pydantic import BaseModel, ConfigDict, Field
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, ConfigDict, Field, ValidationError as PydanticValidationError
 
 from src.pipeline.contracts import (
     build_artifact_provenance,
@@ -24,11 +24,11 @@ from .utils import clean_tag, clean_text, clean_thumbnail_text, dedupe, format_t
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
-TASK_PROMPT = PromptTemplate.from_template(
-    "{system_prompt}\n\n"
-    "{user_preamble}\n\n"
-    "Task payload:\n"
-    "{task_payload}"
+TASK_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        ("system", "{system_prompt}"),
+        ("human", "{user_preamble}\n\nTask payload:\n{task_payload}"),
+    ]
 )
 
 
@@ -39,6 +39,34 @@ class TitleOptionOutput(BaseModel):
     accuracy_risk: Literal["low", "medium", "high"]
     click_potential: Literal["low", "medium", "medium_high", "high"]
     why_it_works: str
+    angle_strategy: Literal[
+        "lead_story_roundup",
+        "multi_story_contrast",
+        "episode_question",
+        "concrete_list",
+    ]
+    represented_story_ids: list[str] = Field(
+        description="Exact selected story IDs materially represented by this title."
+    )
+    relationship_basis: str = Field(
+        description=(
+            "The script-supported relationship behind comparison or rivalry wording, or an empty string "
+            "when the title makes no such relationship claim."
+        )
+    )
+    scope_and_state_check: str = Field(
+        description=(
+            "A concise self-check that the title signals roundup scope and preserves current, planned, "
+            "claimed, and released states from the completed episode."
+        )
+    )
+
+
+class ChapterTitleOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    section_id: str
+    title: str
 
 
 class MetadataDraftOutput(BaseModel):
@@ -47,6 +75,7 @@ class MetadataDraftOutput(BaseModel):
     title_options: list[TitleOptionOutput]
     thumbnail_text_options: list[str]
     blocked_title_angles: list[str] = Field(default_factory=list)
+    chapter_titles: list[ChapterTitleOutput]
     description_intro: str
     tags: list[str] = Field(default_factory=list)
 
@@ -143,6 +172,8 @@ def run(input_json: dict) -> dict:
         model=config["model"],
         temperature=float(config["temperature"]),
         base_url=config.get("base_url"),
+        max_retries=0,
+        provider_options=config.get("provider_options"),
     )
     draft = _generate_metadata_draft(
         script_package=script_package,
@@ -151,6 +182,11 @@ def run(input_json: dict) -> dict:
         prompt_bundle=prompt_bundle,
         llm=llm,
         llm_calls=llm_calls,
+    )
+    chapters = _apply_generated_chapter_titles(
+        chapters=chapters,
+        sections=sections,
+        generated_titles=draft.get("chapter_titles", []),
     )
     metadata = _build_youtube_metadata(
         draft=draft,
@@ -205,7 +241,13 @@ def _generate_metadata_draft(
     llm,
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    structured_llm = llm.with_structured_output(MetadataDraftOutput, include_raw=True)
+    structured_config = dict(config.get("structured_output") or {})
+    structured_llm = llm.with_structured_output(
+        MetadataDraftOutput,
+        include_raw=True,
+        method=str(structured_config.get("method") or "json_schema"),
+        strict=bool(structured_config.get("strict", True)),
+    )
     chain = TASK_PROMPT | structured_llm
     payload = {
         "task": "Generate YouTube metadata for the completed roundup script.",
@@ -216,9 +258,17 @@ def _generate_metadata_draft(
         "script_sections": _sections_for_prompt(script_package.get("sections", [])),
         "full_script": clean_text(script_package.get("full_script", "")),
         "selected_stories_context": _stories_for_prompt(video_packet.get("stories", [])),
+        "source_meaning_boundaries": _source_meaning_boundaries_for_prompt(script_package),
         "required_output": {
-            "title_options": "Use metadata_policy.title_option_count when possible.",
+            "title_options": (
+                "Use metadata_policy.title_option_count when possible. For every option, identify its angle strategy, "
+                "the exact represented story IDs, any real relationship basis, and a scope/state self-check."
+            ),
             "thumbnail_text_options": "Use metadata_policy.thumbnail_text_option_count when possible.",
+            "chapter_titles": (
+                "Return one concise, complete chapter title for every exact script section_id. Keep each title within "
+                "metadata_policy.chapter_title_max_chars. Do not return timestamps and never cut a phrase mid-thought."
+            ),
             "description_intro": "Short description opener only. Do not include chapters or source links.",
             "tags": "Useful YouTube tags only.",
         },
@@ -251,48 +301,139 @@ def _invoke_chain(
         "user_preamble": prompt_bundle["user_preamble"],
         "task_payload": task_payload,
     }
-    rendered_prompt = TASK_PROMPT.format(**prompt_inputs)
+    rendered_messages = [
+        {
+            "role": "system" if message.type == "system" else "user",
+            "content": str(message.content),
+        }
+        for message in TASK_PROMPT.format_messages(**prompt_inputs)
+    ]
     started = time.time()
-    result = chain.invoke(prompt_inputs)
-    duration = time.time() - started
+    retry_config = dict(config.get("llm_retry") or {})
+    retry_enabled = bool(retry_config.get("enabled", True))
+    max_transient_attempts = int(retry_config.get("max_attempts", 2)) if retry_enabled else 1
+    max_structured_attempts = int(retry_config.get("max_structured_output_attempts", 2)) if retry_enabled else 1
+    transient_failures = 0
+    structured_failures = 0
+    retry_errors: list[dict[str, Any]] = []
+    attempt_count = 0
 
-    raw = result.get("raw") if isinstance(result, dict) else None
-    parsed = result.get("parsed") if isinstance(result, dict) else result
-    parsing_error = result.get("parsing_error") if isinstance(result, dict) else None
-    if parsing_error is not None or parsed is None:
+    while True:
+        attempt_count += 1
+        attempt_started = time.time()
+        try:
+            result = chain.invoke(prompt_inputs)
+        except Exception as exc:
+            status_code = _exception_status_code(exc)
+            is_structured = _is_structured_output_error(exc)
+            if is_structured:
+                structured_failures += 1
+                can_retry = retry_enabled and structured_failures < max_structured_attempts
+            else:
+                transient_failures += 1
+                can_retry = (
+                    retry_enabled
+                    and _is_retryable_llm_error(exc, status_code=status_code)
+                    and transient_failures < max_transient_attempts
+                )
+            retry_entry = {
+                "attempt": attempt_count,
+                "status_code": status_code,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+            if can_retry:
+                delay = _retry_delay_seconds(attempt_count, retry_config)
+                retry_entry["delay_seconds"] = round(delay, 3)
+                retry_errors.append(retry_entry)
+                time.sleep(delay)
+                continue
+            retry_errors.append(retry_entry)
+            llm_calls.append(
+                build_llm_call_log(
+                    module_name=module_name,
+                    provider=config["provider"],
+                    model=config["model"],
+                    messages=rendered_messages,
+                    raw_response=None,
+                    parsed_output=None,
+                    metadata={
+                        **metadata,
+                        "attempt_count": attempt_count,
+                        "retry_count": max(0, attempt_count - 1),
+                        "retry_errors": retry_errors,
+                    },
+                    duration_seconds=time.time() - started,
+                    parse_error=str(exc),
+                )
+            )
+            raise
+
+        raw = result.get("raw") if isinstance(result, dict) else None
+        parsed = result.get("parsed") if isinstance(result, dict) else result
+        parsing_error = result.get("parsing_error") if isinstance(result, dict) else None
+        parsed_model = None
+        if parsing_error is None and parsed is not None:
+            try:
+                parsed_model = parsed if isinstance(parsed, output_model) else output_model.model_validate(parsed)
+            except PydanticValidationError as exc:
+                parsing_error = exc
+
+        call_metadata = {
+            **metadata,
+            "attempt_count": attempt_count,
+            "retry_count": max(0, attempt_count - 1),
+        }
+        if retry_errors:
+            call_metadata["retry_errors"] = list(retry_errors)
+        if parsing_error is not None or parsed_model is None:
+            structured_failures += 1
+            parse_error_text = str(parsing_error or "missing parsed output")
+            llm_calls.append(
+                build_llm_call_log(
+                    module_name=module_name,
+                    provider=config["provider"],
+                    model=config["model"],
+                    messages=rendered_messages,
+                    raw_response=raw,
+                    parsed_output=None,
+                    metadata=call_metadata,
+                    duration_seconds=time.time() - attempt_started,
+                    parse_error=parse_error_text,
+                )
+            )
+            if retry_enabled and structured_failures < max_structured_attempts:
+                delay = _retry_delay_seconds(structured_failures, retry_config)
+                retry_errors.append(
+                    {
+                        "attempt": attempt_count,
+                        "status_code": None,
+                        "error_type": "StructuredOutputError",
+                        "error": parse_error_text,
+                        "delay_seconds": round(delay, 3),
+                    }
+                )
+                time.sleep(delay)
+                continue
+            error = ValueError(f"LLM structured output failed for {module_name}: {parse_error_text}")
+            if isinstance(parsing_error, BaseException):
+                raise error from parsing_error
+            raise error
+
+        parsed_output = parsed_model.model_dump(mode="json")
         llm_calls.append(
             build_llm_call_log(
                 module_name=module_name,
                 provider=config["provider"],
                 model=config["model"],
-                rendered_prompt=rendered_prompt,
+                messages=rendered_messages,
                 raw_response=raw,
-                parsed_output=None,
-                metadata=metadata,
-                duration_seconds=duration,
-                parse_error=str(parsing_error),
+                parsed_output=parsed_output,
+                metadata=call_metadata,
+                duration_seconds=time.time() - attempt_started,
             )
         )
-        error = ValueError(f"LLM structured output failed for {module_name}")
-        if isinstance(parsing_error, BaseException):
-            raise error from parsing_error
-        raise error
-
-    parsed_model = parsed if isinstance(parsed, output_model) else output_model.model_validate(parsed)
-    parsed_output = parsed_model.model_dump(mode="json")
-    llm_calls.append(
-        build_llm_call_log(
-            module_name=module_name,
-            provider=config["provider"],
-            model=config["model"],
-            rendered_prompt=rendered_prompt,
-            raw_response=raw,
-            parsed_output=parsed_output,
-            metadata=metadata,
-            duration_seconds=duration,
-        )
-    )
-    return parsed_output
+        return parsed_output
 
 
 def _build_youtube_metadata(
@@ -352,7 +493,7 @@ def _build_youtube_metadata(
 def _clean_title_options(
     raw_options: list[Any],
     limit: int,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     cleaned = []
     for item in raw_options:
         if isinstance(item, str):
@@ -377,6 +518,10 @@ def _clean_title_options(
                     "medium",
                 ),
                 "why_it_works": clean_text(option.get("why_it_works", "")),
+                "angle_strategy": clean_text(option.get("angle_strategy", "")),
+                "represented_story_ids": dedupe(list(option.get("represented_story_ids") or [])),
+                "relationship_basis": clean_text(option.get("relationship_basis", "")),
+                "scope_and_state_check": clean_text(option.get("scope_and_state_check", "")),
             }
         )
     deduped = []
@@ -414,6 +559,34 @@ def _build_chapters(
     return chapters
 
 
+def _apply_generated_chapter_titles(
+    *,
+    chapters: list[dict[str, Any]],
+    sections: list[dict[str, Any]],
+    generated_titles: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    expected_ids = [clean_text(section.get("section_id", "")) for section in sections]
+    title_by_section: dict[str, str] = {}
+    for item in generated_titles:
+        section_id = clean_text(item.get("section_id", ""))
+        title = clean_text(item.get("title", ""))
+        if not section_id or not title:
+            raise ValueError("Metadata chapter titles require non-empty section_id and title values")
+        if section_id in title_by_section:
+            raise ValueError(f"Metadata returned duplicate chapter title for {section_id}")
+        title_by_section[section_id] = title
+
+    missing = [section_id for section_id in expected_ids if section_id not in title_by_section]
+    unknown = sorted(set(title_by_section) - set(expected_ids))
+    if missing or unknown:
+        raise ValueError(f"Metadata chapter section coverage mismatch; missing={missing}, unknown={unknown}")
+
+    return [
+        {**chapter, "title": title_by_section[clean_text(chapter.get("section_id", ""))]}
+        for chapter in chapters
+    ]
+
+
 def _chapter_title(section: dict[str, Any], *, max_title_chars: int = 64) -> str:
     section_type = clean_text(section.get("section_type", ""))
     if section_type == "intro":
@@ -423,6 +596,7 @@ def _chapter_title(section: dict[str, Any], *, max_title_chars: int = 64) -> str
     title_card = section.get("title_card") or {}
     title = clean_text(
         section.get("chapter_title")
+        or title_card.get("subtitle")
         or title_card.get("display_title")
         or section.get("story_title")
         or section.get("section_id")
@@ -511,6 +685,14 @@ def _check_metadata(metadata: dict[str, Any], sections: list[dict[str, Any]], co
         errors.append(f"invalid source URLs: {bad_urls}")
     if len(metadata.get("tags", [])) < 3:
         warnings.append("fewer than 3 tags")
+    chapter_title_limit = int(config["metadata_policy"].get("chapter_title_max_chars", 64))
+    long_chapters = [
+        chapter.get("section_id", "")
+        for chapter in metadata.get("chapters", [])
+        if len(clean_text(chapter.get("title", ""))) > chapter_title_limit
+    ]
+    if long_chapters:
+        warnings.append(f"chapter titles exceed configured guidance: {long_chapters}")
     return {
         "passed": not errors,
         "errors": errors,
@@ -622,6 +804,8 @@ def _video_context(video_packet: dict[str, Any], script_package: dict[str, Any])
         "story_count": video_packet.get("story_count", len(video_packet.get("stories", []))),
         "selected_story_ids": list(video_packet.get("selected_story_ids", [])),
         "generation_strategy": clean_text(script_package.get("generation_strategy", "")),
+        "episode_shape": clean_text(episode_direction.get("episode_shape", "")),
+        "episode_connection_reason": clean_text(episode_direction.get("episode_connection_reason", "")),
         "episode_thesis": clean_text(episode_direction.get("episode_thesis", "")),
         "review_revision_count": int((script_package.get("review") or {}).get("revision_count", 0) or 0),
     }
@@ -662,5 +846,56 @@ def _stories_for_prompt(stories: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return compact
 
 
+def _source_meaning_boundaries_for_prompt(script_package: dict[str, Any]) -> list[dict[str, Any]]:
+    boundaries = []
+    for packet in script_package.get("story_context_packets", []):
+        if not isinstance(packet, dict):
+            continue
+        source_brief = packet.get("semantic_source_brief") or {}
+        story_boundaries = source_brief.get("meaning_boundaries") or []
+        if story_boundaries:
+            boundaries.append(
+                {
+                    "story_id": clean_text(packet.get("story_id", "")),
+                    "boundaries": story_boundaries,
+                }
+            )
+    return boundaries
+
+
 def _iso_now() -> str:
     return datetime.now(IST).isoformat()
+
+
+def _exception_status_code(exc: Exception) -> int | None:
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int):
+        return status_code
+    response = getattr(exc, "response", None)
+    response_status = getattr(response, "status_code", None)
+    return response_status if isinstance(response_status, int) else None
+
+
+def _is_retryable_llm_error(exc: Exception, *, status_code: int | None) -> bool:
+    if status_code in {429, 500, 502, 503, 504}:
+        return True
+    return type(exc).__name__ in {
+        "APIConnectionError",
+        "APITimeoutError",
+        "InternalServerError",
+        "RateLimitError",
+        "ServiceUnavailableError",
+    }
+
+
+def _is_structured_output_error(exc: Exception) -> bool:
+    return isinstance(exc, PydanticValidationError) or type(exc).__name__ in {
+        "OutputParserException",
+        "ValidationError",
+    }
+
+
+def _retry_delay_seconds(attempt: int, retry_config: dict[str, Any]) -> float:
+    initial = float(retry_config.get("initial_delay_seconds", 1.0))
+    maximum = float(retry_config.get("max_delay_seconds", 10.0))
+    return min(maximum, initial * (2 ** max(0, attempt - 1)))

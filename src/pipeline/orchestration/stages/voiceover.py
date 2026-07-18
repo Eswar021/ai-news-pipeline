@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
+import json
 from pathlib import Path
 import os
 import subprocess
@@ -9,6 +11,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from src.pipeline.apps.metadata_finalizer import run as run_metadata_finalizer
+from src.pipeline.voiceover.contract import VoiceoverConfig
 from ..artifact_selection import fingerprint_token, resolve_script_result, resolve_voiceover_package
 from ..io import load_json, write_json
 from ..logging import configure_stage_logging
@@ -107,6 +110,8 @@ def _run_stage(
         output_root=output_root,
     )
     _deep_update(voice_config, request.input.get("voiceover_config_overrides") or {})
+    voice_config["output_dir"] = str(run_dir / "voiceover")
+    voice_config = VoiceoverConfig.model_validate(voice_config).model_dump(mode="json")
     variant = options.variant or _voiceover_variant(voice_config, script_package, script_provenance)
     voiceover_dir = run_dir / "voiceover" / variant
     voice_config["output_dir"] = str(voiceover_dir)
@@ -261,15 +266,41 @@ def _voiceover_variant(
         return "_".join(part for part in "".join(ch if ch.isalnum() else "_" for ch in text).split("_") if part)
 
     source = "chatgpt" if script_package.get("generation_source") == "chatgpt_handoff" else "app"
+    provider = str(config.get("provider", "provider"))
+    provider_config = config.get(provider) if isinstance(config.get(provider), dict) else {}
+    configured_voice = (
+        provider_config.get("voice")
+        if provider in {"openai", "gemini"}
+        else config.get("voice") or provider_config.get("voice")
+    )
     values = [
-        slug(config.get("provider", "provider")),
+        slug(provider),
         slug(config.get("style", "style")),
-        slug(config.get("voice") or "default"),
+        slug(configured_voice or "default"),
+        slug(provider_config.get("model")) if provider in {"openai", "gemini"} else "",
         f"speed_{slug(config.get('speed', 'style'))}",
+        f"cfg_{_api_voice_config_token(config, provider)}" if provider in {"openai", "gemini"} else "",
         source,
         fingerprint_token(script_provenance["script_fingerprint"]),
     ]
     return "_".join(filter(None, values))
+
+
+def _api_voice_config_token(config: dict[str, Any], provider: str) -> str:
+    identity = {
+        "provider": provider,
+        "style": config.get("style"),
+        "voice": config.get("voice"),
+        "speed": config.get("speed"),
+        "sample_rate_hz": config.get("sample_rate_hz"),
+        "chunking": config.get("chunking"),
+        "alignment": config.get("alignment"),
+        "mastering": config.get("mastering"),
+        "captions": config.get("captions"),
+        "provider_config": config.get(provider),
+    }
+    serialized = json.dumps(identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:10]
 
 
 def _run_subprocess(command: list[str], *, cwd: Path, logger) -> None:

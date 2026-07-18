@@ -15,7 +15,9 @@ from .config import (
     PROVIDER_CHATTERBOX_LOCAL,
     PROVIDER_DIA_TRANSFORMERS,
     PROVIDER_F5_TTS_LOCAL,
+    PROVIDER_GEMINI,
     PROVIDER_KOKORO_LOCAL,
+    PROVIDER_OPENAI,
     VoiceoverStyle,
     resolve_style,
     validate_provider,
@@ -24,7 +26,9 @@ from .contract import VoiceoverRequest, VoiceoverResponse
 from .providers.chatterbox_local import synthesize_chunk_to_wav as synthesize_chatterbox_chunk_to_wav
 from .providers.dia_transformers import synthesize_chunk_to_wav as synthesize_dia_chunk_to_wav
 from .providers.f5_tts_local import synthesize_chunk_to_wav as synthesize_f5_chunk_to_wav
+from .providers.gemini_tts import synthesize_chunks_to_wav as synthesize_gemini_chunks_to_wav
 from .providers.kokoro_local import concatenate_wav_files, synthesize_chunk_to_wav as synthesize_kokoro_chunk_to_wav
+from .providers.openai_tts import synthesize_chunks_to_wav as synthesize_openai_chunks_to_wav
 from .script_units import build_audio_units, resolve_script_input
 from .text_chunks import estimated_seconds_from_words, split_narration_into_chunks, word_count
 
@@ -138,6 +142,58 @@ def run(input_json: dict) -> dict:
             sample_rate_hz=actual_sample_rate_hz,
             pauses_after_seconds=[float(chunk.get("pause_after_seconds", 0.0)) for chunk in synthesized_chunks],
         )
+    elif request.config.provider == PROVIDER_OPENAI:
+        audio_chunks = synthesize_openai_chunks_to_wav(
+            chunks=chunks,
+            output_dir=chunk_dir,
+            model=request.config.openai.model,
+            voice=voice_name,
+            instructions=_performance_instructions(style_profile, request.config.openai.instructions),
+            speed=speed_value,
+            response_format=request.config.openai.response_format,
+            api_key_envs=request.config.openai.api_key_envs,
+            request_timeout_seconds=request.config.openai.request_timeout_seconds,
+            max_retries=request.config.openai.max_retries,
+            retry_initial_delay_seconds=request.config.openai.retry_initial_delay_seconds,
+            retry_max_delay_seconds=request.config.openai.retry_max_delay_seconds,
+            worker_count=request.config.openai.worker_count,
+            max_input_chars=request.config.openai.max_input_chars,
+            sample_rate_hz=request.config.sample_rate_hz,
+        )
+        synthesized_chunks = _enrich_api_chunks(chunks, audio_chunks)
+        actual_sample_rate_hz = int(synthesized_chunks[0]["sample_rate_hz"])
+        duration_seconds = concatenate_wav_files(
+            input_paths=[Path(chunk["audio_path"]) for chunk in synthesized_chunks],
+            output_path=raw_audio_path,
+            sample_rate_hz=actual_sample_rate_hz,
+            pauses_after_seconds=[float(chunk.get("pause_after_seconds", 0.0)) for chunk in synthesized_chunks],
+        )
+    elif request.config.provider == PROVIDER_GEMINI:
+        audio_chunks = synthesize_gemini_chunks_to_wav(
+            chunks=chunks,
+            output_dir=chunk_dir,
+            model=request.config.gemini.model,
+            voice=voice_name,
+            instructions=_performance_instructions(style_profile, request.config.gemini.instructions),
+            speed=speed_value,
+            language_code=request.config.gemini.language_code,
+            api_key_envs=request.config.gemini.api_key_envs,
+            request_timeout_seconds=request.config.gemini.request_timeout_seconds,
+            max_retries=request.config.gemini.max_retries,
+            retry_initial_delay_seconds=request.config.gemini.retry_initial_delay_seconds,
+            retry_max_delay_seconds=request.config.gemini.retry_max_delay_seconds,
+            worker_count=request.config.gemini.worker_count,
+            max_input_chars=request.config.gemini.max_input_chars,
+            sample_rate_hz=request.config.sample_rate_hz,
+        )
+        synthesized_chunks = _enrich_api_chunks(chunks, audio_chunks)
+        actual_sample_rate_hz = int(synthesized_chunks[0]["sample_rate_hz"])
+        duration_seconds = concatenate_wav_files(
+            input_paths=[Path(chunk["audio_path"]) for chunk in synthesized_chunks],
+            output_path=raw_audio_path,
+            sample_rate_hz=actual_sample_rate_hz,
+            pauses_after_seconds=[float(chunk.get("pause_after_seconds", 0.0)) for chunk in synthesized_chunks],
+        )
     else:
         raise NotImplementedError(f"Voiceover provider '{request.config.provider}' is not implemented yet.")
 
@@ -220,6 +276,10 @@ def _resolved_chunking(request: VoiceoverRequest, style_profile: VoiceoverStyle)
 
 
 def _resolved_voice_name(request: VoiceoverRequest, style_profile: VoiceoverStyle) -> str:
+    if request.config.provider == PROVIDER_OPENAI:
+        return request.config.openai.voice
+    if request.config.provider == PROVIDER_GEMINI:
+        return request.config.gemini.voice
     if request.config.provider == PROVIDER_CHATTERBOX_LOCAL:
         if request.config.voice:
             return request.config.voice
@@ -230,7 +290,40 @@ def _resolved_voice_name(request: VoiceoverRequest, style_profile: VoiceoverStyl
         return request.config.voice or "f5_reference_voice"
     if request.config.provider == PROVIDER_DIA_TRANSFORMERS:
         return request.config.voice or "dia_dialogue_voice"
+    if request.config.provider == PROVIDER_KOKORO_LOCAL:
+        return request.config.voice or request.config.kokoro.voice or style_profile.default_voice
     return request.config.voice or style_profile.default_voice
+
+
+def _performance_instructions(style_profile: VoiceoverStyle, provider_instructions: str) -> str:
+    return f"{provider_instructions.strip()} Overall style profile: {style_profile.description}"
+
+
+def _enrich_api_chunks(
+    chunks: list[dict[str, Any]],
+    audio_chunks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if len(chunks) != len(audio_chunks):
+        raise RuntimeError(
+            f"API voiceover returned {len(audio_chunks)} audio chunks for {len(chunks)} requested chunks"
+        )
+    enriched_chunks: list[dict[str, Any]] = []
+    cursor_seconds = 0.0
+    for chunk, audio in zip(chunks, audio_chunks, strict=True):
+        duration_seconds = float(audio["duration_seconds"])
+        start_seconds = cursor_seconds
+        end_seconds = start_seconds + duration_seconds
+        cursor_seconds = end_seconds + float(chunk.get("pause_after_seconds", 0.0))
+        enriched_chunks.append(
+            {
+                **chunk,
+                **audio,
+                "duration_seconds": round(duration_seconds, 2),
+                "start_seconds": round(start_seconds, 2),
+                "end_seconds": round(end_seconds, 2),
+            }
+        )
+    return enriched_chunks
 
 
 def _synthesize_kokoro_chunks(
@@ -452,6 +545,10 @@ def _style_manifest(
 
 
 def _provider_settings(request: VoiceoverRequest) -> dict[str, Any]:
+    if request.config.provider == PROVIDER_OPENAI:
+        return request.config.openai.model_dump(mode="json")
+    if request.config.provider == PROVIDER_GEMINI:
+        return request.config.gemini.model_dump(mode="json")
     if request.config.provider == PROVIDER_CHATTERBOX_LOCAL:
         return {
             "device": request.config.chatterbox.device,

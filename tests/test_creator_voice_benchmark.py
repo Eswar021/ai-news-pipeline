@@ -59,6 +59,15 @@ def test_truth_index_scans_full_content_and_preserves_key_metrics() -> None:
             "central_event": "The project published query analysis and repair results.",
             "source_relationship_summary": "One project-authored record reports the results.",
             "distinctive_details": details,
+            "meaning_boundaries": [
+                {
+                    "record_keys": ["record_sqlsure_reference"],
+                    "subject": "Published benchmark results",
+                    "established_state": "The project reports results from one bounded benchmark.",
+                    "must_not_be_upgraded_to": "A universal guarantee that every query is error-free.",
+                    "attribution": "The figures are reported by the project itself.",
+                }
+            ],
             "tensions_and_caveats": ["The benchmark is not an independent guarantee."],
             "creator_opportunities": ["Contrast fast checks with the limited benchmark scope."],
             "visual_opportunities": ["Show the exact benchmark values."],
@@ -77,6 +86,7 @@ def test_truth_index_scans_full_content_and_preserves_key_metrics() -> None:
     } <= values
     assert all(item.record_key == "record_sqlsure_reference" for item in index.items)
     assert any("independent guarantee" in item.source_text for item in index.items)
+    assert index.semantic_source_brief["meaning_boundaries"][0]["subject"] == "Published benchmark results"
 
 
 def test_phase_zero_benchmark_keeps_human_authored_weak_and_strong_examples() -> None:
@@ -104,7 +114,12 @@ def test_phase_zero_fixture_keeps_human_review_and_visual_regression_cases() -> 
         "identical_rewrite",
         "claim_strengthening",
         "future_metric_subject",
+        "promotional_rewrite",
     }
+    assert regressions["status_semantics"]["expected_guardrail"].startswith(
+        "Preserve separate states"
+    )
+    assert regressions["metadata_regressions"][0]["case"] == "invented_roundup_rivalry"
     assert len(regressions["visual_mismatches"]) == 3
     assert all(case["expected_guardrail"] for case in regressions["visual_mismatches"])
 
@@ -116,9 +131,8 @@ def test_creator_prompts_calibrate_specificity_analogy_and_role_shape() -> None:
     )
     writer = (prompt_root / "roundup_story_writer/system.txt").read_text(encoding="utf-8")
     reviewer = (prompt_root / "roundup_story_reviewer/system.txt").read_text(encoding="utf-8")
-    selector = (
-        prompt_root / "roundup_story_revision_selector/system.txt"
-    ).read_text(encoding="utf-8")
+    researcher = (prompt_root / "roundup_source_researcher/system.txt").read_text(encoding="utf-8")
+    director = (prompt_root / "roundup_director/system.txt").read_text(encoding="utf-8")
     bookends = (prompt_root / "roundup_bookend_writer/system.txt").read_text(
         encoding="utf-8"
     )
@@ -128,8 +142,13 @@ def test_creator_prompts_calibrate_specificity_analogy_and_role_shape() -> None:
     assert "- major:" in writer.lower()
     assert "- brief:" in writer.lower()
     assert "bombshell" in reviewer.lower()
-    assert "keep_current" in selector.lower()
+    assert "code published for anyone" in reviewer.lower()
+    assert "meaning_boundaries" in researcher
+    assert "open-weight" in researcher.lower()
+    assert "source_meaning_boundaries" in director
+    assert not any(prompt_root.glob("*revision_selector"))
     assert "this particular episode" in bookends.lower()
+    assert "money arrived first" in bookends.lower()
 
     profile = yaml.safe_load(
         (PROJECT_ROOT / "src/pipeline/config/workbench.yaml").read_text(
@@ -140,3 +159,12 @@ def test_creator_prompts_calibrate_specificity_analogy_and_role_shape() -> None:
     assert guidance["lead"]["suggested_words"] > guidance["major"]["suggested_words"]
     assert guidance["major"]["suggested_words"] > guidance["brief"]["suggested_words"]
     assert "generic universal conclusions" in " ".join(profile["script_style"]["avoid"])
+    assert "candidate_selection" not in profile["review"]
+
+    metadata_prompt = (
+        PROJECT_ROOT
+        / "src/pipeline/apps/metadata_creator/prompts/v1/youtube_metadata_creator/system.txt"
+    ).read_text(encoding="utf-8")
+    assert "relationship_basis" in metadata_prompt
+    assert "open-weight" in metadata_prompt.lower()
+    assert "chapter title" in metadata_prompt.lower()

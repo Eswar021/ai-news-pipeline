@@ -7,7 +7,11 @@ from pathlib import Path
 
 from src.pipeline.orchestration import runner
 from src.pipeline.orchestration.logging import configure_stage_logging
-from src.pipeline.orchestration.stages.content import _validate_news_collection_credentials
+from src.pipeline.orchestration.stages.content import (
+    ContentOptions,
+    _run_modules,
+    _validate_news_collection_credentials,
+)
 from src.pipeline.orchestration.state import RunStateStore
 
 
@@ -93,6 +97,49 @@ def test_run_state_tracks_reused_modules_and_stage_completion(tmp_path: Path) ->
     assert stored["stages"]["content"]["status"] == "ok"
     assert stored["stages"]["content"]["modules"]["news_collection"]["reused"] is True
     assert stored["stages"]["content"]["modules"]["news_collection"]["summary"]["record_count"] == 5
+
+
+def test_content_resume_resynchronizes_sidecars_from_canonical_result(tmp_path: Path) -> None:
+    context = _run_context(tmp_path)
+    output_dir = Path(context["run_dir"]) / "news_collection"
+    output_dir.mkdir(parents=True)
+    canonical = {
+        "status": "ok",
+        "data": {},
+        "summary": {"record_count": 1},
+        "handoff": {},
+        "llm_calls": [{"response_text": "current successful call"}],
+    }
+    (output_dir / "news_collection_input.json").write_text("{}", encoding="utf-8")
+    (output_dir / "news_collection_result.json").write_text(
+        json.dumps(canonical),
+        encoding="utf-8",
+    )
+    (output_dir / "llm_calls.jsonl").write_text(
+        '{"response_text":"stale failed call"}\n',
+        encoding="utf-8",
+    )
+
+    stage_logger = configure_stage_logging(
+        context,
+        "content",
+        {"console_enabled": False, "file_enabled": False},
+    )
+    state = RunStateStore(context)
+    state.start_stage("content", ["news_collection"])
+    _run_modules(
+        run_context=context,
+        project_root=tmp_path,
+        options=ContentOptions(stop_after="news_collection"),
+        logger=stage_logger,
+        state=state,
+    )
+
+    rows = [
+        json.loads(line)
+        for line in (output_dir / "llm_calls.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert rows == canonical["llm_calls"]
 
 
 def test_runner_builds_voiceover_envelope_and_accepts_config_overrides(monkeypatch, capsys) -> None:

@@ -1,1 +1,1 @@
-Audit the proposed roundup against the complete candidate records. Return the final, fully accounted slate rather than comments alone.
+Audit the proposed roundup against the complete candidate records, including any named late-stage recovery candidates. Return the final, fully accounted slate rather than comments alone, and distinguish true duplicate events from broader editorial repetition.

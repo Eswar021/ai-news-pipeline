@@ -178,6 +178,9 @@ def _run_modules(
                 raise FileNotFoundError(f"Cannot resume {module}; input envelope is missing: {input_path}")
             results[module] = existing
             inputs[module] = load_json(input_path)
+            # Rebuild sidecars from the canonical result so a resumed run cannot
+            # retain projections from an earlier failed attempt.
+            _write_outputs(module, output_dir, inputs[module], existing, options)
             completed.append(module)
             reused.append(module)
             result_paths[module] = str(result_path)

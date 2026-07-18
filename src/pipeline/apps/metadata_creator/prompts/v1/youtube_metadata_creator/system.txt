@@ -6,7 +6,29 @@ This is a roundup, so the title must represent the complete episode. A title may
 
 Bold curiosity framing is welcome. Do not contradict the completed script or turn a plan, estimate, attributed claim, prototype, or small example into a different event. blocked_title_angles should identify genuinely misleading promises, not merely dramatic wording.
 
+The payload may include source_meaning_boundaries created while the complete
+records were researched. Preserve those boundaries even when the completed
+script uses loose wording. Do not convert promised weights into shipped weights,
+a hosted model or open-weight announcement into an open-source release, a
+company claim into a measured result, or a possible valuation into an
+established valuation. Strong framing should sharpen the real tension, not
+change the event state.
+
 Do not use "X vs. Y," rivalry, showdown, winner, or head-to-head framing unless the completed script actually compares X and Y as alternatives in the same category or reports a direct conflict between them. Merely appearing in the same roundup is not a competition.
+
+For every title option:
+- angle_strategy must identify the actual title strategy.
+- represented_story_ids must contain only exact selected story IDs that the
+  title materially represents.
+- relationship_basis must name the comparison or conflict established by the
+  completed script. Use an empty string when the title makes no relationship
+  claim.
+- scope_and_state_check must briefly confirm how the title signals roundup
+  scope and preserves material current, planned, claimed, and released states.
+
+If you cannot state a real relationship_basis for relational wording, remove
+that wording. Do not use "vs." merely as a compact way to list two unrelated
+stories.
 
 Rules:
 1. accuracy_risk must be one of: low, medium, high.
@@ -16,6 +38,9 @@ Rules:
 5. Tags should be concise YouTube tags, not source-group names, hostnames, or generic placeholders.
 6. If recent title angles are provided, avoid repeating their wording or framing.
 7. Use metadata_policy option counts as output targets.
+8. Every title must either explicitly signal a roundup/list/update or make its
+   multi-story scope unmistakable; do not package a five-story episode as a
+   single-story deep dive.
 
 Do not use "breakthroughs," "revolution," "game-changer," "bold moves,"
 "innovations," "you can't miss," or "the future of AI" as the main title or
@@ -32,5 +57,22 @@ For a roundup, create several genuinely different title strategies:
 
 Thumbnail text should add a second idea rather than repeating the title's most
 obvious noun.
+
+Write one chapter title for every exact script section_id. Chapter titles are
+viewer navigation labels, not clipped article headlines. Use a short, complete
+phrase that names the actual turn in the episode. Keep each title within the
+configured chapter_title_max_chars target, but never end on a dangling word
+such as "and," "with," "for," or a possessive fragment. Return titles only;
+code owns timestamps and ordering.
+
+Make the metadata sound authored for this exact episode. Prefer concrete nouns,
+surprising details, and real tensions from the completed narration over broad
+labels such as "AI updates," "industry shifts," "multifaceted impact," or
+"innovation meets responsibility." A title can be energetic without becoming
+a category slogan.
+
+blocked_title_angles must include tempting but misleading relationship or
+status framings surfaced during this task. It should be empty only when no such
+angle was considered and rejected.
 
 Return only valid structured output matching the requested schema.

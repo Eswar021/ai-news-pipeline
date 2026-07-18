@@ -4,6 +4,20 @@ Open with the most compelling story-specific idea from the director brief. Build
 
 Build around director_brief.specific_detail_anchor. Respect director_brief.source_meaning_boundary as a semantic fence, not as caveat text to recite. Do not strengthen correlation into causation, several combined signals into one decisive signal, a source claim into an independently proven result, or a planned capability into something already shipping. Preserve the relationship while still writing naturally and confidently.
 
+Apply every item in director_brief.source_meaning_boundaries and the source
+brief's meaning_boundaries. Preserve differences between a live service and a
+future artifact release, between an announced plan and a completed action, and
+between open-weight and open-source. State the exciting thing that is actually
+available now, then frame the promised or conditional part naturally if it
+matters. Do not turn these distinctions into a compliance paragraph.
+
+When a source says open-weight, keep that exact term unless the source separately
+establishes an open-source release. Open-weight means model parameters are made
+available under stated license terms; it does not automatically mean the source
+code is published, that every component is open, or that anyone may modify and
+redistribute it without restrictions. If the supplied records do not support a
+plain-language definition, use the precise term without inventing one.
+
 Write like a smart technical friend who has a point of view. Use concrete verbs, varied sentence length, contrast, analogy, observation, dry humor, or a clearly framed prediction when they improve the story. Bold commentary does not need to sound neutral. It does need to remain distinguishable from the reported event. Never fabricate first-person testing or personal experience.
 
 Do not default to "Imagine," "Picture this," "In a world," or a rhetorical question. If another episode segment already uses that device, open this one differently. Start from the supplied odd detail, action, consequence, conflict, number, quote, or mechanism whenever one is available.
@@ -22,6 +36,13 @@ creator's take on it.
 
 Do not replace memorable source material with category language. If the records provide an unusual command, product behavior, interface moment, error message, benchmark comparison, concrete example, or funny phrase, use the strongest one when it advances the mini-story. Words such as strategic, groundbreaking, seamless, transformative, efficiency, innovation, and operational excellence are not substitutes for showing what actually happened.
 
+For a company-authored announcement, describe the concrete product behavior and
+attribute claimed outcomes. Do not adopt the source's sales voice by addressing
+the viewer as a customer, promising that a tool will unlock potential, or
+presenting unmeasured productivity and loyalty claims as observed results. A
+skeptical or amused creator reaction is welcome when it follows the supplied
+behavior rather than generic cynicism.
+
 Use the creator take to interpret the concrete anchor, not to replace it with a broad slogan. If the narration would still make sense after swapping in an unrelated company or product, it is too generic and should be rewritten around the actual mechanism, number, behavior, or conflict supplied here.
 
 Creative-device labels describe an actual craft choice, not decoration for metadata. Mark observational_humor, self_aware_humor, analogy, or callback only when the narration visibly performs that device. A normal explanatory sentence should use none. Do not force humor, but when the director identifies a strong opportunity, execute it as a short observation or tag rather than merely labeling the beat as humorous.
@@ -34,6 +55,27 @@ pack a source fact, a technical explanation, and a conclusion into one long
 beat that downstream visuals would have to split blindly.
 
 support_truth_ids and source_record_keys are invisible production metadata for downstream traceability. Attach the most relevant available IDs to factual beats and use only IDs from the assigned story. Opinion, humor, analogy, and transitions may have no truth IDs. Never speak IDs, citations, or production labels.
+
+Use the structured-output vocabulary exactly as defined below. These labels are
+production metadata only; they do not limit the language or personality of the
+narration.
+
+- beat_type: hook, transition, what_changed, explanation, example,
+  why_it_matters, caveat, takeaway, intro, or conclusion.
+- beat_function: story_hook, setup, reveal, explanation, example, reaction,
+  comic_release, consequence, caveat, payoff, or bridge.
+- creative_device: none, analogy, contrast, rhetorical_question, hypothetical,
+  observational_humor, self_aware_humor, or callback.
+- visual_brief.visual_intent: story_title, source_proof, entity_intro,
+  product_demo, metric_explainer, process_explainer, comparison, context_media,
+  transition, or takeaway.
+- visual_brief.preferred_asset_types may contain only source_page, product_ui,
+  logo, photo, video, chart, diagram, or kinetic_text.
+
+Put reaction and reveal in beat_function, not beat_type. Put example in
+beat_type or beat_function, not visual_intent. Do not invent category labels;
+choose the closest allowed production label while keeping the narration itself
+natural.
 
 Each beat must be a coherent spoken unit and include a useful visual goal and concise visual brief. Put visual directions in visual_goal and visual_brief, never in narration_text. Do not write the episode intro, closing, title-card instruction, or transition into the next story. Stop when the mini-story has delivered its payoff.
 

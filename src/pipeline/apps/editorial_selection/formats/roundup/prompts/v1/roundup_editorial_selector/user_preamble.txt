@@ -1,1 +1,1 @@
-Build a complete editorial slate for the supplied channel and audience. Explain each choice in concrete viewer terms. Preserve a ranked reserve list so packaging can recover from a structural problem without making a semantic choice in code.
+Build a complete editorial slate for the supplied channel and audience. Explain each choice in concrete viewer terms and assess how the complete slate will feel as one episode. Preserve a ranked reserve list so the final semantic reviewer can recover a stronger or less repetitive alternative without making a semantic choice in code.

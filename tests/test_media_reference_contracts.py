@@ -305,6 +305,13 @@ def test_metadata_finalizer_uses_actual_voiceover_section_starts() -> None:
         voiceover_package,
         script_provenance["script_fingerprint"],
     )
+    draft_chapter_titles = [
+        "The evidence arrives before the confidence",
+        "Source records become an editorial story",
+        "The script keeps its story boundaries",
+        "Audio timing becomes the production clock",
+        "What the final package carries forward",
+    ]
     metadata_draft = {
         "title_options": [{"title": "From Sources to Screen"}],
         "thumbnail_text_options": ["SOURCES TO SCREEN"],
@@ -315,7 +322,15 @@ def test_metadata_finalizer_uses_actual_voiceover_section_starts() -> None:
             "channel_footer": "Fixture Channel",
             "include_source_urls": True,
         },
-        "chapters": [],
+        "chapters": [
+            {
+                "timestamp": "0:00",
+                "start_seconds": 0,
+                "section_id": section["section_id"],
+                "title": draft_chapter_titles[index],
+            }
+            for index, section in enumerate(script_package["sections"])
+        ],
         "tags": ["AI news"],
         "source_urls": ["https://github.com/Eswar021/ai-news-pipeline"],
         "metadata_basis": {"chapters_finalized": False},
@@ -352,6 +367,7 @@ def test_metadata_finalizer_uses_actual_voiceover_section_starts() -> None:
     metadata = result["data"]["metadata_package"]["youtube_metadata"]
     assert result["status"] == "ok"
     assert [chapter["start_seconds"] for chapter in metadata["chapters"]] == starts
+    assert [chapter["title"] for chapter in metadata["chapters"]] == draft_chapter_titles
     assert metadata["metadata_basis"]["chapter_timing_source"] == "voiceover_audio_units"
     assert metadata["metadata_basis"]["chapters_finalized"] is True
     assert "0:13" in metadata["description_draft"]

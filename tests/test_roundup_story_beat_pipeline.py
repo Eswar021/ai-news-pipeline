@@ -11,12 +11,14 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 from src.pipeline.apps.script_generation.formats.roundup import app as script_app
 from src.pipeline.apps.script_generation.formats.roundup import writer as script_writer
 from src.pipeline.apps.script_generation.formats.roundup.checks import check_script_package
-from src.pipeline.apps.script_generation.formats.roundup.contract import ScriptGenerationResponse
+from src.pipeline.apps.script_generation.formats.roundup.contract import (
+    ReviewConfig,
+    ScriptGenerationResponse,
+)
 from src.pipeline.apps.script_generation.formats.roundup.models import (
     BookendOutput,
     BookendReviewOutput,
     EpisodeDirectorOutput,
-    RevisionSelectionOutput,
     StoryReviewOutput,
     StorySegmentOutput,
     StorySourceBriefOutput,
@@ -98,7 +100,6 @@ def test_script_llm_models_are_openai_strict_schema_compatible() -> None:
         StoryReviewOutput,
         BookendOutput,
         BookendReviewOutput,
-        RevisionSelectionOutput,
         StorySourceBriefOutput,
     )
     for model in models:
@@ -156,6 +157,7 @@ def test_truth_compaction_preserves_semantic_source_notes_and_values() -> None:
                     "visual_opportunity": "Show the exact phrase.",
                 }
             ],
+            "meaning_boundaries": [],
             "tensions_and_caveats": ["The results are project-reported."],
             "creator_opportunities": ["Contrast speed with the small test scope."],
             "visual_opportunities": ["Animate the reported values."],
@@ -215,6 +217,7 @@ def test_truth_index_does_not_compare_semantic_notes_with_article_wording() -> N
                     "visual_opportunity": "Show the source-reported scale.",
                 }
             ],
+            "meaning_boundaries": [],
             "tensions_and_caveats": [],
             "creator_opportunities": ["Contrast the old migration timeline with this source claim."],
             "visual_opportunities": ["Show the source passage."],
@@ -265,6 +268,7 @@ def test_truth_index_preserves_llm_selected_quote_without_punctuation_matching()
                     "visual_opportunity": "Show the source-owned quote.",
                 }
             ],
+            "meaning_boundaries": [],
             "tensions_and_caveats": [],
             "creator_opportunities": ["Explain why infrastructure ownership matters."],
             "visual_opportunities": ["Show the article quote."],
@@ -308,6 +312,7 @@ def test_truth_index_does_not_apply_metric_text_matching() -> None:
                     "visual_opportunity": "Show a value only when source-owned.",
                 }
             ],
+            "meaning_boundaries": [],
             "tensions_and_caveats": [],
             "creator_opportunities": ["Explain the benchmark scope."],
             "visual_opportunities": [],
@@ -359,6 +364,7 @@ def test_truth_index_does_not_filter_semantic_details_by_article_text() -> None:
                     "visual_opportunity": "",
                 },
             ],
+            "meaning_boundaries": [],
             "tensions_and_caveats": [],
             "creator_opportunities": ["Explain what the prototype does."],
             "visual_opportunities": ["Show the source page."],
@@ -371,7 +377,7 @@ def test_truth_index_does_not_filter_semantic_details_by_article_text() -> None:
     assert len(index.semantic_source_brief["distinctive_details"]) == 2
 
 
-def test_review_contract_supports_keep_without_a_candidate() -> None:
+def test_review_contract_supports_keep_without_a_revision() -> None:
     keep = StoryReviewOutput.model_validate(
         {
             "rewrite_required": False,
@@ -398,27 +404,15 @@ def test_review_contract_supports_keep_without_a_candidate() -> None:
         )
 
 
-def test_revision_selector_schema_does_not_override_the_llm_semantic_decision() -> None:
-    accepted = RevisionSelectionOutput.model_validate(
-        {
-            "decision": "accept_candidate",
-            "rationale": "The candidate is a clear net improvement.",
-            "material_improvements": ["The opening uses the story's concrete detail."],
-            "material_regressions": [],
-        }
-    )
-    assert accepted.decision == "accept_candidate"
-
-    mixed = RevisionSelectionOutput.model_validate(
-        {
-            "decision": "accept_candidate",
-            "rationale": "The model judged the candidate to be the better overall script.",
-            "material_improvements": ["The opening is shorter."],
-            "material_regressions": ["One transition is less specific."],
-        }
-    )
-    assert mixed.decision == "accept_candidate"
-    assert mixed.material_regressions == ["One transition is less specific."]
+def test_removed_candidate_selection_config_is_rejected() -> None:
+    with pytest.raises(ValueError, match="candidate_selection"):
+        ReviewConfig.model_validate(
+            {
+                "enabled": True,
+                "max_revision_passes": 1,
+                "candidate_selection": {"enabled": False},
+            }
+        )
 
 
 def test_llm_call_retries_a_transient_rate_limit(monkeypatch) -> None:
@@ -457,6 +451,7 @@ def test_llm_call_retries_a_transient_rate_limit(monkeypatch) -> None:
                             "viewer_stakes": "The final output stays coherent.",
                             "specific_detail_anchor": "The handoff preserves context between stages.",
                             "source_meaning_boundary": "A contract preserves supplied context; it does not guarantee creative quality.",
+                            "source_meaning_boundaries": [],
                             "must_communicate_truth_ids": [],
                             "optional_truth_ids": [],
                             "narrator_take": "Structure is the unglamorous advantage.",
@@ -673,7 +668,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
     class FakeLLM:
         def with_structured_output(self, model, include_raw=True, **kwargs):
             assert include_raw is True
-            assert kwargs == {"strict": True}
+            assert kwargs == {"method": "json_schema", "strict": True}
 
             def invoke(prompt):
                 prompt_text = prompt.to_string() if hasattr(prompt, "to_string") else str(prompt)
@@ -702,6 +697,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                                 "visual_opportunity": "Show the assigned source title.",
                             }
                         ],
+                        "meaning_boundaries": [],
                         "tensions_and_caveats": [],
                         "creator_opportunities": ["Explain the handoff as a relay."],
                         "visual_opportunities": ["Show context moving between stages."],
@@ -732,6 +728,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                                 "viewer_stakes": "The explanation and screen can agree.",
                                 "specific_detail_anchor": "The shared contract keeps one active story attached to its media.",
                                 "source_meaning_boundary": "The contract preserves identity and timing, not the semantic quality of generated content.",
+                                "source_meaning_boundaries": [],
                                 "must_communicate_truth_ids": [truth_ids[story_id]],
                                 "optional_truth_ids": [],
                                 "narrator_take": "Reliable handoffs are more useful than flashy glue code.",
@@ -803,11 +800,28 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                     assert "structural_issues" not in task_payload
                     assert "craft_diagnostics" not in task_payload
                     assert task_payload["beat_support_context"]
-                    payload = {
-                        "rewrite_required": False,
-                        "issues": [],
-                        "revised_segment": None,
-                    }
+                    if task_payload["required_story_id"] == story_ids[0]:
+                        revised_segment = task_payload["current_segment"]
+                        revised_segment["beats"][0]["narration_text"] = (
+                            "The reviewer makes this first concrete handoff easier to picture without changing its source ownership."
+                        )
+                        payload = {
+                            "rewrite_required": True,
+                            "issues": [
+                                {
+                                    "code": "unclear_explanation",
+                                    "explanation": "The first beat can state the handoff more directly.",
+                                    "affected_beat_ids": ["beat_01"],
+                                }
+                            ],
+                            "revised_segment": revised_segment,
+                        }
+                    else:
+                        payload = {
+                            "rewrite_required": False,
+                            "issues": [],
+                            "revised_segment": None,
+                        }
                 elif model is BookendOutput:
                     visual = {
                         "purpose": "Keep the episode moving.",
@@ -899,7 +913,8 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
     assert len(package["story_truth_indexes"]) == 3
     assert len(package["story_context_packets"]) == 3
     assert package["review"]["review_call_count"] == 4
-    assert package["review"]["revision_count"] == 0
+    assert package["review"]["revision_count"] == 1
+    assert "The reviewer makes this first concrete handoff" in package["full_script"]
     assert all(index["items"] for index in package["story_truth_indexes"])
     assert all(
         beat["beat_function"] and "support_truth_ids" in beat and beat["visual_goal"]
@@ -913,6 +928,14 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
     )
     assert result["summary"]["content_policy"]["word_counts_are_approval_gates"] is False
     assert result["summary"]["content_policy"]["timing_source_of_truth"] == "voiceover"
+    assert result["summary"]["llm_runtime"]["parallelized_steps"] == [
+        "roundup_source_researcher",
+        "roundup_story_writer",
+    ]
+    assert result["summary"]["llm_runtime"]["serial_steps"] == [
+        "roundup_director",
+        "roundup_bookend_writer",
+    ]
     modules = [call["module_name"] for call in result["llm_calls"]]
     assert modules[:3] == ["roundup_source_researcher"] * 3
     assert modules[3] == "roundup_director"

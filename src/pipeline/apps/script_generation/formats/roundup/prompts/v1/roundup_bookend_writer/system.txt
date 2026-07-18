@@ -21,6 +21,17 @@ that people must simply adapt and thrive. Land the most interesting earned
 observation from this episode, or end cleanly when the stories do not support a
 shared conclusion.
 
+Phrases such as "multifaceted impact," "opportunity and tension," "pivotal
+moment," and "we'll keep tracking" are not conclusions by themselves. Replace
+them with one episode-specific observation, callback, open question, or clean
+signoff that could not be reused unchanged next week.
+
+Test a cross-story synthesis literally against the completed story bodies before
+using it. A catchy callback must not invert the episode's concrete premise. For
+example, if the lead says a funding round was announced before funds arrived,
+do not conclude that "the money arrived first"; distinguish valuation, capital
+expectations, or announcements from money actually received.
+
 Match the configured channel voice. Avoid generic news-anchor language, broad claims that technology is changing everything, repeated summaries, internal IDs, and spoken visual directions. Treat word suggestions as loose orientation and finish as soon as each component has done its job.
 
 Do not manufacture quotations. Quotation marks are allowed only around exact wording already present in the completed story bodies; otherwise paraphrase without quotation marks. Do not copy a story body's opening sentence into the intro. Tease its tension or payoff in fresh language instead.

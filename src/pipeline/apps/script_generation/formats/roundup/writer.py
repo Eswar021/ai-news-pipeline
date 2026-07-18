@@ -5,20 +5,15 @@ import re
 import time
 from typing import Any
 
-from langchain_core.prompts import PromptTemplate
-from pydantic import BaseModel
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, ValidationError as PydanticValidationError
 
 from .asset_hints import build_story_asset_hints
-from .config import (
-    BOOKEND_REVISION_SELECTOR_PROMPT_MODULE,
-    STORY_REVISION_SELECTOR_PROMPT_MODULE,
-)
 from .llm_logging import build_llm_call_log
 from .models import (
     BookendOutput,
     BookendReviewOutput,
     EpisodeDirectorOutput,
-    RevisionSelectionOutput,
     StoryReviewOutput,
     StorySegmentOutput,
     StorySourceBriefOutput,
@@ -37,11 +32,11 @@ from .source_truth import build_story_truth_index, compact_truth_index, truth_it
 from .utils import clean_text, dedupe, json_dumps, source_record_keys, story_id, story_title
 
 
-TASK_PROMPT = PromptTemplate.from_template(
-    "{system_prompt}\n\n"
-    "{user_preamble}\n\n"
-    "Task payload:\n"
-    "{task_payload}"
+TASK_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        ("system", "{system_prompt}"),
+        ("human", "{user_preamble}\n\nTask payload:\n{task_payload}"),
+    ]
 )
 
 
@@ -51,7 +46,7 @@ def generate_roundup_script(
     section_plan: list[dict[str, Any]],
     script_cfg: dict[str, Any],
     prompt_bundles: dict[str, dict[str, str]],
-    llm,
+    llm_runtimes: dict[str, dict[str, Any]],
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
     stories = _ordered_stories(video_packet)
@@ -59,7 +54,7 @@ def generate_roundup_script(
         stories=stories,
         script_cfg=script_cfg,
         prompt_bundle=prompt_bundles["source_researcher"],
-        llm=llm,
+        llm_runtime=llm_runtimes["source_researcher"],
         llm_calls=llm_calls,
     )
     director = direct_episode(
@@ -67,7 +62,7 @@ def generate_roundup_script(
         section_plan=section_plan,
         script_cfg=script_cfg,
         prompt_bundle=prompt_bundles["director"],
-        llm=llm,
+        llm_runtime=llm_runtimes["director"],
         llm_calls=llm_calls,
         context_packets=context_packets,
     )
@@ -78,8 +73,8 @@ def generate_roundup_script(
         script_cfg=script_cfg,
         writer_prompt_bundle=prompt_bundles["story_writer"],
         reviewer_prompt_bundle=prompt_bundles["story_reviewer"],
-        revision_selector_prompt_bundle=prompt_bundles["story_revision_selector"],
-        llm=llm,
+        writer_llm_runtime=llm_runtimes["story_writer"],
+        reviewer_llm_runtime=llm_runtimes["story_reviewer"],
         llm_calls=llm_calls,
         context_packets=context_packets,
     )
@@ -91,8 +86,8 @@ def generate_roundup_script(
         script_cfg=script_cfg,
         writer_prompt_bundle=prompt_bundles["bookend_writer"],
         reviewer_prompt_bundle=prompt_bundles["bookend_reviewer"],
-        revision_selector_prompt_bundle=prompt_bundles["bookend_revision_selector"],
-        llm=llm,
+        writer_llm_runtime=llm_runtimes["bookend_writer"],
+        reviewer_llm_runtime=llm_runtimes["bookend_reviewer"],
         llm_calls=llm_calls,
     )
     story_review_passes = [
@@ -101,10 +96,6 @@ def generate_roundup_script(
         for review_pass in story_review.get("passes", [])
     ]
     all_review_passes = [*story_review_passes, *bookend_reviews]
-    selector_call_count = sum(
-        bool((item.get("candidate_selection") or {}).get("selector_used"))
-        for item in all_review_passes
-    )
     return {
         "director": director,
         "story_segments": story_segments,
@@ -121,8 +112,7 @@ def generate_roundup_script(
             "max_revision_passes": int(script_cfg.get("review", {}).get("max_revision_passes", 1)),
             "story_reviews": story_reviews,
             "bookend_reviews": bookend_reviews,
-            "review_call_count": len(all_review_passes) + selector_call_count,
-            "candidate_selection_call_count": selector_call_count,
+            "review_call_count": len(all_review_passes),
             "revision_count": sum(bool(item.get("applied")) for item in all_review_passes),
         },
     }
@@ -133,14 +123,16 @@ def research_story_sources(
     stories: list[dict[str, Any]],
     script_cfg: dict[str, Any],
     prompt_bundle: dict[str, str],
-    llm,
+    llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     source_config = dict(script_cfg.get("source_context") or {})
     worker_count = min(max(1, int(script_cfg.get("worker_count", 1))), len(stories))
 
+    call_logs_by_index: list[list[dict[str, Any]]] = [[] for _ in stories]
+
     def research(index: int, story: dict[str, Any]):
-        local_calls: list[dict[str, Any]] = []
+        local_calls = call_logs_by_index[index]
         source_context = build_source_research_context(story)
         payload = {
             "task": "Read the complete assigned records and build one semantic source brief without writing narration.",
@@ -150,10 +142,10 @@ def research_story_sources(
         response = _invoke_chain(
             module_name="roundup_source_researcher",
             output_model=StorySourceBriefOutput,
-            llm=llm,
+            llm=llm_runtime["llm"],
             prompt_bundle=prompt_bundle,
             task_payload=json_dumps(payload),
-            script_cfg=script_cfg,
+            script_cfg=llm_runtime["config"],
             metadata={
                 "story_id": story_id(story),
                 "source_context_mode": "complete_records_plus_semantic_brief",
@@ -165,19 +157,23 @@ def research_story_sources(
         truth_index_model = build_story_truth_index(story, response)
         truth_index = compact_truth_index(truth_index_model)
         packet = build_story_context_packet(story, truth_index_model)
-        return index, brief, truth_index, packet, local_calls
+        return index, brief, truth_index, packet
 
-    ordered: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]]] | None] = [None] * len(stories)
-    if worker_count == 1:
-        for index, story in enumerate(stories):
-            _, brief, truth_index, packet, calls = research(index, story)
-            ordered[index] = (brief, truth_index, packet, calls)
-    else:
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            futures = {executor.submit(research, index, story): index for index, story in enumerate(stories)}
-            for future in as_completed(futures):
-                index, brief, truth_index, packet, calls = future.result()
-                ordered[index] = (brief, truth_index, packet, calls)
+    ordered: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]] | None] = [None] * len(stories)
+    try:
+        if worker_count == 1:
+            for index, story in enumerate(stories):
+                _, brief, truth_index, packet = research(index, story)
+                ordered[index] = (brief, truth_index, packet)
+        else:
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                futures = {executor.submit(research, index, story): index for index, story in enumerate(stories)}
+                for future in as_completed(futures):
+                    index, brief, truth_index, packet = future.result()
+                    ordered[index] = (brief, truth_index, packet)
+    finally:
+        for calls in call_logs_by_index:
+            llm_calls.extend(calls)
 
     if any(item is None for item in ordered):
         raise RuntimeError("Source research completed with missing story packets")
@@ -187,11 +183,10 @@ def research_story_sources(
     for item in ordered:
         if item is None:
             continue
-        brief, truth_index, packet, calls = item
+        brief, truth_index, packet = item
         briefs.append(brief)
         truth_indexes.append(truth_index)
         packets.append(packet)
-        llm_calls.extend(calls)
     validate_context_resource_limits(
         packets,
         max_story_context_chars=int(source_config.get("max_story_context_chars", 500_000)),
@@ -206,7 +201,7 @@ def direct_episode(
     section_plan: list[dict[str, Any]],
     script_cfg: dict[str, Any],
     prompt_bundle: dict[str, str],
-    llm,
+    llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
     context_packets: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -224,10 +219,10 @@ def direct_episode(
     response = _invoke_chain(
         module_name="roundup_director",
         output_model=EpisodeDirectorOutput,
-        llm=llm,
+        llm=llm_runtime["llm"],
         prompt_bundle=prompt_bundle,
         task_payload=json_dumps(payload),
-        script_cfg=script_cfg,
+        script_cfg=llm_runtime["config"],
         metadata={
             "story_count": len(video_packet.get("stories", [])),
             "truth_item_count": sum(
@@ -274,8 +269,8 @@ def write_story_segments(
     script_cfg: dict[str, Any],
     writer_prompt_bundle: dict[str, str],
     reviewer_prompt_bundle: dict[str, str],
-    revision_selector_prompt_bundle: dict[str, str],
-    llm,
+    writer_llm_runtime: dict[str, Any],
+    reviewer_llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
     context_packets: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -285,8 +280,10 @@ def write_story_segments(
     packet_by_story = {clean_text(item.get("story_id")): item for item in context_packets}
     worker_count = min(max(1, int(script_cfg.get("worker_count", 1))), len(stories))
 
-    def generate(index: int, story: dict[str, Any]) -> tuple[int, dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
-        local_calls: list[dict[str, Any]] = []
+    call_logs_by_index: list[list[dict[str, Any]]] = [[] for _ in stories]
+
+    def generate(index: int, story: dict[str, Any]) -> tuple[int, dict[str, Any], dict[str, Any]]:
+        local_calls = call_logs_by_index[index]
         sid = story_id(story)
         brief = briefs[sid]
         context_packet = packet_by_story[sid]
@@ -299,24 +296,28 @@ def write_story_segments(
             script_cfg=script_cfg,
             writer_prompt_bundle=writer_prompt_bundle,
             reviewer_prompt_bundle=reviewer_prompt_bundle,
-            revision_selector_prompt_bundle=revision_selector_prompt_bundle,
-            llm=llm,
+            writer_llm_runtime=writer_llm_runtime,
+            reviewer_llm_runtime=reviewer_llm_runtime,
             llm_calls=local_calls,
             context_packet=context_packet,
         )
-        return index, segment, review, local_calls
+        return index, segment, review
 
-    ordered: list[tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]] | None] = [None] * len(stories)
-    if worker_count == 1:
-        for index, story in enumerate(stories):
-            _, segment, review, calls = generate(index, story)
-            ordered[index] = (segment, review, calls)
-    else:
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            future_map = {executor.submit(generate, index, story): index for index, story in enumerate(stories)}
-            for future in as_completed(future_map):
-                index, segment, review, calls = future.result()
-                ordered[index] = (segment, review, calls)
+    ordered: list[tuple[dict[str, Any], dict[str, Any]] | None] = [None] * len(stories)
+    try:
+        if worker_count == 1:
+            for index, story in enumerate(stories):
+                _, segment, review = generate(index, story)
+                ordered[index] = (segment, review)
+        else:
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                future_map = {executor.submit(generate, index, story): index for index, story in enumerate(stories)}
+                for future in as_completed(future_map):
+                    index, segment, review = future.result()
+                    ordered[index] = (segment, review)
+    finally:
+        for calls in call_logs_by_index:
+            llm_calls.extend(calls)
 
     if any(item is None for item in ordered):
         raise RuntimeError("Story generation completed with missing story segments")
@@ -325,10 +326,9 @@ def write_story_segments(
     for item in ordered:
         if item is None:
             continue
-        segment, review, calls = item
+        segment, review = item
         segments.append(segment)
         reviews.append(review)
-        llm_calls.extend(calls)
     return segments, reviews
 
 
@@ -342,8 +342,8 @@ def _write_one_story(
     script_cfg: dict[str, Any],
     writer_prompt_bundle: dict[str, str],
     reviewer_prompt_bundle: dict[str, str],
-    revision_selector_prompt_bundle: dict[str, str],
-    llm,
+    writer_llm_runtime: dict[str, Any],
+    reviewer_llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
     context_packet: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -382,10 +382,10 @@ def _write_one_story(
     response = _invoke_chain(
         module_name="roundup_story_writer",
         output_model=StorySegmentOutput,
-        llm=llm,
+        llm=writer_llm_runtime["llm"],
         prompt_bundle=writer_prompt_bundle,
         task_payload=json_dumps(payload),
-        script_cfg=script_cfg,
+        script_cfg=writer_llm_runtime["config"],
         metadata={
             "story_id": sid,
             "story_role": plan.get("role", ""),
@@ -428,10 +428,10 @@ def _write_one_story(
         review_response = _invoke_chain(
             module_name="roundup_story_reviewer",
             output_model=StoryReviewOutput,
-            llm=llm,
+            llm=reviewer_llm_runtime["llm"],
             prompt_bundle=reviewer_prompt_bundle,
             task_payload=json_dumps(review_payload),
-            script_cfg=script_cfg,
+            script_cfg=reviewer_llm_runtime["config"],
             metadata={
                 "story_id": sid,
                 "pass_index": pass_index,
@@ -450,49 +450,32 @@ def _write_one_story(
                     "decision": "keep",
                     "issues": [],
                     "model_recommended_rewrite": False,
-                    "candidate_rejection_reasons": [],
+                    "revision_contract_errors": [],
                     "applied": False,
                 }
             )
             break
 
-        candidate: dict[str, Any] | None = None
-        rejection_reasons: list[str] = []
+        revision: dict[str, Any] | None = None
+        contract_errors: list[str] = []
         try:
-            candidate = _validate_story_segment(
+            revision = _validate_story_segment(
                 review_response["revised_segment"],
                 story=story,
                 truth_index=truth_index,
             )
         except (TypeError, ValueError) as exc:
-            rejection_reasons = [f"candidate_validation_failed:{exc}"]
-        applied = candidate is not None and not rejection_reasons
-        selection = None
-        if applied and candidate is not None:
-            selection = _select_story_revision(
-                current=current,
-                candidate=candidate,
-                issues=review_issues,
-                story=story,
-                brief=brief,
-                context_packet=context_packet,
-                script_cfg=script_cfg,
-                prompt_bundle=revision_selector_prompt_bundle,
-                llm=llm,
-                llm_calls=llm_calls,
-                pass_index=pass_index,
-            )
-            applied = selection["decision"] == "accept_candidate"
-            if applied:
-                current = candidate
+            contract_errors = [f"revision_contract_failed:{exc}"]
+        applied = revision is not None and not contract_errors
+        if applied and revision is not None:
+            current = revision
         passes.append(
             {
                 "pass_index": pass_index,
                 "decision": "rewrite_applied" if applied else "rewrite_rejected",
                 "issues": review_issues,
                 "model_recommended_rewrite": True,
-                "candidate_rejection_reasons": rejection_reasons,
-                "candidate_selection": selection or {},
+                "revision_contract_errors": contract_errors,
                 "applied": applied,
             }
         )
@@ -506,137 +489,6 @@ def _write_one_story(
     }
 
 
-def _select_story_revision(
-    *,
-    current: dict[str, Any],
-    candidate: dict[str, Any],
-    issues: list[dict[str, Any]],
-    story: dict[str, Any],
-    brief: dict[str, Any],
-    context_packet: dict[str, Any],
-    script_cfg: dict[str, Any],
-    prompt_bundle: dict[str, str],
-    llm,
-    llm_calls: list[dict[str, Any]],
-    pass_index: int,
-) -> dict[str, Any]:
-    selector_config = dict(script_cfg.get("review", {}).get("candidate_selection") or {})
-    if not bool(selector_config.get("enabled", False)):
-        return {
-            "selector_used": False,
-            "decision": "accept_candidate",
-            "rationale": "Candidate selection is disabled by config.",
-            "material_improvements": [],
-            "material_regressions": [],
-        }
-    payload = {
-        "required_story_id": story_id(story),
-        "director_brief": brief,
-        "review_issues": issues,
-        "story_context_packet": context_packet,
-        "current_segment": current,
-        "candidate_segment": candidate,
-        "quality_criteria": list(script_cfg.get("review", {}).get("quality_criteria", [])),
-        "script_style": script_cfg["script_style"],
-        "channel_voice": script_cfg["channel_voice"],
-    }
-    try:
-        selected = _invoke_chain(
-            module_name=STORY_REVISION_SELECTOR_PROMPT_MODULE,
-            output_model=RevisionSelectionOutput,
-            llm=llm,
-            prompt_bundle=prompt_bundle,
-            task_payload=json_dumps(payload),
-            script_cfg=script_cfg,
-            metadata={
-                "story_id": story_id(story),
-                "pass_index": pass_index,
-                "source_context_mode": "complete_records_plus_semantic_brief",
-                "source_context_char_count": int(
-                    (context_packet.get("telemetry") or {}).get("serialized_char_count", 0)
-                ),
-                "source_record_keys": list((context_packet.get("telemetry") or {}).get("record_keys", [])),
-            },
-            llm_calls=llm_calls,
-        ).model_dump(mode="json")
-        return {"selector_used": True, **selected}
-    except Exception as exc:
-        if clean_text(selector_config.get("failure_mode")) == "fail":
-            raise
-        return {
-            "selector_used": True,
-            "decision": "keep_current",
-            "rationale": "Candidate selector failed; retained the already-valid current segment.",
-            "material_improvements": [],
-            "material_regressions": [f"selector_failure:{type(exc).__name__}:{exc}"],
-        }
-
-
-def _select_bookend_revision(
-    *,
-    current: dict[str, Any],
-    candidate: dict[str, Any],
-    issues: list[dict[str, Any]],
-    director: dict[str, Any],
-    story_sequence: list[dict[str, Any]],
-    script_cfg: dict[str, Any],
-    prompt_bundle: dict[str, str],
-    llm,
-    llm_calls: list[dict[str, Any]],
-    pass_index: int,
-) -> dict[str, Any]:
-    selector_config = dict(script_cfg.get("review", {}).get("candidate_selection") or {})
-    if not bool(selector_config.get("enabled", False)):
-        return {
-            "selector_used": False,
-            "decision": "accept_candidate",
-            "rationale": "Candidate selection is disabled by config.",
-            "material_improvements": [],
-            "material_regressions": [],
-        }
-    payload = {
-        "episode_direction": {
-            key: director.get(key, "")
-            for key in (
-                "episode_shape",
-                "episode_connection_reason",
-                "episode_thesis",
-                "viewer_promise",
-                "hook_strategy",
-            )
-        },
-        "review_issues": issues,
-        "story_sequence": story_sequence,
-        "current_bookends": current,
-        "candidate_bookends": candidate,
-        "quality_criteria": list(script_cfg.get("review", {}).get("quality_criteria", [])),
-        "script_style": script_cfg["script_style"],
-        "channel_voice": script_cfg["channel_voice"],
-    }
-    try:
-        selected = _invoke_chain(
-            module_name=BOOKEND_REVISION_SELECTOR_PROMPT_MODULE,
-            output_model=RevisionSelectionOutput,
-            llm=llm,
-            prompt_bundle=prompt_bundle,
-            task_payload=json_dumps(payload),
-            script_cfg=script_cfg,
-            metadata={"pass_index": pass_index},
-            llm_calls=llm_calls,
-        ).model_dump(mode="json")
-        return {"selector_used": True, **selected}
-    except Exception as exc:
-        if clean_text(selector_config.get("failure_mode")) == "fail":
-            raise
-        return {
-            "selector_used": True,
-            "decision": "keep_current",
-            "rationale": "Candidate selector failed; retained the already-valid current bookends.",
-            "material_improvements": [],
-            "material_regressions": [f"selector_failure:{type(exc).__name__}:{exc}"],
-        }
-
-
 def write_bookends(
     *,
     video_packet: dict[str, Any],
@@ -646,8 +498,8 @@ def write_bookends(
     script_cfg: dict[str, Any],
     writer_prompt_bundle: dict[str, str],
     reviewer_prompt_bundle: dict[str, str],
-    revision_selector_prompt_bundle: dict[str, str],
-    llm,
+    writer_llm_runtime: dict[str, Any],
+    reviewer_llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     intro_plan = next(item for item in section_plan if item["section_type"] == "intro")
@@ -684,10 +536,10 @@ def write_bookends(
     response = _invoke_chain(
         module_name="roundup_bookend_writer",
         output_model=BookendOutput,
-        llm=llm,
+        llm=writer_llm_runtime["llm"],
         prompt_bundle=writer_prompt_bundle,
         task_payload=json_dumps(payload),
-        script_cfg=script_cfg,
+        script_cfg=writer_llm_runtime["config"],
         metadata={"story_count": len(story_segments)},
         llm_calls=llm_calls,
     )
@@ -728,10 +580,10 @@ def write_bookends(
         review_response = _invoke_chain(
             module_name="roundup_bookend_reviewer",
             output_model=BookendReviewOutput,
-            llm=llm,
+            llm=reviewer_llm_runtime["llm"],
             prompt_bundle=reviewer_prompt_bundle,
             task_payload=json_dumps(review_payload),
-            script_cfg=script_cfg,
+            script_cfg=reviewer_llm_runtime["config"],
             metadata={
                 "pass_index": pass_index,
             },
@@ -745,44 +597,28 @@ def write_bookends(
                     "decision": "keep",
                     "issues": [],
                     "model_recommended_rewrite": False,
-                    "candidate_rejection_reasons": [],
+                    "revision_contract_errors": [],
                     "applied": False,
                 }
             )
             break
 
-        candidate: dict[str, Any] | None = None
-        rejection_reasons: list[str] = []
+        revision: dict[str, Any] | None = None
+        contract_errors: list[str] = []
         try:
-            candidate = _validate_bookends(review_response["revised_bookends"], video_packet)
+            revision = _validate_bookends(review_response["revised_bookends"], video_packet)
         except (TypeError, ValueError) as exc:
-            rejection_reasons = [f"candidate_validation_failed:{exc}"]
-        applied = candidate is not None and not rejection_reasons
-        selection = None
-        if applied and candidate is not None:
-            selection = _select_bookend_revision(
-                current=current,
-                candidate=candidate,
-                issues=review_issues,
-                director=director,
-                story_sequence=payload["story_sequence"],
-                script_cfg=script_cfg,
-                prompt_bundle=revision_selector_prompt_bundle,
-                llm=llm,
-                llm_calls=llm_calls,
-                pass_index=pass_index,
-            )
-            applied = selection["decision"] == "accept_candidate"
-            if applied:
-                current = candidate
+            contract_errors = [f"revision_contract_failed:{exc}"]
+        applied = revision is not None and not contract_errors
+        if applied and revision is not None:
+            current = revision
         passes.append(
             {
                 "pass_index": pass_index,
                 "decision": "rewrite_applied" if applied else "rewrite_rejected",
                 "issues": review_issues,
                 "model_recommended_rewrite": True,
-                "candidate_rejection_reasons": rejection_reasons,
-                "candidate_selection": selection or {},
+                "revision_contract_errors": contract_errors,
                 "applied": applied,
             }
         )
@@ -802,9 +638,12 @@ def _invoke_chain(
     metadata: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ):
-    structured_options: dict[str, Any] = {"include_raw": True}
-    if str(script_cfg.get("provider", "")).lower() == "openai":
-        structured_options["strict"] = True
+    structured_config = dict(script_cfg.get("structured_output") or {})
+    structured_options: dict[str, Any] = {
+        "include_raw": True,
+        "method": str(structured_config.get("method") or "json_schema"),
+        "strict": bool(structured_config.get("strict", True)),
+    }
     structured_llm = llm.with_structured_output(output_model, **structured_options)
     chain = TASK_PROMPT | structured_llm
     prompt_inputs = {
@@ -812,20 +651,32 @@ def _invoke_chain(
         "user_preamble": prompt_bundle["user_preamble"],
         "task_payload": task_payload,
     }
-    rendered_prompt = TASK_PROMPT.format(**prompt_inputs)
+    rendered_messages = [
+        {
+            "role": "system" if message.type == "system" else "user",
+            "content": str(message.content),
+        }
+        for message in TASK_PROMPT.format_messages(**prompt_inputs)
+    ]
     started = time.time()
     retry_config = script_cfg.get("llm_retry", {})
     retry_enabled = bool(retry_config.get("enabled", True))
-    max_attempts = int(retry_config.get("max_attempts", 5)) if retry_enabled else 1
+    max_transient_attempts = int(retry_config.get("max_attempts", 5)) if retry_enabled else 1
+    max_structured_attempts = (
+        int(retry_config.get("max_structured_output_attempts", 2)) if retry_enabled else 1
+    )
     retry_errors: list[dict[str, Any]] = []
     attempt_count = 0
+    transient_failure_count = 0
+    structured_failure_count = 0
     while True:
         attempt_count += 1
+        attempt_started = time.time()
         try:
             result = chain.invoke(prompt_inputs)
-            break
         except Exception as exc:
             status_code = _exception_status_code(exc)
+            structured_failure = _is_structured_output_error(exc)
             retryable = _is_retryable_llm_error(exc, status_code=status_code)
             retry_entry = {
                 "attempt": attempt_count,
@@ -833,7 +684,13 @@ def _invoke_chain(
                 "error_type": type(exc).__name__,
                 "error": str(exc),
             }
-            if not retryable or attempt_count >= max_attempts:
+            if structured_failure:
+                structured_failure_count += 1
+                can_retry = retry_enabled and structured_failure_count < max_structured_attempts
+            else:
+                transient_failure_count += 1
+                can_retry = retry_enabled and retryable and transient_failure_count < max_transient_attempts
+            if not can_retry:
                 retry_errors.append(retry_entry)
                 call_metadata = {
                     **metadata,
@@ -842,11 +699,11 @@ def _invoke_chain(
                     "retry_errors": retry_errors,
                 }
                 llm_calls.append(
-                    build_llm_call_log(
+                        build_llm_call_log(
                         module_name=module_name,
-                        provider=str(script_cfg.get("provider", "")),
-                        model=str(script_cfg.get("model", "")),
-                        rendered_prompt=rendered_prompt,
+                            provider=str(script_cfg.get("provider", "")),
+                            model=str(script_cfg.get("model", "")),
+                            messages=rendered_messages,
                         raw_response=None,
                         parsed_output=None,
                         metadata=call_metadata,
@@ -863,52 +720,79 @@ def _invoke_chain(
             retry_entry["delay_seconds"] = round(delay_seconds, 3)
             retry_errors.append(retry_entry)
             time.sleep(delay_seconds)
-    duration = time.time() - started
-    call_metadata = {
-        **metadata,
-        "attempt_count": attempt_count,
-        "retry_count": max(0, attempt_count - 1),
-    }
-    if retry_errors:
-        call_metadata["retry_errors"] = retry_errors
-    raw = result.get("raw") if isinstance(result, dict) else None
-    parsed = result.get("parsed") if isinstance(result, dict) else result
-    parsing_error = result.get("parsing_error") if isinstance(result, dict) else None
+            continue
 
-    if parsing_error is not None or parsed is None:
+        raw = result.get("raw") if isinstance(result, dict) else None
+        parsed = result.get("parsed") if isinstance(result, dict) else result
+        parsing_error = result.get("parsing_error") if isinstance(result, dict) else None
+        parsed_model = None
+        if parsing_error is None and parsed is not None:
+            try:
+                parsed_model = parsed if isinstance(parsed, output_model) else output_model.model_validate(parsed)
+            except PydanticValidationError as exc:
+                parsing_error = exc
+
+        call_metadata = {
+            **metadata,
+            "attempt_count": attempt_count,
+            "retry_count": max(0, attempt_count - 1),
+        }
+        if retry_errors:
+            call_metadata["retry_errors"] = list(retry_errors)
+
+        if parsing_error is not None or parsed_model is None:
+            structured_failure_count += 1
+            parse_error_text = str(parsing_error or "missing parsed output")
+            llm_calls.append(
+                build_llm_call_log(
+                    module_name=module_name,
+                    provider=str(script_cfg.get("provider", "")),
+                    model=str(script_cfg.get("model", "")),
+                    messages=rendered_messages,
+                    raw_response=raw,
+                    parsed_output=None,
+                    metadata=call_metadata,
+                    duration_seconds=time.time() - attempt_started,
+                    parse_error=parse_error_text,
+                )
+            )
+            if retry_enabled and structured_failure_count < max_structured_attempts:
+                retry_error = ValueError(parse_error_text)
+                delay_seconds = _retry_delay_seconds(
+                    retry_error,
+                    attempt=structured_failure_count,
+                    retry_config=retry_config,
+                )
+                retry_errors.append(
+                    {
+                        "attempt": attempt_count,
+                        "status_code": None,
+                        "error_type": "StructuredOutputError",
+                        "error": parse_error_text,
+                        "delay_seconds": round(delay_seconds, 3),
+                    }
+                )
+                time.sleep(delay_seconds)
+                continue
+            error = ValueError(f"LLM structured output failed for {module_name}: {parse_error_text}")
+            if isinstance(parsing_error, BaseException):
+                raise error from parsing_error
+            raise error
+
+        parsed_output = parsed_model.model_dump(mode="json")
         llm_calls.append(
             build_llm_call_log(
                 module_name=module_name,
                 provider=str(script_cfg.get("provider", "")),
                 model=str(script_cfg.get("model", "")),
-                rendered_prompt=rendered_prompt,
+                messages=rendered_messages,
                 raw_response=raw,
-                parsed_output=None,
+                parsed_output=parsed_output,
                 metadata=call_metadata,
-                duration_seconds=duration,
-                parse_error=str(parsing_error),
+                duration_seconds=time.time() - attempt_started,
             )
         )
-        error = ValueError(f"LLM structured output failed for {module_name}")
-        if isinstance(parsing_error, BaseException):
-            raise error from parsing_error
-        raise error
-
-    parsed_model = parsed if isinstance(parsed, output_model) else output_model.model_validate(parsed)
-    parsed_output = parsed_model.model_dump(mode="json")
-    llm_calls.append(
-        build_llm_call_log(
-            module_name=module_name,
-            provider=str(script_cfg.get("provider", "")),
-            model=str(script_cfg.get("model", "")),
-            rendered_prompt=rendered_prompt,
-            raw_response=raw,
-            parsed_output=parsed_output,
-            metadata=call_metadata,
-            duration_seconds=duration,
-        )
-    )
-    return parsed_model
+        return parsed_model
 
 
 def _exception_status_code(exc: Exception) -> int | None:
@@ -929,6 +813,13 @@ def _is_retryable_llm_error(exc: Exception, *, status_code: int | None) -> bool:
         "InternalServerError",
         "RateLimitError",
         "ServiceUnavailableError",
+    }
+
+
+def _is_structured_output_error(exc: Exception) -> bool:
+    return isinstance(exc, PydanticValidationError) or type(exc).__name__ in {
+        "OutputParserException",
+        "ValidationError",
     }
 
 

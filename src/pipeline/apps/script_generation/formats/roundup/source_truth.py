@@ -91,6 +91,16 @@ def build_story_truth_index(
         for record in records
         if clean_text(record.get("record_key"))
     }
+    for boundary in brief.meaning_boundaries:
+        unknown_record_keys = sorted(
+            clean_text(record_key)
+            for record_key in boundary.record_keys
+            if clean_text(record_key) not in records_by_key
+        )
+        if unknown_record_keys:
+            raise ValueError(
+                f"source brief meaning boundary used record_key outside {sid}: {unknown_record_keys}"
+            )
     items: list[TruthItem] = []
     for source_order, detail in enumerate(brief.distinctive_details, start=1):
         record_key = clean_text(detail.record_key)

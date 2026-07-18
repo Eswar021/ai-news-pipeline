@@ -23,19 +23,31 @@ from .config import (
     DEFAULT_F5_NFE_STEP,
     DEFAULT_F5_SWAY_SAMPLING_COEF,
     DEFAULT_F5_TARGET_RMS,
+    DEFAULT_GEMINI_TTS_MODEL,
+    DEFAULT_GEMINI_TTS_VOICE,
     DEFAULT_LANGUAGE_CODE,
     DEFAULT_MASTERING_DURATION_TOLERANCE_SECONDS,
     DEFAULT_MASTERING_LOUDNESS_RANGE_LU,
     DEFAULT_MASTERING_TARGET_LUFS,
     DEFAULT_MASTERING_TRUE_PEAK_DB,
     DEFAULT_PROVIDER,
+    DEFAULT_OPENAI_TTS_MODEL,
+    DEFAULT_OPENAI_TTS_VOICE,
     DEFAULT_SAMPLE_RATE_HZ,
     DEFAULT_STYLE,
     DEFAULT_CAPTION_MAX_CHARS,
     DEFAULT_CAPTION_MAX_WORDS,
     DEFAULT_CAPTION_MIN_SECONDS,
+    DEFAULT_API_TTS_MAX_RETRIES,
+    DEFAULT_API_TTS_REQUEST_TIMEOUT_SECONDS,
+    DEFAULT_API_TTS_RETRY_INITIAL_DELAY_SECONDS,
+    DEFAULT_API_TTS_RETRY_MAX_DELAY_SECONDS,
+    DEFAULT_API_TTS_WORKER_COUNT,
+    DEFAULT_VOICE,
     KNOWN_PROVIDERS,
     PROVIDER_F5_TTS_LOCAL,
+    PROVIDER_GEMINI,
+    PROVIDER_OPENAI,
 )
 
 
@@ -75,6 +87,126 @@ class ChunkingConfig(BaseModel):
         if value is not None and value < 0:
             raise ValueError("chunking pause overrides must be non-negative when provided")
         return value
+
+
+class KokoroConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    voice: str = DEFAULT_VOICE
+
+    @field_validator("voice")
+    @classmethod
+    def voice_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("config.kokoro.voice must not be empty")
+        return value.strip()
+
+
+class APITTSConfigBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    instructions: str
+    api_key_envs: list[str]
+    request_timeout_seconds: float = DEFAULT_API_TTS_REQUEST_TIMEOUT_SECONDS
+    max_retries: int = DEFAULT_API_TTS_MAX_RETRIES
+    retry_initial_delay_seconds: float = DEFAULT_API_TTS_RETRY_INITIAL_DELAY_SECONDS
+    retry_max_delay_seconds: float = DEFAULT_API_TTS_RETRY_MAX_DELAY_SECONDS
+    worker_count: int = DEFAULT_API_TTS_WORKER_COUNT
+    max_input_chars: int = 4000
+
+    @field_validator("instructions")
+    @classmethod
+    def instructions_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("API TTS instructions must not be empty")
+        return value.strip()
+
+    @field_validator("api_key_envs")
+    @classmethod
+    def api_key_envs_must_not_be_empty(cls, value: list[str]) -> list[str]:
+        cleaned = list(dict.fromkeys(item.strip() for item in value if item.strip()))
+        if not cleaned:
+            raise ValueError("API TTS api_key_envs must contain at least one environment variable name")
+        return cleaned
+
+    @field_validator("worker_count")
+    @classmethod
+    def worker_count_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 8:
+            raise ValueError("API TTS worker_count must be between 1 and 8")
+        return value
+
+    @field_validator("max_retries")
+    @classmethod
+    def max_retries_must_be_bounded(cls, value: int) -> int:
+        if value < 0 or value > 8:
+            raise ValueError("API TTS max_retries must be between 0 and 8")
+        return value
+
+    @field_validator(
+        "request_timeout_seconds",
+        "retry_initial_delay_seconds",
+        "retry_max_delay_seconds",
+    )
+    @classmethod
+    def timing_values_must_be_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("API TTS timeout and retry delay values must be positive")
+        return value
+
+    @field_validator("max_input_chars")
+    @classmethod
+    def max_input_chars_must_be_positive(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("API TTS max_input_chars must be positive")
+        return value
+
+    @model_validator(mode="after")
+    def retry_delay_range_is_valid(self) -> "APITTSConfigBase":
+        if self.retry_max_delay_seconds < self.retry_initial_delay_seconds:
+            raise ValueError("API TTS retry_max_delay_seconds must be >= retry_initial_delay_seconds")
+        return self
+
+
+class OpenAITTSConfig(APITTSConfigBase):
+    model: str = DEFAULT_OPENAI_TTS_MODEL
+    voice: str = DEFAULT_OPENAI_TTS_VOICE
+    response_format: Literal["wav"] = "wav"
+    api_key_envs: list[str] = Field(
+        default_factory=lambda: ["OPENAI_API_KEY", "OPENAI_API_KEY_A_C_C"]
+    )
+    instructions: str = (
+        "Confident, conversational YouTube technology-news host. Sound engaged and human, "
+        "not like a broadcast anchor or advertisement. Vary pace and emphasis naturally."
+    )
+    max_input_chars: int = 4096
+
+    @field_validator("model", "voice")
+    @classmethod
+    def openai_identity_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("config.openai model and voice must not be empty")
+        return value.strip()
+
+
+class GeminiTTSConfig(APITTSConfigBase):
+    model: str = DEFAULT_GEMINI_TTS_MODEL
+    voice: str = DEFAULT_GEMINI_TTS_VOICE
+    language_code: str = "en-US"
+    api_key_envs: list[str] = Field(
+        default_factory=lambda: ["GEMINI_TTS_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"]
+    )
+    instructions: str = (
+        "Deliver the narration as an expressive, conversational technology-news host. "
+        "Use natural emphasis and pacing without sounding theatrical or promotional."
+    )
+
+    @field_validator("model", "voice", "language_code")
+    @classmethod
+    def gemini_identity_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("config.gemini model, voice, and language_code must not be empty")
+        return value.strip()
 
 
 class AlignmentConfig(BaseModel):
@@ -316,9 +448,12 @@ class VoiceoverConfig(BaseModel):
     alignment: AlignmentConfig = Field(default_factory=AlignmentConfig)
     mastering: AudioMasteringConfig = Field(default_factory=AudioMasteringConfig)
     captions: CaptionConfig = Field(default_factory=CaptionConfig)
+    kokoro: KokoroConfig = Field(default_factory=KokoroConfig)
     chatterbox: ChatterboxConfig = Field(default_factory=ChatterboxConfig)
     f5_tts: F5TTSConfig = Field(default_factory=F5TTSConfig)
     dia: DiaConfig = Field(default_factory=DiaConfig)
+    openai: OpenAITTSConfig = Field(default_factory=OpenAITTSConfig)
+    gemini: GeminiTTSConfig = Field(default_factory=GeminiTTSConfig)
 
     @field_validator("provider")
     @classmethod
@@ -357,6 +492,10 @@ class VoiceoverConfig(BaseModel):
                 raise ValueError("config.f5_tts.ref_audio_path is required for provider=f5_tts_local")
             if not self.f5_tts.ref_text:
                 raise ValueError("config.f5_tts.ref_text is required for provider=f5_tts_local")
+        if self.provider in {PROVIDER_OPENAI, PROVIDER_GEMINI} and self.sample_rate_hz != 24000:
+            raise ValueError("OpenAI and Gemini voiceover currently require config.sample_rate_hz=24000")
+        if self.provider == PROVIDER_OPENAI and self.speed is not None and not 0.25 <= self.speed <= 4.0:
+            raise ValueError("OpenAI voiceover config.speed must be between 0.25 and 4.0")
         return self
 
 

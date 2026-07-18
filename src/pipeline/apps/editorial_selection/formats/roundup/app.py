@@ -15,7 +15,11 @@ from .contract import (
     RoundupSlateDraft,
     RoundupSlateReviewDraft,
 )
-from .config import SCREENING_PROMPT_MODULE, SLATE_REVIEW_PROMPT_MODULE
+from .config import (
+    DEFAULT_PREFERRED_FINALIST_STORY_COUNT,
+    SCREENING_PROMPT_MODULE,
+    SLATE_REVIEW_PROMPT_MODULE,
+)
 from .llm_client import make_llm
 from .llm_logging import build_llm_call_log
 from .prompt_loader import load_prompt_bundle
@@ -73,14 +77,31 @@ def run(input_json: dict) -> dict:
     slate: dict[str, Any] | None = None
     slate_review_changed = False
     slate_review_reason = ""
+    slate_diversity_assessment = ""
+    slate_diversity_reason = ""
     duplicate_story_groups: list[dict[str, Any]] = []
     slate_review_config = dict(config.get("slate_review") or {})
     slate_review_prompt_bundle = None
+    review_pool = list(candidate_pool)
+    review_recovery = {
+        "requested_count": 0,
+        "available_story_count": len(screened_out),
+        "included_story_ids": [],
+        "omitted_story_ids": [],
+    }
     if bool(slate_review_config.get("enabled")):
         slate_review_prompt_bundle = load_prompt_bundle(
             slate_review_config["prompt_version"],
             module=SLATE_REVIEW_PROMPT_MODULE,
         )
+        review_pool, review_recovery = _build_slate_review_pool(
+            candidate_pool=candidate_pool,
+            screened_out=screened_out,
+            stories=stories,
+            config=config,
+            review_config=slate_review_config,
+        )
+    screening["slate_review_recovery"] = review_recovery
     for attempt in range(1, int(config["max_attempts"]) + 1):
         try:
             draft = _invoke_selector(
@@ -93,21 +114,32 @@ def run(input_json: dict) -> dict:
                 original_story_count=len(stories),
             )
             _validate_slate(draft, candidate_pool, config)
+            materialization_pool = candidate_pool
             if slate_review_prompt_bundle is not None:
+                proposed_for_review = _complete_proposed_slate_for_review(
+                    draft,
+                    review_pool=review_pool,
+                    recovery_story_ids=set(review_recovery["included_story_ids"]),
+                )
                 reviewed_draft = _invoke_slate_reviewer(
-                    stories=candidate_pool,
-                    proposed=draft,
+                    stories=review_pool,
+                    proposed=proposed_for_review,
                     config=config,
                     review_config=slate_review_config,
                     prompt_bundle=slate_review_prompt_bundle,
                     llm=llm,
                     llm_calls=llm_calls,
                     attempt=attempt,
+                    primary_candidate_count=len(candidate_pool),
+                    recovery_story_ids=set(review_recovery["included_story_ids"]),
                 )
-                _validate_slate(reviewed_draft, candidate_pool, config)
+                _validate_slate(reviewed_draft, review_pool, config)
                 draft = reviewed_draft
+                materialization_pool = review_pool
                 slate_review_changed = bool(reviewed_draft.review_changed)
                 slate_review_reason = clean_text(reviewed_draft.review_reason)
+                slate_diversity_assessment = reviewed_draft.diversity_assessment
+                slate_diversity_reason = clean_text(reviewed_draft.diversity_reason)
                 duplicate_story_groups = [
                     group.model_dump(mode="json")
                     for group in reviewed_draft.duplicate_story_groups
@@ -115,7 +147,7 @@ def run(input_json: dict) -> dict:
             slate = _materialize_slate(
                 draft,
                 stories,
-                candidate_pool=candidate_pool,
+                candidate_pool=materialization_pool,
                 screened_out=screened_out,
                 screening=screening,
             )
@@ -163,11 +195,19 @@ def run(input_json: dict) -> dict:
             ),
             "slate_review_changed": slate_review_changed,
             "slate_review_reason": slate_review_reason,
+            "slate_diversity_assessment": slate_diversity_assessment,
+            "slate_diversity_reason": slate_diversity_reason,
             "duplicate_story_group_count": len(duplicate_story_groups),
             "duplicate_story_groups": duplicate_story_groups,
             "selection_strategy": screening["strategy"],
             "screening_round_count": len(screening["rounds"]),
             "final_candidate_story_count": len(candidate_pool),
+            "target_finalist_story_count": int(screening["target_finalist_story_count"]),
+            "slate_review_candidate_story_count": len(review_pool),
+            "slate_review_recovery_candidate_count": len(
+                review_recovery["included_story_ids"]
+            ),
+            "slate_review_recovery_story_ids": review_recovery["included_story_ids"],
             "max_candidate_stories_per_call": int(config["max_candidate_stories"]),
             "max_call_context_chars": int(config["max_call_context_chars"]),
             "max_call_context_tokens": int(config["max_call_context_tokens"]),
@@ -193,6 +233,8 @@ def _invoke_slate_reviewer(
     llm,
     llm_calls: list[dict[str, Any]],
     attempt: int,
+    primary_candidate_count: int,
+    recovery_story_ids: set[str],
 ) -> RoundupSlateReviewDraft:
     story_contexts, selection_ref_to_story_id = _selection_contexts_with_refs(
         stories,
@@ -206,6 +248,11 @@ def _invoke_slate_reviewer(
         proposed,
         selection_ref_to_story_id,
     )
+    recovery_selection_refs = [
+        selection_ref
+        for selection_ref, story_id in selection_ref_to_story_id.items()
+        if story_id in recovery_story_ids
+    ]
     payload = {
         "task": "Audit and finalize the proposed roundup slate.",
         "channel": config["channel"],
@@ -215,6 +262,14 @@ def _invoke_slate_reviewer(
             "exactly_one_lead": True,
             "all_candidate_ids_must_be_accounted_for": True,
             "do_not_select_duplicate_editorial_stories": True,
+            "judge_episode_level_variety_semantically": True,
+            "category_quotas_are_forbidden": True,
+        },
+        "review_pool": {
+            "primary_finalist_count": primary_candidate_count,
+            "late_stage_recovery_candidate_count": len(recovery_selection_refs),
+            "late_stage_recovery_story_ids": recovery_selection_refs,
+            "recovery_candidates_may_replace_a_weaker_or_repetitive_selection": True,
         },
         "selection_identity": {
             "story_id_values_are_opaque_selection_refs": True,
@@ -272,6 +327,8 @@ def _invoke_slate_reviewer(
                             selection_ref_to_story_id=selection_ref_to_story_id,
                         ),
                         "review_attempt": review_attempt,
+                        "primary_candidate_count": primary_candidate_count,
+                        "recovery_story_ids": sorted(recovery_story_ids),
                     },
                     duration_seconds=time.time() - started,
                     module_name=SLATE_REVIEW_PROMPT_MODULE,
@@ -296,6 +353,8 @@ def _invoke_slate_reviewer(
                             selection_ref_to_story_id=selection_ref_to_story_id,
                         ),
                         "review_attempt": review_attempt,
+                        "primary_candidate_count": primary_candidate_count,
+                        "recovery_story_ids": sorted(recovery_story_ids),
                     },
                     duration_seconds=time.time() - started,
                     parse_error=last_error,
@@ -420,11 +479,13 @@ def _screen_candidate_pool(
     llm_calls: list[dict[str, Any]],
 ) -> tuple[list[dict], list[dict[str, Any]], dict[str, Any]]:
     per_call_limit = int(config["max_candidate_stories"])
-    if _candidate_pool_fits_one_call(stories, config):
+    target_finalist_count = _effective_target_finalist_story_count(config)
+    if _candidate_pool_is_ready(stories, config):
         return list(stories), [], {
             "strategy": "direct_final_selection",
             "input_story_count": len(stories),
             "final_candidate_story_count": len(stories),
+            "target_finalist_story_count": target_finalist_count,
             "rounds": [],
         }
 
@@ -439,20 +500,24 @@ def _screen_candidate_pool(
     shortlist_per_batch = int(config["screening_shortlist_per_batch"])
 
     for round_number in range(1, max_rounds + 1):
-        if _candidate_pool_fits_one_call(active, config):
+        if _candidate_pool_is_ready(active, config):
             break
+        if len(active) <= int(config["max_stories"]):
+            raise ValueError(
+                "The minimum viable roundup candidate pool cannot fit one complete-context "
+                "selection call; increase the configured context budget or use a larger-context model"
+            )
         batches = _balanced_context_batches(active, config)
+        target_total = _screening_target_total(
+            stories=active,
+            batch_sizes=[len(batch) for batch in batches],
+            shortlist_per_batch=shortlist_per_batch,
+            config=config,
+        )
         quotas = _screening_quotas(
             [len(batch) for batch in batches],
             shortlist_per_batch=shortlist_per_batch,
-            target_total=max(
-                len(batches),
-                min(
-                    per_call_limit,
-                    shortlist_per_batch * len(batches),
-                    math.ceil(len(active) / 2),
-                ),
-            ),
+            target_total=target_total,
         )
         next_active: list[dict] = []
         round_batch_summaries: list[dict[str, Any]] = []
@@ -532,6 +597,7 @@ def _screen_candidate_pool(
                 "round_number": round_number,
                 "input_story_count": len(active),
                 "output_story_count": len(next_active),
+                "target_output_story_count": target_total,
                 "batch_count": len(batches),
                 "batches": round_batch_summaries,
             }
@@ -549,7 +615,134 @@ def _screen_candidate_pool(
         "strategy": "iterative_llm_screening_then_final_selection",
         "input_story_count": len(stories),
         "final_candidate_story_count": len(active),
+        "target_finalist_story_count": target_finalist_count,
         "rounds": rounds,
+    }
+
+
+def _effective_target_finalist_story_count(config: dict[str, Any]) -> int:
+    configured = config.get("target_finalist_stories")
+    if configured is None:
+        configured = max(
+            DEFAULT_PREFERRED_FINALIST_STORY_COUNT,
+            int(config["max_stories"]) * 2,
+            int(config["max_stories"]) + 2,
+        )
+    return min(int(config["max_candidate_stories"]), int(configured))
+
+
+def _candidate_pool_is_ready(
+    stories: list[dict[str, Any]],
+    config: dict[str, Any],
+) -> bool:
+    return (
+        len(stories) <= _effective_target_finalist_story_count(config)
+        and _candidate_pool_fits_one_call(stories, config)
+    )
+
+
+def _screening_target_total(
+    *,
+    stories: list[dict[str, Any]],
+    batch_sizes: list[int],
+    shortlist_per_batch: int,
+    config: dict[str, Any],
+) -> int:
+    story_count = len(stories)
+    if story_count < 2:
+        raise ValueError("semantic screening requires at least two candidate stories")
+
+    hard_ceiling = min(
+        story_count - 1,
+        int(config["max_candidate_stories"]),
+        sum(min(batch_size, shortlist_per_batch) for batch_size in batch_sizes),
+    )
+    minimum_total = max(len(batch_sizes), int(config["max_stories"]))
+    if hard_ceiling < minimum_total:
+        raise ValueError(
+            "Configured editorial screening limits cannot retain a viable roundup pool"
+        )
+
+    finalist_target = _effective_target_finalist_story_count(config)
+    if story_count > finalist_target:
+        desired_total = max(finalist_target, math.ceil(story_count / 2))
+    else:
+        contexts, _selection_ref_to_story_id = _selection_contexts_with_refs(
+            stories,
+            config,
+        )
+        serialized_context = _serialize_story_contexts(contexts)
+        serialized_tokens = text_token_count(
+            serialized_context,
+            model=config["model"],
+            fallback_encoding=config["tokenizer_encoding"],
+        )
+        char_ratio = int(config["max_call_context_chars"]) / max(
+            1,
+            len(serialized_context),
+        )
+        token_ratio = int(config["max_call_context_tokens"]) / max(
+            1,
+            serialized_tokens,
+        )
+        desired_total = math.floor(story_count * min(char_ratio, token_ratio))
+        desired_total = min(desired_total, story_count - 1)
+
+    return max(minimum_total, min(hard_ceiling, desired_total))
+
+
+def _build_slate_review_pool(
+    *,
+    candidate_pool: list[dict[str, Any]],
+    screened_out: list[dict[str, Any]],
+    stories: list[dict[str, Any]],
+    config: dict[str, Any],
+    review_config: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    requested_count = int(review_config.get("recovery_candidate_count", 0))
+    by_id = {clean_text(story.get("story_id")): story for story in stories}
+    story_order = {
+        clean_text(story.get("story_id")): index
+        for index, story in enumerate(stories)
+    }
+    primary_ids = {clean_text(story.get("story_id")) for story in candidate_pool}
+    ranked_reserves = sorted(
+        (
+            item
+            for item in screened_out
+            if clean_text(item.get("story_id")) not in primary_ids
+            and clean_text(item.get("story_id")) in by_id
+        ),
+        key=lambda item: (
+            -int(item.get("screening_round") or 0),
+            int(item.get("screening_batch") or 0),
+            story_order[clean_text(item.get("story_id"))],
+        ),
+    )
+
+    review_pool = list(candidate_pool)
+    included_story_ids: list[str] = []
+    considered_story_ids: list[str] = []
+    omitted_for_context_story_ids: list[str] = []
+    for decision in ranked_reserves:
+        if len(included_story_ids) >= requested_count:
+            break
+        story_id = clean_text(decision.get("story_id"))
+        considered_story_ids.append(story_id)
+        proposed_pool = [*review_pool, by_id[story_id]]
+        if not _candidate_pool_fits_one_call(proposed_pool, config):
+            omitted_for_context_story_ids.append(story_id)
+            continue
+        review_pool = proposed_pool
+        included_story_ids.append(story_id)
+
+    return review_pool, {
+        "requested_count": requested_count,
+        "available_story_count": len(ranked_reserves),
+        "considered_story_ids": considered_story_ids,
+        "included_story_ids": included_story_ids,
+        "omitted_for_context_story_ids": omitted_for_context_story_ids,
+        "selection_policy": "latest_semantic_screening_round_first_then_complete_context_fit",
     }
 
 
@@ -845,6 +1038,38 @@ def _slate_with_selection_refs(
     return payload
 
 
+def _complete_proposed_slate_for_review(
+    draft: RoundupSlateDraft,
+    *,
+    review_pool: list[dict[str, Any]],
+    recovery_story_ids: set[str],
+) -> RoundupSlateDraft:
+    payload = draft.model_dump(mode="json")
+    accounted_ids = {
+        clean_text(item.get("story_id"))
+        for collection_name in ("selected", "non_selected")
+        for item in payload[collection_name]
+    }
+    for story in review_pool:
+        story_id = clean_text(story.get("story_id"))
+        if story_id in accounted_ids:
+            continue
+        is_recovery = story_id in recovery_story_ids
+        payload["non_selected"].append(
+            {
+                "story_id": story_id,
+                "action": "reserve",
+                "reason": (
+                    "Late-stage semantic-screening reserve supplied for final editorial review."
+                    if is_recovery
+                    else "Finalist supplied for complete final editorial review."
+                ),
+                "confidence": 0.5,
+            }
+        )
+    return RoundupSlateDraft.model_validate(payload)
+
+
 def _restore_slate_review_story_ids(
     draft: RoundupSlateReviewDraft,
     selection_ref_to_story_id: dict[str, str],
@@ -956,13 +1181,16 @@ def _screening_quotas(
     shortlist_per_batch: int,
     target_total: int,
 ) -> list[int]:
-    target_total = min(target_total, sum(batch_sizes) - 1)
+    capacities = [
+        min(batch_size, shortlist_per_batch) for batch_size in batch_sizes
+    ]
+    target_total = min(target_total, sum(capacities), sum(batch_sizes) - 1)
     quotas = [0 for _ in batch_sizes]
     assigned = 0
     while assigned < target_total:
         made_progress = False
-        for index, batch_size in enumerate(batch_sizes):
-            if quotas[index] >= batch_size or assigned >= target_total:
+        for index, capacity in enumerate(capacities):
+            if quotas[index] >= capacity or assigned >= target_total:
                 continue
             quotas[index] += 1
             assigned += 1
@@ -1056,7 +1284,15 @@ def _materialize_slate(
         for story_id in [clean_text(story.get("story_id")) for story in candidate_pool]
         if story_id not in final_returned_ids
     )
-    all_non_selected = [*non_selected, *screened_out]
+    final_returned_ids.update(
+        clean_text(story.get("story_id")) for story in candidate_pool
+    )
+    remaining_screened_out = [
+        item
+        for item in screened_out
+        if clean_text(item.get("story_id")) not in final_returned_ids
+    ]
+    all_non_selected = [*non_selected, *remaining_screened_out]
     reserve_decisions = [
         item for item in all_non_selected if item["action"] == "reserve"
     ]

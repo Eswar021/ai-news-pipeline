@@ -5,7 +5,14 @@ from pathlib import Path
 import yaml
 
 from src.pipeline.apps.evidence_prep.utils import clean_article_content
-from src.pipeline.apps.metadata_creator.app import _build_tags, _chapter_title, _clean_title_options
+from src.pipeline.apps.metadata_creator.app import (
+    MetadataDraftOutput,
+    _apply_generated_chapter_titles,
+    _build_tags,
+    _chapter_title,
+    _clean_title_options,
+    _source_meaning_boundaries_for_prompt,
+)
 from src.pipeline.apps.metadata_finalizer.app import _chapter_title as finalized_chapter_title
 from src.pipeline.apps.script_generation.formats.roundup.source_truth import (
     build_story_truth_index,
@@ -152,6 +159,7 @@ def test_truth_context_prioritizes_body_and_removes_repeated_chrome() -> None:
                         "visual_opportunity": "Show the source sentence.",
                     }
                 ],
+                "meaning_boundaries": [],
                 "tensions_and_caveats": [],
                 "creator_opportunities": ["Explain what the role signals."],
                 "visual_opportunities": ["Show the job-posting source."],
@@ -207,6 +215,102 @@ def test_metadata_keeps_llm_title_judgment_and_applies_only_stable_cleanup() -> 
     ]
     assert _chapter_title(section) == "Apple's Car Failure Became an AI Chip Strategy"
     assert "Github.io" not in tags
+
+
+def test_metadata_title_draft_exposes_scope_relationship_and_state_reasoning() -> None:
+    draft = MetadataDraftOutput.model_validate(
+        {
+            "title_options": [
+                {
+                    "title": "Kimi K3, AWS Growth, and Three More AI Updates",
+                    "accuracy_risk": "low",
+                    "click_potential": "high",
+                    "why_it_works": "A concrete lead pair plus an explicit roundup signal.",
+                    "angle_strategy": "lead_story_roundup",
+                    "represented_story_ids": ["story_kimi", "story_aws"],
+                    "relationship_basis": "",
+                    "scope_and_state_check": (
+                        "The title signals multiple updates and does not claim that promised weights shipped."
+                    ),
+                }
+            ],
+            "thumbnail_text_options": ["FIVE AI SHIFTS"],
+            "blocked_title_angles": ["Kimi K3 versus AWS"],
+            "chapter_titles": [
+                {"section_id": "section_00_intro", "title": "The week's strange AI split"},
+                {"section_id": "section_01_kimi", "title": "Kimi K3 promises weights later"},
+            ],
+            "description_intro": "Five concrete AI stories worth understanding.",
+            "tags": ["AI news"],
+        }
+    )
+    boundaries = _source_meaning_boundaries_for_prompt(
+        {
+            "story_context_packets": [
+                {
+                    "story_id": "story_kimi",
+                    "semantic_source_brief": {
+                        "meaning_boundaries": [
+                            {
+                                "record_keys": ["record_kimi"],
+                                "subject": "Kimi K3 weights",
+                                "established_state": "Hosted access is live and weights are promised later.",
+                                "must_not_be_upgraded_to": "The weights have already shipped.",
+                                "attribution": "The release schedule comes from Moonshot AI.",
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+    )
+
+    assert draft.title_options[0].relationship_basis == ""
+    assert draft.title_options[0].represented_story_ids == ["story_kimi", "story_aws"]
+    assert boundaries[0]["story_id"] == "story_kimi"
+    assert boundaries[0]["boundaries"][0]["must_not_be_upgraded_to"].endswith("shipped.")
+
+
+def test_metadata_applies_complete_llm_chapter_titles_by_exact_section_id() -> None:
+    sections = [
+        {"section_id": "section_00_intro", "section_type": "intro"},
+        {
+            "section_id": "section_01_story",
+            "section_type": "story",
+            "story_title": "A very long source headline that would otherwise end with a dangling and",
+        },
+    ]
+    chapters = [
+        {"section_id": "section_00_intro", "timestamp": "0:00", "start_seconds": 0, "title": "Intro"},
+        {"section_id": "section_01_story", "timestamp": "0:20", "start_seconds": 20, "title": "Old"},
+    ]
+
+    resolved = _apply_generated_chapter_titles(
+        chapters=chapters,
+        sections=sections,
+        generated_titles=[
+            {"section_id": "section_00_intro", "title": "Why this roundup is different"},
+            {"section_id": "section_01_story", "title": "The funding round that has not closed"},
+        ],
+    )
+
+    assert [chapter["title"] for chapter in resolved] == [
+        "Why this roundup is different",
+        "The funding round that has not closed",
+    ]
+
+
+def test_metadata_chapter_title_fallback_prefers_complete_title_card_subtitle() -> None:
+    section = {
+        "section_type": "story",
+        "story_title": "U.S.-China AI feud sees ASML walk tightrope between sales and geopolitics",
+        "title_card": {
+            "display_title": "U.S.-China AI feud sees ASML walk tightrope between sales and geopolitics",
+            "subtitle": "ASML's Geopolitical Tightrope",
+        },
+    }
+
+    assert _chapter_title(section) == "ASML's Geopolitical Tightrope"
 
 
 def test_story_label_preserves_complete_why_it_matters_sentence() -> None:

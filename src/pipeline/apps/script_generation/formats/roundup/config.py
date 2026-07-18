@@ -6,15 +6,24 @@ DIRECTOR_PROMPT_MODULE = "roundup_director"
 SOURCE_RESEARCHER_PROMPT_MODULE = "roundup_source_researcher"
 STORY_WRITER_PROMPT_MODULE = "roundup_story_writer"
 STORY_REVIEWER_PROMPT_MODULE = "roundup_story_reviewer"
-STORY_REVISION_SELECTOR_PROMPT_MODULE = "roundup_story_revision_selector"
 BOOKEND_WRITER_PROMPT_MODULE = "roundup_bookend_writer"
 BOOKEND_REVIEWER_PROMPT_MODULE = "roundup_bookend_reviewer"
-BOOKEND_REVISION_SELECTOR_PROMPT_MODULE = "roundup_bookend_revision_selector"
+
+SCRIPT_LLM_ROLES = (
+    "source_researcher",
+    "director",
+    "story_writer",
+    "story_reviewer",
+    "bookend_writer",
+    "bookend_reviewer",
+)
 
 DEFAULT_SCRIPT_WORKER_COUNT = 1
 DEFAULT_DIAGNOSTIC_WORDS_PER_MINUTE = 140
 DEFAULT_LLM_RETRY_ENABLED = True
 DEFAULT_LLM_RETRY_MAX_ATTEMPTS = 5
+DEFAULT_LLM_RETRY_MAX_STRUCTURED_OUTPUT_ATTEMPTS = 2
+DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 300.0
 DEFAULT_LLM_RETRY_INITIAL_DELAY_SECONDS = 1.0
 DEFAULT_LLM_RETRY_MAX_DELAY_SECONDS = 30.0
 DEFAULT_REVIEW_ENABLED = True

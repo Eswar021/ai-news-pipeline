@@ -1,10 +1,11 @@
 Generate a full YouTube metadata draft for this completed roundup script.
 
 Return:
-- title options
+- title options with angle strategy, represented story IDs, relationship basis, and scope/state self-check
 - thumbnail text options
 - blocked title angles
+- one concise, complete chapter title for every exact script section ID
 - a short description intro
 - suggested tags
 
-Do not generate chapters or source URLs. Those are built deterministically by code.
+Do not generate chapter timestamps or source URLs. Code owns timestamps, ordering, and source links.

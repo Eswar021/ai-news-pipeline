@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from .app import run
 
 
@@ -15,6 +17,7 @@ def main() -> None:
 
     input_path = Path(args.input_json)
     try:
+        load_dotenv(Path.cwd() / ".env", override=False)
         payload = json.loads(input_path.read_text(encoding="utf-8"))
         result = run(payload)
     except Exception as exc:

@@ -14,6 +14,8 @@ from .config import (
     DEFAULT_MAX_STORY_CONTEXT_TOKENS,
     DEFAULT_SCREENING_SHORTLIST_PER_BATCH,
     DEFAULT_SLATE_REVIEW_MAX_ATTEMPTS,
+    DEFAULT_SLATE_REVIEW_RECOVERY_CANDIDATE_COUNT,
+    DEFAULT_TARGET_FINALIST_STORIES,
     DEFAULT_TOKENIZER_ENCODING,
 )
 
@@ -55,6 +57,7 @@ class SlateReviewConfig(BaseModel):
     enabled: bool = False
     prompt_version: str = "v1"
     max_attempts: int = DEFAULT_SLATE_REVIEW_MAX_ATTEMPTS
+    recovery_candidate_count: int = DEFAULT_SLATE_REVIEW_RECOVERY_CANDIDATE_COUNT
 
     @field_validator("prompt_version")
     @classmethod
@@ -68,6 +71,15 @@ class SlateReviewConfig(BaseModel):
     def attempts_must_be_bounded(cls, value: int) -> int:
         if value < 1 or value > 5:
             raise ValueError("config.slate_review.max_attempts must be between 1 and 5")
+        return value
+
+    @field_validator("recovery_candidate_count")
+    @classmethod
+    def recovery_count_must_be_bounded(cls, value: int) -> int:
+        if value < 0 or value > 20:
+            raise ValueError(
+                "config.slate_review.recovery_candidate_count must be between 0 and 20"
+            )
         return value
 
 
@@ -84,6 +96,7 @@ class RoundupEditorialSelectionConfig(BaseModel):
     max_stories: int = 5
     max_candidate_stories: int = DEFAULT_MAX_CANDIDATE_STORIES
     screening_shortlist_per_batch: int = DEFAULT_SCREENING_SHORTLIST_PER_BATCH
+    target_finalist_stories: int | None = DEFAULT_TARGET_FINALIST_STORIES
     max_screening_rounds: int = DEFAULT_MAX_SCREENING_ROUNDS
     max_story_context_chars: int = DEFAULT_MAX_STORY_CONTEXT_CHARS
     max_call_context_chars: int = DEFAULT_MAX_CALL_CONTEXT_CHARS
@@ -119,6 +132,13 @@ class RoundupEditorialSelectionConfig(BaseModel):
     def positive_values(cls, value: int) -> int:
         if value < 1:
             raise ValueError("editorial selection limits must be positive")
+        return value
+
+    @field_validator("target_finalist_stories")
+    @classmethod
+    def finalist_target_must_be_positive(cls, value: int | None) -> int | None:
+        if value is not None and value < 1:
+            raise ValueError("config.target_finalist_stories must be positive")
         return value
 
     @field_validator("max_attempts")
@@ -166,6 +186,20 @@ class RoundupEditorialSelectionConfig(BaseModel):
             raise ValueError("config.min_stories must be <= config.max_stories")
         if self.max_candidate_stories < self.max_stories:
             raise ValueError("config.max_candidate_stories must be >= config.max_stories")
+        if (
+            self.target_finalist_stories is not None
+            and self.target_finalist_stories < self.max_stories
+        ):
+            raise ValueError(
+                "config.target_finalist_stories must be >= config.max_stories"
+            )
+        if (
+            self.target_finalist_stories is not None
+            and self.target_finalist_stories > self.max_candidate_stories
+        ):
+            raise ValueError(
+                "config.target_finalist_stories must be <= config.max_candidate_stories"
+            )
         if self.screening_shortlist_per_batch < self.max_stories:
             raise ValueError(
                 "config.screening_shortlist_per_batch must be >= config.max_stories"
@@ -258,6 +292,8 @@ class DuplicateStoryGroup(BaseModel):
 class RoundupSlateReviewDraft(RoundupSlateDraft):
     review_changed: bool
     review_reason: str
+    diversity_assessment: Literal["strong", "acceptable", "repetitive"] = "acceptable"
+    diversity_reason: str = ""
     duplicate_story_groups: list[DuplicateStoryGroup] = Field(default_factory=list)
 
 

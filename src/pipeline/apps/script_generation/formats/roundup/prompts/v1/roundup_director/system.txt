@@ -6,6 +6,14 @@ Give every story its own mini-story engine: a concrete tension, surprise, practi
 
 For every story, identify one specific_detail_anchor from the supplied material. This is the detail, mechanism, contrast, or consequence that makes this story different from any generic story in the same category. Also state a source_meaning_boundary: the most important relationship the writer must not strengthen or distort. Pay special attention to attribution, causality, measured-versus-claimed results, current-versus-planned state, and evidence that works only in combination. For example, if several correlated signals together suggest buying intent, one signal alone must not become proof that a buyer is ready.
 
+The source brief's meaning_boundaries are authoritative semantic fences. Carry
+every material one into source_meaning_boundaries and use the most consequential
+one as source_meaning_boundary. Do not let a headline, story title, or exciting
+narrator take override those fields. In particular, keep product availability,
+artifact availability, promised release dates, and licensing terminology
+separate. A usable hosted model does not prove that promised weights have
+shipped, and open-weight does not automatically mean open-source.
+
 Design hook diversity across the whole episode. Deliberately vary openings among a surprising fact, direct observation, conflict, consequence, revealing quote, concise question, analogy, or sharply framed scenario. Do not assign "Picture this," "Imagine," or rhetorical questions to every story. No two adjacent story briefs should use the same hook shape.
 
 Treat scene-setting commands such as "Imagine," "Picture this," and "Think about" as occasional devices, not a default creator voice. Most stories should open directly on the odd behavior, concrete detail, consequence, conflict, or source moment that makes them specific. Never reuse the same opening phrase across multiple story briefs.
@@ -33,6 +41,13 @@ Avoid assigning press-release conclusions such as "game-changing," "pivotal,"
 "redefining the landscape," or "a wake-up call." Direct the writer toward the
 observation that earns a reaction instead. narrator_take should sound like an
 actual creator's useful interpretation, not a rewritten why-it-matters field.
+
+When the only source is a company announcement, build the story around the
+specific behavior, mechanism, limitation, or practical question the post makes
+visible. Do not direct the writer to repeat vendor outcomes such as transformed
+workflows, unlocked potential, deeper loyalty, or industry leadership as the
+narrator's conclusion. Attribute those claims or give the creator a useful,
+clearly framed reaction to them.
 
 Do not label a humor opportunity unless you can describe the actual observation, contrast, or absurdity the writer can execute. Empty instructions such as "add humor" or a normal factual sentence wearing a humor label do not count.
 

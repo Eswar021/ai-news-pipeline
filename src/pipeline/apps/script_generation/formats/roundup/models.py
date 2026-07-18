@@ -134,6 +134,43 @@ class SourceDetailDraft(BaseModel):
         return value.strip()
 
 
+class SourceMeaningBoundaryDraft(BaseModel):
+    """A source-derived relationship that later creative stages must not strengthen."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    record_keys: list[str] = Field(
+        description="Assigned record keys that establish this boundary."
+    )
+    subject: str = Field(
+        description="The entity, artifact, result, claim, or event whose state needs to remain distinct."
+    )
+    established_state: str = Field(
+        description="What the supplied records establish now, including meaningful attribution."
+    )
+    must_not_be_upgraded_to: str = Field(
+        description="A stronger state or relationship the records do not establish."
+    )
+    attribution: str = Field(
+        description="Who supplies the claim or status, or how the relationship is known."
+    )
+
+    @field_validator("record_keys")
+    @classmethod
+    def boundary_record_keys_must_not_be_empty(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if isinstance(item, str) and item.strip()]
+        if not cleaned:
+            raise ValueError("source meaning boundary record_keys must not be empty")
+        return list(dict.fromkeys(cleaned))
+
+    @field_validator("subject", "established_state", "must_not_be_upgraded_to", "attribution")
+    @classmethod
+    def boundary_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("source meaning boundary text fields must not be empty")
+        return value.strip()
+
+
 class StorySourceBriefOutput(BaseModel):
     """Semantic reading notes built from the complete records for one story."""
 
@@ -144,6 +181,12 @@ class StorySourceBriefOutput(BaseModel):
     central_event: str
     source_relationship_summary: str
     distinctive_details: list[SourceDetailDraft] = Field(min_length=1)
+    meaning_boundaries: list[SourceMeaningBoundaryDraft] = Field(
+        description=(
+            "Material current-versus-planned, claim-versus-result, terminology, attribution, or causality "
+            "boundaries; return an empty list only when the records establish no such distinction."
+        )
+    )
     tensions_and_caveats: list[str]
     creator_opportunities: list[str]
     visual_opportunities: list[str]
@@ -224,6 +267,12 @@ class StoryDirectionBrief(BaseModel):
         description=(
             "A concise semantic boundary the writer must preserve, especially attribution, causality, "
             "single-versus-combined evidence, measured-versus-claimed results, and current-versus-planned state."
+        )
+    )
+    source_meaning_boundaries: list[str] = Field(
+        description=(
+            "All material source-state and attribution boundaries the writer must preserve; "
+            "return an empty list only when no additional boundary exists beyond source_meaning_boundary."
         )
     )
     must_communicate_truth_ids: list[str] = Field(
@@ -349,30 +398,6 @@ class StoryReviewOutput(BaseModel):
             raise ValueError("rewrite_required=true requires material issues and a revised_segment")
         return self
 
-
-class RevisionSelectionOutput(BaseModel):
-    """Choose between two already-written candidates without authoring new prose."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    decision: Literal["keep_current", "accept_candidate"]
-    rationale: str
-    material_improvements: list[str] = Field(
-        description="Concrete ways the candidate improves the viewer experience; empty when none are material."
-    )
-    material_regressions: list[str] = Field(
-        description=(
-            "Concrete ways the candidate weakens source meaning, attribution, specificity, rhythm, or personality; "
-            "empty when none are material."
-        )
-    )
-
-    @field_validator("rationale")
-    @classmethod
-    def rationale_must_not_be_empty(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("revision selection rationale must not be empty")
-        return value.strip()
 
 class BookendBeatDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")

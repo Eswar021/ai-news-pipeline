@@ -1,1 +1,1 @@
-Create a fair semantic shortlist for this batch. Explain each shortlisted choice in concrete viewer terms and remember that shortlisted stories will face a separate cross-batch final selection. Return shortlist entries only.
+Create a fair, deliberately wide semantic shortlist for this batch. Explain each shortlisted choice in concrete viewer terms and remember that shortlisted stories will face a separate cross-batch final selection and diversity audit. Return shortlist entries only.

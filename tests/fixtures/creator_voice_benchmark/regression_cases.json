@@ -13,7 +13,7 @@
     {
       "case": "identical_rewrite",
       "bad_behavior": "The reviewer requests a rewrite but returns the current segment unchanged.",
-      "expected_guardrail": "An identical candidate is rejected and the original remains active."
+      "expected_guardrail": "The reviewer prompt must return KEEP when it cannot make a material improvement; code does not compare prose strings."
     },
     {
       "case": "claim_strengthening",
@@ -24,6 +24,22 @@
       "case": "future_metric_subject",
       "bad_behavior": "The script says current M-series chips support 1.5TB when the source says a future M7 Ultra could support up to 1.5TB.",
       "expected_guardrail": "The reviewer should preserve the metric's subject, upper bound, and uncertainty when they materially affect the story."
+    },
+    {
+      "case": "promotional_rewrite",
+      "bad_behavior": "The reviewer flags press-release language and then rewrites the segment with phrases such as AI-powered ally and unlock full potential.",
+      "expected_guardrail": "A reviewer revision must resolve every reported issue and remain grounded in concrete product behavior."
+    }
+  ],
+  "status_semantics": {
+    "bad_behavior": "A hosted model is available, its downloadable weights are promised for later, and narration calls it a completed open-source release.",
+    "expected_guardrail": "Preserve separate states for service availability, artifact availability, and licensing terminology through research, direction, writing, and metadata."
+  },
+  "metadata_regressions": [
+    {
+      "case": "invented_roundup_rivalry",
+      "bad_behavior": "A title uses X vs. Y for unrelated stories that merely appear in the same episode.",
+      "expected_guardrail": "Each title must identify represented story IDs and a real script-supported relationship basis before using rivalry framing."
     }
   ],
   "visual_mismatches": [

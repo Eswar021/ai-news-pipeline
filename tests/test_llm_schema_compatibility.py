@@ -9,7 +9,12 @@ from src.pipeline.apps.editorial_selection.formats.roundup.contract import (
 )
 from src.pipeline.apps.editorial_triage.contract import TriageBatchOutput
 from src.pipeline.apps.metadata_creator.app import MetadataDraftOutput
-from src.pipeline.apps.script_generation.formats.roundup.models import RevisionSelectionOutput
+from src.pipeline.apps.script_generation.formats.roundup.models import (
+    BookendReviewOutput,
+    EpisodeDirectorOutput,
+    StoryReviewOutput,
+    StorySourceBriefOutput,
+)
 from src.pipeline.apps.story_mapping.pair_adjudicator import PairDecisionBatch
 from src.pipeline.apps.story_mapping.cluster_reconciler import (
     ComponentReconciliationOutput,
@@ -71,7 +76,10 @@ def test_all_active_llm_output_models_are_openai_strict_schema_compatible() -> N
         RoundupSlateDraft,
         RoundupSlateReviewDraft,
         MetadataDraftOutput,
-        RevisionSelectionOutput,
+        StorySourceBriefOutput,
+        EpisodeDirectorOutput,
+        StoryReviewOutput,
+        BookendReviewOutput,
         EpisodeDirectorDraft,
         StoryVisualPlanDraft,
         active_story_plan,

@@ -1,6 +1,6 @@
 # Production Orchestration and Creative Quality Worklist
 
-Status: Active implementation tracker. Q-01 through Q-12 are implemented and
+Status: Active implementation tracker. Q-01 through Q-17 are implemented and
 now require a fresh production episode plus human quality review.
 
 Last updated: 2026-07-18
@@ -202,7 +202,7 @@ Observed issues:
 
 Implemented in the current pass:
 
-- writer, reviewer, revision-selector, bookend, and metadata prompts now
+- writer, reviewer, bookend, and metadata prompts now
   calibrate against stock hype, misleading analogies, generic conclusions, and
   collapsed story roles
 - role-specific word suggestions remain soft creative orientation rather than
@@ -228,7 +228,7 @@ additional naive validators.
 Every selected story now receives one complete, versioned `story_context_v1`
 packet. It contains all selected records with complete cleaned content and
 source metadata. The source researcher, director, writer, reviewer, and
-revision selector receive that same packet. Configured resource limits fail
+bookend writer receive the relevant complete context. Configured resource limits fail
 clearly rather than clipping records. LLM call metadata records context mode,
 record keys, per-record character counts, and serialized context size.
 Story-level visual planning and conditional visual editing likewise receive
@@ -369,6 +369,123 @@ metadata prompts also reinforce concrete creator language, varied hook shapes,
 memorable source details, and a ban on invented `X vs. Y` framing when the
 episode contains no real comparison.
 
+### Q-13: Wide finalist funnel and recoverable slate review (`P0`, implemented 2026-07-18)
+
+Editorial screening no longer repeatedly halves a broad candidate pool until
+only the final episode count remains. The production profile now preserves a
+preferred 12-story finalist pool, with complete records for every story, before
+the episode selector chooses three to five. The target is configurable and may
+be reduced only when the complete contexts cannot fit the configured provider
+budget; the effective target, screening reductions, and final pool width are
+reported in the result.
+
+The final semantic slate reviewer now receives the complete finalist pool plus
+a bounded set of late-stage screening reserves when those records also fit the
+same complete-context call. It may promote a reserve when that produces a
+materially stronger or less repetitive episode. The reviewer separately
+reports true duplicate-event groups and episode-level diversity, so shared
+editorial texture is not mislabeled as `same_event`. Concrete source details
+and legitimate visual potential are semantic tie-breakers, not deterministic
+eligibility rules. Code owns only context budgets, opaque IDs, selected-count
+bounds, one-lead structure, and exact decision-ledger coverage; it applies no
+company, source, or topic quota.
+
+### Q-14: Semantic state continuity and authoritative reviewer revisions (`P0`, implemented 2026-07-18)
+
+The source research contract now carries explicit meaning boundaries for
+current versus planned state, source attribution, claim strength, causality,
+and terminology such as open-weight versus open-source. These LLM-authored
+boundaries remain attached to the complete story context through direction,
+writing, review, and metadata generation. Code validates only Pydantic shape
+and selected record ownership; it does not infer or score contextual meaning.
+
+The production script profile now treats the reviewer's bounded
+`rewrite_required` decision as authoritative and applies a structurally valid
+revision directly. The redundant A/B selector, its prompts, schema, config, and
+telemetry were removed after a production run showed it reversing five requested
+revisions while swapping phrases between current and candidate drafts. Reviewer
+prompts require the proposed revision to resolve every reported issue and to
+return KEEP when no material net improvement is available.
+
+Metadata title drafting now receives episode shape and source meaning
+boundaries. Every internal title candidate identifies its angle strategy,
+represented story IDs, any real comparison basis, and a scope/state self-check
+before the public title fields are retained. This remains semantic LLM
+judgment; no regex rivalry filter or deterministic contextual title validator
+was added.
+
+### Q-15: Single revision authority and validator boundary (`P0`, implemented 2026-07-18)
+
+The story and bookend reviewers are the only semantic revision authorities.
+Each returns either KEEP or one complete replacement. The former A/B revision
+selector was removed end-to-end: no prompt bundle, output schema, config key,
+failure mode, invocation path, or selector telemetry remains.
+
+The active post-LLM validation boundary was audited as follows:
+
+| Boundary | Deterministic checks retained | Contextual decisions code must not make |
+| --- | --- | --- |
+| Editorial triage | Pydantic shape, known record IDs, and complete batch coverage | Relevance, newsworthiness, novelty, or advance/reserve/quarantine judgment |
+| Story mapping | Known pair/component IDs, complete record coverage, and exactly-once partitions | Whether records describe the same event, a follow-up, or a broader arc |
+| Editorial selection | Known story IDs, bounded selected count, one lead first, and complete decision ledger | Which stories are strongest, diverse, repetitive, or worth selecting |
+| Script generation | Pydantic shape, selected story/source ownership, known truth IDs, section order, non-empty beats, deterministic projections, provenance, and one-pass loop bound | Hook quality, humor, prose style, claim interpretation, quote equivalence, metric support, or whether a rewrite is better |
+| Metadata | Pydantic shape, option counts, chapter/source URL structure, deduplication, and platform caps | Whether a title angle is accurate, compelling, representative, or a real rivalry |
+| Visuals | Pydantic shape, known asset ownership, render payload shape, timeline coverage, duration caps, media streams, and fingerprints | Whether an image or scene semantically fits the narration; LLM/human review owns that judgment |
+
+Embeddings, token budgets, and bounded shortlist sizes may nominate or transport
+context, but they cannot make the final semantic decision. Renderer payload
+validation is intentionally strict because malformed numeric fields, unknown
+assets, overlapping time ranges, or missing streams are executable media
+errors rather than editorial opinions.
+
+### Q-16: Role-specific K3 creative routing (`P0`, implemented and frozen-packet tested 2026-07-18)
+
+The production profile keeps GPT-4o on source research and episode direction.
+Those calls accurately surfaced complete-record details and meaning boundaries
+in roughly 8-17 seconds per selected story, so moving high-volume extraction to
+K3 would add latency without evidence of a quality gain. Kimi K3 now owns the
+viewer-facing story writer/reviewer and bookend writer/reviewer roles.
+
+The frozen five-story packet from
+`run_2026_07_18_171428_daily_48h_all_sources` completed with
+`worker_count: 2` in 768.23 seconds versus 1,170 seconds for the prior
+sequential script run. All 12 K3 calls completed on their first attempt with no
+rate-limit or schema retry. The resulting intro, connectors, and closing were
+materially more concrete than the GPT-4o bookends. The evaluation also exposed
+two remaining semantic prompt defects: an open-weight model was described as
+published source code, and a closing about money arriving first inverted the
+lead story's announced-before-close premise. Writer and reviewer prompts now
+name both mechanism errors explicitly; the next fresh run must verify them.
+
+Metadata creation now uses one Kimi K3 call and returns one complete chapter
+label for every exact script section ID. Code owns timestamps, ordering, source
+URLs, and section coverage; it no longer clips article headlines into fragments
+such as `AI's` or `sales and`. On the same frozen script, K3 metadata completed
+in 279.15 seconds without retry and produced concrete title strategies,
+thumbnail text, blocked misleading angles, and seven complete chapter labels.
+The isolated comparison artifacts live under
+`output/labs/script_model_comparison/run_2026_07_18_171428_k3_creative_worker2/`.
+
+### Q-17: Config-driven hosted voiceover (`P1`, implemented 2026-07-18)
+
+Voiceover now supports OpenAI `gpt-4o-mini-tts` and Gemini TTS as first-class
+providers without changing the canonical script, beat timing, mastering,
+captions, or fingerprint contracts. Model, voice, natural-language performance
+direction, API-key aliases, bounded retries, timeout, and worker count are all
+provider-local config. API calls synthesize existing beat-linked chunks in
+parallel and deterministically restore original chunk order before timing.
+Kokoro remains the free local switch. Provider settings participate in variant
+identity so a model or delivery-direction change cannot reuse stale audio.
+The current Google key reports a Gemini TTS free-tier limit of three requests
+per minute, so Gemini remains an optional comparison provider with one worker;
+OpenAI is the active hosted profile until Gemini billing/quota is upgraded.
+Real one-chunk smokes passed for both providers. The full OpenAI run for
+`run_2026_07_18_184808_daily_48h_all_sources` synthesized 1,380 words across
+40 beat-linked chunks in 57.13 seconds. The mastered output is 535.20 seconds,
+with seven section audio units, 39 aligned beats, two caption files, monotonic
+chunk timing, and exact decoded-WAV/package duration agreement. The prior
+Kokoro variant remains available at 585.33 seconds for human A/B listening.
+
 ### Standing Semantic Policy (`KEEP`)
 
 Engagement, humor, hook quality, claim interpretation, tone, visual meaning,
@@ -391,7 +508,7 @@ pass human review.
 
 ## 6. Next Evaluation Gate
 
-Q-01 through Q-12 are implemented. The next gate is a fresh production episode
+Q-01 through Q-17 are implemented. The next gate is a fresh production episode
 from evidence preparation onward, followed by artifact inspection rather than
 summary-only review. External provider search and paid vision verification stay
 disabled during this evaluation so source-context, grouping, script quality,
@@ -428,13 +545,26 @@ Visual review:
 
 ## 7. Other Deferred Work
 
-After the validated Q-01 through Q-12 foundation, keep these operational and
+After the validated Q-01 through Q-17 foundation, keep these operational and
 product tasks visible without mixing them into the current evaluation:
 
 - Keep Wikimedia, Pexels, Pixabay, and paid frame-level vision verification
   disabled until fresh-run script, grouping, and trusted-catalog quality is
   accepted. Re-enable them only through an explicit profile and human-reviewed
   cost/quality comparison.
+
+- Investigate the generated visual-plan failure in
+  `run_2026_07_18_184808_daily_48h_all_sources`: asset cataloging completed,
+  but story-level planning failed for
+  `story_20260717_agility_robotics_plants_its_flag_in_tesl_4eb6ec`. Preserve
+  its planner diagnostics and address it after the voiceover provider work;
+  do not hide it behind a generic text fallback.
+
+- Compare the verified OpenAI `gpt-4o-mini-tts` baseline against a
+  non-deprecated hosted speech path before production lock. The model still
+  works and is highly steerable, but OpenAI currently labels it deprecated;
+  replacement quality, exact-script adherence, latency, and episode cost need
+  a human-listened A/B rather than an automatic model-name swap.
 
 - Improve asset briefs and catalog coverage for software interfaces, product
   screenshots, people, and official imagery.

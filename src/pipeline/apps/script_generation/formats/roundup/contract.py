@@ -9,7 +9,9 @@ from .config import (
     DEFAULT_LLM_RETRY_ENABLED,
     DEFAULT_LLM_RETRY_INITIAL_DELAY_SECONDS,
     DEFAULT_LLM_RETRY_MAX_ATTEMPTS,
+    DEFAULT_LLM_RETRY_MAX_STRUCTURED_OUTPUT_ATTEMPTS,
     DEFAULT_LLM_RETRY_MAX_DELAY_SECONDS,
+    DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS,
     DEFAULT_MAX_EPISODE_CONTEXT_CHARS,
     DEFAULT_MAX_REVISION_PASSES,
     DEFAULT_MAX_STORY_CONTEXT_CHARS,
@@ -20,7 +22,15 @@ from .config import (
 
 
 ScriptGenerationStatus = Literal["ok", "failed"]
-LLMProvider = Literal["openai", "gemini", "lmstudio"]
+LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot"]
+ScriptLLMRole = Literal[
+    "source_researcher",
+    "director",
+    "story_writer",
+    "story_reviewer",
+    "bookend_writer",
+    "bookend_reviewer",
+]
 
 
 class ScriptGenerationRun(BaseModel):
@@ -186,6 +196,7 @@ class LLMRetryConfig(BaseModel):
 
     enabled: bool = DEFAULT_LLM_RETRY_ENABLED
     max_attempts: int = DEFAULT_LLM_RETRY_MAX_ATTEMPTS
+    max_structured_output_attempts: int = DEFAULT_LLM_RETRY_MAX_STRUCTURED_OUTPUT_ATTEMPTS
     initial_delay_seconds: float = DEFAULT_LLM_RETRY_INITIAL_DELAY_SECONDS
     max_delay_seconds: float = DEFAULT_LLM_RETRY_MAX_DELAY_SECONDS
 
@@ -193,6 +204,8 @@ class LLMRetryConfig(BaseModel):
     def retry_policy_must_be_bounded(self) -> "LLMRetryConfig":
         if self.max_attempts < 1 or self.max_attempts > 8:
             raise ValueError("llm_retry.max_attempts must be between 1 and 8")
+        if self.max_structured_output_attempts < 1 or self.max_structured_output_attempts > 3:
+            raise ValueError("llm_retry.max_structured_output_attempts must be between 1 and 3")
         if self.initial_delay_seconds < 0.1 or self.initial_delay_seconds > 30:
             raise ValueError("llm_retry.initial_delay_seconds must be between 0.1 and 30")
         if self.max_delay_seconds < self.initial_delay_seconds:
@@ -264,13 +277,6 @@ class WritingGuidance(BaseModel):
     )
 
 
-class CandidateSelectionConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    enabled: bool = False
-    failure_mode: Literal["keep_current", "fail"] = "keep_current"
-
-
 class ReviewConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -286,8 +292,6 @@ class ReviewConfig(BaseModel):
             "visualizable story beats",
         ]
     )
-    candidate_selection: CandidateSelectionConfig = Field(default_factory=CandidateSelectionConfig)
-
     @field_validator("max_revision_passes")
     @classmethod
     def revision_passes_must_be_bounded(cls, value: int) -> int:
@@ -304,12 +308,62 @@ class ReviewConfig(BaseModel):
         if not cleaned:
             raise ValueError("review.quality_criteria must contain at least one criterion")
         return cleaned
+
+
+class ProviderOptions(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    thinking: Literal["enabled", "disabled"] | None = None
+    omit_temperature: bool = False
+    request_timeout_seconds: float = Field(
+        default=DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS,
+        ge=10.0,
+        le=1800.0,
+    )
+
+
+class StructuredOutputConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method: Literal["json_schema", "function_calling", "json_mode"] = "json_schema"
+    strict: bool = True
+
+
+class RoleLLMConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: LLMProvider
+    model: str
+    temperature: float
+    base_url: str | None = None
+    provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
+    structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
+    llm_retry: LLMRetryConfig | None = None
+
+    @field_validator("model")
+    @classmethod
+    def role_model_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("llm_roles model must not be empty")
+        return value.strip()
+
+    @field_validator("temperature")
+    @classmethod
+    def role_temperature_must_be_valid(cls, value: float) -> float:
+        if value < 0 or value > 2:
+            raise ValueError("llm_roles temperature must be between 0 and 2")
+        return value
+
+
 class RoundupScriptConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     provider: LLMProvider
     model: str
     base_url: str | None = None
+    provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
+    structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
+    llm_roles: dict[ScriptLLMRole, RoleLLMConfig] = Field(default_factory=dict)
     prompt_version: str
     temperature: float
     diagnostic_words_per_minute: int = DEFAULT_DIAGNOSTIC_WORDS_PER_MINUTE

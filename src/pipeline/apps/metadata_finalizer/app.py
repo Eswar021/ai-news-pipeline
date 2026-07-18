@@ -70,11 +70,16 @@ def run(input_json: dict) -> dict:
     if voiceover_package.get("status") != "ready":
         raise ValueError("voiceover package status must be ready")
 
+    youtube_metadata = deepcopy(metadata_package.get("youtube_metadata") or {})
+    draft_chapters = youtube_metadata.get("chapters")
+    if not isinstance(draft_chapters, list):
+        draft_chapters = []
     sections = _ordered_sections(script_package)
     audio_units = _ordered_audio_units(voiceover_package)
     chapters = _chapters_from_audio_units(
         sections,
         audio_units,
+        draft_chapters=draft_chapters,
         require_all=request.config.require_all_script_sections,
     )
     errors = _chapter_errors(
@@ -83,7 +88,6 @@ def run(input_json: dict) -> dict:
         first_tolerance=request.config.first_chapter_tolerance_seconds,
     )
 
-    youtube_metadata = deepcopy(metadata_package.get("youtube_metadata") or {})
     components = youtube_metadata.get("description_components")
     if not isinstance(components, dict):
         errors.append("metadata draft is missing description_components")
@@ -193,9 +197,17 @@ def _chapters_from_audio_units(
     sections: list[dict[str, Any]],
     audio_units: list[dict[str, Any]],
     *,
+    draft_chapters: list[dict[str, Any]],
     require_all: bool,
 ) -> list[dict[str, Any]]:
     units_by_section = {clean_text(unit.get("section_id")): unit for unit in audio_units}
+    draft_titles_by_section = {
+        clean_text(chapter.get("section_id")): clean_text(chapter.get("title"))
+        for chapter in draft_chapters
+        if isinstance(chapter, dict)
+        and clean_text(chapter.get("section_id"))
+        and clean_text(chapter.get("title"))
+    }
     chapters: list[dict[str, Any]] = []
     for section in sections:
         section_id = clean_text(section.get("section_id"))
@@ -210,13 +222,19 @@ def _chapters_from_audio_units(
                 "timestamp": format_timestamp(start),
                 "start_seconds": round(start, 2),
                 "section_id": section_id,
-                "title": _chapter_title(section),
+                "title": _chapter_title(
+                    section,
+                    preferred_title=draft_titles_by_section.get(section_id, ""),
+                ),
             }
         )
     return chapters
 
 
-def _chapter_title(section: dict[str, Any]) -> str:
+def _chapter_title(section: dict[str, Any], *, preferred_title: str = "") -> str:
+    preferred_title = clean_text(preferred_title)
+    if preferred_title:
+        return preferred_title
     section_type = clean_text(section.get("section_type"))
     if section_type == "intro":
         return "Intro"

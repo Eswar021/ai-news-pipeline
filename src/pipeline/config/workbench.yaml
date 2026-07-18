@@ -158,7 +158,8 @@ profiles:
       min_stories: 3
       max_stories: 5
       max_candidate_stories: 40
-      screening_shortlist_per_batch: 10
+      screening_shortlist_per_batch: 15
+      target_finalist_stories: 12
       max_screening_rounds: 4
       max_story_context_chars: 500000
       max_call_context_chars: 650000
@@ -170,6 +171,7 @@ profiles:
         enabled: true
         prompt_version: v1
         max_attempts: 3
+        recovery_candidate_count: 4
     video_packaging:
       target_format: roundup
       roundup:
@@ -182,12 +184,87 @@ profiles:
       model: gpt-4o
       prompt_version: v1
       temperature: 0.4
+      structured_output:
+        method: json_schema
+        strict: true
+      provider_options:
+        request_timeout_seconds: 300
+      llm_roles:
+        story_writer:
+          provider: moonshot
+          model: kimi-k3
+          temperature: 1.0
+          provider_options:
+            thinking: null
+            omit_temperature: true
+            request_timeout_seconds: 360
+          structured_output:
+            method: json_schema
+            strict: true
+          llm_retry:
+            enabled: true
+            max_attempts: 1
+            max_structured_output_attempts: 2
+            initial_delay_seconds: 1.0
+            max_delay_seconds: 10.0
+        story_reviewer:
+          provider: moonshot
+          model: kimi-k3
+          temperature: 1.0
+          provider_options:
+            thinking: null
+            omit_temperature: true
+            request_timeout_seconds: 480
+          structured_output:
+            method: json_schema
+            strict: true
+          llm_retry:
+            enabled: true
+            max_attempts: 1
+            max_structured_output_attempts: 2
+            initial_delay_seconds: 1.0
+            max_delay_seconds: 10.0
+        bookend_writer:
+          provider: moonshot
+          model: kimi-k3
+          temperature: 1.0
+          provider_options:
+            thinking: null
+            omit_temperature: true
+            request_timeout_seconds: 360
+          structured_output:
+            method: json_schema
+            strict: true
+          llm_retry:
+            enabled: true
+            max_attempts: 1
+            max_structured_output_attempts: 2
+            initial_delay_seconds: 1.0
+            max_delay_seconds: 10.0
+        bookend_reviewer:
+          provider: moonshot
+          model: kimi-k3
+          temperature: 1.0
+          provider_options:
+            thinking: null
+            omit_temperature: true
+            request_timeout_seconds: 480
+          structured_output:
+            method: json_schema
+            strict: true
+          llm_retry:
+            enabled: true
+            max_attempts: 1
+            max_structured_output_attempts: 2
+            initial_delay_seconds: 1.0
+            max_delay_seconds: 10.0
       diagnostic_words_per_minute: 140
-      worker_count: 1
+      worker_count: 2
       title_card_seconds: 2.8
       llm_retry:
         enabled: true
         max_attempts: 5
+        max_structured_output_attempts: 2
         initial_delay_seconds: 1.0
         max_delay_seconds: 30.0
       writing_guidance:
@@ -279,9 +356,6 @@ profiles:
       review:
         enabled: true
         max_revision_passes: 1
-        candidate_selection:
-          enabled: true
-          failure_mode: keep_current
         quality_criteria:
           - an immediate story-specific hook
           - a concrete explanation a smart non-specialist can follow
@@ -291,6 +365,7 @@ profiles:
           - materially faithful use of the assigned story records
           - a story-specific concrete anchor rather than a reusable category summary
           - preservation of source meaning, including combined versus individual evidence and measured versus claimed results
+          - preservation of current versus planned state and source terminology such as open-weight versus open-source
           - exact quotations and preserved attribution for source opinions, forecasts, allegations, and marketing claims
           - an honest curated-roundup frame when the selected stories do not share one concrete tension
           - one focused cold-open idea instead of a three-headline intro list
@@ -301,10 +376,23 @@ profiles:
           - audiovisual beats that suggest useful visuals
 
     metadata_creator:
-      provider: openai
-      model: gpt-4o-mini
+      provider: moonshot
+      model: kimi-k3
       prompt_version: v1
-      temperature: 0.4
+      temperature: 1.0
+      provider_options:
+        thinking: null
+        omit_temperature: true
+        request_timeout_seconds: 600
+      structured_output:
+        method: json_schema
+        strict: true
+      llm_retry:
+        enabled: true
+        max_attempts: 2
+        max_structured_output_attempts: 2
+        initial_delay_seconds: 1.0
+        max_delay_seconds: 10.0
       metadata_policy:
         title_option_count: 8
         thumbnail_text_option_count: 5
@@ -1156,10 +1244,10 @@ profiles:
         keep_frames: false
 
     voiceover:
-      provider: kokoro_local
+      provider: openai
       style: general_youtube
       speed: 1.0
-      voice: af_heart
+      voice: null
       language_code: a
       sample_rate_hz: 24000
       keep_chunks: true
@@ -1193,6 +1281,47 @@ profiles:
         max_chars_per_cue: 48
         max_words_per_cue: 12
         min_cue_seconds: 0.8
+      kokoro:
+        voice: af_heart
+      openai:
+        model: gpt-4o-mini-tts
+        voice: cedar
+        response_format: wav
+        instructions: >-
+          Speak like a confident, conversational YouTube technology-news host.
+          Sound curious, engaged, and human rather than like a broadcast anchor
+          or advertisement. Vary pace and emphasis naturally, let punchlines
+          breathe, and keep dense explanations crisp. Avoid sing-song cadence,
+          melodrama, and exaggerated hype.
+
+        api_key_envs:
+          - OPENAI_API_KEY
+          - OPENAI_API_KEY_A_C_C
+        request_timeout_seconds: 180
+        max_retries: 3
+        retry_initial_delay_seconds: 1.0
+        retry_max_delay_seconds: 8.0
+        worker_count: 3
+        max_input_chars: 4096
+      gemini:
+        model: gemini-2.5-flash-preview-tts
+        voice: Kore
+        language_code: en-US
+        instructions: >-
+          Deliver the narration as an expressive, conversational YouTube
+          technology-news host. Use natural emphasis, tempo changes, and short
+          dramatic pauses without sounding theatrical or promotional. Keep
+          technical explanations clear and let humorous lines land lightly.
+        api_key_envs:
+          - GEMINI_TTS_API_KEY
+          - GEMINI_API_KEY
+          - GOOGLE_API_KEY
+        request_timeout_seconds: 180
+        max_retries: 3
+        retry_initial_delay_seconds: 1.0
+        retry_max_delay_seconds: 8.0
+        worker_count: 1
+        max_input_chars: 4000
       chatterbox:
         device: auto
         exaggeration: 0.65
@@ -1222,3 +1351,544 @@ profiles:
         top_p: 0.9
         top_k: 45
         speaker_tag: S1
+
+experiments:
+  voiceover_delivery_comparison:
+    section_type: intro
+    beat_count: 1
+    max_projected_cost_usd: 2.0
+    provider_request_intervals_seconds:
+      gemini: 2.0
+    default_variant_ids:
+      - marin_dynamic_creator
+      - marin_warm_witty
+      - cedar_punchy_explainer
+      - coral_bright_storyteller
+    variants:
+      - id: marin_dynamic_creator
+        label: Marin - Dynamic Creator
+        description: Controlled surprise, contrast, and forward momentum for a roundup opening.
+        config:
+          provider: openai
+          style: general_youtube
+          speed: 0.98
+          openai:
+            voice: marin
+            instructions: >-
+              Perform this as an expressive YouTube technology-news opening, not
+              as a newsreader. Begin with controlled disbelief at the first
+              number, sharpen the contrast in the second sentence, then build
+              curiosity toward the final line. Use meaningful pitch and pace
+              changes, stress the key numbers and the words confidence and
+              evidence, and leave a brief pause before the final reveal.
+      - id: marin_warm_witty
+        label: Marin - Warm and Witty
+        description: More conversational personality with a lightly amused edge.
+        config:
+          provider: openai
+          style: general_youtube
+          speed: 0.96
+          openai:
+            voice: marin
+            instructions: >-
+              Speak like a smart technology creator sharing an eyebrow-raising
+              discovery with one viewer. Sound warm, curious, and lightly amused
+              by the mismatch between confidence and evidence. Vary rhythm
+              naturally, give the numbers room to land, and finish with quiet
+              intrigue rather than announcer-style intensity.
+      - id: cedar_punchy_explainer
+        label: Cedar - Punchy Explainer
+        description: Crisp, confident delivery with stronger contrast and less theatricality.
+        config:
+          provider: openai
+          style: general_youtube
+          speed: 1.01
+          openai:
+            voice: cedar
+            instructions: >-
+              Deliver this like a sharp, modern YouTube explainer. Keep the first
+              two figures crisp and distinct, accelerate slightly through the
+              setup, then slow down and emphasize the contrast between confidence
+              and evidence. Sound confident and energized, with natural pitch
+              variation, but never like a television anchor or advertisement.
+      - id: coral_bright_storyteller
+        label: Coral - Bright Storyteller
+        description: Brighter personality and visible curiosity without exaggerated hype.
+        config:
+          provider: openai
+          style: general_youtube
+          speed: 0.99
+          openai:
+            voice: coral
+            instructions: >-
+              Tell this opening with bright curiosity and an expressive creator
+              voice. Treat each number as a surprising clue, use a quick reset
+              between the first two sentences, and make the final contrast feel
+              like the reason the viewer should keep watching. Keep it human,
+              lively, and conversational without shouting or sounding promotional.
+      - id: gemini31_kore_director
+        label: Gemini 3.1 Kore - Directed and Firm
+        description: Controlled authority with explicit reveal and contrast direction.
+        config:
+          provider: gemini
+          style: general_youtube
+          speed: 0.98
+          gemini:
+            model: gemini-3.1-flash-tts-preview
+            voice: Kore
+            worker_count: 1
+            instructions: >-
+              Audio profile: an incisive but personable technology creator.
+              Scene: opening a tightly edited YouTube roundup with two figures
+              that sound impressive until the evidence catches up. Director's
+              notes: begin with measured surprise, articulate both numbers
+              cleanly, pause briefly after each contrast, then lower the pace
+              and add intrigue on the final sentence. Avoid broadcast-news
+              cadence, sales energy, and melodrama.
+      - id: gemini31_achird_friendly
+        label: Gemini 3.1 Achird - Friendly Creator
+        description: Direct-to-viewer warmth, curiosity, and conversational rhythm.
+        config:
+          provider: gemini
+          style: general_youtube
+          speed: 0.97
+          gemini:
+            model: gemini-3.1-flash-tts-preview
+            voice: Achird
+            worker_count: 1
+            instructions: >-
+              Audio profile: a smart, friendly YouTube technology host speaking
+              to one curious viewer. Scene: the host has just noticed that the
+              confidence in this week's AI headlines arrived before the proof.
+              Director's notes: sound genuinely intrigued, let the two numbers
+              land without rushing, use a lightly amused turn on confidence,
+              and finish evidence is the interesting part as an inviting reveal.
+              Keep the performance natural and unscripted rather than announcer-like.
+      - id: gemini31_sadachbia_lively
+        label: Gemini 3.1 Sadachbia - Lively Hook
+        description: Higher energy and sharper momentum while preserving clarity.
+        config:
+          provider: gemini
+          style: general_youtube
+          speed: 1.0
+          gemini:
+            model: gemini-3.1-flash-tts-preview
+            voice: Sadachbia
+            worker_count: 1
+            instructions: >-
+              Audio profile: a lively, quick-thinking technology creator with
+              strong control of emphasis. Scene: a cold open designed to stop a
+              viewer without shouting. Director's notes: hit the first figure
+              with surprise, reset before the security rating, build momentum
+              through the contradiction, and make the final clause feel like a
+              promise that the real story is about to begin. Use expressive pitch
+              and tempo changes while keeping every number easy to understand.
+    matrices:
+      - id: gemini31_creator_matrix
+        label: Gemini 3.1 Creator Voice Matrix
+        provider: gemini
+        model: gemini-3.1-flash-tts-preview
+        style: general_youtube
+        provider_config:
+          language_code: en-US
+          worker_count: 1
+        pricing:
+          text_input_usd_per_million_tokens: 1.0
+          audio_output_usd_per_million_tokens: 20.0
+          audio_tokens_per_second: 25.0
+          projected_audio_seconds: 20.0
+        voices:
+          - id: kore
+            voice: Kore
+            label: Kore
+            character: Firm and controlled
+          - id: achird
+            voice: Achird
+            label: Achird
+            character: Friendly and direct-to-viewer
+          - id: sadachbia
+            voice: Sadachbia
+            label: Sadachbia
+            character: Lively and energetic
+          - id: charon
+            voice: Charon
+            label: Charon
+            character: Informative and composed
+          - id: puck
+            voice: Puck
+            label: Puck
+            character: Upbeat and playful
+          - id: sulafat
+            voice: Sulafat
+            label: Sulafat
+            character: Warm and inviting
+          - id: iapetus
+            voice: Iapetus
+            label: Iapetus
+            character: Clear and precise
+          - id: gacrux
+            voice: Gacrux
+            label: Gacrux
+            character: Mature and grounded
+          - id: algieba
+            voice: Algieba
+            label: Algieba
+            character: Smooth and polished
+          - id: zephyr
+            voice: Zephyr
+            label: Zephyr
+            character: Bright and attention-forward
+        directions:
+          - id: dynamic_hook
+            label: Dynamic Hook
+            description: Strong contrast, energetic pacing, and a clear final reveal
+            speed: 0.99
+            instructions: >-
+              Audio profile: an expressive YouTube technology creator with
+              confident control, not a television newsreader. Scene: a cold open
+              built around two surprising numbers and the gap between confidence
+              and evidence. Director's notes: land the first number with measured
+              surprise, reset before the second figure, accelerate through the
+              contradiction, then slow down slightly and make the final clause an
+              irresistible reveal. Use meaningful pitch, rhythm, and emphasis
+              changes without shouting, melodrama, or promotional energy.
+          - id: conversational_intrigue
+            label: Conversational Intrigue
+            description: Warmer one-to-one delivery with curiosity and restrained wit
+            speed: 0.96
+            instructions: >-
+              Audio profile: a smart, personable technology creator speaking to
+              one curious viewer. Scene: the host has noticed something slightly
+              absurd in this week's biggest AI claims and is inviting the viewer
+              to inspect it together. Director's notes: sound warm and genuinely
+              curious, let both numbers breathe, add a lightly amused turn on the
+              word confidence, and finish the evidence line with quiet intrigue.
+              Keep the rhythm spontaneous, intimate, and human rather than formal
+              or announcer-like.
+
+      # Research suite: all 30 official Gemini voices on one identical fast creator direction.
+      - id: gemini31_all_voices_fast
+        label: Gemini 3.1 All Voices - Fast Creator
+        provider: gemini
+        model: gemini-3.1-flash-tts-preview
+        style: general_youtube
+        provider_config:
+          language_code: en-US
+          worker_count: 1
+        pricing:
+          text_input_usd_per_million_tokens: 1.0
+          audio_output_usd_per_million_tokens: 20.0
+          audio_tokens_per_second: 25.0
+          projected_audio_seconds: 20.0
+        voices:
+          - {id: zephyr, voice: Zephyr, label: Zephyr, character: Bright}
+          - {id: puck, voice: Puck, label: Puck, character: Upbeat}
+          - {id: charon, voice: Charon, label: Charon, character: Informative}
+          - {id: kore, voice: Kore, label: Kore, character: Firm}
+          - {id: fenrir, voice: Fenrir, label: Fenrir, character: Excitable}
+          - {id: leda, voice: Leda, label: Leda, character: Youthful}
+          - {id: orus, voice: Orus, label: Orus, character: Firm}
+          - {id: aoede, voice: Aoede, label: Aoede, character: Breezy}
+          - {id: callirrhoe, voice: Callirrhoe, label: Callirrhoe, character: Easy-going}
+          - {id: autonoe, voice: Autonoe, label: Autonoe, character: Bright}
+          - {id: enceladus, voice: Enceladus, label: Enceladus, character: Breathy}
+          - {id: iapetus, voice: Iapetus, label: Iapetus, character: Clear}
+          - {id: umbriel, voice: Umbriel, label: Umbriel, character: Easy-going}
+          - {id: algieba, voice: Algieba, label: Algieba, character: Smooth}
+          - {id: despina, voice: Despina, label: Despina, character: Smooth}
+          - {id: erinome, voice: Erinome, label: Erinome, character: Clear}
+          - {id: algenib, voice: Algenib, label: Algenib, character: Gravelly}
+          - {id: rasalgethi, voice: Rasalgethi, label: Rasalgethi, character: Informative}
+          - {id: laomedeia, voice: Laomedeia, label: Laomedeia, character: Upbeat}
+          - {id: achernar, voice: Achernar, label: Achernar, character: Soft}
+          - {id: alnilam, voice: Alnilam, label: Alnilam, character: Firm}
+          - {id: schedar, voice: Schedar, label: Schedar, character: Even}
+          - {id: gacrux, voice: Gacrux, label: Gacrux, character: Mature}
+          - {id: pulcherrima, voice: Pulcherrima, label: Pulcherrima, character: Forward}
+          - {id: achird, voice: Achird, label: Achird, character: Friendly}
+          - {id: zubenelgenubi, voice: Zubenelgenubi, label: Zubenelgenubi, character: Casual}
+          - {id: vindemiatrix, voice: Vindemiatrix, label: Vindemiatrix, character: Gentle}
+          - {id: sadachbia, voice: Sadachbia, label: Sadachbia, character: Lively}
+          - {id: sadaltager, voice: Sadaltager, label: Sadaltager, character: Knowledgeable}
+          - {id: sulafat, voice: Sulafat, label: Sulafat, character: Warm}
+        directions:
+          - id: fast_creator
+            label: Fast Creator
+            description: Energetic 170-180 WPM creator delivery with crisp numbers and no dead air
+            speed: 1.10
+            instructions: >-
+              Audio profile: a modern YouTube technology creator who sounds
+              quick-thinking, confident, and genuinely curious. Scene: a tightly
+              edited roundup cold open where surprising figures lead into a
+              contradiction. Director's notes: aim for roughly 170 to 180 words
+              per minute, maintain forward momentum with no dead air, articulate
+              every number clearly, vary pitch on contrasts, and make the final
+              clause an inviting reveal. Sound conversational and alive, never
+              like a television anchor, advertisement, or rushed disclaimer.
+
+      # Shortlist sweep: two faster expressive deliveries in addition to each voice's base sample above.
+      - id: gemini31_focused_fast_deliveries
+        label: Gemini 3.1 Shortlist - Faster Deliveries
+        provider: gemini
+        model: gemini-3.1-flash-tts-preview
+        style: general_youtube
+        provider_config:
+          language_code: en-US
+          worker_count: 1
+        pricing:
+          text_input_usd_per_million_tokens: 1.0
+          audio_output_usd_per_million_tokens: 20.0
+          audio_tokens_per_second: 25.0
+          projected_audio_seconds: 18.0
+        voices:
+          - {id: achird, voice: Achird, label: Achird, character: Friendly}
+          - {id: sadachbia, voice: Sadachbia, label: Sadachbia, character: Lively}
+          - {id: charon, voice: Charon, label: Charon, character: Informative}
+          - {id: sulafat, voice: Sulafat, label: Sulafat, character: Warm}
+          - {id: puck, voice: Puck, label: Puck, character: Upbeat}
+          - {id: iapetus, voice: Iapetus, label: Iapetus, character: Clear}
+          - {id: gacrux, voice: Gacrux, label: Gacrux, character: Mature}
+          - {id: zephyr, voice: Zephyr, label: Zephyr, character: Bright}
+        directions:
+          - id: rapid_punchy
+            label: Rapid Punchy
+            description: High-retention 180-190 WPM hook with sharp contrasts and controlled excitement
+            speed: 1.18
+            transcript_prefix: "[excitedly] [very fast but clear]"
+            instructions: >-
+              Audio profile: a witty, high-retention YouTube technology host with
+              a vocal smile and sharp timing. Scene: the first seconds of a cold
+              open where each sentence must earn attention. Director's notes:
+              aim for roughly 180 to 190 words per minute, use punchy consonants,
+              quick clean resets, and strong contrast without shouting. Keep all
+              names and numbers intelligible. Land the final reveal with a tiny
+              pause before it, not with announcer-style drama.
+          - id: conversational_fast
+            label: Conversational Fast
+            description: Natural 160-170 WPM one-to-one delivery with curiosity and restrained wit
+            speed: 1.08
+            transcript_prefix: "[curious] [lightly amused]"
+            instructions: >-
+              Audio profile: a smart technology creator talking directly to one
+              viewer, warm but brisk, with dry understated humor. Scene: the host
+              has found a contradiction worth inspecting together. Director's
+              notes: aim for roughly 160 to 170 words per minute, keep the rhythm
+              spontaneous, give important figures just enough space to land, and
+              let amusement color the contrast without slowing the episode down.
+              Avoid formal narration, theatrical pauses, and sales energy.
+
+      - id: gemini25_flash_model_compare
+        label: Gemini 2.5 Flash - Model Comparison
+        provider: gemini
+        model: gemini-2.5-flash-preview-tts
+        style: general_youtube
+        provider_config:
+          language_code: en-US
+          worker_count: 1
+        pricing:
+          text_input_usd_per_million_tokens: 0.5
+          audio_output_usd_per_million_tokens: 10.0
+          audio_tokens_per_second: 25.0
+          projected_audio_seconds: 20.0
+        voices:
+          - {id: achird, voice: Achird, label: Achird, character: Friendly}
+          - {id: sadachbia, voice: Sadachbia, label: Sadachbia, character: Lively}
+          - {id: charon, voice: Charon, label: Charon, character: Informative}
+          - {id: sulafat, voice: Sulafat, label: Sulafat, character: Warm}
+        directions:
+          - id: fast_creator
+            label: Fast Creator
+            description: Same 170-180 WPM direction used for the Gemini 3.1 baseline
+            speed: 1.10
+            instructions: >-
+              Audio profile: a modern YouTube technology creator who sounds
+              quick-thinking, confident, and genuinely curious. Scene: a tightly
+              edited roundup cold open where surprising figures lead into a
+              contradiction. Director's notes: aim for roughly 170 to 180 words
+              per minute, maintain forward momentum with no dead air, articulate
+              every number clearly, vary pitch on contrasts, and make the final
+              clause an inviting reveal. Sound conversational and alive, never
+              like a television anchor, advertisement, or rushed disclaimer.
+
+      - id: gemini25_pro_model_compare
+        label: Gemini 2.5 Pro - Model Comparison
+        provider: gemini
+        model: gemini-2.5-pro-preview-tts
+        style: general_youtube
+        provider_config:
+          language_code: en-US
+          worker_count: 1
+        pricing:
+          text_input_usd_per_million_tokens: 1.0
+          audio_output_usd_per_million_tokens: 20.0
+          audio_tokens_per_second: 25.0
+          projected_audio_seconds: 20.0
+        voices:
+          - {id: achird, voice: Achird, label: Achird, character: Friendly}
+          - {id: sadachbia, voice: Sadachbia, label: Sadachbia, character: Lively}
+          - {id: charon, voice: Charon, label: Charon, character: Informative}
+          - {id: sulafat, voice: Sulafat, label: Sulafat, character: Warm}
+        directions:
+          - id: fast_creator
+            label: Fast Creator
+            description: Same 170-180 WPM direction used for the Gemini 3.1 baseline
+            speed: 1.10
+            instructions: >-
+              Audio profile: a modern YouTube technology creator who sounds
+              quick-thinking, confident, and genuinely curious. Scene: a tightly
+              edited roundup cold open where surprising figures lead into a
+              contradiction. Director's notes: aim for roughly 170 to 180 words
+              per minute, maintain forward momentum with no dead air, articulate
+              every number clearly, vary pitch on contrasts, and make the final
+              clause an inviting reveal. Sound conversational and alive, never
+              like a television anchor, advertisement, or rushed disclaimer.
+
+  script_model_comparison:
+    variants:
+      - id: openai_gpt4o_role_baseline
+        config:
+          provider: openai
+          model: gpt-4o
+          temperature: 0.4
+          provider_options:
+            request_timeout_seconds: 300
+          structured_output:
+            method: json_schema
+            strict: true
+        pricing_per_million_tokens:
+          input_cache_miss: 2.5
+          input_cache_hit: 1.25
+          output: 10.0
+      - id: moonshot_kimi_k26_non_thinking
+        config:
+          provider: moonshot
+          model: kimi-k2.6
+          temperature: 0.6
+          provider_options:
+            thinking: disabled
+            omit_temperature: false
+            request_timeout_seconds: 240
+          llm_retry:
+            enabled: true
+            max_attempts: 2
+            max_structured_output_attempts: 2
+            initial_delay_seconds: 1.0
+            max_delay_seconds: 10.0
+          structured_output:
+            method: function_calling
+            strict: true
+        pricing_per_million_tokens:
+          input_cache_miss: 0.95
+          input_cache_hit: 0.16
+          output: 4.0
+      - id: moonshot_kimi_k3_max_thinking
+        config:
+          provider: moonshot
+          model: kimi-k3
+          temperature: 1.0
+          provider_options:
+            thinking: null
+            omit_temperature: true
+            request_timeout_seconds: 300
+          llm_retry:
+            enabled: true
+            max_attempts: 1
+            max_structured_output_attempts: 1
+            initial_delay_seconds: 1.0
+            max_delay_seconds: 10.0
+          structured_output:
+            method: json_schema
+            strict: true
+        pricing_per_million_tokens:
+          input_cache_miss: 3.0
+          input_cache_hit: 0.3
+          output: 15.0
+      - id: hybrid_k3_creative_worker2
+        config:
+          provider: openai
+          model: gpt-4o
+          temperature: 0.4
+          worker_count: 2
+          provider_options:
+            request_timeout_seconds: 300
+          structured_output:
+            method: json_schema
+            strict: true
+          llm_roles:
+            story_writer:
+              provider: moonshot
+              model: kimi-k3
+              temperature: 1.0
+              provider_options:
+                thinking: null
+                omit_temperature: true
+                request_timeout_seconds: 360
+              structured_output:
+                method: json_schema
+                strict: true
+              llm_retry:
+                enabled: true
+                max_attempts: 1
+                max_structured_output_attempts: 2
+                initial_delay_seconds: 1.0
+                max_delay_seconds: 10.0
+            story_reviewer:
+              provider: moonshot
+              model: kimi-k3
+              temperature: 1.0
+              provider_options:
+                thinking: null
+                omit_temperature: true
+                request_timeout_seconds: 480
+              structured_output:
+                method: json_schema
+                strict: true
+              llm_retry:
+                enabled: true
+                max_attempts: 1
+                max_structured_output_attempts: 2
+                initial_delay_seconds: 1.0
+                max_delay_seconds: 10.0
+            bookend_writer:
+              provider: moonshot
+              model: kimi-k3
+              temperature: 1.0
+              provider_options:
+                thinking: null
+                omit_temperature: true
+                request_timeout_seconds: 360
+              structured_output:
+                method: json_schema
+                strict: true
+              llm_retry:
+                enabled: true
+                max_attempts: 1
+                max_structured_output_attempts: 2
+                initial_delay_seconds: 1.0
+                max_delay_seconds: 10.0
+            bookend_reviewer:
+              provider: moonshot
+              model: kimi-k3
+              temperature: 1.0
+              provider_options:
+                thinking: null
+                omit_temperature: true
+                request_timeout_seconds: 480
+              structured_output:
+                method: json_schema
+                strict: true
+              llm_retry:
+                enabled: true
+                max_attempts: 1
+                max_structured_output_attempts: 2
+                initial_delay_seconds: 1.0
+                max_delay_seconds: 10.0
+        pricing_by_route:
+          openai/gpt-4o:
+            input_cache_miss: 2.5
+            input_cache_hit: 1.25
+            output: 10.0
+          moonshot/kimi-k3:
+            input_cache_miss: 3.0
+            input_cache_hit: 0.3
+            output: 15.0

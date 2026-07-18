@@ -494,3 +494,173 @@ def test_final_slate_review_replaces_duplicate_story(monkeypatch) -> None:
     ]
     assert result["summary"]["slate_review_changed"] is True
     assert result["summary"]["duplicate_story_group_count"] == 1
+
+
+def test_editorial_screening_preserves_wide_finalist_target() -> None:
+    stories = [{"story_id": f"story_{index}"} for index in range(18)]
+
+    target_total = selection_app._screening_target_total(
+        stories=stories,
+        batch_sizes=[9, 9],
+        shortlist_per_batch=15,
+        config={
+            "model": "fixture",
+            "tokenizer_encoding": "o200k_base",
+            "min_stories": 3,
+            "max_stories": 5,
+            "max_candidate_stories": 40,
+            "target_finalist_stories": 12,
+            "max_call_context_chars": 650_000,
+            "max_call_context_tokens": 100_000,
+        },
+    )
+
+    assert target_total == 12
+    assert selection_app._screening_quotas(
+        [9, 9],
+        shortlist_per_batch=15,
+        target_total=target_total,
+    ) == [6, 6]
+
+
+def test_final_slate_review_can_recover_late_semantic_reserve(monkeypatch) -> None:
+    stories = [
+        {
+            "story_id": f"story_{index}",
+            "story_title": f"Story {index}",
+            "records": [
+                {
+                    "record_key": f"record_{index}",
+                    "title": f"Story {index}",
+                    "url": f"https://example.com/{index}",
+                    "content": f"Complete source context for story {index}.",
+                }
+            ],
+        }
+        for index in range(1, 7)
+    ]
+
+    def fake_screen_candidate_pool(**_kwargs):
+        return (
+            stories[:4],
+            [
+                {
+                    "story_id": "story_5",
+                    "action": "reserve",
+                    "reason": "Late semantic reserve.",
+                    "selection_stage": "candidate_screen",
+                    "decision_source": "llm_shortlist_complement",
+                    "screening_round": 3,
+                    "screening_batch": 1,
+                },
+                {
+                    "story_id": "story_6",
+                    "action": "reserve",
+                    "reason": "Early semantic reserve.",
+                    "selection_stage": "candidate_screen",
+                    "decision_source": "llm_shortlist_complement",
+                    "screening_round": 1,
+                    "screening_batch": 1,
+                },
+            ],
+            {
+                "strategy": "fixture_semantic_screening",
+                "input_story_count": 6,
+                "final_candidate_story_count": 4,
+                "target_finalist_story_count": 4,
+                "rounds": [],
+            },
+        )
+
+    selector_draft = RoundupSlateDraft.model_validate(
+        {
+            "episode_shape": "mixed_news_roundup",
+            "episode_thesis": "",
+            "ordering_rationale": "Initial finalist slate.",
+            "selected": [
+                {"story_id": "candidate_001", "role": "lead", "selection_reason": "Lead.", "viewer_payoff": "Useful.", "confidence": 0.9},
+                {"story_id": "candidate_002", "role": "major", "selection_reason": "Major.", "viewer_payoff": "Useful.", "confidence": 0.85},
+                {"story_id": "candidate_003", "role": "brief", "selection_reason": "Brief.", "viewer_payoff": "Useful.", "confidence": 0.8},
+            ],
+            "non_selected": [
+                {"story_id": "candidate_004", "action": "reserve", "reason": "Alternate.", "confidence": 0.7}
+            ],
+            "human_review_warning": "",
+        }
+    )
+    reviewer_draft = RoundupSlateReviewDraft.model_validate(
+        {
+            "episode_shape": "mixed_news_roundup",
+            "episode_thesis": "",
+            "ordering_rationale": "Promote the stronger late-stage reserve.",
+            "selected": [
+                {"story_id": "candidate_001", "role": "lead", "selection_reason": "Lead.", "viewer_payoff": "Useful.", "confidence": 0.9},
+                {"story_id": "candidate_002", "role": "major", "selection_reason": "Major.", "viewer_payoff": "Useful.", "confidence": 0.85},
+                {"story_id": "candidate_005", "role": "brief", "selection_reason": "Adds a distinct payoff.", "viewer_payoff": "More variety.", "confidence": 0.88},
+            ],
+            "non_selected": [
+                {"story_id": "candidate_003", "action": "reserve", "reason": "Less varied.", "confidence": 0.7},
+                {"story_id": "candidate_004", "action": "reserve", "reason": "Alternate.", "confidence": 0.7},
+            ],
+            "human_review_warning": "",
+            "review_changed": True,
+            "review_reason": "The recovery candidate improves episode variety.",
+            "diversity_assessment": "strong",
+            "diversity_reason": "The stories now offer distinct mechanisms and stakes.",
+            "duplicate_story_groups": [],
+        }
+    )
+
+    class FakeLLM:
+        def with_structured_output(self, output_model, include_raw):
+            assert include_raw is True
+            parsed = (
+                selector_draft
+                if output_model is RoundupSlateDraft
+                else reviewer_draft
+            )
+            return RunnableLambda(
+                lambda _prompt: {"parsed": parsed, "raw": None, "parsing_error": None}
+            )
+
+    monkeypatch.setattr(selection_app, "_screen_candidate_pool", fake_screen_candidate_pool)
+    monkeypatch.setattr(selection_app, "make_llm", lambda **_kwargs: FakeLLM())
+    result = selection_app.run(
+        {
+            "run": {"run_id": "recovery_fixture"},
+            "config": {
+                "provider": "openai",
+                "model": "fixture",
+                "prompt_version": "v1",
+                "min_stories": 3,
+                "max_stories": 3,
+                "max_candidate_stories": 10,
+                "screening_shortlist_per_batch": 5,
+                "target_finalist_stories": 4,
+                "max_attempts": 2,
+                "channel": {"channel_name": "Fixture AI"},
+                "slate_review": {
+                    "enabled": True,
+                    "prompt_version": "v1",
+                    "max_attempts": 2,
+                    "recovery_candidate_count": 1,
+                },
+            },
+            "input": {
+                "story_mapping": {
+                    "status": "ok",
+                    "data": {"run_id": "recovery_fixture", "stories": stories},
+                }
+            },
+        }
+    )
+
+    slate = result["data"]["editorial_slate"]
+    assert result["status"] == "ok"
+    assert slate["selected_story_ids"] == ["story_1", "story_2", "story_5"]
+    assert result["summary"]["slate_review_recovery_story_ids"] == ["story_5"]
+    assert result["summary"]["slate_diversity_assessment"] == "strong"
+    assert len(slate["decision_ledger"]) == len(stories)
+    assert {item["story_id"] for item in slate["decision_ledger"]} == {
+        story["story_id"] for story in stories
+    }
