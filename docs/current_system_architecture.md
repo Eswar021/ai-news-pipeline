@@ -98,7 +98,7 @@ flowchart LR
     end
 
     subgraph visuals[3. Visuals stage]
-        assetCatalog[Build trusted story asset catalog]
+        assetCatalog[Build trusted story asset catalog<br/>and preflight source-page capture]
         visualPlan[visual_planner<br/>generate or load canonical visual plan]
         discover[Resolve catalog media<br/>or deliberate external research]
         resolve[Capture screenshots and resolve assets]
@@ -156,7 +156,7 @@ flowchart TD
     packet[Structural video packet]
     beats[Canonical script<br/>sections and audiovisual beats]
     voice[Mastered voiceover<br/>audio units, aligned beats, captions]
-    catalog[Trusted per-story asset catalog<br/>pages, images, direct videos, identities]
+    catalog[Trusted per-story asset catalog<br/>capture-ready pages, images, direct videos, identities]
     scenes[Voiceover-timed visual scene plan]
     media[Resolved screenshots, logos, images, and video clips]
     final[Final video, finalized metadata,<br/>review package, publish handoff]

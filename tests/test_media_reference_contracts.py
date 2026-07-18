@@ -128,6 +128,10 @@ def test_visual_planner_passes_provenance_to_plan_builder_not_episode_director(
         **profile["visuals"]["asset_catalog"],
         "output_dir": str(tmp_path / "catalog"),
         "page_metadata": {**profile["visuals"]["asset_catalog"]["page_metadata"], "enabled": False},
+        "source_page_preflight": {
+            **profile["visuals"]["asset_catalog"]["source_page_preflight"],
+            "enabled": False,
+        },
         "contact_sheet": {**profile["visuals"]["asset_catalog"]["contact_sheet"], "enabled": False},
     }
     asset_catalog = build_visual_asset_catalog(

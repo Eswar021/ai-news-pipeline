@@ -81,6 +81,9 @@ Purpose:
 - convert beat-level `visual_brief` values into story-owned asset requests
 - register every selected source record as a stable `source_page` asset
 - bind source-page screenshot targets to exact canonical beat support truths
+- preflight source pages with the same browser capture path used by the asset
+  resolver, so anti-bot, access-denied, or otherwise uncapturable pages are
+  marked unavailable before the planner can select them
 - fetch page metadata and inspect OpenGraph/hero plus bounded in-article image
   and direct source-video candidates, including lazy-loaded and `srcset` image
   sources
@@ -103,6 +106,11 @@ does not call an LLM or vision model. A selected source page is a real visual
 anchor even when the publisher exposes no usable hero image or direct video.
 Unresolved photo or B-roll briefs remain visible; this stage never substitutes
 an unrelated asset to make the run appear complete.
+
+HTTP metadata fetch status and browser capture readiness are recorded
+separately. Browser preflight is authoritative for screenshot availability: a
+page that rejects the metadata client but renders correctly in Chromium remains
+available, while a challenge or access page is not advertised to the planner.
 
 ### 2. Planner
 
@@ -323,6 +331,10 @@ from src.pipeline.visuals.asset_resolver import run
 Purpose:
 
 - resolve screenshot assets for source-backed scenes
+- reuse a successful screenshot capture when several scenes request the exact
+  same URL, target text, capture mode, zoom, and highlight treatment, avoiding
+  repeated publisher requests and anti-bot throttling while retaining one
+  scene-owned output file per scene
 - resolve logo assets for logo reveal scenes and report their actual quality
   class (`verified_logo`, `simple_icon`, `domain_favicon`, or
   `text_identity_fallback`)
@@ -379,6 +391,8 @@ Source screenshot capture can apply a profile-driven focus zoom and target
 highlight after locating a semantic headline/body candidate. Large page
 containers are not accepted merely because they contain the requested words;
 the capture prefers readable headings, paragraphs, and list items.
+Challenge pages, access-denied responses, and HTTP 401/403/429 responses are
+reported as capture failures rather than being rendered as source proof.
 
 ### 5. Render
 

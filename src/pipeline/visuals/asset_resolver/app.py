@@ -112,6 +112,7 @@ def run(input_json: dict) -> dict:
 
     source_scenes = [scene for scene in scenes if scene.get("render_kind") in SOURCE_SCREENSHOT_RENDER_KINDS]
     other_scenes = [scene for scene in scenes if scene.get("render_kind") not in SOURCE_SCREENSHOT_RENDER_KINDS]
+    source_capture_cache: dict[tuple[str, str, str, float, bool], dict[str, Any]] = {}
 
     if source_scenes and request.config.source_screenshots.enabled:
         with sync_playwright() as playwright:
@@ -132,6 +133,7 @@ def run(input_json: dict) -> dict:
                             screenshots_dir=screenshots_dir,
                             raw_capture_dir=raw_capture_dir,
                             full_page_dir=full_page_dir,
+                            capture_cache=source_capture_cache,
                         )
                     )
             finally:
@@ -205,29 +207,52 @@ def _resolve_source_screenshot(
     screenshots_dir: Path,
     raw_capture_dir: Path,
     full_page_dir: Path,
+    capture_cache: dict[tuple[str, str, str, float, bool], dict[str, Any]],
 ) -> dict[str, Any]:
     scene_id = clean_text(scene.get("scene_id", "scene_unknown"))
     output_path = screenshots_dir / f"{scene_id}.png"
     capture_scene = _scene_with_capture_target(scene)
-    capture = capture_source_viewport(
-        context=context,
-        scene=capture_scene,
-        timeout_ms=request.config.browser.timeout_ms,
-        post_load_wait_ms=request.config.browser.post_load_wait_ms,
-        capture_mode=request.config.source_screenshots.capture_mode,
-        focus_zoom=request.config.source_screenshots.focus_zoom,
-        highlight_target=request.config.source_screenshots.highlight_target,
-        raw_capture_path=(
-            raw_capture_dir / f"{scene_id}_raw.png"
-            if request.config.source_screenshots.save_raw_capture_debug
-            else None
-        ),
-        full_page_debug_path=(
-            full_page_dir / f"{scene_id}_full.png"
-            if request.config.source_screenshots.save_full_page_debug
-            else None
-        ),
+    source_config = request.config.source_screenshots
+    cache_key = _source_capture_cache_key(
+        capture_scene,
+        capture_mode=source_config.capture_mode,
+        focus_zoom=source_config.focus_zoom,
+        highlight_target=source_config.highlight_target,
     )
+    cached_capture = capture_cache.get(cache_key) if source_config.reuse_identical_captures else None
+    if cached_capture is not None:
+        capture = {
+            **cached_capture,
+            "cache_hit": True,
+        }
+        if source_config.save_raw_capture_debug:
+            raw_path = raw_capture_dir / f"{scene_id}_raw.png"
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_path.write_bytes(capture["screenshot_bytes"])
+    else:
+        capture = capture_source_viewport(
+            context=context,
+            scene=capture_scene,
+            timeout_ms=request.config.browser.timeout_ms,
+            post_load_wait_ms=request.config.browser.post_load_wait_ms,
+            capture_mode=source_config.capture_mode,
+            focus_zoom=source_config.focus_zoom,
+            highlight_target=source_config.highlight_target,
+            raw_capture_path=(
+                raw_capture_dir / f"{scene_id}_raw.png"
+                if source_config.save_raw_capture_debug
+                else None
+            ),
+            full_page_debug_path=(
+                full_page_dir / f"{scene_id}_full.png"
+                if source_config.save_full_page_debug
+                else None
+            ),
+        )
+        capture["cache_hit"] = False
+        if capture.get("ok") and source_config.reuse_identical_captures:
+            capture["cache_source_scene_id"] = scene_id
+            capture_cache[cache_key] = dict(capture)
     if capture.get("ok"):
         output_path.write_bytes(capture["screenshot_bytes"])
         target_text = clean_text((capture_scene.get("payload") or {}).get("target_text", ""))
@@ -251,6 +276,23 @@ def _resolve_source_screenshot(
         "capture": capture,
         "error": clean_text(capture.get("error", "source screenshot capture failed")),
     }
+
+
+def _source_capture_cache_key(
+    scene: dict[str, Any],
+    *,
+    capture_mode: str,
+    focus_zoom: float,
+    highlight_target: bool,
+) -> tuple[str, str, str, float, bool]:
+    payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
+    return (
+        clean_text(payload.get("url", "")).rstrip("/"),
+        clean_text(payload.get("target_text", "")).casefold(),
+        clean_text(capture_mode),
+        round(float(focus_zoom), 4),
+        bool(highlight_target),
+    )
 
 
 def _scene_with_capture_target(scene: dict[str, Any]) -> dict[str, Any]:
@@ -432,6 +474,15 @@ def _build_summary(
         "logo_asset_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "logo_asset" and asset.get("status") in {"resolved", "fallback"}]),
         "context_image_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "context_image" and asset.get("status") == "resolved"]),
         "broll_video_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "broll_video" and asset.get("status") == "resolved"]),
+        "source_screenshot_capture_cache_hit_count": len(
+            [
+                asset
+                for asset in resolved_assets
+                if asset.get("asset_type") == "source_screenshot"
+                and isinstance(asset.get("capture"), dict)
+                and asset["capture"].get("cache_hit") is True
+            ]
+        ),
         "failed_asset_count": len(failed),
         "degraded_asset_count": len(degraded),
         "asset_type_counts": counter_dict([asset.get("asset_type", "") for asset in resolved_assets]),

@@ -1533,6 +1533,13 @@ def _story_draft_errors(
         )
     allowed = set(config["scene_policy"]["allowed_render_kinds"])
     allowed.discard("story_transition_scene")
+    catalog_required_kinds = {
+        clean_text(kind)
+        for kind in config.get("asset_availability_policy", {}).get(
+            "catalog_asset_required_render_kinds", []
+        )
+        if clean_text(kind)
+    }
     available_assets = [
         asset
         for asset in asset_catalog_index.get("assets_by_story", {}).get(story_id, [])
@@ -1575,6 +1582,10 @@ def _story_draft_errors(
         if render_kind in OLD_CARD_RENDER_KINDS or render_kind not in allowed:
             errors.append(f"{prefix} uses unsupported render_kind {render_kind!r}")
             continue
+        if render_kind in catalog_required_kinds and not clean_text(scene.get("asset_id")):
+            errors.append(
+                f"{prefix} {render_kind} requires an exact available story-owned asset_id"
+            )
         catalog_asset, catalog_errors = _catalog_asset_for_scene(
             scene,
             story_id=story_id,
@@ -4573,15 +4584,28 @@ def _check_scene_plan(visual_scene_plan: dict[str, Any], config: dict[str, Any])
         if not clean_text(payload.get("source_record_key", "")):
             errors.append(f"{scene.get('scene_id')} {scene.get('render_kind')} is missing source_record_key")
     catalog_index = _asset_catalog_index(visual_scene_plan.get("asset_catalog", {}))
+    catalog_required_kinds = {
+        clean_text(kind)
+        for kind in config.get("asset_availability_policy", {}).get(
+            "catalog_asset_required_render_kinds", []
+        )
+        if clean_text(kind)
+    }
     anchored_story_ids: set[str] = set()
     for scene in scenes:
         payload = scene.get("payload", {}) if isinstance(scene.get("payload"), dict) else {}
+        render_kind = clean_text(scene.get("render_kind"))
+        if render_kind in catalog_required_kinds and not clean_text(payload.get("asset_id")):
+            errors.append(
+                f"{scene.get('scene_id')} {render_kind} requires an available catalog asset_id"
+            )
+            continue
         if not clean_text(payload.get("asset_id")):
             continue
         asset, asset_errors = _catalog_asset_for_scene(
             payload,
             story_id=clean_text(scene.get("story_id")),
-            render_kind=clean_text(scene.get("render_kind")),
+            render_kind=render_kind,
             catalog_index=catalog_index,
         )
         errors.extend(f"{scene.get('scene_id')} {error}" for error in asset_errors)

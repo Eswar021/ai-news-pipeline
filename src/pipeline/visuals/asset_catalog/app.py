@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 from PIL import Image, ImageDraw, ImageOps
+from playwright.sync_api import sync_playwright
 import requests
 
 from src.pipeline.contracts import (
@@ -24,6 +25,7 @@ from src.pipeline.contracts import (
 
 from ..common import clean_text, counter_dict, dedupe, first_url, iso_now, screenshot_target_candidates, slugify
 from ..generators.logo_reveal.resolver import simple_icon_export_for
+from ..generators.source_screenshot.web_capture import capture_source_viewport
 from .config import CATALOG_VERSION, NEXT_MODULE, PACKAGE_TYPE
 from .contract import AssetCatalogRequest, AssetCatalogResponse
 from .identity import catalog_identity_payload
@@ -204,7 +206,11 @@ def run(input_json: dict) -> dict:
                     )
                 )
             if (
-                (request.config.collect_source_images or request.config.collect_source_videos)
+                (
+                    request.config.collect_source_pages
+                    or request.config.collect_source_images
+                    or request.config.collect_source_videos
+                )
                 and record_key
                 and url
                 and request.config.page_metadata.enabled
@@ -243,6 +249,18 @@ def run(input_json: dict) -> dict:
         warnings.extend(clean_text(item) for item in result.get("warnings", []) if clean_text(item))
         if isinstance(result.get("candidate_telemetry"), dict):
             source_candidate_telemetry.append(result["candidate_telemetry"])
+
+    assets = _apply_source_page_fetch_status(
+        assets,
+        page_results=page_results,
+        failure_policy=request.config.page_metadata.source_page_fetch_failure_policy,
+    )
+    assets, preflight_warnings = _preflight_source_pages(
+        assets,
+        output_dir=output_dir / "source_page_preflight",
+        config=request.config.source_page_preflight.model_dump(mode="json"),
+    )
+    warnings.extend(preflight_warnings)
 
     candidate_filtering = _aggregate_candidate_telemetry(source_candidate_telemetry)
     candidate_summary = {
@@ -349,6 +367,22 @@ def run(input_json: dict) -> dict:
         "asset_count": len(assets),
         "asset_type_counts": counter_dict([clean_text(asset.get("asset_type")) for asset in assets]),
         "source_page_count": len([asset for asset in assets if asset.get("asset_type") == "source_page"]),
+        "available_source_page_count": len(
+            [
+                asset
+                for asset in assets
+                if asset.get("asset_type") == "source_page"
+                and asset.get("status") == "available"
+            ]
+        ),
+        "unavailable_source_page_count": len(
+            [
+                asset
+                for asset in assets
+                if asset.get("asset_type") == "source_page"
+                and asset.get("status") == "unavailable"
+            ]
+        ),
         "source_image_count": len([asset for asset in assets if asset.get("asset_type") == "source_image"]),
         "source_video_count": len([asset for asset in assets if asset.get("asset_type") == "source_video"]),
         "logo_count": len([asset for asset in assets if asset.get("asset_type") == "logo"]),
@@ -630,11 +664,19 @@ def _collect_source_media(
             try:
                 results.append(future.result())
             except Exception as exc:
+                record_key = clean_text(record.get("record_key"))
+                source_url = first_url(record)
+                error = f"{type(exc).__name__}: {exc}"
                 results.append(
                     {
+                        "story_id": story_id,
+                        "record_key": record_key,
+                        "source_url": source_url,
+                        "page_fetch_status": "failed",
+                        "page_fetch_error": error,
                         "warning": (
-                            f"{story_id}/{clean_text(record.get('record_key'))}: "
-                            f"source metadata collection failed: {type(exc).__name__}: {exc}"
+                            f"{story_id}/{record_key}: "
+                            f"source metadata collection failed: {error}"
                         )
                     }
                 )
@@ -657,9 +699,21 @@ def _source_media_for_record(
         stream=True,
     )
     response.raise_for_status()
+    page_result = {
+        "story_id": story_id,
+        "record_key": record_key,
+        "source_url": response.url,
+        "page_fetch_status": "available",
+        "page_fetch_error": "",
+    }
     content_type = clean_text(response.headers.get("Content-Type")).lower()
     if "html" not in content_type:
-        return {"warning": f"{story_id}/{record_key}: selected source is not an HTML page"}
+        return {
+            **page_result,
+            "page_fetch_status": "unsupported",
+            "page_fetch_error": f"unsupported content type: {content_type or 'unknown'}",
+            "warning": f"{story_id}/{record_key}: selected source is not an HTML page",
+        }
     html_bytes = _bounded_response_bytes(response, int(config["max_html_bytes"]))
     parser = _MetadataParser()
     parser.feed(html_bytes.decode(response.encoding or "utf-8", errors="replace"))
@@ -801,6 +855,7 @@ def _source_media_for_record(
         if config.get("collect_source_videos", False):
             requested.append("video")
         return {
+            **page_result,
             "warning": (
                 f"{story_id}/{record_key}: no {' or '.join(requested) or 'media'} candidate "
                 "met the configured structural requirements"
@@ -818,6 +873,7 @@ def _source_media_for_record(
             ),
         }
     return {
+        **page_result,
         "assets": assets,
         "warnings": warnings,
         "candidate_telemetry": _source_candidate_telemetry(
@@ -831,6 +887,136 @@ def _source_media_for_record(
             retained_count=len(image_assets),
         ),
     }
+
+
+def _apply_source_page_fetch_status(
+    assets: list[dict[str, Any]],
+    *,
+    page_results: list[dict[str, Any]],
+    failure_policy: str,
+) -> list[dict[str, Any]]:
+    """Keep planner availability aligned with what the catalog could actually fetch."""
+
+    status_by_record = {
+        clean_text(result.get("record_key")): result
+        for result in page_results
+        if clean_text(result.get("record_key"))
+    }
+    resolved: list[dict[str, Any]] = []
+    for original in assets:
+        asset = dict(original)
+        if clean_text(asset.get("asset_type")) != "source_page":
+            resolved.append(asset)
+            continue
+        result = status_by_record.get(clean_text(asset.get("source_record_key")))
+        if not result:
+            resolved.append(asset)
+            continue
+        fetch_status = clean_text(result.get("page_fetch_status")) or "unverified"
+        asset["page_fetch_status"] = fetch_status
+        asset["page_fetch_error"] = clean_text(result.get("page_fetch_error"))
+        if failure_policy == "mark_unavailable" and fetch_status != "available":
+            asset["status"] = "unavailable"
+            asset["review_status"] = "source_page_unavailable"
+            asset["availability_reason"] = (
+                asset["page_fetch_error"] or f"source page fetch status is {fetch_status}"
+            )
+        resolved.append(asset)
+    return resolved
+
+
+def _preflight_source_pages(
+    assets: list[dict[str, Any]],
+    *,
+    output_dir: Path,
+    config: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    if not config.get("enabled", True):
+        return assets, []
+    source_pages = [
+        asset
+        for asset in assets
+        if clean_text(asset.get("asset_type")) == "source_page"
+        and clean_text(asset.get("asset_url") or asset.get("source_url"))
+    ]
+    if not source_pages:
+        return assets, []
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    results_by_id: dict[str, dict[str, Any]] = {}
+    warnings: list[str] = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        context = browser.new_context(
+            viewport={
+                "width": int(config["viewport_width"]),
+                "height": int(config["viewport_height"]),
+            },
+            device_scale_factor=float(config["device_scale_factor"]),
+            user_agent=clean_text(config.get("user_agent")),
+        )
+        try:
+            for asset in source_pages:
+                asset_id = clean_text(asset.get("asset_id"))
+                target_candidates = asset.get("screenshot_target_candidates")
+                target_text = (
+                    clean_text(target_candidates[0])
+                    if isinstance(target_candidates, list) and target_candidates
+                    else clean_text(asset.get("title"))
+                )
+                preview_path = output_dir / f"{slugify(asset_id or 'source_page')}.png"
+                capture = capture_source_viewport(
+                    context=context,
+                    scene={
+                        "payload": {
+                            "url": clean_text(asset.get("asset_url") or asset.get("source_url")),
+                            "target_text": target_text,
+                        }
+                    },
+                    timeout_ms=int(config["timeout_ms"]),
+                    post_load_wait_ms=int(config["post_load_wait_ms"]),
+                    capture_mode="article_viewport",
+                    focus_zoom=1.0,
+                    highlight_target=False,
+                    raw_capture_path=preview_path if config.get("save_preview_debug", True) else None,
+                )
+                results_by_id[asset_id] = capture
+                if not capture.get("ok"):
+                    warnings.append(
+                        f"{clean_text(asset.get('story_id'))}/{clean_text(asset.get('source_record_key'))}: "
+                        f"source page capture preflight failed: "
+                        f"{clean_text(capture.get('error')) or 'unknown capture failure'}"
+                    )
+        finally:
+            context.close()
+            browser.close()
+
+    resolved: list[dict[str, Any]] = []
+    for original in assets:
+        asset = dict(original)
+        capture = results_by_id.get(clean_text(asset.get("asset_id")))
+        if not capture:
+            resolved.append(asset)
+            continue
+        asset["capture_preflight"] = {
+            key: value for key, value in capture.items() if key != "screenshot_bytes"
+        }
+        preview_path = output_dir / f"{slugify(clean_text(asset.get('asset_id')))}.png"
+        if preview_path.exists():
+            asset["capture_preflight_preview_path"] = str(preview_path.resolve())
+        if capture.get("ok"):
+            asset["status"] = "available"
+            asset["review_status"] = "trusted_source"
+            asset["capture_preflight_status"] = "available"
+            asset["availability_reason"] = ""
+        else:
+            asset["capture_preflight_status"] = "unavailable"
+            if config.get("failure_policy") == "mark_unavailable":
+                asset["status"] = "unavailable"
+                asset["review_status"] = "source_page_unavailable"
+                asset["availability_reason"] = clean_text(capture.get("error"))
+        resolved.append(asset)
+    return resolved, warnings
 
 
 def _source_candidate_telemetry(

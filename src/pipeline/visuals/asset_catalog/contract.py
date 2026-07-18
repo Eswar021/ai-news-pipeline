@@ -37,6 +37,9 @@ class PageMetadataConfig(BaseModel):
     max_video_candidates: int = 8
     ffprobe_path: str = "ffprobe"
     user_agent: str = "AIContentCreation/2.0 (visual-asset-catalog)"
+    source_page_fetch_failure_policy: Literal["keep_unverified", "mark_unavailable"] = (
+        "mark_unavailable"
+    )
 
     @field_validator(
         "request_timeout_seconds",
@@ -94,6 +97,51 @@ class ContactSheetConfig(BaseModel):
         return value
 
 
+class SourcePagePreflightConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    timeout_ms: int = 20_000
+    post_load_wait_ms: int = 1_000
+    viewport_width: int = 1_440
+    viewport_height: int = 900
+    device_scale_factor: float = 1.0
+    save_preview_debug: bool = True
+    failure_policy: Literal["keep_unverified", "mark_unavailable"] = "mark_unavailable"
+    user_agent: str = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    )
+
+    @field_validator("timeout_ms", "post_load_wait_ms")
+    @classmethod
+    def non_negative_timings_required(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("source_page_preflight timing values must be non-negative")
+        return value
+
+    @field_validator("viewport_width", "viewport_height")
+    @classmethod
+    def positive_viewport_required(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("source_page_preflight viewport values must be positive")
+        return value
+
+    @field_validator("device_scale_factor")
+    @classmethod
+    def device_scale_factor_must_be_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("source_page_preflight.device_scale_factor must be positive")
+        return value
+
+    @field_validator("user_agent")
+    @classmethod
+    def user_agent_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("source_page_preflight.user_agent must not be empty")
+        return value
+
+
 class SourceLinkedVideoConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -147,6 +195,9 @@ class AssetCatalogConfig(BaseModel):
     collect_resolvable_logos: bool = True
     local_logo_dir: str | None = None
     page_metadata: PageMetadataConfig = Field(default_factory=PageMetadataConfig)
+    source_page_preflight: SourcePagePreflightConfig = Field(
+        default_factory=SourcePagePreflightConfig
+    )
     source_linked_video: SourceLinkedVideoConfig = Field(
         default_factory=SourceLinkedVideoConfig
     )

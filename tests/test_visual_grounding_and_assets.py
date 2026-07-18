@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -59,9 +60,14 @@ from src.pipeline.visuals.planner.app import (
     _timing_continuation_variants,
     _visual_capabilities_for_prompt,
 )
-from src.pipeline.visuals.asset_resolver.app import _scene_with_capture_target
+from src.pipeline.visuals.asset_resolver.app import (
+    _resolve_source_screenshot,
+    _scene_with_capture_target,
+    _source_capture_cache_key,
+)
 from src.pipeline.visuals.asset_catalog.app import (
     _MetadataParser,
+    _apply_source_page_fetch_status,
     _download_source_linked_video_candidate,
     _difference_hash,
     _hash_distance,
@@ -74,6 +80,7 @@ from src.pipeline.visuals.asset_catalog.app import (
     _truth_targets_by_record,
     _video_candidates,
 )
+from src.pipeline.visuals.generators.source_screenshot.web_capture import _capture_block_reason
 from src.pipeline.visuals.payload_validation import validate_scene_payload
 from src.pipeline.visuals.common import normalize_text_list
 from src.pipeline.visuals.review import run as run_visual_review
@@ -256,6 +263,199 @@ def test_asset_catalog_parser_retains_largest_article_srcset_candidate() -> None
     assert parser.image_candidates[0]["url"] == "/large.jpg"
     assert parser.image_candidates[0]["alt"] == "Codex Micro control deck"
     assert _largest_srcset_url("/one.jpg 1x, /two.jpg 2x") == "/two.jpg"
+
+
+def test_asset_catalog_marks_failed_source_page_fetch_unavailable() -> None:
+    assets = [
+        {
+            "asset_id": "asset_source_page_openai",
+            "asset_type": "source_page",
+            "status": "available",
+            "review_status": "trusted_source",
+            "source_record_key": "record_openai",
+        }
+    ]
+
+    resolved = _apply_source_page_fetch_status(
+        assets,
+        page_results=[
+            {
+                "record_key": "record_openai",
+                "page_fetch_status": "failed",
+                "page_fetch_error": "HTTPError: 403 Client Error",
+            }
+        ],
+        failure_policy="mark_unavailable",
+    )
+
+    assert resolved[0]["status"] == "unavailable"
+    assert resolved[0]["review_status"] == "source_page_unavailable"
+    assert resolved[0]["page_fetch_status"] == "failed"
+    assert "403" in resolved[0]["availability_reason"]
+
+
+def test_source_capture_detects_challenge_pages_as_unavailable() -> None:
+    assert _capture_block_reason(
+        title="Just a moment...",
+        body_text="Verify you are human",
+        http_status=403,
+        challenge_frame_count=1,
+    ) == "anti-bot challenge frame detected"
+    assert (
+        _capture_block_reason(
+            title="A normal article",
+            body_text="The article body is visible.",
+            http_status=200,
+            challenge_frame_count=0,
+        )
+        == ""
+    )
+    assert (
+        _capture_block_reason(
+            title="A normal article",
+            body_text="Visible article content. " * 40,
+            http_status=200,
+            challenge_frame_count=1,
+        )
+        == ""
+    )
+
+
+def test_source_capture_cache_key_reuses_only_identical_capture_requests() -> None:
+    scene = {
+        "payload": {
+            "url": "https://openai.com/index/a-scorecard-for-the-ai-age/",
+            "target_text": "A scorecard for the AI age",
+        }
+    }
+
+    first = _source_capture_cache_key(
+        scene,
+        capture_mode="target_text_focus",
+        focus_zoom=1.3,
+        highlight_target=True,
+    )
+    duplicate = _source_capture_cache_key(
+        {
+            "payload": {
+                "url": "https://openai.com/index/a-scorecard-for-the-ai-age",
+                "target_text": "A SCORECARD FOR THE AI AGE",
+            }
+        },
+        capture_mode="target_text_focus",
+        focus_zoom=1.3,
+        highlight_target=True,
+    )
+    different_target = _source_capture_cache_key(
+        {"payload": {**scene["payload"], "target_text": "A different claim"}},
+        capture_mode="target_text_focus",
+        focus_zoom=1.3,
+        highlight_target=True,
+    )
+
+    assert first == duplicate
+    assert first != different_target
+
+
+def test_source_resolver_reuses_identical_successful_capture(monkeypatch, tmp_path: Path) -> None:
+    capture_calls: list[str] = []
+
+    def fake_capture_source_viewport(**kwargs):
+        capture_calls.append(kwargs["scene"]["scene_id"])
+        return {
+            "ok": True,
+            "url": kwargs["scene"]["payload"]["url"],
+            "target_found": True,
+            "matched_text": kwargs["scene"]["payload"]["target_text"],
+            "screenshot_bytes": b"identical-png-bytes",
+        }
+
+    monkeypatch.setattr(
+        "src.pipeline.visuals.asset_resolver.app.capture_source_viewport",
+        fake_capture_source_viewport,
+    )
+    source_config = SimpleNamespace(
+        capture_mode="target_text_focus",
+        focus_zoom=1.3,
+        highlight_target=True,
+        reuse_identical_captures=True,
+        save_raw_capture_debug=False,
+        save_full_page_debug=False,
+        target_miss_policy="failed",
+    )
+    request = SimpleNamespace(
+        config=SimpleNamespace(
+            browser=SimpleNamespace(timeout_ms=10_000, post_load_wait_ms=0),
+            source_screenshots=source_config,
+        )
+    )
+    base_scene = {
+        "scene_order": 1,
+        "story_id": "story_openai",
+        "render_kind": "source_article_scene",
+        "payload": {
+            "url": "https://openai.com/index/a-scorecard-for-the-ai-age",
+            "target_text": "A scorecard for the AI age",
+        },
+    }
+    cache: dict = {}
+    (tmp_path / "screenshots").mkdir(parents=True)
+
+    first = _resolve_source_screenshot(
+        context=object(),
+        scene={**base_scene, "scene_id": "scene_020"},
+        request=request,
+        screenshots_dir=tmp_path / "screenshots",
+        raw_capture_dir=tmp_path / "raw",
+        full_page_dir=tmp_path / "full",
+        capture_cache=cache,
+    )
+    second = _resolve_source_screenshot(
+        context=object(),
+        scene={**base_scene, "scene_id": "scene_024"},
+        request=request,
+        screenshots_dir=tmp_path / "screenshots",
+        raw_capture_dir=tmp_path / "raw",
+        full_page_dir=tmp_path / "full",
+        capture_cache=cache,
+    )
+
+    assert capture_calls == ["scene_020"]
+    assert first["capture"]["cache_hit"] is False
+    assert second["capture"]["cache_hit"] is True
+    assert second["capture"]["cache_source_scene_id"] == "scene_020"
+    assert Path(first["asset_path"]).read_bytes() == b"identical-png-bytes"
+    assert Path(second["asset_path"]).read_bytes() == b"identical-png-bytes"
+
+
+def test_story_capabilities_exclude_source_scenes_without_available_source_page() -> None:
+    config = {
+        "scene_policy": {
+            "allowed_render_kinds": [
+                "source_article_scene",
+                "logo_reveal_scene",
+                "simple_explainer_scene",
+            ]
+        },
+        "asset_availability_policy": {
+            "catalog_asset_required_render_kinds": ["source_article_scene"]
+        },
+    }
+    story_catalog = {
+        "available_assets": [
+            {
+                "asset_id": "asset_logo_openai",
+                "asset_type": "logo",
+                "status": "available",
+                "review_status": "trusted_identity",
+            },
+        ]
+    }
+
+    assert _story_allowed_render_kinds(config, story_catalog) == [
+        "logo_reveal_scene",
+        "simple_explainer_scene",
+    ]
 
 
 def test_asset_catalog_structural_image_policy_accepts_portraits_and_reports_omissions() -> None:
@@ -1084,6 +1284,86 @@ def test_story_title_echo_and_missing_real_anchor_are_quality_warnings_by_defaul
     assert strict_errors == [
         "story plan must reference at least one available verified_asset_catalog asset_id"
     ]
+
+
+def test_catalog_backed_source_scene_requires_exact_asset_id() -> None:
+    section = {
+        "start_unit_order": 1,
+        "end_unit_order": 1,
+        "script_units": [
+            {
+                "order": 1,
+                "start_seconds": 0.0,
+                "end_seconds": 6.0,
+                "duration_seconds": 6.0,
+                "text": "The selected source reports an 80 percent increase.",
+            }
+        ],
+    }
+    draft = {
+        "story_id": "story_apple",
+        "scene_timeline": [
+            {
+                "order": 1,
+                "start_unit_order": 1,
+                "end_unit_order": 1,
+                "render_kind": "source_article_scene",
+                "script_excerpt": "The selected source reports an 80 percent increase.",
+                "visual_intent": "Show the selected source.",
+                "evidence_record_keys": ["record_apple"],
+                "evidence_truth_ids": ["truth_apple_80_percent"],
+                "evidence_text": "The selected record explicitly reports an 80 percent increase.",
+                "grounding_basis": "selected_record",
+                "payload_json": json.dumps(
+                    {
+                        "url": "https://apple.example/release",
+                        "source_record_key": "record_apple",
+                        "target_text": "Apple release",
+                        "highlight_phrases": ["80 percent"],
+                        "crop_strategy": "target_text_focus",
+                        "overlay_headline": "80 percent increase",
+                        "motion_style": "highlight_scan",
+                    }
+                ),
+                "reason": "Use the source as proof.",
+            }
+        ],
+    }
+    catalog_asset = {
+        "asset_id": "asset_source_page_apple",
+        "asset_type": "source_page",
+        "story_id": "story_apple",
+        "status": "available",
+        "source_record_key": "record_apple",
+        "source_url": "https://apple.example/release",
+    }
+    errors = _story_draft_errors(
+        draft,
+        story_id="story_apple",
+        section=section,
+        source_index=_source_index(),
+        asset_catalog_index={
+            "assets_by_id": {"asset_source_page_apple": catalog_asset},
+            "assets_by_story": {"story_apple": [catalog_asset]},
+        },
+        config={
+            "require_real_anchor_per_story": True,
+            "real_anchor_failure_mode": "warn",
+            "asset_availability_policy": {
+                "catalog_asset_required_render_kinds": ["source_article_scene"]
+            },
+            "scene_policy": {
+                "allowed_render_kinds": ["source_article_scene"],
+                "max_scene_seconds": 14.0,
+                "hard_max_scene_seconds": 16.0,
+                "hard_cap_tolerance_seconds": 0.25,
+                "unit_assignment_mode": "one_scene_per_script_unit",
+                "duplicate_subscene_policy": "continue",
+            },
+        },
+    )
+
+    assert any("requires an exact available story-owned asset_id" in error for error in errors)
 
 
 def test_long_bookend_unit_is_split_without_crossing_authored_boundaries() -> None:

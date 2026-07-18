@@ -78,6 +78,8 @@ visual_editor:
   failure_mode: keep_original
 asset_availability_policy:
   catalog_asset_required_render_kinds:
+  - source_article_scene
+  - quote_or_claim_highlight_scene
   - context_image_scene
   - broll_video_scene
 scene_policy:

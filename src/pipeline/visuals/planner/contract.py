@@ -225,7 +225,12 @@ class AssetAvailabilityPolicyConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     catalog_asset_required_render_kinds: list[RenderKind] = Field(
-        default_factory=lambda: ["context_image_scene", "broll_video_scene"]
+        default_factory=lambda: [
+            "source_article_scene",
+            "quote_or_claim_highlight_scene",
+            "context_image_scene",
+            "broll_video_scene",
+        ]
     )
 
     @field_validator("catalog_asset_required_render_kinds")

@@ -1,6 +1,6 @@
 # Production Orchestration and Creative Quality Worklist
 
-Status: Active implementation tracker. Q-01 through Q-20 are implemented and
+Status: Active implementation tracker. Q-01 through Q-21 are implemented and
 now require a fresh production episode plus human quality review.
 
 Last updated: 2026-07-19
@@ -531,6 +531,25 @@ denial-of-service advisory. HyperFrames must process pipeline-owned
 compositions and trusted local assets only until upstream dependencies are
 fixed.
 
+### Q-21: Capture-ready source assets and duplicate capture reuse (`P0`, implemented and real-run tested 2026-07-19)
+
+The trusted catalog now verifies source-page screenshot readiness through the
+same Chromium capture path used by the resolver. HTTP metadata status and
+browser readiness remain separate: a browser-readable page can recover from a
+metadata-client failure, while a real challenge, access-denied page, or HTTP
+401/403/429 response is not offered to the planner as usable source proof.
+Source-backed and quote-highlight scenes must select one exact available,
+story-owned catalog asset ID.
+
+The resolver now captures identical URL/target/treatment requests once and
+reuses the successful pixels for each scene-owned output. This avoids repeated
+publisher requests triggering anti-bot throttling without relaxing target-text
+location or substituting fallback media. The frozen 57-scene plan for
+`run_2026_07_18_184808_daily_48h_all_sources` resolved with zero failed assets;
+six source scenes used the capture cache, including two repeated OpenAI scenes
+that previously failed after the first request. The inspected frame showed the
+real article and highlighted the requested headline.
+
 ### Standing Semantic Policy (`KEEP`)
 
 Engagement, humor, hook quality, claim interpretation, tone, visual meaning,
@@ -553,7 +572,7 @@ pass human review.
 
 ## 6. Next Evaluation Gate
 
-Q-01 through Q-20 are implemented. The next gate is a fresh production episode
+Q-01 through Q-21 are implemented. The next gate is a fresh production episode
 from evidence preparation onward, followed by artifact inspection rather than
 summary-only review. External provider search and paid vision verification stay
 disabled during this evaluation so source-context, grouping, script quality,

@@ -31,6 +31,30 @@ def capture_source_viewport(
         if post_load_wait_ms:
             page.wait_for_timeout(post_load_wait_ms)
         _dismiss_common_overlays(page)
+        http_status = response.status if response else None
+        blocked_reason = _capture_block_reason(
+            title=clean_text(page.title()),
+            body_text=_page_body_text(page),
+            http_status=http_status,
+            challenge_frame_count=_challenge_frame_count(page),
+        )
+        if blocked_reason:
+            screenshot_bytes = page.screenshot(full_page=False, type="png")
+            if raw_capture_path:
+                raw_capture_path.parent.mkdir(parents=True, exist_ok=True)
+                raw_capture_path.write_bytes(screenshot_bytes)
+            if full_page_debug_path:
+                full_page_debug_path.parent.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(full_page_debug_path), full_page=True)
+            return {
+                "ok": False,
+                "url": url,
+                "domain": source_domain(url),
+                "http_status": http_status,
+                "title": clean_text(page.title()),
+                "blocked": True,
+                "error": f"source page is not visually capturable: {blocked_reason}",
+            }
         match = {"target_found": False, "matched_text": "", "match_score": 0, "scroll_error": ""}
         if capture_mode in {"article_viewport", "target_text_focus", "headline_then_body"}:
             try:
@@ -59,7 +83,7 @@ def capture_source_viewport(
             "ok": True,
             "url": url,
             "domain": source_domain(url),
-            "http_status": response.status if response else None,
+            "http_status": http_status,
             "title": clean_text(page.title()),
             "target_found": bool(match.get("target_found")),
             "matched_text": clean_text(match.get("matched_text", "")),
@@ -86,6 +110,52 @@ def _dismiss_common_overlays(page) -> None:
                 return
         except Exception:
             continue
+
+
+def _page_body_text(page) -> str:
+    try:
+        return clean_text(page.locator("body").inner_text(timeout=1_000))[:8_000]
+    except Exception:
+        return ""
+
+
+def _challenge_frame_count(page) -> int:
+    try:
+        return page.locator(
+            'iframe[src*="challenges.cloudflare.com"], '
+            'iframe[title*="challenge" i], iframe[title*="captcha" i]'
+        ).count()
+    except Exception:
+        return 0
+
+
+def _capture_block_reason(
+    *,
+    title: str,
+    body_text: str,
+    http_status: int | None,
+    challenge_frame_count: int,
+) -> str:
+    combined = f"{title}\n{body_text}".casefold()
+    markers = (
+        "verify you are human",
+        "checking your browser",
+        "security verification",
+        "enable javascript and cookies to continue",
+        "cloudflare ray id",
+        "attention required",
+        "access denied",
+        "complete the captcha",
+        "bot verification",
+    )
+    marker = next((value for value in markers if value in combined), "")
+    if challenge_frame_count > 0 and (marker or len(clean_text(body_text)) < 320):
+        return "anti-bot challenge frame detected"
+    if marker:
+        return f"challenge/access page detected ({marker})"
+    if http_status in {401, 403, 429}:
+        return f"HTTP {http_status}"
+    return ""
 
 
 def _scroll_near_target(

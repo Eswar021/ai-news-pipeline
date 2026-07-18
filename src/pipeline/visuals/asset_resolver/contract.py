@@ -64,6 +64,7 @@ class SourceScreenshotConfig(BaseModel):
     target_miss_policy: Literal["allow", "partial", "failed"] = "failed"
     focus_zoom: float = 1.3
     highlight_target: bool = True
+    reuse_identical_captures: bool = True
 
     @field_validator("focus_zoom")
     @classmethod
