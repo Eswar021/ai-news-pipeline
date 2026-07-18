@@ -3,21 +3,21 @@ from __future__ import annotations
 from langchain_core.runnables import RunnableLambda
 import numpy as np
 
-from src.pipeline.apps.editorial_selection.formats.roundup import app as selection_app
-from src.pipeline.apps.editorial_selection.formats.roundup.contract import (
+from src.pipeline.content.editorial_selection.formats.roundup import app as selection_app
+from src.pipeline.content.editorial_selection.formats.roundup.contract import (
     RoundupSlateDraft,
     RoundupSlateReviewDraft,
 )
-from src.pipeline.apps.story_mapping.clusterer import cluster_records
-from src.pipeline.apps.story_mapping.cluster_reconciler import (
+from src.pipeline.content.story_mapping.clusterer import cluster_records
+from src.pipeline.content.story_mapping.cluster_reconciler import (
     ComponentReconciliationOutput,
     reconcile_components,
 )
-from src.pipeline.apps.story_mapping.event_identity import (
+from src.pipeline.content.story_mapping.event_identity import (
     EventIdentityOutput,
     attach_event_identities,
 )
-from src.pipeline.apps.story_mapping.pair_adjudicator import (
+from src.pipeline.content.story_mapping.pair_adjudicator import (
     PairDecisionBatch,
     _invoke_batch,
 )

@@ -1,0 +1,29 @@
+provider: moonshot
+model: kimi-k3
+prompt_version: v1
+temperature: 1.0
+provider_options:
+  thinking: null
+  omit_temperature: true
+  request_timeout_seconds: 600
+structured_output:
+  method: json_schema
+  strict: true
+llm_retry:
+  enabled: true
+  max_attempts: 2
+  max_structured_output_attempts: 2
+  initial_delay_seconds: 1.0
+  max_delay_seconds: 10.0
+metadata_policy:
+  title_option_count: 8
+  thumbnail_text_option_count: 5
+  max_tags: 20
+  include_source_urls: true
+  chapter_title_max_chars: 64
+  blocked_tags:
+  - github.io
+  - unknown
+  - none
+memory_context:
+  recent_title_angles: []

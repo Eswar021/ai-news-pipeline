@@ -34,6 +34,9 @@ ALLOWED_CREATIVE_DEVICES = {
     "none", "analogy", "contrast", "rhetorical_question", "hypothetical",
     "observational_humor", "self_aware_humor", "callback",
 }
+ALLOWED_DELIVERY_PACES = {"deliberate", "measured", "conversational", "brisk", "rapid"}
+ALLOWED_DELIVERY_ENERGIES = {"restrained", "warm", "engaged", "animated", "punchy"}
+ALLOWED_DELIVERY_PAUSES = {"none", "micro", "short", "full_beat"}
 
 
 def run(input_json: dict) -> dict:
@@ -440,6 +443,7 @@ def _build_beats(
                     else []
                 ),
                 "creative_device": creative_device,
+                "delivery_direction": _normalize_delivery_direction(draft.get("delivery_direction")),
                 "visual_goal": clean_text(draft.get("visual_goal"))
                 or clean_text(visual_brief.get("purpose"))
                 or "Visually reinforce this exact narration beat.",
@@ -531,6 +535,42 @@ def _normalize_visual_brief(raw: dict[str, Any], plan: dict[str, Any], order: in
         # the original brief supplied by the writer or operator.
         "on_screen_text": clean_text(raw.get("on_screen_text")),
         "avoid": _dedupe(raw.get("avoid", []) if isinstance(raw.get("avoid"), list) else []),
+    }
+
+
+def _normalize_delivery_direction(raw: Any) -> dict[str, Any]:
+    if raw is None:
+        return {
+            "performance_intent": "Deliver this beat naturally and make its purpose clear.",
+            "emotional_color": "engaged",
+            "pace": "conversational",
+            "energy": "engaged",
+            "emphasis_phrases": [],
+            "pause_after": "none",
+        }
+    if not isinstance(raw, dict):
+        raise ValueError("delivery_direction must be an object")
+    pace = clean_text(raw.get("pace"))
+    energy = clean_text(raw.get("energy"))
+    pause_after = clean_text(raw.get("pause_after"))
+    if pace not in ALLOWED_DELIVERY_PACES:
+        raise ValueError(f"Unsupported delivery pace: {pace!r}")
+    if energy not in ALLOWED_DELIVERY_ENERGIES:
+        raise ValueError(f"Unsupported delivery energy: {energy!r}")
+    if pause_after not in ALLOWED_DELIVERY_PAUSES:
+        raise ValueError(f"Unsupported delivery pause_after: {pause_after!r}")
+    performance_intent = clean_text(raw.get("performance_intent"))
+    emotional_color = clean_text(raw.get("emotional_color"))
+    if not performance_intent or not emotional_color:
+        raise ValueError("delivery_direction performance_intent and emotional_color must not be empty")
+    emphasis = raw.get("emphasis_phrases") if isinstance(raw.get("emphasis_phrases"), list) else []
+    return {
+        "performance_intent": performance_intent,
+        "emotional_color": emotional_color,
+        "pace": pace,
+        "energy": energy,
+        "emphasis_phrases": _dedupe(emphasis),
+        "pause_after": pause_after,
     }
 
 

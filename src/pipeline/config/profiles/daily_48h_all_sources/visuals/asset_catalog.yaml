@@ -1,0 +1,45 @@
+force: true
+output_dir: ''
+research_mode: trusted_only
+require_real_anchor_per_story: true
+collect_source_pages: true
+collect_source_images: true
+collect_source_videos: true
+collect_resolvable_logos: true
+local_logo_dir: ''
+page_metadata:
+  enabled: true
+  request_timeout_seconds: 15
+  max_html_bytes: 2000000
+  max_image_bytes: 20000000
+  max_video_bytes: 120000000
+  worker_count: 4
+  min_image_short_edge: 360
+  min_image_pixel_area: 450000
+  min_image_aspect_ratio: 0.2
+  max_image_aspect_ratio: 5.0
+  near_duplicate_hash_distance: 5
+  max_images_per_record: 12
+  max_image_candidates: 48
+  min_video_width: 720
+  min_video_height: 404
+  max_videos_per_record: 1
+  max_video_candidates: 8
+  ffprobe_path: ffprobe
+  user_agent: AIContentCreation/2.0 (visual-asset-catalog)
+source_linked_video:
+  enabled: true
+  providers:
+  - youtube
+  - vimeo
+  - x
+  yt_dlp_path: yt-dlp
+  download_timeout_seconds: 180
+  max_links_per_record: 3
+  max_duration_seconds: 1800
+  max_height: 1080
+contact_sheet:
+  enabled: true
+  columns: 3
+  tile_width: 480
+  tile_height: 270

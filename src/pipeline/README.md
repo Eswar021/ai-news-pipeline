@@ -4,7 +4,7 @@
 
 ```text
 src/pipeline/
-├── apps/            # pure JSON/dict applications
+├── content/         # pure JSON/dict content applications
 ├── contracts/       # public cross-module artifact identity contracts
 ├── handoffs/        # manual/external adapters
 ├── orchestration/   # run context, stage routers, state, and logging
@@ -49,22 +49,25 @@ Focused notebooks remain available for interactive operation and inspection:
 - `notebooks/production/visual_production.ipynb`
 - `notebooks/labs/visual_assets_lab.ipynb`
 
-New content runs freeze `config/workbench.yaml` into
-`output/runs/{run_id}/run_context.json`. Module artifacts live below the same
-run directory. Local model caches live outside run output under
+New content runs store an immutable composed profile in
+`output/runs/{run_id}/run_context.json`. By default, each stage reloads the
+current YAML for the module it is about to execute and records the exact value
+in that module's `config_snapshot.json`. Use `--config-mode frozen` for an
+exact initial-profile reproduction. Module artifacts live below the same run
+directory. Local model caches live outside run output under
 `.cache/ai_content_creation/models/`.
 
 Current pure applications:
 
-- `apps/news_collection`
-- `apps/evidence_prep`
-- `apps/editorial_triage`
-- `apps/story_mapping`
-- `apps/editorial_selection`
-- `apps/video_packaging`
-- `apps/script_generation/formats/roundup`
-- `apps/metadata_creator`
-- `apps/metadata_finalizer`
+- `content/news_collection`
+- `content/evidence_prep`
+- `content/editorial_triage`
+- `content/story_mapping`
+- `content/editorial_selection`
+- `content/video_packaging`
+- `content/script_generation/formats/roundup`
+- `content/metadata_creator`
+- `content/metadata_finalizer`
 
 Current media/handoff modules:
 
@@ -82,6 +85,10 @@ and both visual-planning routes consume the same aligned beat timeline.
 Downstream code must never branch on a manual-only data shape or infer story
 boundaries from `full_script`.
 
+Canonical beats can carry provider-neutral `delivery_direction` metadata.
+Hosted speech adapters translate it into provider instructions while spoken
+narration and captions remain clean text.
+
 Canonical scripts and all downstream media packages carry deterministic
 fingerprints. Notebook artifact selection is explicit or unambiguous and never
 uses newest-file-wins behavior. Metadata creation is a draft stage; actual
@@ -90,5 +97,5 @@ chapter timestamps are finalized from voiceover section audio units.
 Read:
 
 - `docs/current_system_architecture.md`
-- `src/pipeline/apps/script_generation/formats/roundup/README.md`
+- `src/pipeline/content/script_generation/formats/roundup/README.md`
 - `src/pipeline/visuals/README.md`

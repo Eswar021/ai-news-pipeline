@@ -5,9 +5,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.pipeline.apps.story_mapping.contract import RankingConfig
-from src.pipeline.apps.story_mapping.ranker import rank_stories
-from src.pipeline.apps.video_packaging.formats.roundup import build_roundup_packet
+from src.pipeline.content.story_mapping.contract import RankingConfig
+from src.pipeline.content.story_mapping.ranker import rank_stories
+from src.pipeline.content.video_packaging.formats.roundup import build_roundup_packet
 
 
 def test_story_mapping_preserves_candidate_order_and_attaches_telemetry_only() -> None:

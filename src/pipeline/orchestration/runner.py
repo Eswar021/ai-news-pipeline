@@ -1,3 +1,20 @@
+"""Thin production router for the three pipeline stages.
+
+Run from the project root with the main project Python, not `.venv-voiceover`::
+
+    python3 -m src.pipeline.orchestration.runner content \
+      --profile daily_48h_all_sources
+    python3 -m src.pipeline.orchestration.runner voiceover \
+      --run-id current --script-source app
+    python3 -m src.pipeline.orchestration.runner visuals \
+      --run-id current --plan-source generate --render-mode preview
+
+Module configs are reloaded from their stage YAML immediately before execution
+by default. Use ``--config-mode frozen`` only when reproducing the exact config
+captured when the run was created. Resume from a module with ``--from-module``;
+the stage reuses compatible upstream artifacts and reruns downstream work.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -84,6 +101,15 @@ def _add_common_arguments(parser: argparse.ArgumentParser, *, default_run_id: st
     parser.add_argument("--project-root", default=".")
     parser.add_argument("--output-root", default="output")
     parser.add_argument("--pipeline-config", default="src/pipeline/config/workbench.yaml")
+    parser.add_argument(
+        "--config-mode",
+        choices=("live", "frozen"),
+        default="live",
+        help=(
+            "Resolve each module from current authoring YAML (live, default) or from the run's initial "
+            "profile snapshot (frozen). Every executed module writes its own config snapshot."
+        ),
+    )
 
 
 def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
@@ -100,12 +126,14 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
     if args.stage == "content":
         request["run"]["run_profile"] = args.run_profile
         request["config"] = {
+            "config_mode": args.config_mode,
             "resume_completed": not args.no_resume,
             "from_module": args.from_module,
             "stop_after": args.stop_after,
         }
     elif args.stage == "voiceover":
         request["config"] = {
+            "config_mode": args.config_mode,
             "script_source": args.script_source,
             "variant": args.variant,
             "voiceover_python": args.voiceover_python,
@@ -119,6 +147,7 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
             request["input"]["voiceover_config_overrides"] = overrides
     else:
         request["config"] = {
+            "config_mode": args.config_mode,
             "script_source": args.script_source,
             "voiceover_variant": args.voiceover_variant,
             "plan_source": args.plan_source,

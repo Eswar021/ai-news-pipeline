@@ -1,0 +1,196 @@
+provider: openai
+model: gpt-4o
+prompt_version: v1
+temperature: 0.4
+structured_output:
+  method: json_schema
+  strict: true
+provider_options:
+  request_timeout_seconds: 300
+llm_roles:
+  story_writer:
+    provider: moonshot
+    model: kimi-k3
+    temperature: 1.0
+    provider_options:
+      thinking: null
+      omit_temperature: true
+      request_timeout_seconds: 360
+    structured_output:
+      method: json_schema
+      strict: true
+    llm_retry:
+      enabled: true
+      max_attempts: 1
+      max_structured_output_attempts: 2
+      initial_delay_seconds: 1.0
+      max_delay_seconds: 10.0
+  story_reviewer:
+    provider: moonshot
+    model: kimi-k3
+    temperature: 1.0
+    provider_options:
+      thinking: null
+      omit_temperature: true
+      request_timeout_seconds: 480
+    structured_output:
+      method: json_schema
+      strict: true
+    llm_retry:
+      enabled: true
+      max_attempts: 1
+      max_structured_output_attempts: 2
+      initial_delay_seconds: 1.0
+      max_delay_seconds: 10.0
+  bookend_writer:
+    provider: moonshot
+    model: kimi-k3
+    temperature: 1.0
+    provider_options:
+      thinking: null
+      omit_temperature: true
+      request_timeout_seconds: 360
+    structured_output:
+      method: json_schema
+      strict: true
+    llm_retry:
+      enabled: true
+      max_attempts: 1
+      max_structured_output_attempts: 2
+      initial_delay_seconds: 1.0
+      max_delay_seconds: 10.0
+  bookend_reviewer:
+    provider: moonshot
+    model: kimi-k3
+    temperature: 1.0
+    provider_options:
+      thinking: null
+      omit_temperature: true
+      request_timeout_seconds: 480
+    structured_output:
+      method: json_schema
+      strict: true
+    llm_retry:
+      enabled: true
+      max_attempts: 1
+      max_structured_output_attempts: 2
+      initial_delay_seconds: 1.0
+      max_delay_seconds: 10.0
+diagnostic_words_per_minute: 140
+worker_count: 2
+title_card_seconds: 2.8
+llm_retry:
+  enabled: true
+  max_attempts: 5
+  max_structured_output_attempts: 2
+  initial_delay_seconds: 1.0
+  max_delay_seconds: 30.0
+writing_guidance:
+  intro:
+    suggested_words: 40
+    beat_guidance: Use two or three purposeful beats.
+    editorial_goal: Open on one episode-specific curiosity gap and make one concise promise without listing every
+      headline.
+  lead:
+    suggested_words: 190
+    beat_guidance: Use as many distinct beats as the explanation naturally needs.
+    editorial_goal: Earn lead status through a developed mechanism or conflict, one concrete anchor, and a clear
+      payoff without padding.
+  major:
+    suggested_words: 135
+    beat_guidance: Use a compact sequence of distinct explanatory beats.
+    editorial_goal: Deliver one compact complete mini-arc around the distinctive anchor.
+  brief:
+    suggested_words: 85
+    beat_guidance: Use one reveal and one useful interpretation, then leave before the conclusion repeats.
+    editorial_goal: Make one concrete update memorable and remain visibly lighter than lead and major stories.
+  closing:
+    suggested_words: 25
+    beat_guidance: Use one or two concise beats.
+    editorial_goal: End on one earned episode-specific observation or a clean signoff, never a reusable AI slogan.
+connector:
+  suggested_words: 8
+  beat_guidance: Use one natural spoken line.
+  editorial_goal: Introduce the next story while its title motion appears.
+script_style:
+  audience: AI-curious professionals
+  tone: creator-led, clear, energetic, curious, and grounded
+  avoid:
+  - dry technical reporting
+  - overhype
+  - fake certainty
+  - source-by-source summaries
+  - stock hype phrases used instead of a concrete idea
+  - generic universal conclusions about AI changing everything
+channel_voice:
+  persona: curious technical friend with a skeptical eyebrow
+  worldview:
+  - optimistic about useful progress
+  - skeptical of marketing
+  - practical consequences over abstract importance
+  energy: energetic but not frantic
+  opinion:
+    allow_first_person_editorial_opinion: true
+    forbid_fabricated_personal_experience: true
+  humor:
+    enabled: true
+    modes:
+    - observational
+    - dry
+    - self_aware
+    - absurd_analogy
+    density: restrained
+    allow_callbacks: true
+    avoid:
+    - forced meme references
+    - cruelty
+    - unsupported accusations
+  language:
+    prefer:
+    - concrete verbs
+    - varied sentence length
+    - plain-language mental models
+    avoid:
+    - corporate press-release language
+    - generic importance claims
+    - article-summary transitions
+    profanity_mode: avoid
+    profanity_terms:
+    - fuck
+    - fucking
+    - shit
+    - bullshit
+storytelling:
+  require_story_engine: true
+  require_viewer_payoff: true
+  allow_optional_truth_details: true
+  forbid_source_order_summary: true
+  max_must_communicate_truth_items: 4
+  max_optional_truth_items: 10
+source_context:
+  max_story_context_chars: 500000
+  max_episode_context_chars: 1500000
+source_policy:
+  use_selected_stories_only: true
+  include_full_records: true
+review:
+  enabled: true
+  max_revision_passes: 1
+  quality_criteria:
+  - an immediate story-specific hook
+  - a concrete explanation a smart non-specialist can follow
+  - a memorable creator viewpoint or reaction
+  - natural spoken rhythm with varied sentence length
+  - a satisfying viewer payoff without filler
+  - materially faithful use of the assigned story records
+  - a story-specific concrete anchor rather than a reusable category summary
+  - preservation of source meaning, including combined versus individual evidence and measured versus claimed results
+  - preservation of current versus planned state and source terminology such as open-weight versus open-source
+  - exact quotations and preserved attribution for source opinions, forecasts, allegations, and marketing claims
+  - an honest curated-roundup frame when the selected stories do not share one concrete tension
+  - one focused cold-open idea instead of a three-headline intro list
+  - creative-device labels that are actually expressed in the narration
+  - analogies whose scale and mechanism remain materially truthful
+  - clear lead, major, and brief differentiation without numerical quotas
+  - connectors whose spoken transition and title card introduce the same target story
+  - audiovisual beats that suggest useful visuals

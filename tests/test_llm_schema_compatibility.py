@@ -2,25 +2,25 @@ from __future__ import annotations
 
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
-from src.pipeline.apps.editorial_selection.formats.roundup.contract import (
+from src.pipeline.content.editorial_selection.formats.roundup.contract import (
     CandidateScreenDraft,
     RoundupSlateDraft,
     RoundupSlateReviewDraft,
 )
-from src.pipeline.apps.editorial_triage.contract import TriageBatchOutput
-from src.pipeline.apps.metadata_creator.app import MetadataDraftOutput
-from src.pipeline.apps.script_generation.formats.roundup.models import (
+from src.pipeline.content.editorial_triage.contract import TriageBatchOutput
+from src.pipeline.content.metadata_creator.app import MetadataDraftOutput
+from src.pipeline.content.script_generation.formats.roundup.models import (
     BookendReviewOutput,
     EpisodeDirectorOutput,
     StoryReviewOutput,
     StorySourceBriefOutput,
 )
-from src.pipeline.apps.story_mapping.pair_adjudicator import PairDecisionBatch
-from src.pipeline.apps.story_mapping.cluster_reconciler import (
+from src.pipeline.content.story_mapping.pair_adjudicator import PairDecisionBatch
+from src.pipeline.content.story_mapping.cluster_reconciler import (
     ComponentReconciliationOutput,
 )
-from src.pipeline.apps.story_mapping.event_identity import EventIdentityOutput
-from src.pipeline.apps.story_mapping.story_label import StoryLabelOutput
+from src.pipeline.content.story_mapping.event_identity import EventIdentityOutput
+from src.pipeline.content.story_mapping.story_label import StoryLabelOutput
 from src.pipeline.visuals.media_discovery.semantic_verifier import (
     MediaCandidateVerificationBatch,
 )

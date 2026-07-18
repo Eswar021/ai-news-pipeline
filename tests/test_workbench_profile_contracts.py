@@ -3,16 +3,15 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 
-import yaml
-
-from src.pipeline.apps.editorial_selection.formats.roundup.contract import (
+from src.pipeline.config import ConfigRepository
+from src.pipeline.content.editorial_selection.formats.roundup.contract import (
     RoundupEditorialSelectionConfig,
 )
-from src.pipeline.apps.editorial_triage.contract import EditorialTriageConfig
-from src.pipeline.apps.metadata_creator.contract import MetadataConfig
-from src.pipeline.apps.script_generation.formats.roundup.contract import RoundupScriptConfig
-from src.pipeline.apps.story_mapping.contract import StoryMappingConfig
-from src.pipeline.apps.video_packaging.contract import VideoPackagingConfig
+from src.pipeline.content.editorial_triage.contract import EditorialTriageConfig
+from src.pipeline.content.metadata_creator.contract import MetadataConfig
+from src.pipeline.content.script_generation.formats.roundup.contract import RoundupScriptConfig
+from src.pipeline.content.story_mapping.contract import StoryMappingConfig
+from src.pipeline.content.video_packaging.contract import VideoPackagingConfig
 from src.pipeline.visuals.assembly.contract import VideoAssemblyConfig
 from src.pipeline.visuals.asset_resolver.contract import AssetResolverConfig
 from src.pipeline.visuals.media_discovery.contract import VisualMediaConfig
@@ -27,8 +26,8 @@ WORKBENCH_PATH = ROOT / "src" / "pipeline" / "config" / "workbench.yaml"
 
 
 def _profile() -> dict:
-    workbench = yaml.safe_load(WORKBENCH_PATH.read_text(encoding="utf-8"))
-    return deepcopy(workbench["profiles"][workbench["default_run_profile"]])
+    repository = ConfigRepository(WORKBENCH_PATH)
+    return deepcopy(repository.profile(repository.default_profile).value)
 
 
 def _with_output_dir(config: dict, module_name: str) -> dict:
@@ -75,3 +74,16 @@ def test_default_workbench_profile_composes_into_public_configs() -> None:
     )
     VisualReviewConfig.model_validate(_with_output_dir(visuals["review"], "review"))
     VoiceoverConfig.model_validate(_with_output_dir(profile["voiceover"], "voiceover"))
+
+
+def test_module_config_has_independent_source_identity() -> None:
+    repository = ConfigRepository(WORKBENCH_PATH)
+    profile_name = repository.default_profile
+    script = repository.module(profile_name, "content", "script_generation")
+    voiceover = repository.module(profile_name, "voiceover", "voiceover")
+
+    assert script.sha256 != voiceover.sha256
+    assert script.source_paths[-1].endswith("content/script_generation.yaml")
+    assert voiceover.source_paths[-1].endswith("voiceover/voiceover.yaml")
+    assert repository.profile(profile_name).value["script_generation"] == script.value
+    assert repository.profile(profile_name).value["voiceover"] == voiceover.value

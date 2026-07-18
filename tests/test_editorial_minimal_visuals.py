@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+
+from src.pipeline.config import ConfigRepository
 from pydantic import ValidationError
 
 from src.pipeline.handoffs.chatgpt_exporter.app import _prepare_artifact
@@ -24,10 +26,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _planner_config() -> dict:
-    workbench = yaml.safe_load(
-        (PROJECT_ROOT / "src/pipeline/config/workbench.yaml").read_text(encoding="utf-8")
-    )
-    return deepcopy(workbench["profiles"]["daily_48h_all_sources"]["visuals"]["planner"])
+    repository = ConfigRepository(PROJECT_ROOT / "src/pipeline/config/workbench.yaml")
+    return deepcopy(repository.module("daily_48h_all_sources", "visuals", "planner").value)
 
 
 def test_production_profile_exposes_compact_editorial_vocabulary() -> None:

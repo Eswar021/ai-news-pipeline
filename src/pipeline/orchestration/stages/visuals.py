@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -25,12 +25,15 @@ from ..logging import configure_stage_logging
 from ..state import RunStateStore
 from .common import (
     BaseStageRequest,
+    StageConfigResolver,
     current_or_named_context,
     effective_logging_config,
     now_iso,
     project_paths,
     rendered_config,
     require_ready,
+    reusable_config_matches,
+    write_module_config_snapshot,
 )
 
 
@@ -46,10 +49,22 @@ MODULES = [
     "publish_handoff",
 ]
 
+CONFIG_MODULE_KEYS = {
+    "asset_catalog": "asset_catalog",
+    "visual_planner": "planner",
+    "media_discovery": "media_discovery",
+    "asset_resolver": "asset_resolver",
+    "visual_render": "render",
+    "video_assembly": "assembly",
+    "visual_review": "review",
+    "publish_handoff": "publish_handoff",
+}
+
 
 class VisualsOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    config_mode: Literal["live", "frozen"] = "live"
     script_source: str = "auto"
     voiceover_variant: str | None = None
     plan_source: str = "generate"
@@ -85,7 +100,7 @@ class VisualsOptions(BaseModel):
 def run(input_json: dict[str, Any]) -> dict[str, Any]:
     request = BaseStageRequest.model_validate(input_json)
     options = VisualsOptions.model_validate(request.config)
-    project_root, output_root, _ = project_paths(request.paths)
+    project_root, output_root, config_path = project_paths(request.paths)
     run_context = current_or_named_context(output_root, request.run.run_id)
     logger = configure_stage_logging(run_context, STAGE, effective_logging_config(run_context))
     state = RunStateStore(run_context)
@@ -97,6 +112,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
             options=options,
             project_root=project_root,
             output_root=output_root,
+            config_path=config_path,
             run_context=run_context,
             logger=logger,
             state=state,
@@ -128,16 +144,18 @@ def _run_stage(
     options: VisualsOptions,
     project_root: Path,
     output_root: Path,
+    config_path: Path,
     run_context: dict[str, Any],
     logger,
     state: RunStateStore,
 ) -> dict[str, Any]:
     run_id = str(run_context["run_id"])
     run_dir = Path(run_context["run_dir"])
-    profile = deepcopy(run_context["profile_config"])
-    visuals_profile = deepcopy(profile.get("visuals") or {})
-    if not visuals_profile:
-        raise KeyError("Frozen run profile is missing visuals config")
+    config_resolver = StageConfigResolver(run_context, config_path, options.config_mode)
+    config_documents = {
+        module: config_resolver.module("visuals", config_key)
+        for module, config_key in CONFIG_MODULE_KEYS.items()
+    }
 
     video_packaging_result = load_json(run_dir / "video_packaging" / "video_packaging_result.json")
     script_path, script_result = resolve_script_result(
@@ -178,6 +196,27 @@ def _run_stage(
         },
     )
     from_index = MODULES.index(options.from_module) if options.from_module else None
+    if options.resume_completed:
+        changed_indexes = [
+            index
+            for index, module in enumerate(MODULES)
+            if from_index is None or index >= from_index
+            if _module_result_path(run_dir, options, module).exists()
+            and not reusable_config_matches(
+                _module_config_snapshot_path(run_dir, options, module),
+                config_documents[module],
+                mode=options.config_mode,
+            )
+        ]
+        if changed_indexes:
+            changed_index = min(changed_indexes)
+            if from_index is None or changed_index < from_index:
+                from_index = changed_index
+            logger.logger.info(
+                "CONFIG_CHANGED module=%s mode=%s; rerunning this module and downstream modules",
+                MODULES[changed_index],
+                options.config_mode,
+            )
 
     asset_catalog_dir = visuals_dir / "asset_catalog"
     asset_catalog_result_path = asset_catalog_dir / "visual_asset_catalog_result.json"
@@ -190,13 +229,27 @@ def _run_stage(
         state,
     )
     if asset_catalog_result is None:
-        config = rendered_config(run_context, visuals_profile["asset_catalog"], project_root=project_root, output_root=output_root)
+        config = rendered_config(
+            run_context,
+            config_documents["asset_catalog"].value,
+            project_root=project_root,
+            output_root=output_root,
+        )
         config["output_dir"] = str(asset_catalog_dir)
         asset_input = {
             "run": {"run_id": run_id, "generated_at": now_iso()},
             "config": config,
             "input": {"script_generation": script_result, "video_packaging": video_packaging_result},
         }
+        write_module_config_snapshot(
+            asset_catalog_dir,
+            stage=STAGE,
+            module="asset_catalog",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=config_documents["asset_catalog"],
+            effective_config=config,
+        )
         write_json(inputs_dir / f"{run_id}_visual_asset_catalog_input.json", asset_input)
         asset_catalog_result = logger.run_module("asset_catalog", run_asset_catalog, asset_input)
         write_json(asset_catalog_dir / "visual_asset_catalog_input.json", asset_input)
@@ -220,8 +273,13 @@ def _run_stage(
         state,
     )
     if planning_result is None:
+        planner_config = rendered_config(
+            run_context,
+            config_documents["visual_planner"].value,
+            project_root=project_root,
+            output_root=output_root,
+        )
         if options.plan_source == "generate":
-            planner_config = rendered_config(run_context, visuals_profile["planner"], project_root=project_root, output_root=output_root)
             planner_input = {
                 "run": {"run_id": run_id, "generated_at": now_iso()},
                 "config": planner_config,
@@ -241,6 +299,15 @@ def _run_stage(
                 )
             planning_result = load_json(planning_result_path)
         planning_dir.mkdir(parents=True, exist_ok=True)
+        write_module_config_snapshot(
+            planning_dir,
+            stage=STAGE,
+            module="visual_planner",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=config_documents["visual_planner"],
+            effective_config=planner_config,
+        )
         write_json(planning_dir / "visual_scene_planning_input.json", planner_input)
         write_json(planning_result_path, planning_result)
         write_json(planning_dir / "summary.json", planning_result.get("summary", {}))
@@ -260,7 +327,12 @@ def _run_stage(
     media_result_path = media_dir / "visual_media_discovery_result.json"
     media_result = _reuse_before("media_discovery", media_result_path, options, from_index, logger, state)
     if media_result is None:
-        config = rendered_config(run_context, visuals_profile["media_discovery"], project_root=project_root, output_root=output_root)
+        config = rendered_config(
+            run_context,
+            config_documents["media_discovery"].value,
+            project_root=project_root,
+            output_root=output_root,
+        )
         config["output_dir"] = str(media_dir)
         media_input = {
             "run": {"run_id": run_id, "generated_at": now_iso()},
@@ -269,6 +341,15 @@ def _run_stage(
         }
         write_json(inputs_dir / f"{run_id}_visual_media_discovery_input.json", media_input)
         write_json(media_dir / "visual_media_discovery_input.json", media_input)
+        write_module_config_snapshot(
+            media_dir,
+            stage=STAGE,
+            module="media_discovery",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=config_documents["media_discovery"],
+            effective_config=config,
+        )
         media_result = logger.run_module("media_discovery", run_media_discovery, media_input)
         write_jsonl(media_dir / "llm_calls.jsonl", media_result.get("llm_calls", []))
         _record(state, "media_discovery", media_result_path, media_result)
@@ -278,7 +359,12 @@ def _run_stage(
     resolver_result_path = resolver_dir / "visual_asset_resolution_result.json"
     resolver_result = _reuse_before("asset_resolver", resolver_result_path, options, from_index, logger, state)
     if resolver_result is None:
-        config = rendered_config(run_context, visuals_profile["asset_resolver"], project_root=project_root, output_root=output_root)
+        config = rendered_config(
+            run_context,
+            config_documents["asset_resolver"].value,
+            project_root=project_root,
+            output_root=output_root,
+        )
         config["output_dir"] = str(resolver_dir)
         config.setdefault("logos", {})
         if not config["logos"].get("local_logo_dir"):
@@ -293,6 +379,15 @@ def _run_stage(
         }
         write_json(inputs_dir / f"{run_id}_visual_asset_resolution_input.json", resolver_input)
         write_json(resolver_dir / "visual_asset_resolution_input.json", resolver_input)
+        write_module_config_snapshot(
+            resolver_dir,
+            stage=STAGE,
+            module="asset_resolver",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=config_documents["asset_resolver"],
+            effective_config=config,
+        )
         resolver_result = logger.run_module("asset_resolver", run_asset_resolver, resolver_input)
         _record(state, "asset_resolver", resolver_result_path, resolver_result)
     require_ready(
@@ -306,7 +401,12 @@ def _run_stage(
     render_result_path = render_dir / "visual_render_result.json"
     render_result = _reuse_before("visual_render", render_result_path, options, from_index, logger, state)
     if render_result is None:
-        base = rendered_config(run_context, visuals_profile["render"], project_root=project_root, output_root=output_root)
+        base = rendered_config(
+            run_context,
+            config_documents["visual_render"].value,
+            project_root=project_root,
+            output_root=output_root,
+        )
         profiles = base.pop("profiles", {})
         base.pop("active_mode", None)
         if options.render_mode not in profiles:
@@ -325,6 +425,15 @@ def _run_stage(
         }
         write_json(inputs_dir / f"{run_id}_visual_render_{options.render_mode}_input.json", render_input)
         write_json(render_dir / "visual_render_input.json", render_input)
+        write_module_config_snapshot(
+            render_dir,
+            stage=STAGE,
+            module="visual_render",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=config_documents["visual_render"],
+            effective_config=base,
+        )
         render_result = logger.run_module("visual_render", run_visual_render, render_input)
         _record(state, "visual_render", render_result_path, render_result)
     require_ready(render_result, "visual_render", allowed_statuses=("ok", "partial"))
@@ -338,7 +447,12 @@ def _run_stage(
     assembly_result_path = assembly_dir / "video_assembly_result.json"
     assembly_result = _reuse_before("video_assembly", assembly_result_path, options, from_index, logger, state)
     if assembly_result is None:
-        config = rendered_config(run_context, visuals_profile["assembly"], project_root=project_root, output_root=output_root)
+        config = rendered_config(
+            run_context,
+            config_documents["video_assembly"].value,
+            project_root=project_root,
+            output_root=output_root,
+        )
         config["output_dir"] = str(assembly_dir)
         assembly_input = {
             "run": {"run_id": run_id, "generated_at": now_iso()},
@@ -347,6 +461,15 @@ def _run_stage(
         }
         write_json(inputs_dir / f"{run_id}_visual_assembly_{options.render_mode}_input.json", assembly_input)
         write_json(assembly_dir / "video_assembly_input.json", assembly_input)
+        write_module_config_snapshot(
+            assembly_dir,
+            stage=STAGE,
+            module="video_assembly",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=config_documents["video_assembly"],
+            effective_config=config,
+        )
         assembly_result = logger.run_module("video_assembly", run_video_assembly, assembly_input)
         _record(state, "video_assembly", assembly_result_path, assembly_result)
     require_ready(assembly_result, "video_assembly", handoff_key="ready_for_manual_review")
@@ -355,7 +478,12 @@ def _run_stage(
     review_result_path = review_dir / "visual_review_result.json"
     review_result = _reuse_before("visual_review", review_result_path, options, from_index, logger, state)
     if review_result is None:
-        config = rendered_config(run_context, visuals_profile["review"], project_root=project_root, output_root=output_root)
+        config = rendered_config(
+            run_context,
+            config_documents["visual_review"].value,
+            project_root=project_root,
+            output_root=output_root,
+        )
         config["output_dir"] = str(review_dir)
         review_input = {
             "run": {"run_id": run_id, "generated_at": now_iso()},
@@ -364,6 +492,15 @@ def _run_stage(
         }
         write_json(inputs_dir / f"{run_id}_visual_review_{options.render_mode}_input.json", review_input)
         write_json(review_dir / "visual_review_input.json", review_input)
+        write_module_config_snapshot(
+            review_dir,
+            stage=STAGE,
+            module="visual_review",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=config_documents["visual_review"],
+            effective_config=config,
+        )
         review_result = logger.run_module("visual_review", run_visual_review, review_input)
         _record(state, "visual_review", review_result_path, review_result)
     require_ready(review_result, "visual_review", handoff_key="ready_for_human_visual_review")
@@ -373,7 +510,7 @@ def _run_stage(
         metadata_result = load_json(run_dir / "metadata_finalizer" / "metadata_finalizer_result.json")
         publish_input = {
             "run": {"run_id": run_id, "generated_at": now_iso()},
-            "config": {"require_ready_inputs": True},
+            "config": deepcopy(config_documents["publish_handoff"].value),
             "input": {
                 "run_context": run_context,
                 "video_packaging": video_packaging_result,
@@ -386,6 +523,15 @@ def _run_stage(
         }
         publish_result = logger.run_module("publish_handoff", run_publish_handoff, publish_input)
         publish_dir = run_dir / "handoffs" / "publish_review"
+        write_module_config_snapshot(
+            publish_dir,
+            stage=STAGE,
+            module="publish_handoff",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=config_documents["publish_handoff"],
+            effective_config=publish_input["config"],
+        )
         write_json(publish_dir / "publish_handoff_input.json", publish_input)
         write_json(publish_dir / "publish_handoff_result.json", publish_result)
         _record(state, "publish_handoff", publish_dir / "publish_handoff_result.json", publish_result)
@@ -456,3 +602,42 @@ def _record(state: RunStateStore, module: str, path: Path, result: dict[str, Any
         result_path=str(path),
         summary=result.get("summary", {}),
     )
+
+
+def _module_output_dir(run_dir: Path, options: VisualsOptions, module: str) -> Path:
+    visuals_dir = run_dir / "visuals"
+    if module == "asset_catalog":
+        return visuals_dir / "asset_catalog"
+    if module == "visual_planner":
+        return visuals_dir / "planning" / options.plan_source
+    if module == "media_discovery":
+        return visuals_dir / "media_discovery"
+    if module == "asset_resolver":
+        return visuals_dir / "asset_resolution"
+    if module == "visual_render":
+        return visuals_dir / ("render" if options.render_mode == "final" else "render_preview")
+    if module == "video_assembly":
+        return visuals_dir / ("assembly" if options.render_mode == "final" else "assembly_preview")
+    if module == "visual_review":
+        return visuals_dir / ("review" if options.render_mode == "final" else "review_preview")
+    if module == "publish_handoff":
+        return run_dir / "handoffs" / "publish_review"
+    raise KeyError(module)
+
+
+def _module_result_path(run_dir: Path, options: VisualsOptions, module: str) -> Path:
+    names = {
+        "asset_catalog": "visual_asset_catalog_result.json",
+        "visual_planner": "visual_scene_planning_result.json",
+        "media_discovery": "visual_media_discovery_result.json",
+        "asset_resolver": "visual_asset_resolution_result.json",
+        "visual_render": "visual_render_result.json",
+        "video_assembly": "video_assembly_result.json",
+        "visual_review": "visual_review_result.json",
+        "publish_handoff": "publish_handoff_result.json",
+    }
+    return _module_output_dir(run_dir, options, module) / names[module]
+
+
+def _module_config_snapshot_path(run_dir: Path, options: VisualsOptions, module: str) -> Path:
+    return _module_output_dir(run_dir, options, module) / "config_snapshot.json"

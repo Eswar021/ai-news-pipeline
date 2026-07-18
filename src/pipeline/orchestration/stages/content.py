@@ -4,9 +4,8 @@ from copy import deepcopy
 from datetime import datetime
 import os
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
-import yaml
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from ..io import load_json, write_json, write_jsonl
@@ -15,6 +14,8 @@ from ..run_context import create_run_context, module_output_dir
 from ..state import RunStateStore
 from .common import (
     BaseStageRequest,
+    StageConfigResolver,
+    combine_config_documents,
     current_or_named_context,
     effective_logging_config,
     now_iso,
@@ -22,6 +23,8 @@ from .common import (
     require_non_empty_script,
     require_ready,
     reusable_result,
+    reusable_config_matches,
+    write_module_config_snapshot,
 )
 
 
@@ -41,6 +44,7 @@ MODULES = [
 class ContentOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    config_mode: Literal["live", "frozen"] = "live"
     resume_completed: bool = True
     from_module: str | None = None
     stop_after: str | None = None
@@ -90,6 +94,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
         result = _run_modules(
             run_context=run_context,
             project_root=project_root,
+            config_path=config_path,
             options=options,
             logger=logger,
             state=state,
@@ -149,11 +154,14 @@ def _run_modules(
     *,
     run_context: dict[str, Any],
     project_root: Path,
+    config_path: Path,
     options: ContentOptions,
     logger,
     state: RunStateStore,
 ) -> dict[str, Any]:
-    profile = deepcopy(run_context["profile_config"])
+    config_resolver = StageConfigResolver(run_context, config_path, options.config_mode)
+    shared_document = config_resolver.shared()
+    shared_config = deepcopy(shared_document.value)
     run_id = str(run_context["run_id"])
     run_profile = str(run_context["run_profile"])
     from_index = MODULES.index(options.from_module) if options.from_module else None
@@ -163,6 +171,7 @@ def _run_modules(
     result_paths: dict[str, str] = {}
     completed: list[str] = []
     reused: list[str] = []
+    config_changed_upstream = False
 
     for index, module in enumerate(MODULES):
         if index > stop_index:
@@ -170,10 +179,23 @@ def _run_modules(
         output_dir = module_output_dir(run_context, module)
         result_path = output_dir / f"{module}_result.json"
         input_path = output_dir / f"{module}_input.json"
-        can_reuse = options.resume_completed and (from_index is None or index < from_index)
+        config_snapshot_path = output_dir / "config_snapshot.json"
+        module_document = config_resolver.module("content", module)
+        authoring_document = combine_config_documents(shared_document, module_document)
+        can_reuse = (
+            options.resume_completed
+            and not config_changed_upstream
+            and (from_index is None or index < from_index)
+        )
         ready_statuses = ("ok", "partial") if module == "news_collection" else ("ok",)
         existing = reusable_result(result_path, allowed_statuses=ready_statuses) if can_reuse else None
-        if existing is not None:
+        explicit_upstream_reuse = from_index is not None and index < from_index
+        config_matches = explicit_upstream_reuse or reusable_config_matches(
+            config_snapshot_path,
+            authoring_document,
+            mode=options.config_mode,
+        )
+        if existing is not None and config_matches:
             if not input_path.exists():
                 raise FileNotFoundError(f"Cannot resume {module}; input envelope is missing: {input_path}")
             results[module] = existing
@@ -196,12 +218,20 @@ def _run_modules(
             logger.event("module.reused", module=module, status=str(existing.get("status")), details={"result_path": str(result_path)})
             _require_module_result(module, existing)
             continue
+        if can_reuse and existing is not None and not config_matches:
+            config_changed_upstream = True
+            logger.logger.info(
+                "CONFIG_CHANGED module=%s mode=%s; rerunning this module and downstream modules",
+                module,
+                options.config_mode,
+            )
 
         module_input = _build_input(
             module=module,
             run_id=run_id,
             run_profile=run_profile,
-            profile=profile,
+            module_config=module_document.value,
+            shared_config=shared_config,
             project_root=project_root,
             inputs=inputs,
             results=results,
@@ -210,6 +240,15 @@ def _run_modules(
             _validate_news_collection_credentials(module_input)
         function = _module_function(module)
         write_json(input_path, module_input)
+        write_module_config_snapshot(
+            output_dir,
+            stage=STAGE,
+            module=module,
+            mode=options.config_mode,
+            profile_name=run_profile,
+            document=authoring_document,
+            effective_config=module_input["config"],
+        )
         module_result = logger.run_module(module, function, module_input)
         _write_outputs(module, output_dir, module_input, module_result, options)
         state.record_module(
@@ -238,17 +277,18 @@ def _build_input(
     module: str,
     run_id: str,
     run_profile: str,
-    profile: dict[str, Any],
+    module_config: dict[str, Any],
+    shared_config: dict[str, Any],
     project_root: Path,
     inputs: dict[str, dict[str, Any]],
     results: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     run = {"run_id": run_id, "generated_at": now_iso()}
     if module == "news_collection":
-        app_dir = project_root / "src" / "pipeline" / "apps" / "news_collection"
-        profile_config = _load_yaml(app_dir / "profiles.yaml")
-        source_config = _load_yaml(app_dir / "source_config.yaml")
-        collection_profile = profile_config["profiles"][run_profile]
+        collection_profile = deepcopy(module_config.get("profile") or {})
+        source_groups = deepcopy(module_config.get("source_groups") or {})
+        if not collection_profile or not source_groups:
+            raise KeyError("news_collection config requires profile and source_groups")
         end = datetime.now().astimezone()
         lookback_hours = int(collection_profile["lookback_hours"])
         from datetime import timedelta
@@ -260,7 +300,7 @@ def _build_input(
         }
         collectors: dict[str, Any] = {}
         for group in collection_profile["enabled_source_groups"]:
-            collector = deepcopy(source_config["source_groups"][group])
+            collector = deepcopy(source_groups[group])
             collector.update(
                 {
                     "source_group": group,
@@ -277,17 +317,17 @@ def _build_input(
                 "query_themes": list(collection_profile["query_themes"]),
                 "collectors": collectors,
             },
-            "input": {"run_profile": run_profile, "channel": deepcopy(profile["channel"])},
+            "input": {"run_profile": run_profile, "channel": deepcopy(shared_config["channel"])},
         }
     if module == "evidence_prep":
-        config = _module_config(profile, module)
+        config = deepcopy(module_config)
         first_collector = next(iter(inputs["news_collection"]["config"]["collectors"].values()))
         config["collection_window"] = deepcopy(first_collector["collection_window"])
         config["query_themes"] = list(inputs["news_collection"]["config"]["query_themes"])
         return {"run": run, "config": config, "input": {"news_collection": results["news_collection"]}}
     if module == "editorial_triage":
-        config = _module_config(profile, module)
-        config["channel"] = deepcopy(profile["channel"])
+        config = deepcopy(module_config)
+        config["channel"] = deepcopy(shared_config["channel"])
         return {
             "run": run,
             "config": config,
@@ -297,7 +337,7 @@ def _build_input(
             },
         }
     if module == "story_mapping":
-        config = _module_config(profile, module)
+        config = deepcopy(module_config)
         config["collection_window"] = deepcopy(inputs["evidence_prep"]["config"]["collection_window"])
         return {
             "run": run,
@@ -308,24 +348,24 @@ def _build_input(
             },
         }
     if module == "editorial_selection":
-        config = _module_config(profile, module)
-        config["channel"] = deepcopy(profile["channel"])
+        config = deepcopy(module_config)
+        config["channel"] = deepcopy(shared_config["channel"])
         return {"run": run, "config": config, "input": {"story_mapping": results["story_mapping"]}}
     if module == "video_packaging":
         return {
             "run": run,
-            "config": _module_config(profile, module),
+            "config": deepcopy(module_config),
             "input": {"editorial_selection": results["editorial_selection"]},
         }
     if module == "script_generation":
         return {
             "run": run,
-            "config": _module_config(profile, module),
+            "config": deepcopy(module_config),
             "input": {"video_packaging": results["video_packaging"]},
         }
     if module == "metadata_creator":
-        config = _module_config(profile, module)
-        channel = profile["channel"]
+        config = deepcopy(module_config)
+        channel = shared_config["channel"]
         config["channel"] = {
             "channel_name": channel["channel_name"],
             "content_promise": channel.get("content_promise", ""),
@@ -402,29 +442,22 @@ def _require_module_result(module: str, result: dict[str, Any]) -> None:
 
 def _module_function(module: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
     if module == "news_collection":
-        from src.pipeline.apps.news_collection import run
+        from src.pipeline.content.news_collection import run
     elif module == "evidence_prep":
-        from src.pipeline.apps.evidence_prep import run
+        from src.pipeline.content.evidence_prep import run
     elif module == "editorial_triage":
-        from src.pipeline.apps.editorial_triage import run
+        from src.pipeline.content.editorial_triage import run
     elif module == "story_mapping":
-        from src.pipeline.apps.story_mapping import run
+        from src.pipeline.content.story_mapping import run
     elif module == "editorial_selection":
-        from src.pipeline.apps.editorial_selection import run
+        from src.pipeline.content.editorial_selection import run
     elif module == "video_packaging":
-        from src.pipeline.apps.video_packaging import run
+        from src.pipeline.content.video_packaging import run
     elif module == "script_generation":
-        from src.pipeline.apps.script_generation.formats.roundup import run
+        from src.pipeline.content.script_generation.formats.roundup import run
     else:
-        from src.pipeline.apps.metadata_creator import run
+        from src.pipeline.content.metadata_creator import run
     return run
-
-
-def _module_config(profile: dict[str, Any], module: str) -> dict[str, Any]:
-    config = deepcopy(profile.get(module) or {})
-    if not config:
-        raise KeyError(f"Frozen profile is missing config for {module!r}")
-    return config
 
 
 def _validate_news_collection_credentials(module_input: dict[str, Any]) -> None:
@@ -459,10 +492,3 @@ def _record_missing_credential(
     keys = [str(key).strip() for key in (env_keys or []) if str(key).strip()]
     if keys and not any(os.getenv(key) for key in keys):
         missing.append(f"{source_name} ({' | '.join(keys)})")
-
-
-def _load_yaml(path: Path) -> dict[str, Any]:
-    value = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(value, dict):
-        raise ValueError(f"Expected YAML object at {path}")
-    return value

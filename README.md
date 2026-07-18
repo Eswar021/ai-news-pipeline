@@ -11,7 +11,7 @@ The canonical runtime is `src/pipeline/`. Functional applications use a direct
 JSON/dict boundary:
 
 ```python
-from src.pipeline.apps.story_mapping import run
+from src.pipeline.content.story_mapping import run
 
 result = run(input_json)
 ```
@@ -23,13 +23,13 @@ modules may write media files because those files are their product.
 
 ```text
 src/pipeline/
-├── apps/            # collection through metadata
+├── content/         # collection through metadata
 ├── contracts/       # stable artifact identity and lineage
 ├── handoffs/        # ChatGPT and publish adapters
-├── orchestration/   # frozen run context helpers
+├── orchestration/   # run context, live module config, state, and logging
 ├── voiceover/       # local TTS providers and WAV packaging
 ├── visuals/         # planning, media, assets, rendering, assembly
-└── config/          # workbench.yaml
+└── config/          # profile manifest plus stage/module YAML
 ```
 
 ## Notebooks
@@ -82,13 +82,14 @@ Generated test media is written under `output/tests/media_roundup_reference/`.
 
 ## Configuration
 
-Edit `src/pipeline/config/workbench.yaml` to select providers, models, voices,
-visual capabilities, rendering quality, and policy limits. A production content
-run freezes the selected profile and config hash into `run_context.json`; media
-notebooks use that frozen profile.
+Edit the relevant YAML below `src/pipeline/config/profiles/` to select
+providers, models, voices, visual capabilities, rendering quality, and policy
+limits. A production run stores its initial composed profile in
+`run_context.json`; runners and notebooks load current module YAML by default
+and record the effective value in each module's `config_snapshot.json`.
 
-The default voiceover is free local Kokoro. Other local providers remain
-available but may require additional models or reference audio.
+The current production voice is Gemini 3.1 Flash TTS with Puck and
+provider-neutral beat delivery direction. Free local Kokoro remains available.
 
 ## Development Checks
 

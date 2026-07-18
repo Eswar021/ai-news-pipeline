@@ -1039,7 +1039,7 @@ def run(input_json: dict) -> dict:
 Suggested location:
 
 ```text
-src/pipeline/apps/editorial_triage/
+src/pipeline/content/editorial_triage/
 ```
 
 The app receives prepared candidates and channel/profile context. It returns a
@@ -1104,7 +1104,7 @@ substage before deterministic video packaging.
 Recommended final location:
 
 ```text
-src/pipeline/apps/editorial_selection/formats/roundup/
+src/pipeline/content/editorial_selection/formats/roundup/
 ```
 
 The selector receives all bounded story candidates, their records, triage

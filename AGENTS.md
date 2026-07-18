@@ -18,7 +18,7 @@ The active shape is:
 
 ```text
 src/pipeline/
-├── apps/
+├── content/
 │   ├── news_collection/
 │   ├── evidence_prep/
 │   ├── editorial_triage/
@@ -91,11 +91,16 @@ products. Their control boundary should still be JSON/dict-in and JSON/dict-out.
 
 Behavior must be config-driven.
 
-- authoring config lives in `src/pipeline/config/workbench.yaml`
-- a production run freezes its selected profile into `run_context.json`
-- apps receive their effective config in the input envelope
-- apps do not read YAML directly
-- media notebooks use the frozen profile for production runs
+- `src/pipeline/config/workbench.yaml` is the profile manifest; module authoring
+  config lives below `src/pipeline/config/profiles/{profile}/{stage}/`
+- a production run stores an immutable initial composed profile in
+  `run_context.json` for identity and reproducibility
+- stage runners load each module's current YAML immediately before execution by
+  default and write that effective config to the module's `config_snapshot.json`
+- use runner `--config-mode frozen` only for exact initial-profile reproduction
+- content apps receive their effective config in the input envelope
+- content apps do not read YAML directly
+- operator notebooks reload module YAML when the corresponding execution cell runs
 - model caches live under `.cache/ai_content_creation/models/`, not output folders
 
 Do not hardcode current-run company names, story titles, thresholds, model

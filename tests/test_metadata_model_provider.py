@@ -6,20 +6,20 @@ from pathlib import Path
 from pydantic import TypeAdapter
 import yaml
 
-from src.pipeline.apps.metadata_creator.app import TASK_PROMPT
-from src.pipeline.apps.metadata_creator.contract import LLMProvider, MetadataConfig
-from src.pipeline.apps.metadata_creator.llm_client import make_llm
-from src.pipeline.apps.script_generation.formats.roundup.app import _resolved_llm_configs
+from src.pipeline.config import ConfigRepository
+
+from src.pipeline.content.metadata_creator.app import TASK_PROMPT
+from src.pipeline.content.metadata_creator.contract import LLMProvider, MetadataConfig
+from src.pipeline.content.metadata_creator.llm_client import make_llm
+from src.pipeline.content.script_generation.formats.roundup.app import _resolved_llm_configs
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def _profile() -> dict:
-    workbench = yaml.safe_load(
-        (ROOT / "src/pipeline/config/workbench.yaml").read_text(encoding="utf-8")
-    )
-    return deepcopy(workbench["profiles"][workbench["default_run_profile"]])
+    repository = ConfigRepository(ROOT / "src/pipeline/config/workbench.yaml")
+    return deepcopy(repository.profile(repository.default_profile).value)
 
 
 def test_metadata_prompt_keeps_system_and_user_roles_separate() -> None:

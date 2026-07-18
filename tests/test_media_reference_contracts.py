@@ -6,9 +6,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.pipeline.apps.metadata_finalizer import run as finalize_metadata
-from src.pipeline.apps.script_generation.formats.roundup.contract import ScriptGenerationResponse
-from src.pipeline.apps.video_packaging.contract import VideoPackagingResponse
+from src.pipeline.config import ConfigRepository
+
+from src.pipeline.content.metadata_finalizer import run as finalize_metadata
+from src.pipeline.content.script_generation.formats.roundup.contract import ScriptGenerationResponse
+from src.pipeline.content.video_packaging.contract import VideoPackagingResponse
 from src.pipeline.contracts import (
     artifact_fingerprint,
     build_artifact_provenance,
@@ -117,9 +119,10 @@ def test_visual_planner_passes_provenance_to_plan_builder_not_episode_director(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    profile = yaml.safe_load(
-        (Path(__file__).parents[1] / "src/pipeline/config/workbench.yaml").read_text(encoding="utf-8")
-    )["profiles"]["daily_48h_all_sources"]
+    repository = ConfigRepository(
+        Path(__file__).parents[1] / "src/pipeline/config/workbench.yaml"
+    )
+    profile = repository.profile("daily_48h_all_sources").value
     captured: dict = {}
     catalog_config = {
         **profile["visuals"]["asset_catalog"],

@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
-import yaml
+from src.pipeline.config import ConfigRepository
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -40,15 +39,9 @@ def create_run_context(
             return context
 
     config_file = (config_path or root / "src" / "pipeline" / "config" / "workbench.yaml").resolve()
-    config_text = config_file.read_text(encoding="utf-8")
-    authoring_config = yaml.safe_load(config_text)
-    if not isinstance(authoring_config, dict):
-        raise ValueError(f"Expected YAML object at {config_file}")
-
-    selected_profile = run_profile or str(authoring_config.get("default_run_profile", "")).strip()
-    profiles = authoring_config.get("profiles")
-    if not isinstance(profiles, dict) or not isinstance(profiles.get(selected_profile), dict):
-        raise KeyError(f"Unknown run profile: {selected_profile}")
+    repository = ConfigRepository(config_file)
+    selected_profile = run_profile or repository.default_profile
+    profile_document = repository.profile(selected_profile)
 
     created_at = datetime.now(IST)
     resolved_run_id = (requested_run_id or f"run_{created_at.strftime('%Y_%m_%d_%H%M%S')}_{selected_profile}").strip()
@@ -64,8 +57,10 @@ def create_run_context(
         "trigger": trigger,
         "orchestrator": orchestrator,
         "pipeline_config_path": str(config_file.relative_to(root)),
-        "pipeline_config_sha256": hashlib.sha256(config_text.encode("utf-8")).hexdigest(),
-        "profile_config": deepcopy(profiles[selected_profile]),
+        "pipeline_config_schema_version": repository.schema_version,
+        "pipeline_config_sha256": profile_document.sha256,
+        "pipeline_config_sources": list(profile_document.source_paths),
+        "profile_config": deepcopy(profile_document.value),
         "output_root": str(output),
         "run_dir": str(run_dir),
     }

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pydantic import TypeAdapter
 
-from src.pipeline.apps.script_generation.formats.roundup.app import _resolved_llm_configs
-from src.pipeline.apps.script_generation.formats.roundup.contract import LLMProvider
-from src.pipeline.apps.script_generation.formats.roundup.llm_client import make_llm
-from src.pipeline.apps.script_generation.formats.roundup.llm_logging import build_llm_call_log
-from src.pipeline.apps.script_generation.formats.roundup.writer import TASK_PROMPT
+from src.pipeline.content.script_generation.formats.roundup.app import _resolved_llm_configs
+from src.pipeline.content.script_generation.formats.roundup.contract import LLMProvider
+from src.pipeline.content.script_generation.formats.roundup.llm_client import make_llm
+from src.pipeline.content.script_generation.formats.roundup.llm_logging import build_llm_call_log
+from src.pipeline.content.script_generation.formats.roundup.writer import TASK_PROMPT
 from src.pipeline.orchestration.script_model_comparison import (
     ComparisonVariant,
     _aggregate_usage_by_route,

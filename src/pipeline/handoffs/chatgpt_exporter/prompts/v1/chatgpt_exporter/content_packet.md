@@ -58,8 +58,8 @@ Each section object must contain:
 - `section_id`
 - `narration_text`, equal to the spoken beat texts joined in order
 - `beats`, a list of objects with `beat_type`, `beat_function`,
-  `narration_text`, `source_record_keys`, `creative_device`, `visual_goal`, and
-  `visual_brief`
+  `narration_text`, `source_record_keys`, `creative_device`,
+  `delivery_direction`, `visual_goal`, and `visual_brief`
 
 Use `beat_function` values from `story_hook`, `setup`, `reveal`, `explanation`,
 `example`, `reaction`, `comic_release`, `consequence`, `caveat`, `payoff`, and
@@ -67,6 +67,18 @@ Use `beat_function` values from `story_hook`, `setup`, `reveal`, `explanation`,
 `rhetorical_question`, `hypothetical`, `observational_humor`,
 `self_aware_humor`, and `callback`. Intro and closing beats may omit
 `beat_function`; the parser assigns their canonical bookend functions.
+
+Each `delivery_direction` is silent performance metadata and must contain:
+- `performance_intent`: a concise director note for how the beat should land
+- `emotional_color`: a natural description such as curious, lightly amused,
+  skeptical, urgent, or reflective
+- `pace`: `deliberate`, `measured`, `conversational`, `brisk`, or `rapid`
+- `energy`: `restrained`, `warm`, `engaged`, `animated`, or `punchy`
+- `emphasis_phrases`: exact phrases from this beat's narration, or an empty list
+- `pause_after`: `none`, `micro`, `short`, or `full_beat`
+
+Do not put bracketed acting tags in `narration_text`. Vary performance across
+beats rather than making the whole episode fast or enthusiastic.
 
 Each `visual_brief` must contain:
 - `purpose`

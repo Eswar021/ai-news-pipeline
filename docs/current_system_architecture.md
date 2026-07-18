@@ -2,7 +2,7 @@
 
 Status: Canonical runtime reference
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 ## Runtime
 
@@ -10,7 +10,7 @@ Last updated: 2026-07-18
 
 ```text
 src/pipeline/
-|-- apps/
+|-- content/
 |   |-- news_collection/
 |   |-- evidence_prep/
 |   |-- editorial_triage/
@@ -25,7 +25,9 @@ src/pipeline/
 |-- orchestration/
 |-- voiceover/
 |-- visuals/
-`-- config/workbench.yaml
+`-- config/
+    |-- workbench.yaml
+    `-- profiles/{profile}/{content|voiceover|visuals}/
 ```
 
 Production automation uses one thin CLI router with three stage modules:
@@ -57,11 +59,12 @@ write caller-directed media because WAV, PNG, and MP4 files are their products.
 flowchart LR
     operator[Operator, notebook, scheduler, or service]
     runner[Three-stage orchestration runner]
-    config[workbench.yaml]
-    context[run_context.json<br/>frozen profile and config hash]
+    config[workbench manifest<br/>plus module YAML]
+    context[run_context.json<br/>initial profile and config hash]
 
     operator --> runner
     config --> context
+    config --> runner
     runner --> context
 
     subgraph content[1. Content stage]
@@ -327,7 +330,7 @@ flowchart TD
 
 Synthesis timing, not a requested episode duration, controls every later visual
 timestamp. Mastering is accepted only when it preserves duration within the
-frozen profile tolerance.
+effective module-config tolerance.
 
 ### Visuals Stage
 
@@ -392,8 +395,9 @@ profiles and visual-lab tests.
 
 ```mermaid
 flowchart LR
-    yaml[Authoring workbench.yaml]
-    context[run_context.json<br/>frozen profile and SHA-256]
+    yaml[Authoring manifest and module YAML]
+    context[run_context.json<br/>initial profile and SHA-256]
+    moduleConfig[Current module YAML<br/>or frozen initial value]
     current[current_run.json<br/>operator pointer]
     stage[Stage runner]
     input[Module input envelope]
@@ -404,8 +408,10 @@ flowchart LR
     next[Downstream module]
 
     yaml --> context
+    yaml --> moduleConfig
     context --> current
-    context --> stage --> input --> app --> result --> next
+    context --> stage
+    moduleConfig --> stage --> input --> app --> result --> next
     stage --> state
     stage --> logs
     result -. ready result may be reused .-> stage
@@ -413,7 +419,11 @@ flowchart LR
 ```
 
 `--from-module` reruns the named module and every downstream module in that
-stage. Earlier ready results may be reused. Cross-stage script, voiceover, and
+stage. Earlier ready results may be reused. The default `--config-mode live`
+reloads each module's YAML immediately before it runs and writes the exact
+effective value to that module's `config_snapshot.json`; a changed config
+invalidates that module and downstream reuse. `--config-mode frozen` resolves
+from the initial profile in `run_context.json`. Cross-stage script, voiceover, and
 visual-plan selection verifies run ID, parent fingerprints, and media hashes;
 artifacts are never selected by modification time.
 
@@ -707,15 +717,17 @@ output_v2/ is historical only. Model caches live under
 
 ## Configuration
 
-Operator-authored configuration lives in src/pipeline/config/workbench.yaml.
-The content stage or content notebook freezes the selected profile and config
-hash into run_context.json. Apps receive effective config inside their input
-envelope and do not read YAML directly.
+`src/pipeline/config/workbench.yaml` is the profile and experiment manifest.
+Production module configuration lives under
+`src/pipeline/config/profiles/{profile}/{stage}/{module}.yaml`. Creating a run
+stores an immutable initial composed profile and hash in `run_context.json`.
+Stage routers and notebooks resolve module YAML and pass effective config inside
+input envelopes; content and media modules do not read YAML directly.
 
-Channel identity, audience, allowed topics, and excluded topics live once at
-the selected profile's `channel` key. The active orchestrator copies that
-frozen context into triage, editorial selection, and metadata app envelopes;
-app-local news source YAML contains collection mechanics only.
+Channel identity, audience, allowed topics, and excluded topics live once in
+the selected profile's shared `profile.yaml`. The active orchestrator combines
+that live or frozen shared context with the relevant module envelope. News
+collection mechanics live only in its content-stage module YAML.
 
 Behavioral values such as providers, models, prompt versions, source policies,
 selection limits, voices, visual capabilities, render settings, and bounded

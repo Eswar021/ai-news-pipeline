@@ -38,8 +38,8 @@ provider splitting, beat/section pauses, sample
 rate, mastering, captions, and provider settings come from the input config.
 `llm_client` is not involved.
 
-The default profile in `src/pipeline/config/workbench.yaml` uses OpenAI
-`gpt-4o-mini-tts` with `cedar`, `general_youtube`, and speed `1.0`. API keys
+The default module profile uses Gemini `gemini-3.1-flash-tts-preview` with
+`Puck`, `general_youtube`, and speed `1.08`. API keys
 remain environment-only. The configured aliases are:
 
 - OpenAI: `OPENAI_API_KEY`, then `OPENAI_API_KEY_A_C_C`
@@ -64,9 +64,9 @@ OpenAI currently labels `gpt-4o-mini-tts` deprecated, although it remains
 available and passed the production smoke. Treat it as the immediate
 cost/quality comparison baseline, not a permanent provider lock.
 
-Authoring YAML affects new runs. Existing runs keep their frozen profile, so
-use an explicit stage override when comparing providers against the same
-script:
+Authoring YAML is loaded per module by the stage runner, including for existing
+runs. Each output variant records its effective config snapshot. Use an
+explicit stage override for a one-off comparison without editing authoring YAML:
 
 ```bash
 python3 -m src.pipeline.orchestration.runner voiceover \
@@ -78,6 +78,14 @@ python3 -m src.pipeline.orchestration.runner voiceover \
 Provider/model/voice/delivery settings are part of the generated variant name
 and artifact fingerprint. A config change therefore creates a new voiceover
 variant instead of reusing stale audio.
+
+Generated script beats carry a provider-neutral `delivery_direction` object
+with performance intent, emotional color, pace, energy, emphasis phrases, and
+end-pause guidance. Gemini and OpenAI translate it into their native
+instruction channel for each beat. Bracketed acting tags are not inserted into
+`full_script`, synthesized transcript text, or captions. Future providers can
+opt in through `delivery_direction.apply_to_providers` after their adapter
+supports instruction-driven prosody.
 
 ## Short Delivery Comparisons
 

@@ -159,6 +159,7 @@ def run(input_json: dict) -> dict:
             worker_count=request.config.openai.worker_count,
             max_input_chars=request.config.openai.max_input_chars,
             sample_rate_hz=request.config.sample_rate_hz,
+            delivery_config=request.config.delivery_direction.model_dump(mode="json"),
         )
         synthesized_chunks = _enrich_api_chunks(chunks, audio_chunks)
         actual_sample_rate_hz = int(synthesized_chunks[0]["sample_rate_hz"])
@@ -185,6 +186,7 @@ def run(input_json: dict) -> dict:
             worker_count=request.config.gemini.worker_count,
             max_input_chars=request.config.gemini.max_input_chars,
             sample_rate_hz=request.config.sample_rate_hz,
+            delivery_config=request.config.delivery_direction.model_dump(mode="json"),
         )
         synthesized_chunks = _enrich_api_chunks(chunks, audio_chunks)
         actual_sample_rate_hz = int(synthesized_chunks[0]["sample_rate_hz"])

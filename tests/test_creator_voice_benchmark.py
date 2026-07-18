@@ -5,7 +5,9 @@ from pathlib import Path
 
 import yaml
 
-from src.pipeline.apps.script_generation.formats.roundup.source_truth import build_story_truth_index
+from src.pipeline.config import ConfigRepository
+
+from src.pipeline.content.script_generation.formats.roundup.source_truth import build_story_truth_index
 
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "creator_voice_benchmark"
@@ -127,7 +129,7 @@ def test_phase_zero_fixture_keeps_human_review_and_visual_regression_cases() -> 
 def test_creator_prompts_calibrate_specificity_analogy_and_role_shape() -> None:
     prompt_root = (
         PROJECT_ROOT
-        / "src/pipeline/apps/script_generation/formats/roundup/prompts/v1"
+        / "src/pipeline/content/script_generation/formats/roundup/prompts/v1"
     )
     writer = (prompt_root / "roundup_story_writer/system.txt").read_text(encoding="utf-8")
     reviewer = (prompt_root / "roundup_story_reviewer/system.txt").read_text(encoding="utf-8")
@@ -150,11 +152,9 @@ def test_creator_prompts_calibrate_specificity_analogy_and_role_shape() -> None:
     assert "this particular episode" in bookends.lower()
     assert "money arrived first" in bookends.lower()
 
-    profile = yaml.safe_load(
-        (PROJECT_ROOT / "src/pipeline/config/workbench.yaml").read_text(
-            encoding="utf-8"
-        )
-    )["profiles"]["daily_48h_all_sources"]["script_generation"]
+    profile = ConfigRepository(
+        PROJECT_ROOT / "src/pipeline/config/workbench.yaml"
+    ).module("daily_48h_all_sources", "content", "script_generation").value
     guidance = profile["writing_guidance"]
     assert guidance["lead"]["suggested_words"] > guidance["major"]["suggested_words"]
     assert guidance["major"]["suggested_words"] > guidance["brief"]["suggested_words"]
@@ -163,7 +163,7 @@ def test_creator_prompts_calibrate_specificity_analogy_and_role_shape() -> None:
 
     metadata_prompt = (
         PROJECT_ROOT
-        / "src/pipeline/apps/metadata_creator/prompts/v1/youtube_metadata_creator/system.txt"
+        / "src/pipeline/content/metadata_creator/prompts/v1/youtube_metadata_creator/system.txt"
     ).read_text(encoding="utf-8")
     assert "relationship_basis" in metadata_prompt
     assert "open-weight" in metadata_prompt.lower()

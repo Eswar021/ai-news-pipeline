@@ -1,0 +1,5 @@
+target_format: roundup
+roundup:
+  min_stories: 3
+  max_stories: 5
+  duration_mode: content_driven

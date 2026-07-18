@@ -1,0 +1,108 @@
+provider: gemini
+style: general_youtube
+speed: 1.08
+voice: null
+language_code: a
+sample_rate_hz: 24000
+keep_chunks: true
+force: true
+output_dir: ''
+chunking:
+  chunk_max_chars: 900
+  max_sentences_per_chunk: 4
+  chunk_pause_seconds: 0.12
+  paragraph_pause_seconds: 0.38
+alignment:
+  require_script_beats: true
+  beat_pause_seconds: 0.08
+  section_pause_seconds: 0.32
+delivery_direction:
+  enabled: true
+  apply_to_providers:
+  - openai
+  - gemini
+mastering:
+  enabled: true
+  ffmpeg_path: ffmpeg
+  target_lufs: -16.0
+  true_peak_db: -1.0
+  loudness_range_lu: 7.0
+  two_pass: true
+  measure_output: true
+  keep_raw_audio: false
+  duration_tolerance_seconds: 0.08
+  failure_mode: fail
+captions:
+  enabled: true
+  formats:
+  - srt
+  - vtt
+  max_chars_per_cue: 48
+  max_words_per_cue: 12
+  min_cue_seconds: 0.8
+kokoro:
+  voice: af_heart
+openai:
+  model: gpt-4o-mini-tts
+  voice: cedar
+  response_format: wav
+  instructions: Speak like a confident, conversational YouTube technology-news host. Sound curious, engaged, and
+    human rather than like a broadcast anchor or advertisement. Vary pace and emphasis naturally, let punchlines
+    breathe, and keep dense explanations crisp. Avoid sing-song cadence, melodrama, and exaggerated hype.
+  api_key_envs:
+  - OPENAI_API_KEY
+  - OPENAI_API_KEY_A_C_C
+  request_timeout_seconds: 180
+  max_retries: 3
+  retry_initial_delay_seconds: 1.0
+  retry_max_delay_seconds: 8.0
+  worker_count: 3
+  max_input_chars: 4096
+gemini:
+  model: gemini-3.1-flash-tts-preview
+  voice: Puck
+  language_code: en-US
+  instructions: Perform as a quick-thinking, witty YouTube technology creator speaking directly to one curious viewer.
+    Keep forward momentum without rushing names or numbers. Use a vocal smile for dry humor, genuine curiosity before
+    reveals, measured weight for consequences, and relaxed clarity for technical explanations. Let beat-specific
+    performance direction shape the emotion, pace, emphasis, and pause of each passage. Avoid television-news cadence,
+    sales energy, shouting, melodrama, and identical intensity across the episode.
+  api_key_envs:
+  - GEMINI_TTS_API_KEY
+  - GEMINI_API_KEY
+  - GOOGLE_API_KEY
+  request_timeout_seconds: 180
+  max_retries: 3
+  retry_initial_delay_seconds: 1.0
+  retry_max_delay_seconds: 8.0
+  worker_count: 1
+  max_input_chars: 4000
+chatterbox:
+  device: auto
+  exaggeration: 0.65
+  cfg_weight: 0.5
+  audio_prompt_path: null
+  cache_dir: '{CACHE_ROOT}/huggingface_local'
+f5_tts:
+  model: F5TTS_v1_Base
+  device: cpu
+  ref_audio_path: null
+  ref_text: Today, we are testing a more expressive local voiceover model for the new pipeline.
+  cache_dir: '{CACHE_ROOT}/f5_tts'
+  nfe_step: 16
+  cfg_strength: 2.0
+  sway_sampling_coef: -1.0
+  target_rms: 0.1
+  cross_fade_duration: 0.15
+  remove_silence: false
+  seed: 1234
+dia:
+  model_checkpoint: nari-labs/Dia-1.6B-0626
+  device: cpu
+  cache_dir: '{CACHE_ROOT}/dia'
+  max_new_tokens: 256
+  guidance_scale: 3.0
+  temperature: 1.8
+  top_p: 0.9
+  top_k: 45
+  speaker_tag: S1

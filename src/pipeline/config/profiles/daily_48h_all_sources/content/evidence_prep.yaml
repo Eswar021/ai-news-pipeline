@@ -1,0 +1,42 @@
+content_cleaning:
+  enabled: true
+  strip_html_markup: true
+  rules:
+  - name: times_group_article_chrome
+    domain_suffixes:
+    - economictimes.indiatimes.com
+    - timesofindia.indiatimes.com
+    leading_markers:
+    - TIMESOFINDIA.COM
+    trailing_markers:
+    - Add as a Reliable and Trusted News Source
+    - Read More News on
+    - Prime Exclusives
+    remove_phrases:
+    - Listen to this article in summarized format
+    - Listen Loading...
+    - Live Events
+    remove_patterns:
+    - (?i)\bALSO READ:\s+.{1,180}?(?=\b(?:Who is|How did|What is|Building |Finding |Since then|Despite|The inspiration|She
+      |He |According to)\b)
+  - name: the_verge_article_chrome
+    domain_suffixes:
+    - theverge.com
+    leading_markers:
+    - Link Share Gift
+    trailing_markers:
+    - Follow topics and authors from this story
+    remove_phrases:
+    - Previous Next
+    remove_patterns:
+    - (?is)^.*?\b[A-Z][A-Za-z .’'-]{2,90}\s+is\s+(?:the\s+Verge(?:’s|'s)\s+)?[^.]{0,140}\b(?:editor|reporter|writer|reviewer|correspondent)\b[^.]{0,180}\.\s*
+    - (?is)^\s*(?:He|She|They|His|Her|Their)\b[^.]{0,300}\.\s*
+    - (?i)\b\d+\s*/\s*\d+\b
+  - name: techcrunch_article_chrome
+    domain_suffixes:
+    - techcrunch.com
+    trailing_markers:
+    - When you purchase through links in our articles
+    - Topics AI
+    remove_patterns:
+    - (?i)\bImage Credits?:\s*[^.]{0,180}

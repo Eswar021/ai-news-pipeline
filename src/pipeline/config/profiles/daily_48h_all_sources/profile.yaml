@@ -1,0 +1,30 @@
+channel:
+  channel_name: ManiVerse - AI
+  content_promise: Engaging AI news roundups that explain what changed, why it matters, and what to watch next.
+  audience: AI-curious professionals
+  allowed_topics:
+  - AI agents
+  - LLM releases
+  - AI coding tools
+  - AI research
+  - AI product launches
+  - AI safety
+  excluded_topics:
+  - crypto
+  - memecoin
+  - sports
+  - celebrity
+orchestration:
+  logging:
+    level: INFO
+    profile: summary
+    file_enabled: true
+    console_enabled: true
+    max_bytes: 5000000
+    backup_count: 3
+    runtime_logger_name: ai_content_creation.runtime
+    dependency_levels:
+      httpx: WARNING
+      httpcore: WARNING
+      openai: WARNING
+      urllib3: WARNING

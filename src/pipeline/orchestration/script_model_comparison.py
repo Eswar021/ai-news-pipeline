@@ -10,9 +10,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-import yaml
-
-from src.pipeline.apps.script_generation.formats.roundup import run as run_script_generation
+from src.pipeline.content.script_generation.formats.roundup import run as run_script_generation
+from src.pipeline.config import ConfigRepository
 
 
 class VariantPricing(BaseModel):
@@ -213,8 +212,8 @@ def _estimate_cost(usage: dict[str, int], pricing: VariantPricing) -> float:
 
 
 def _load_variants(config_path: Path, selected_ids: list[str]) -> list[ComparisonVariant]:
-    authoring = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    raw_variants = (((authoring or {}).get("experiments") or {}).get("script_model_comparison") or {}).get("variants")
+    experiment = ConfigRepository(config_path).experiment("script_model_comparison").value
+    raw_variants = experiment.get("variants")
     variants = [ComparisonVariant.model_validate(item) for item in (raw_variants or [])]
     if not selected_ids:
         return variants

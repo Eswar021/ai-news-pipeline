@@ -8,14 +8,14 @@ import pytest
 from langchain_core.runnables import RunnableLambda
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
-from src.pipeline.apps.script_generation.formats.roundup import app as script_app
-from src.pipeline.apps.script_generation.formats.roundup import writer as script_writer
-from src.pipeline.apps.script_generation.formats.roundup.checks import check_script_package
-from src.pipeline.apps.script_generation.formats.roundup.contract import (
+from src.pipeline.content.script_generation.formats.roundup import app as script_app
+from src.pipeline.content.script_generation.formats.roundup import writer as script_writer
+from src.pipeline.content.script_generation.formats.roundup.checks import check_script_package
+from src.pipeline.content.script_generation.formats.roundup.contract import (
     ReviewConfig,
     ScriptGenerationResponse,
 )
-from src.pipeline.apps.script_generation.formats.roundup.models import (
+from src.pipeline.content.script_generation.formats.roundup.models import (
     BookendOutput,
     BookendReviewOutput,
     EpisodeDirectorOutput,
@@ -23,12 +23,12 @@ from src.pipeline.apps.script_generation.formats.roundup.models import (
     StorySegmentOutput,
     StorySourceBriefOutput,
 )
-from src.pipeline.apps.script_generation.formats.roundup.source_truth import (
+from src.pipeline.content.script_generation.formats.roundup.source_truth import (
     build_story_truth_index,
     compact_truth_index,
 )
-from src.pipeline.apps.script_generation.formats.roundup.sections import build_roundup_section_inputs
-from src.pipeline.apps.video_packaging.formats.roundup import build_roundup_packet
+from src.pipeline.content.script_generation.formats.roundup.sections import build_roundup_section_inputs
+from src.pipeline.content.video_packaging.formats.roundup import build_roundup_packet
 from src.pipeline.contracts import (
     build_artifact_provenance,
     validate_artifact_provenance,
@@ -760,6 +760,14 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                         "explanation": "explanation",
                         "takeaway": "payoff",
                     }
+                    delivery = {
+                        "performance_intent": "Make the workflow consequence easy to follow.",
+                        "emotional_color": "curious and confident",
+                        "pace": "conversational",
+                        "energy": "engaged",
+                        "emphasis_phrases": [],
+                        "pause_after": "micro",
+                    }
 
                     def beat(beat_type: str, narration: str) -> dict:
                         return {
@@ -770,6 +778,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                             "creative_device": "contrast" if beat_type == "takeaway" else "none",
                             "visual_goal": "Make the concrete workflow relationship visible.",
                             "source_record_keys": [source_keys[story_id]],
+                            "delivery_direction": delivery,
                             "visual_brief": {
                                 "purpose": "Show the concrete mechanism.",
                                 "visual_intent": "source_proof",
@@ -823,6 +832,14 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                             "revised_segment": None,
                         }
                 elif model is BookendOutput:
+                    delivery = {
+                        "performance_intent": "Keep the episode moving with clear curiosity.",
+                        "emotional_color": "intrigued",
+                        "pace": "brisk",
+                        "energy": "animated",
+                        "emphasis_phrases": [],
+                        "pause_after": "short",
+                    }
                     visual = {
                         "purpose": "Keep the episode moving.",
                         "visual_intent": "transition",
@@ -836,11 +853,13 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                             {
                                 "beat_type": "hook",
                                 "narration_text": "Automated video falls apart when writing, audio, and visuals disagree about the story playing right now.",
+                                "delivery_direction": delivery,
                                 "visual_brief": visual,
                             },
                             {
                                 "beat_type": "intro",
                                 "narration_text": "Here is how one evidence-first workflow keeps those moving parts connected from source material to the final screen.",
+                                "delivery_direction": delivery,
                                 "visual_brief": visual,
                             },
                         ],
@@ -850,6 +869,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                                 "display_title": titles[story_id],
                                 "transition_line": "Next, another production problem comes into focus.",
                                 "title_card_subtitle": "Evidence to screen",
+                                "delivery_direction": delivery,
                             }
                             for story_id in story_ids
                         ],
@@ -857,6 +877,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                             {
                                 "beat_type": "conclusion",
                                 "narration_text": "The real advantage is not any single model or renderer; it is the shared beat contract that lets every stage improve without losing the story.",
+                                "delivery_direction": delivery,
                                 "visual_brief": visual,
                             }
                         ],

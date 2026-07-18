@@ -1,7 +1,7 @@
 # Pipeline Visuals
 
 `src.pipeline.visuals` is the motion-visual subsystem. It is parallel to
-`apps/` and `voiceover/` because it produces media files, not just JSON.
+`content/` and `voiceover/` because it produces media files, not just JSON.
 
 The subsystem is intentionally split into small stages:
 

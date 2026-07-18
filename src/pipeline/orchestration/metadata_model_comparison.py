@@ -9,9 +9,8 @@ import time
 from typing import Any
 
 from dotenv import load_dotenv
-import yaml
-
-from src.pipeline.apps.metadata_creator import run as run_metadata_creator
+from src.pipeline.content.metadata_creator import run as run_metadata_creator
+from src.pipeline.config import ConfigRepository
 from src.pipeline.orchestration.io import load_json, write_json, write_jsonl
 
 
@@ -92,9 +91,8 @@ def main() -> int:
 
     root = Path(__file__).resolve().parents[3]
     load_dotenv(root / ".env", override=False)
-    authoring = yaml.safe_load((root / args.pipeline_config).resolve().read_text(encoding="utf-8"))
-    profile_name = authoring["default_run_profile"]
-    profile = authoring["profiles"][profile_name]
+    repository = ConfigRepository((root / args.pipeline_config).resolve())
+    profile = repository.profile(repository.default_profile).value
     summary = run_comparison(
         script_result=load_json((root / args.script_result).resolve()),
         video_packaging_result=load_json((root / args.video_packaging_result).resolve()),

@@ -11,6 +11,7 @@ from .api_utils import (
     synthesize_in_parallel,
     write_audio_bytes_to_wav,
 )
+from ..delivery import compose_delivery_instructions
 
 
 INSTALL_HINT = (
@@ -36,6 +37,7 @@ def synthesize_chunks_to_wav(
     worker_count: int,
     max_input_chars: int,
     sample_rate_hz: int,
+    delivery_config: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     api_key = resolve_api_key(api_key_envs, "Gemini")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -51,13 +53,19 @@ def synthesize_chunks_to_wav(
         chunk_id = str(chunk.get("chunk_id") or "chunk")
         require_text_within_limit(text, max_input_chars=max_input_chars, label=f"Gemini {chunk_id}")
         output_path = output_dir / f"{chunk_id}.wav"
+        chunk_instructions = compose_delivery_instructions(
+            base_instructions=instructions,
+            chunk=chunk,
+            provider="gemini",
+            config=delivery_config or {},
+        )
 
         def request_audio() -> tuple[bytes, str]:
             output_path.unlink(missing_ok=True)
             client, types = client_bundle()
             response = client.models.generate_content(
                 model=model,
-                contents=_speech_prompt(text=text, instructions=instructions, speed=speed),
+                contents=_speech_prompt(text=text, instructions=chunk_instructions, speed=speed),
                 config=types.GenerateContentConfig(
                     response_modalities=["AUDIO"],
                     speech_config=types.SpeechConfig(

@@ -12,6 +12,11 @@ from src.pipeline.orchestration.stages.content import (
     _run_modules,
     _validate_news_collection_credentials,
 )
+from src.pipeline.orchestration.stages.common import (
+    StageConfigResolver,
+    combine_config_documents,
+    write_module_config_snapshot,
+)
 from src.pipeline.orchestration.state import RunStateStore
 
 
@@ -101,6 +106,8 @@ def test_run_state_tracks_reused_modules_and_stage_completion(tmp_path: Path) ->
 
 def test_content_resume_resynchronizes_sidecars_from_canonical_result(tmp_path: Path) -> None:
     context = _run_context(tmp_path)
+    config_path = Path(__file__).parents[1] / "src/pipeline/config/workbench.yaml"
+    context["run_profile"] = "daily_48h_all_sources"
     output_dir = Path(context["run_dir"]) / "news_collection"
     output_dir.mkdir(parents=True)
     canonical = {
@@ -127,9 +134,24 @@ def test_content_resume_resynchronizes_sidecars_from_canonical_result(tmp_path: 
     )
     state = RunStateStore(context)
     state.start_stage("content", ["news_collection"])
+    resolver = StageConfigResolver(context, config_path, "live")
+    document = combine_config_documents(
+        resolver.shared(),
+        resolver.module("content", "news_collection"),
+    )
+    write_module_config_snapshot(
+        output_dir,
+        stage="content",
+        module="news_collection",
+        mode="live",
+        profile_name=context["run_profile"],
+        document=document,
+        effective_config={},
+    )
     _run_modules(
         run_context=context,
         project_root=tmp_path,
+        config_path=config_path,
         options=ContentOptions(stop_after="news_collection"),
         logger=stage_logger,
         state=state,

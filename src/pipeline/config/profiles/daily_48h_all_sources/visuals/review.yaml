@@ -1,0 +1,9 @@
+force: true
+output_dir: ''
+ffmpeg_path: ffmpeg
+ffprobe_path: ffprobe
+sample_count: 20
+columns: 5
+thumbnail_width: 420
+jpeg_quality: 90
+keep_frames: false

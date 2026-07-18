@@ -1,0 +1,25 @@
+force: true
+output_dir: ''
+target_width: 2560
+target_height: 1440
+browser:
+  headless: true
+  timeout_ms: 25000
+  post_load_wait_ms: 1200
+  device_scale_factor: 1.0
+  user_agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0
+    Safari/537.36
+source_screenshots:
+  enabled: true
+  capture_mode: target_text_focus
+  save_full_page_debug: false
+  save_raw_capture_debug: true
+  target_miss_policy: failed
+  focus_zoom: 1.3
+  highlight_target: true
+logos:
+  local_logo_dir: ''
+  simple_icons_enabled: true
+  favicon_fallback_enabled: false
+  text_fallback_enabled: true
+  favicon_timeout_seconds: 10

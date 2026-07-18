@@ -224,6 +224,18 @@ class AlignmentConfig(BaseModel):
         return value
 
 
+class DeliveryDirectionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    apply_to_providers: list[str] = Field(default_factory=lambda: [PROVIDER_OPENAI, PROVIDER_GEMINI])
+
+    @field_validator("apply_to_providers")
+    @classmethod
+    def provider_names_must_be_clean(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(item.strip() for item in value if item.strip()))
+
+
 class AudioMasteringConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -446,6 +458,7 @@ class VoiceoverConfig(BaseModel):
     output_dir: str
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     alignment: AlignmentConfig = Field(default_factory=AlignmentConfig)
+    delivery_direction: DeliveryDirectionConfig = Field(default_factory=DeliveryDirectionConfig)
     mastering: AudioMasteringConfig = Field(default_factory=AudioMasteringConfig)
     captions: CaptionConfig = Field(default_factory=CaptionConfig)
     kokoro: KokoroConfig = Field(default_factory=KokoroConfig)

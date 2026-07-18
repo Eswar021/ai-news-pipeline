@@ -4,8 +4,10 @@ from pathlib import Path
 
 import yaml
 
-from src.pipeline.apps.evidence_prep.utils import clean_article_content
-from src.pipeline.apps.metadata_creator.app import (
+from src.pipeline.config import ConfigRepository
+
+from src.pipeline.content.evidence_prep.utils import clean_article_content
+from src.pipeline.content.metadata_creator.app import (
     MetadataDraftOutput,
     _apply_generated_chapter_titles,
     _build_tags,
@@ -13,20 +15,20 @@ from src.pipeline.apps.metadata_creator.app import (
     _clean_title_options,
     _source_meaning_boundaries_for_prompt,
 )
-from src.pipeline.apps.metadata_finalizer.app import _chapter_title as finalized_chapter_title
-from src.pipeline.apps.script_generation.formats.roundup.source_truth import (
+from src.pipeline.content.metadata_finalizer.app import _chapter_title as finalized_chapter_title
+from src.pipeline.content.script_generation.formats.roundup.source_truth import (
     build_story_truth_index,
     compact_truth_index,
 )
-from src.pipeline.apps.story_mapping.story_label import validate_story_label
+from src.pipeline.content.story_mapping.story_label import validate_story_label
 
 
 ROOT = Path(__file__).parents[1]
 
 
 def _profile() -> dict:
-    workbench = yaml.safe_load((ROOT / "src/pipeline/config/workbench.yaml").read_text(encoding="utf-8"))
-    return workbench["profiles"][workbench["default_run_profile"]]
+    repository = ConfigRepository(ROOT / "src/pipeline/config/workbench.yaml")
+    return repository.profile(repository.default_profile).value
 
 
 def test_domain_scoped_cleaner_removes_article_chrome_without_losing_body() -> None:

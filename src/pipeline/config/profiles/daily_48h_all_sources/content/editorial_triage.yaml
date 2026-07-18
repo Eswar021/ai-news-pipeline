@@ -1,0 +1,13 @@
+enabled: true
+mode: authoritative
+provider: openai
+model: gpt-4o-mini
+prompt_version: v1
+temperature: 0.1
+batch_size: 10
+max_record_context_chars: 300000
+max_batch_context_chars: 450000
+max_attempts: 3
+story_mapping_actions:
+- advance
+- reserve

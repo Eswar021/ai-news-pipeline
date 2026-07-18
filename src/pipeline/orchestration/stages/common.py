@@ -1,18 +1,149 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.pipeline.config import ConfigDocument, ConfigRepository
+
 from ..config_templates import render_config_templates
-from ..io import load_json
+from ..io import load_json, write_json
 from ..run_context import load_run_context
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
+
+
+@dataclass(frozen=True)
+class StageConfigResolver:
+    run_context: dict[str, Any]
+    config_path: Path
+    mode: str = "live"
+
+    def __post_init__(self) -> None:
+        if self.mode not in {"live", "frozen"}:
+            raise ValueError("config_mode must be live or frozen")
+
+    @property
+    def profile_name(self) -> str:
+        return str(self.run_context["run_profile"])
+
+    def shared(self) -> ConfigDocument:
+        if self.mode == "live":
+            return ConfigRepository(self.config_path).shared(self.profile_name)
+        profile = self._frozen_profile()
+        return _frozen_document(
+            {
+                key: deepcopy(value)
+                for key, value in profile.items()
+                if key in {"channel", "orchestration"}
+            },
+            run_context=self.run_context,
+        )
+
+    def module(self, stage: str, module: str) -> ConfigDocument:
+        if self.mode == "live":
+            return ConfigRepository(self.config_path).module(self.profile_name, stage, module)
+        profile = self._frozen_profile()
+        if stage == "visuals":
+            visuals = profile.get("visuals")
+            value = visuals.get(module) if isinstance(visuals, dict) else None
+        else:
+            value = profile.get(module)
+        if not isinstance(value, dict) or not value:
+            raise KeyError(f"Frozen profile is missing config for {stage}.{module}")
+        return _frozen_document(value, run_context=self.run_context)
+
+    def _frozen_profile(self) -> dict[str, Any]:
+        profile = self.run_context.get("profile_config")
+        if not isinstance(profile, dict):
+            raise KeyError("run_context.profile_config is missing")
+        return profile
+
+
+def write_module_config_snapshot(
+    output_dir: Path,
+    *,
+    stage: str,
+    module: str,
+    mode: str,
+    profile_name: str,
+    document: ConfigDocument,
+    effective_config: dict[str, Any],
+) -> Path:
+    path = output_dir / "config_snapshot.json"
+    write_json(
+        path,
+        {
+            "schema_version": "pipeline_module_config_snapshot_v1",
+            "stage": stage,
+            "module": module,
+            "config_mode": mode,
+            "run_profile": profile_name,
+            "authoring_config_sha256": document.sha256,
+            "source_paths": list(document.source_paths),
+            "effective_config_sha256": _json_sha256(effective_config),
+            "effective_config": deepcopy(effective_config),
+        },
+    )
+    return path
+
+
+def combine_config_documents(*documents: ConfigDocument) -> ConfigDocument:
+    values = [document.value for document in documents]
+    return ConfigDocument(
+        value={"documents": deepcopy(values)},
+        sha256=_json_sha256(
+            {
+                "documents": [document.sha256 for document in documents],
+                "values": values,
+            }
+        ),
+        source_paths=tuple(
+            dict.fromkeys(path for document in documents for path in document.source_paths)
+        ),
+    )
+
+
+def reusable_config_matches(
+    path: Path,
+    document: ConfigDocument,
+    *,
+    mode: str,
+    effective_config: dict[str, Any] | None = None,
+) -> bool:
+    if not path.exists():
+        return False
+    snapshot = load_json(path)
+    matches = (
+        snapshot.get("schema_version") == "pipeline_module_config_snapshot_v1"
+        and snapshot.get("config_mode") == mode
+        and snapshot.get("authoring_config_sha256") == document.sha256
+    )
+    if effective_config is not None:
+        matches = matches and snapshot.get("effective_config_sha256") == _json_sha256(effective_config)
+    return matches
+
+
+def _frozen_document(value: dict[str, Any], *, run_context: dict[str, Any]) -> ConfigDocument:
+    return ConfigDocument(
+        value=deepcopy(value),
+        sha256=_json_sha256(value),
+        source_paths=(
+            str(Path(run_context["run_dir"]) / "run_context.json"),
+        ),
+    )
+
+
+def _json_sha256(value: Any) -> str:
+    serialized = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 class RunnerRun(BaseModel):
@@ -134,4 +265,3 @@ def reusable_result(path: Path, *, allowed_statuses: tuple[str, ...] = ("ok",)) 
 
 def now_iso() -> str:
     return datetime.now(IST).isoformat()
-

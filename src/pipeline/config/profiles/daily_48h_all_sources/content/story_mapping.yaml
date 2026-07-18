@@ -1,0 +1,55 @@
+embedding_model: all-MiniLM-L6-v2
+use_llm_story_labels: true
+clustering:
+  max_pair_hours: null
+  candidate_neighbors_per_record: 8
+  candidate_similarity_floor: 0.58
+  fingerprint_chunk_chars: 1800
+  max_fingerprint_chunks_per_record: 128
+  max_candidate_pairs: 2000
+  event_identity:
+    enabled: true
+    provider: openai
+    model: gpt-4o-mini
+    prompt_version: v1
+    temperature: 0.0
+    worker_count: 6
+    max_attempts: 3
+    max_record_chars: 500000
+  pair_adjudication:
+    enabled: true
+    provider: openai
+    model: gpt-4o-mini
+    prompt_version: v1
+    temperature: 0.0
+    batch_size: 1
+    worker_count: 6
+    max_attempts: 3
+    max_batch_chars: 180000
+    max_single_pair_chars: 300000
+    confirm_same_event_with_full_records: true
+  cluster_reconciliation:
+    enabled: true
+    provider: openai
+    model: gpt-4o-mini
+    prompt_version: v1
+    temperature: 0.0
+    worker_count: 4
+    max_attempts: 3
+    max_component_chars: 1500000
+    max_component_tokens: 100000
+    tokenizer_encoding: o200k_base
+ranking:
+  mode: telemetry_only
+triage_policy:
+  required: true
+  eligible_actions:
+  - advance
+  - reserve
+story_label:
+  provider: openai
+  model: gpt-4o-mini
+  prompt_version: v1
+  worker_count: 10
+  temperature: 0.15
+  max_story_context_chars: 500000

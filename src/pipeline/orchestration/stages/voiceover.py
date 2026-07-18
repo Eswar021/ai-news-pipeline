@@ -6,11 +6,11 @@ import json
 from pathlib import Path
 import os
 import subprocess
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from src.pipeline.apps.metadata_finalizer import run as run_metadata_finalizer
+from src.pipeline.content.metadata_finalizer import run as run_metadata_finalizer
 from src.pipeline.voiceover.contract import VoiceoverConfig
 from ..artifact_selection import fingerprint_token, resolve_script_result, resolve_voiceover_package
 from ..io import load_json, write_json
@@ -18,12 +18,15 @@ from ..logging import configure_stage_logging
 from ..state import RunStateStore
 from .common import (
     BaseStageRequest,
+    StageConfigResolver,
     current_or_named_context,
     effective_logging_config,
     now_iso,
     project_paths,
     rendered_config,
     require_ready,
+    reusable_config_matches,
+    write_module_config_snapshot,
 )
 
 
@@ -34,6 +37,7 @@ MODULES = ["voiceover", "metadata_finalizer"]
 class VoiceoverOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    config_mode: Literal["live", "frozen"] = "live"
     script_source: str = "auto"
     variant: str | None = None
     voiceover_python: str = ".venv-voiceover/bin/python"
@@ -44,7 +48,7 @@ class VoiceoverOptions(BaseModel):
 def run(input_json: dict[str, Any]) -> dict[str, Any]:
     request = BaseStageRequest.model_validate(input_json)
     options = VoiceoverOptions.model_validate(request.config)
-    project_root, output_root, _ = project_paths(request.paths)
+    project_root, output_root, config_path = project_paths(request.paths)
     run_context = current_or_named_context(output_root, request.run.run_id)
     logger = configure_stage_logging(run_context, STAGE, effective_logging_config(run_context))
     state = RunStateStore(run_context)
@@ -57,6 +61,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
             options=options,
             project_root=project_root,
             output_root=output_root,
+            config_path=config_path,
             run_context=run_context,
             logger=logger,
             state=state,
@@ -89,13 +94,14 @@ def _run_stage(
     options: VoiceoverOptions,
     project_root: Path,
     output_root: Path,
+    config_path: Path,
     run_context: dict[str, Any],
     logger,
     state: RunStateStore,
 ) -> dict[str, Any]:
     run_id = str(run_context["run_id"])
     run_dir = Path(run_context["run_dir"])
-    profile = deepcopy(run_context["profile_config"])
+    config_resolver = StageConfigResolver(run_context, config_path, options.config_mode)
     script_path, script_result = resolve_script_result(
         run_dir=run_dir,
         run_id=run_id,
@@ -103,9 +109,10 @@ def _run_stage(
     )
     script_package = script_result["data"]["script_package"]
     script_provenance = script_package["provenance"]
+    voice_document = config_resolver.module("voiceover", "voiceover")
     voice_config = rendered_config(
         run_context,
-        deepcopy(profile.get("voiceover") or {}),
+        voice_document.value,
         project_root=project_root,
         output_root=output_root,
     )
@@ -122,9 +129,15 @@ def _run_stage(
     }
     input_path = run_dir / "inputs" / "voiceover" / f"{variant}.json"
     write_json(input_path, input_envelope)
+    config_snapshot_path = voiceover_dir / "config_snapshot.json"
 
     existing: tuple[Path, dict[str, Any]] | None = None
-    if options.resume_completed:
+    if options.resume_completed and reusable_config_matches(
+        config_snapshot_path,
+        voice_document,
+        mode=options.config_mode,
+        effective_config=voice_config,
+    ):
         try:
             existing = resolve_voiceover_package(
                 run_dir=run_dir,
@@ -172,6 +185,15 @@ def _run_stage(
         summary = voiceover_result["summary"]
         write_json(voiceover_dir / "voiceover_input.json", input_envelope)
         write_json(voiceover_dir / "voiceover_result.json", voiceover_result)
+        write_module_config_snapshot(
+            voiceover_dir,
+            stage=STAGE,
+            module="voiceover",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=voice_document,
+            effective_config=voice_config,
+        )
         state.record_module(
             STAGE,
             "voiceover",
@@ -194,9 +216,10 @@ def _run_stage(
     if options.finalize_metadata:
         metadata_creator_path = run_dir / "metadata_creator" / "metadata_creator_result.json"
         metadata_creator_result = load_json(metadata_creator_path)
+        metadata_document = config_resolver.module("content", "metadata_finalizer")
         metadata_input = {
             "run": {"run_id": run_id, "generated_at": now_iso()},
-            "config": deepcopy(profile.get("metadata_finalizer") or {}),
+            "config": deepcopy(metadata_document.value),
             "input": {
                 "metadata_creator": metadata_creator_result,
                 "script_generation": script_result,
@@ -205,6 +228,15 @@ def _run_stage(
         }
         metadata_result = logger.run_module("metadata_finalizer", run_metadata_finalizer, metadata_input)
         metadata_dir = run_dir / "metadata_finalizer"
+        write_module_config_snapshot(
+            metadata_dir,
+            stage=STAGE,
+            module="metadata_finalizer",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=metadata_document,
+            effective_config=metadata_input["config"],
+        )
         write_json(metadata_dir / "metadata_finalizer_input.json", metadata_input)
         write_json(metadata_result_path, metadata_result)
         write_json(metadata_dir / "summary.json", metadata_result["summary"])

@@ -482,7 +482,7 @@ Supplying only the creative layer produces confident nonsense.
 
 Add an app-local helper:
 
-    src/pipeline/apps/script_generation/formats/roundup/source_truth.py
+    src/pipeline/content/script_generation/formats/roundup/source_truth.py
 
 This is not a public fact-packet layer and does not add an LLM extraction call.
 It is invisible production metadata derived from the same full records already

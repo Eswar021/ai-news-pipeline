@@ -1,0 +1,22 @@
+target_format: roundup
+provider: openai
+model: gpt-4o-mini
+prompt_version: v1
+temperature: 0.2
+min_stories: 3
+max_stories: 5
+max_candidate_stories: 40
+screening_shortlist_per_batch: 15
+target_finalist_stories: 12
+max_screening_rounds: 4
+max_story_context_chars: 500000
+max_call_context_chars: 650000
+max_story_context_tokens: 90000
+max_call_context_tokens: 100000
+tokenizer_encoding: o200k_base
+max_attempts: 3
+slate_review:
+  enabled: true
+  prompt_version: v1
+  max_attempts: 3
+  recovery_candidate_count: 4

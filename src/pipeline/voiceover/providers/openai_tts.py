@@ -11,6 +11,7 @@ from .api_utils import (
     synthesize_in_parallel,
     wav_metadata,
 )
+from ..delivery import compose_delivery_instructions
 
 
 INSTALL_HINT = (
@@ -36,6 +37,7 @@ def synthesize_chunks_to_wav(
     worker_count: int,
     max_input_chars: int,
     sample_rate_hz: int,
+    delivery_config: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     if response_format != "wav":
         raise ValueError("OpenAI voiceover currently supports response_format=wav only")
@@ -53,6 +55,12 @@ def synthesize_chunks_to_wav(
         chunk_id = str(chunk.get("chunk_id") or "chunk")
         require_text_within_limit(text, max_input_chars=max_input_chars, label=f"OpenAI {chunk_id}")
         output_path = output_dir / f"{chunk_id}.wav"
+        chunk_instructions = compose_delivery_instructions(
+            base_instructions=instructions,
+            chunk=chunk,
+            provider="openai",
+            config=delivery_config or {},
+        )
 
         def request_audio() -> None:
             output_path.unlink(missing_ok=True)
@@ -61,7 +69,7 @@ def synthesize_chunks_to_wav(
                     model=model,
                     voice=voice,
                     input=text,
-                    instructions=instructions,
+                    instructions=chunk_instructions,
                     response_format="wav",
                     speed=speed,
                 ) as response:

@@ -1,1357 +1,30 @@
+config_schema_version: pipeline_modular_config_v1
 default_run_profile: daily_48h_all_sources
-
 profiles:
   daily_48h_all_sources:
-    channel:
-      channel_name: ManiVerse - AI
-      content_promise: Engaging AI news roundups that explain what changed, why it matters, and what to watch next.
-      audience: AI-curious professionals
-      allowed_topics:
-        - AI agents
-        - LLM releases
-        - AI coding tools
-        - AI research
-        - AI product launches
-        - AI safety
-      excluded_topics:
-        - crypto
-        - memecoin
-        - sports
-        - celebrity
-
-    orchestration:
-      logging:
-        level: INFO
-        profile: summary
-        file_enabled: true
-        console_enabled: true
-        max_bytes: 5000000
-        backup_count: 3
-        runtime_logger_name: ai_content_creation.runtime
-        dependency_levels:
-          httpx: WARNING
-          httpcore: WARNING
-          openai: WARNING
-          urllib3: WARNING
-
-    evidence_prep:
-      content_cleaning:
-        enabled: true
-        strip_html_markup: true
-        rules:
-          - name: times_group_article_chrome
-            domain_suffixes:
-              - economictimes.indiatimes.com
-              - timesofindia.indiatimes.com
-            leading_markers:
-              - TIMESOFINDIA.COM
-            trailing_markers:
-              - Add as a Reliable and Trusted News Source
-              - Read More News on
-              - Prime Exclusives
-            remove_phrases:
-              - Listen to this article in summarized format
-              - Listen Loading...
-              - Live Events
-            remove_patterns:
-              - '(?i)\bALSO READ:\s+.{1,180}?(?=\b(?:Who is|How did|What is|Building |Finding |Since then|Despite|The inspiration|She |He |According to)\b)'
-          - name: the_verge_article_chrome
-            domain_suffixes:
-              - theverge.com
-            leading_markers:
-              - Link Share Gift
-            trailing_markers:
-              - Follow topics and authors from this story
-            remove_phrases:
-              - Previous Next
-            remove_patterns:
-              - "(?is)^.*?\\b[A-Z][A-Za-z .’'-]{2,90}\\s+is\\s+(?:the\\s+Verge(?:’s|'s)\\s+)?[^.]{0,140}\\b(?:editor|reporter|writer|reviewer|correspondent)\\b[^.]{0,180}\\.\\s*"
-              - '(?is)^\s*(?:He|She|They|His|Her|Their)\b[^.]{0,300}\.\s*'
-              - '(?i)\b\d+\s*/\s*\d+\b'
-          - name: techcrunch_article_chrome
-            domain_suffixes:
-              - techcrunch.com
-            trailing_markers:
-              - When you purchase through links in our articles
-              - Topics AI
-            remove_patterns:
-              - '(?i)\bImage Credits?:\s*[^.]{0,180}'
-
-    editorial_triage:
-      enabled: true
-      mode: authoritative
-      provider: openai
-      model: gpt-4o-mini
-      prompt_version: v1
-      temperature: 0.1
-      batch_size: 10
-      max_record_context_chars: 300000
-      max_batch_context_chars: 450000
-      max_attempts: 3
-      story_mapping_actions:
-        - advance
-        - reserve
-
-    story_mapping:
-      embedding_model: all-MiniLM-L6-v2
-      use_llm_story_labels: true
-      clustering:
-        max_pair_hours: null
-        candidate_neighbors_per_record: 8
-        candidate_similarity_floor: 0.58
-        fingerprint_chunk_chars: 1800
-        max_fingerprint_chunks_per_record: 128
-        max_candidate_pairs: 2000
-        event_identity:
-          enabled: true
-          provider: openai
-          model: gpt-4o-mini
-          prompt_version: v1
-          temperature: 0.0
-          worker_count: 6
-          max_attempts: 3
-          max_record_chars: 500000
-        pair_adjudication:
-          enabled: true
-          provider: openai
-          model: gpt-4o-mini
-          prompt_version: v1
-          temperature: 0.0
-          batch_size: 1
-          worker_count: 6
-          max_attempts: 3
-          max_batch_chars: 180000
-          max_single_pair_chars: 300000
-          confirm_same_event_with_full_records: true
-        cluster_reconciliation:
-          enabled: true
-          provider: openai
-          model: gpt-4o-mini
-          prompt_version: v1
-          temperature: 0.0
-          worker_count: 4
-          max_attempts: 3
-          max_component_chars: 1500000
-          max_component_tokens: 100000
-          tokenizer_encoding: o200k_base
-      ranking:
-        mode: telemetry_only
-      triage_policy:
-        required: true
-        eligible_actions:
-          - advance
-          - reserve
-      story_label:
-        provider: openai
-        model: gpt-4o-mini
-        prompt_version: v1
-        worker_count: 10
-        temperature: 0.15
-        max_story_context_chars: 500000
-
-    editorial_selection:
-      target_format: roundup
-      provider: openai
-      model: gpt-4o-mini
-      prompt_version: v1
-      temperature: 0.2
-      min_stories: 3
-      max_stories: 5
-      max_candidate_stories: 40
-      screening_shortlist_per_batch: 15
-      target_finalist_stories: 12
-      max_screening_rounds: 4
-      max_story_context_chars: 500000
-      max_call_context_chars: 650000
-      max_story_context_tokens: 90000
-      max_call_context_tokens: 100000
-      tokenizer_encoding: o200k_base
-      max_attempts: 3
-      slate_review:
-        enabled: true
-        prompt_version: v1
-        max_attempts: 3
-        recovery_candidate_count: 4
-    video_packaging:
-      target_format: roundup
-      roundup:
-        min_stories: 3
-        max_stories: 5
-        duration_mode: content_driven
-
-    script_generation:
-      provider: openai
-      model: gpt-4o
-      prompt_version: v1
-      temperature: 0.4
-      structured_output:
-        method: json_schema
-        strict: true
-      provider_options:
-        request_timeout_seconds: 300
-      llm_roles:
-        story_writer:
-          provider: moonshot
-          model: kimi-k3
-          temperature: 1.0
-          provider_options:
-            thinking: null
-            omit_temperature: true
-            request_timeout_seconds: 360
-          structured_output:
-            method: json_schema
-            strict: true
-          llm_retry:
-            enabled: true
-            max_attempts: 1
-            max_structured_output_attempts: 2
-            initial_delay_seconds: 1.0
-            max_delay_seconds: 10.0
-        story_reviewer:
-          provider: moonshot
-          model: kimi-k3
-          temperature: 1.0
-          provider_options:
-            thinking: null
-            omit_temperature: true
-            request_timeout_seconds: 480
-          structured_output:
-            method: json_schema
-            strict: true
-          llm_retry:
-            enabled: true
-            max_attempts: 1
-            max_structured_output_attempts: 2
-            initial_delay_seconds: 1.0
-            max_delay_seconds: 10.0
-        bookend_writer:
-          provider: moonshot
-          model: kimi-k3
-          temperature: 1.0
-          provider_options:
-            thinking: null
-            omit_temperature: true
-            request_timeout_seconds: 360
-          structured_output:
-            method: json_schema
-            strict: true
-          llm_retry:
-            enabled: true
-            max_attempts: 1
-            max_structured_output_attempts: 2
-            initial_delay_seconds: 1.0
-            max_delay_seconds: 10.0
-        bookend_reviewer:
-          provider: moonshot
-          model: kimi-k3
-          temperature: 1.0
-          provider_options:
-            thinking: null
-            omit_temperature: true
-            request_timeout_seconds: 480
-          structured_output:
-            method: json_schema
-            strict: true
-          llm_retry:
-            enabled: true
-            max_attempts: 1
-            max_structured_output_attempts: 2
-            initial_delay_seconds: 1.0
-            max_delay_seconds: 10.0
-      diagnostic_words_per_minute: 140
-      worker_count: 2
-      title_card_seconds: 2.8
-      llm_retry:
-        enabled: true
-        max_attempts: 5
-        max_structured_output_attempts: 2
-        initial_delay_seconds: 1.0
-        max_delay_seconds: 30.0
-      writing_guidance:
-        intro:
-          suggested_words: 40
-          beat_guidance: Use two or three purposeful beats.
-          editorial_goal: Open on one episode-specific curiosity gap and make one concise promise without listing every headline.
-        lead:
-          suggested_words: 190
-          beat_guidance: Use as many distinct beats as the explanation naturally needs.
-          editorial_goal: Earn lead status through a developed mechanism or conflict, one concrete anchor, and a clear payoff without padding.
-        major:
-          suggested_words: 135
-          beat_guidance: Use a compact sequence of distinct explanatory beats.
-          editorial_goal: Deliver one compact complete mini-arc around the distinctive anchor.
-        brief:
-          suggested_words: 85
-          beat_guidance: Use one reveal and one useful interpretation, then leave before the conclusion repeats.
-          editorial_goal: Make one concrete update memorable and remain visibly lighter than lead and major stories.
-        closing:
-          suggested_words: 25
-          beat_guidance: Use one or two concise beats.
-          editorial_goal: End on one earned episode-specific observation or a clean signoff, never a reusable AI slogan.
-      connector:
-        suggested_words: 8
-        beat_guidance: Use one natural spoken line.
-        editorial_goal: Introduce the next story while its title motion appears.
-      script_style:
-        audience: AI-curious professionals
-        tone: creator-led, clear, energetic, curious, and grounded
-        avoid:
-          - dry technical reporting
-          - overhype
-          - fake certainty
-          - source-by-source summaries
-          - stock hype phrases used instead of a concrete idea
-          - generic universal conclusions about AI changing everything
-      channel_voice:
-        persona: curious technical friend with a skeptical eyebrow
-        worldview:
-          - optimistic about useful progress
-          - skeptical of marketing
-          - practical consequences over abstract importance
-        energy: energetic but not frantic
-        opinion:
-          allow_first_person_editorial_opinion: true
-          forbid_fabricated_personal_experience: true
-        humor:
-          enabled: true
-          modes:
-            - observational
-            - dry
-            - self_aware
-            - absurd_analogy
-          density: restrained
-          allow_callbacks: true
-          avoid:
-            - forced meme references
-            - cruelty
-            - unsupported accusations
-        language:
-          prefer:
-            - concrete verbs
-            - varied sentence length
-            - plain-language mental models
-          avoid:
-            - corporate press-release language
-            - generic importance claims
-            - article-summary transitions
-          profanity_mode: avoid
-          profanity_terms:
-            - fuck
-            - fucking
-            - shit
-            - bullshit
-      storytelling:
-        require_story_engine: true
-        require_viewer_payoff: true
-        allow_optional_truth_details: true
-        forbid_source_order_summary: true
-        max_must_communicate_truth_items: 4
-        max_optional_truth_items: 10
-      source_context:
-        max_story_context_chars: 500000
-        max_episode_context_chars: 1500000
-      source_policy:
-        use_selected_stories_only: true
-        include_full_records: true
-      review:
-        enabled: true
-        max_revision_passes: 1
-        quality_criteria:
-          - an immediate story-specific hook
-          - a concrete explanation a smart non-specialist can follow
-          - a memorable creator viewpoint or reaction
-          - natural spoken rhythm with varied sentence length
-          - a satisfying viewer payoff without filler
-          - materially faithful use of the assigned story records
-          - a story-specific concrete anchor rather than a reusable category summary
-          - preservation of source meaning, including combined versus individual evidence and measured versus claimed results
-          - preservation of current versus planned state and source terminology such as open-weight versus open-source
-          - exact quotations and preserved attribution for source opinions, forecasts, allegations, and marketing claims
-          - an honest curated-roundup frame when the selected stories do not share one concrete tension
-          - one focused cold-open idea instead of a three-headline intro list
-          - creative-device labels that are actually expressed in the narration
-          - analogies whose scale and mechanism remain materially truthful
-          - clear lead, major, and brief differentiation without numerical quotas
-          - connectors whose spoken transition and title card introduce the same target story
-          - audiovisual beats that suggest useful visuals
-
-    metadata_creator:
-      provider: moonshot
-      model: kimi-k3
-      prompt_version: v1
-      temperature: 1.0
-      provider_options:
-        thinking: null
-        omit_temperature: true
-        request_timeout_seconds: 600
-      structured_output:
-        method: json_schema
-        strict: true
-      llm_retry:
-        enabled: true
-        max_attempts: 2
-        max_structured_output_attempts: 2
-        initial_delay_seconds: 1.0
-        max_delay_seconds: 10.0
-      metadata_policy:
-        title_option_count: 8
-        thumbnail_text_option_count: 5
-        max_tags: 20
-        include_source_urls: true
-        chapter_title_max_chars: 64
-        blocked_tags:
-          - github.io
-          - unknown
-          - none
-      memory_context:
-        recent_title_angles: []
-
-    metadata_finalizer:
-      require_all_script_sections: true
-      first_chapter_tolerance_seconds: 0.25
-
-    visuals:
-      asset_catalog:
-        force: true
-        output_dir: ""
-        research_mode: trusted_only
-        require_real_anchor_per_story: true
-        collect_source_pages: true
-        collect_source_images: true
-        collect_source_videos: true
-        collect_resolvable_logos: true
-        local_logo_dir: ""
-        page_metadata:
-          enabled: true
-          request_timeout_seconds: 15
-          max_html_bytes: 2000000
-          max_image_bytes: 20000000
-          max_video_bytes: 120000000
-          worker_count: 4
-          min_image_short_edge: 360
-          min_image_pixel_area: 450000
-          min_image_aspect_ratio: 0.2
-          max_image_aspect_ratio: 5.0
-          near_duplicate_hash_distance: 5
-          max_images_per_record: 12
-          max_image_candidates: 48
-          min_video_width: 720
-          min_video_height: 404
-          max_videos_per_record: 1
-          max_video_candidates: 8
-          ffprobe_path: ffprobe
-          user_agent: "AIContentCreation/2.0 (visual-asset-catalog)"
-        source_linked_video:
-          enabled: true
-          providers:
-            - youtube
-            - vimeo
-            - x
-          yt_dlp_path: yt-dlp
-          download_timeout_seconds: 180
-          max_links_per_record: 3
-          max_duration_seconds: 1800
-          max_height: 1080
-        contact_sheet:
-          enabled: true
-          columns: 3
-          tile_width: 480
-          tile_height: 270
-
-      planner:
-        provider: openai
-        model: gpt-4o-mini
-        prompt_version: v1
-        temperature: 0.3
-        max_attempts: 2
-        diagnostic_words_per_minute: 150
-        allow_deterministic_story_fallbacks: false
-        require_asset_catalog: true
-        require_real_anchor_per_story: true
-        real_anchor_failure_mode: warn
-        max_automatic_timing_repair_seconds: 0.5
-        style:
-          style_id: editorial_minimal
-          visual_language: asset-first editorial YouTube visuals with clean typography and generous whitespace
-          motion_style: restrained editorial reveals, purposeful source zooms, subtle parallax, and short chapter wipes
-          color_system: warm paper, near-black ink, and one restrained burnt-orange accent
-          typography: expressive editorial serif headlines with condensed uppercase sans labels
-          background_color: "#f4efe6"
-          text_color: "#171611"
-          accent_color: "#bd4e2f"
-          muted_color: "#6f6a61"
-          editorial_font: Iowan Old Style, Baskerville, Georgia, Times New Roman, serif
-          sans_font: Avenir Next Condensed, Avenir Next, Helvetica Neue, Arial, sans-serif
-          surface_treatment: generous whitespace, subtle paper texture, thin rules, and no dashboard chrome
-          card_policy: no decorative cards; use a surface only when it represents a real browser, document, or interface
-          avoid:
-            - PPT-style cards
-            - dashboard panels and decorative pills
-            - static slide-deck layouts
-            - walls of text
-            - tiny explanatory labels
-            - decorative charts without source-supported data
-        visual_mix_policy:
-          target_max_text_like_scene_ratio: 0.30
-          target_max_text_like_duration_ratio: 0.30
-          target_max_text_like_scenes_per_story: 2
-          prefer_catalog_assets_for_concrete_subjects: true
-          prefer_explanatory_motion_for_mechanisms: true
-          kinetic_text_is_supporting_only: true
-        visual_editor:
-          enabled: true
-          max_passes: 1
-          max_story_calls: 8
-          review_all_stories: false
-          failure_mode: keep_original
-        scene_policy:
-          target_aspect_ratio: "16:9"
-          max_scenes: 64
-          min_scene_seconds: 3
-          max_scene_seconds: 14
-          hard_max_scene_seconds: 16
-          hard_cap_tolerance_seconds: 0.25
-          semantic_min_scene_seconds: 5
-          semantic_target_scene_seconds: 9
-          semantic_max_units_per_scene: 4
-          compact_per_chunk_scenes: true
-          unit_assignment_mode: one_scene_per_script_unit
-          duplicate_subscene_policy: continue
-          min_scenes_per_story: 3
-          max_scenes_per_story: 12
-          max_source_article_scenes: 20
-          max_context_image_scenes: 14
-          max_broll_video_scenes: 4
-          max_logo_reveal_scenes: 24
-          max_editorial_text_scenes: 32
-          max_simple_explainer_scenes: 24
-          max_story_transition_scenes: 12
-          max_kinetic_type_scenes: 32
-          max_bullet_build_scenes: 24
-          max_quote_or_claim_highlight_scenes: 18
-          max_entity_compare_scenes: 16
-          max_recap_sequence_scenes: 8
-          max_data_counter_scenes: 16
-          max_trend_line_scenes: 16
-          max_bar_chart_scenes: 16
-          max_bar_race_scenes: 12
-          max_ranked_list_scenes: 12
-          max_benchmark_delta_scenes: 12
-          max_ecosystem_map_scenes: 16
-          max_architecture_flow_scenes: 16
-          max_process_zoom_scenes: 12
-          max_browser_walkthrough_scenes: 12
-          max_decision_tree_scenes: 12
-          max_capability_matrix_scenes: 12
-          max_timeline_zoom_scenes: 12
-          max_document_stack_scenes: 12
-          max_signal_radar_scenes: 12
-          max_interface_transform_scenes: 12
-          max_transition_stinger_scenes: 12
-          max_consecutive_same_kind: 2
-          allowed_render_kinds:
-            - source_article_scene
-            - context_image_scene
-            - broll_video_scene
-            - logo_reveal_scene
-            - editorial_text_scene
-            - simple_explainer_scene
-            - story_transition_scene
-        visual_capabilities:
-          editorial_text_scene:
-            description: Present one concise editorial idea with large expressive typography, generous whitespace, and one restrained accent.
-            best_for:
-              - short hooks and punchlines
-              - one-sentence implications
-              - clean visual punctuation between richer asset scenes
-            required_payload_fields:
-              - headline
-              - accent_words
-              - composition
-              - motion_style
-            avoid_when:
-              - the narration names a source, product image, or identity that can be shown
-              - more than one visual idea is needed
-              - the headline would repeat a full narration paragraph
-            render_notes: Use a short headline, optional eyebrow/supporting line, and no card container. Keep one visual idea on screen.
-          simple_explainer_scene:
-            description: Explain one relationship or short process with two to four clean labels, restrained connectors, and sequential focus motion.
-            best_for:
-              - small workflows
-              - cause and effect
-              - two-to-four entity relationships
-              - before-to-after conceptual changes
-            required_payload_fields:
-              - headline
-              - items
-              - orientation
-              - motion_style
-            avoid_when:
-              - a real source or product image communicates the beat better
-              - the relationship is not supported by the script beat
-              - more than four nodes are required
-            render_notes: Use 2-4 short item objects with a label and optional detail. Keep labels large and connectors secondary; never build a dashboard.
-          story_transition_scene:
-            description: Introduce the next roundup story with a clean editorial title, optional story number, and a brief transition motion.
-            best_for:
-              - the first aligned beat of each selected story
-              - clear chapter boundaries in a roundup
-            required_payload_fields:
-              - headline
-              - accent_words
-              - motion_style
-            avoid_when:
-              - the scene is not the deterministic first beat of a story
-              - the title would be duplicated elsewhere
-            render_notes: Overlay the complete story title on the story planner's selected opening media when available; otherwise use a short clean reset. Do not use a card.
-          source_article_scene:
-            description: Show a real source webpage, article, blog, paper, or report as visual proof for a narration beat.
-            best_for:
-              - source-backed details
-              - headline reveals
-              - important claims that benefit from visible provenance
-              - showing article context while the narrator explains the story
-            required_payload_fields:
-              - url
-              - source_record_key
-              - target_text
-              - highlight_phrases
-              - crop_strategy
-              - overlay_headline
-              - motion_style
-            avoid_when:
-              - no selected source URL exists
-              - the narration is a broad transition rather than a source-specific point
-              - the scene would become a static slide with too much text
-            render_notes: Copy target_text exactly from the selected record's screenshot_target_candidates so browser capture can locate it. Use article zooms, headline/body focus, and highlight scans. When a verified source_page asset exists, include its asset_id. Never invent URLs, asset IDs, or quotes.
-          context_image_scene:
-            description: Show a verified story-owned source image that directly supports the active narration beat.
-            best_for:
-              - tangible physical context
-              - people using technology
-              - labs, offices, devices, hardware, data centers, and cities
-              - visual breathing room between dense diagrams and sources
-            required_payload_fields:
-              - asset_id
-              - shot_style
-              - overlay_headline
-              - motion_style
-              - show_overlay
-            payload_field_contract:
-              asset_id: "optional verified source_image asset id; when present, discovery fields may be empty"
-              search_queries: "list[str] of concrete, camera-depictable subjects or actions"
-              must_show: "list[str] of visible requirements"
-              must_avoid: "list[str] of visible conflicts to reject"
-            avoid_when:
-              - no verified source_image asset exists in this story catalog
-              - a source article is needed as proof
-              - the image would imply an unsupported exact event
-              - the request is generic AI stock imagery
-              - the visible requirement is a statistic, employee count, internal mental state, or abstract relationship that a photograph cannot directly show
-              - a named software or product interface is required but no exact media for that identity is available
-            render_notes: Use only a relevant verified source_image asset_id in trusted-catalog production mode. Do not request generic external imagery.
-          broll_video_scene:
-            description: Show a short trusted source-owned video clip of a concrete action, environment, device, workflow, product, or infrastructure moment.
-            best_for:
-              - server rooms, offices, devices, robotics, labs, manufacturing, and infrastructure
-              - physical actions and environments that benefit from real motion
-              - short contextual bridges tied directly to narration
-            required_payload_fields:
-              - asset_id
-              - shot_style
-              - overlay_headline
-              - motion_style
-              - show_overlay
-            payload_field_contract:
-              asset_id: "exact verified source_video asset id from this story catalog"
-            avoid_when:
-              - no verified source_video asset exists in this story catalog
-              - footage would imply an event not represented by the selected source
-              - a source, chart, metric, logo, or diagram is clearer
-            render_notes: Use only a verified story-owned source_video asset_id in trusted-catalog mode. Media discovery prepares a short muted clip and narration remains the only audio.
-          logo_reveal_scene:
-            description: Use company, product, model, or platform logos/entities as a quick YouTube-style identity moment.
-            best_for:
-              - introducing a company or product
-              - contrasting two entities
-              - moving between stories
-              - creating quick recognition without a full screenshot
-            required_payload_fields:
-              - entities
-              - primary_entity
-              - logo_strategy
-              - companion_text
-              - motion_style
-            avoid_when:
-              - the story is about a source claim that needs article grounding
-              - the entity is unclear
-              - the companion text would duplicate a full sentence from narration
-            render_notes: Prefer short companion text, logo stacks, spotlights, and pop/slide reveals. Include the verified logo asset_id when the catalog supplies one.
-          kinetic_type_scene:
-            description: Animate short phrases from the narration with typewriter, word snap, highlight sweep, or similar motion.
-            best_for:
-              - retention beats
-              - transitions
-              - key takeaways
-              - moments where no source screenshot or logo is the right visual
-            required_payload_fields:
-              - phrases
-              - emphasis_words
-              - animation_style
-              - background_motif
-            avoid_when:
-              - the phrase is too long for on-screen reading
-              - the scene would become a wall of text
-              - a source article is needed for credibility at that moment
-            render_notes: Keep phrases short and punchy. Use motion, emphasis, and atmosphere rather than cards.
-          bullet_build_scene:
-            description: Reveal two to four short narration points one by one with a dynamic headline and progress rhythm.
-            best_for:
-              - explaining multiple points in one narration beat
-              - showing a sequence of implications
-              - turning dense narration into readable visual beats
-              - moments where the viewer should track a list without seeing a static slide
-            required_payload_fields:
-              - headline
-              - points
-              - emphasis_words
-              - build_style
-              - background_motif
-            avoid_when:
-              - there is only one short idea
-              - a source screenshot is needed for credibility
-              - the points would duplicate a full paragraph from narration
-            render_notes: Use staggered point reveals, numbered pills, and animated emphasis. Keep each point short.
-          quote_or_claim_highlight_scene:
-            description: Show a source screenshot with one highlighted claim, quote, number, or caution callout.
-            best_for:
-              - source-backed claims
-              - important caveats
-              - numbers or reported details
-              - moments where screenshot plus callout is better than a plain article view
-            required_payload_fields:
-              - url
-              - source_record_key
-              - claim_text
-              - supporting_text
-              - highlight_phrases
-              - overlay_headline
-              - motion_style
-            avoid_when:
-              - no selected source URL exists
-              - the narration is a broad transition
-              - the claim cannot be tied to a provided source record
-            render_notes: Copy supporting_text exactly from the selected record's screenshot_target_candidates. Use the source screenshot as the background proof layer with a large editorial callout.
-          entity_compare_scene:
-            description: Compare two to four companies, products, platforms, or models with logo-style tokens and short contrasting labels.
-            best_for:
-              - Apple versus Google moments
-              - OpenAI versus Anthropic market positioning
-              - platform or model ecosystem comparisons
-              - recap beats where entities need contrast
-            required_payload_fields:
-              - headline
-              - entities
-              - comparison_axis
-              - entity_notes
-              - motion_style
-            avoid_when:
-              - there is only one entity
-              - a real source screenshot is more important
-              - the comparison would invent an unsupported rivalry
-            render_notes: Use side-by-side or stacked logo/entity tokens with short labels, not paragraphs.
-          recap_sequence_scene:
-            description: Build a fast closing or transition recap with multiple story beats appearing in sequence.
-            best_for:
-              - closing summaries
-              - roundup recap sections
-              - turning many short closing sentences into matched visual beats
-              - episode-level takeaways
-            required_payload_fields:
-              - headline
-              - recap_items
-              - final_takeaway
-              - motion_style
-              - background_motif
-            avoid_when:
-              - the narration is source-specific
-              - the scene would need full article proof
-            render_notes: Reveal recap items progressively and end on the final takeaway. This replaces generic closing kinetic text.
-          data_counter_scene:
-            description: Animate one to three important metrics, dates, costs, speedups, valuations, model sizes, or adoption numbers.
-            best_for:
-              - numbers that should feel concrete
-              - reported metrics, dates, prices, costs, speedups, or percentages
-              - turning numeric narration into a visual moment
-              - quick evidence-backed scale emphasis
-            required_payload_fields:
-              - headline
-              - metrics
-              - emphasis_label
-              - motion_style
-              - background_motif
-            avoid_when:
-              - the narration has no meaningful number, date, or measurable scale
-              - the value would need to be invented
-              - a source screenshot is more important for credibility
-            render_notes: "Use animated counters and scale bars. metrics must contain 1-3 objects shaped {label, value, unit?, context?}. Put exact supporting metric truth IDs in scene.evidence_truth_ids and copy value_text without inference."
-          trend_line_scene:
-            description: Animate a rising, falling, volatile, or pressure-building trend line for momentum or competition beats.
-            best_for:
-              - skyrocketing, surging, falling behind, pressure rising, race heating up
-              - market momentum, adoption momentum, cost pressure, model competition
-              - showing direction of change when exact chart data is not required
-            required_payload_fields:
-              - headline
-              - trend_direction
-              - y_axis_label
-              - x_axis_label
-              - annotations
-              - motion_style
-            avoid_when:
-              - the narration does not imply direction or momentum
-              - a precise quantitative chart would be misleading
-              - the scene would imply real data points not provided
-            render_notes: "Use a stylized direction, not fake data points. trend_direction must be rising, falling, volatile, pressure_building, or flat_then_jump; annotations must be non-empty story-specific strings."
-          bar_chart_scene:
-            description: Show two to five bars for concrete comparisons such as cost, usage, latency, funding, model size, or adoption.
-            best_for:
-              - comparing numeric values across entities or categories
-              - making scale differences visible
-              - showing cost, latency, adoption, funding, valuation, benchmark, or capacity comparisons
-            required_payload_fields:
-              - headline
-              - bars
-              - unit
-              - emphasis_label
-              - motion_style
-              - background_motif
-            avoid_when:
-              - there are no comparable values
-              - the values would need to be invented
-              - a source screenshot is more important for credibility
-            render_notes: "bars must contain 2-5 objects shaped {label, value, display_value?, context?}. value must be a source-supported number; never create relative or illustrative numbers."
-          bar_race_scene:
-            description: Animate ranked bars changing over time or across stages to show a race, rollout, adoption shift, or competitive movement.
-            best_for:
-              - race heating up moments
-              - adoption or market movement
-              - before-to-after comparison across multiple entities
-              - competition among companies, models, platforms, or products
-            required_payload_fields:
-              - headline
-              - items
-              - unit
-              - leader_label
-              - motion_style
-              - background_motif
-            avoid_when:
-              - there is no change or ranking implied
-              - the bars would suggest precise data not present
-            render_notes: "items must contain 2-5 objects shaped {label, start_value, end_value, display_value?}. Both values must be explicitly supported; never synthesize relative values."
-          ranked_list_scene:
-            description: Show a fast top-three or top-five ranked list with large rank numbers, compact entity labels, and short details.
-            best_for:
-              - top tools, models, risks, reasons, or takeaways
-              - ordered implications
-              - fast editorial ranking moments
-            required_payload_fields:
-              - headline
-              - items
-              - emphasis_label
-              - motion_style
-              - background_motif
-            avoid_when:
-              - the narration is not actually ranking or ordering items
-              - the ranking would imply unsupported certainty
-            render_notes: "items must contain 2-5 objects shaped {label, rank?, value?, detail?}. Use this only when the supplied material explicitly orders the items."
-          benchmark_delta_scene:
-            description: Show before/after or model-vs-model deltas with arrows, percentage changes, and short interpretation labels.
-            best_for:
-              - speedups
-              - cost reductions
-              - benchmark improvements
-              - latency, accuracy, context, price, or capability deltas
-            required_payload_fields:
-              - headline
-              - benchmarks
-              - winner_label
-              - motion_style
-              - background_motif
-            avoid_when:
-              - there is no measurable delta
-              - the comparison is not grounded in the script or records
-            render_notes: "benchmarks must contain 1-3 objects shaped {label, before, after, delta, unit?, context?}; before, after, and delta are all required and source-supported."
-          ecosystem_map_scene:
-            description: Show entities, products, platforms, developers, users, and clouds as connected nodes in a simple motion map.
-            best_for:
-              - multi-entity platform stories
-              - Apple, Google, OpenAI, Anthropic, developers, apps, SDKs, users
-              - explaining who connects to whom
-              - showing ecosystem relationships without paragraphs
-            required_payload_fields:
-              - headline
-              - nodes
-              - edges
-              - focus_entity
-              - motion_style
-            avoid_when:
-              - there is only one meaningful entity
-              - the relationship would be invented
-              - a source screenshot is the clearer visual
-            render_notes: "nodes must contain 2-6 objects shaped {id, label, role?}; edges must contain objects shaped {from, to, label} using those exact node ids; focus_entity must match a node label."
-          architecture_flow_scene:
-            description: Show a technical or workflow pipeline as connected steps, such as app to SDK to model to user result.
-            best_for:
-              - SDK/API/model/app/user flows
-              - training or deployment pipelines
-              - agent workflows
-              - cloud plus on-device architecture explanations
-            required_payload_fields:
-              - headline
-              - steps
-              - flow_direction
-              - active_step_label
-              - motion_style
-            avoid_when:
-              - the narration is just a headline or transition
-              - the steps would be speculative
-              - the sequence has fewer than two concrete stages
-            render_notes: "steps must contain 2-6 objects shaped {label, detail?}; active_step_label must exactly match one step label. Use only a flow stated by the script or records."
-          process_zoom_scene:
-            description: Zoom into one important step in a workflow or architecture, showing the surrounding process as context and the active step as the hero.
-            best_for:
-              - explaining one critical system stage
-              - showing where agents, APIs, SDKs, model calls, memory, tools, or deployment fit
-              - making a complex process feel tangible without showing every detail equally
-            required_payload_fields:
-              - headline
-              - steps
-              - focus_step_label
-              - zoom_note
-              - motion_style
-              - background_motif
-            avoid_when:
-              - there is no clear active step
-              - the process has fewer than two concrete stages
-            render_notes: "steps must contain 2-6 objects shaped {label, detail?}; focus_step_label must exactly match one step label; zoom_note must explain that supported step."
-          browser_walkthrough_scene:
-            description: Show a guided webpage or product-page walkthrough with viewport panels, scroll markers, and focused callouts.
-            best_for:
-              - source pages that need more motion than a static screenshot
-              - product pages, docs, release pages, GitHub pages, or launch posts
-              - showing headline to feature to proof progression
-            required_payload_fields:
-              - headline
-              - url
-              - walkthrough_steps
-              - focus_text
-              - motion_style
-              - background_motif
-            avoid_when:
-              - there is no URL or page context
-              - the narration is abstract rather than page-specific
-              - a quote highlight is more direct
-            render_notes: "Use a selected-record url and source_record_key. walkthrough_steps must contain 2-5 objects shaped {label, detail? or target_text?}; focus_text must identify the supplied page detail."
-          decision_tree_scene:
-            description: Show branching decisions for routing, safety gates, agent choices, product strategy, or model selection.
-            best_for:
-              - agent routing
-              - model selection
-              - safety or policy gates
-              - strategic tradeoffs
-              - if-this-then-that explanations
-            required_payload_fields:
-              - headline
-              - root_label
-              - branches
-              - selected_path_label
-              - motion_style
-              - background_motif
-            avoid_when:
-              - there is no meaningful choice or branch
-              - the branching would invent hidden logic
-            render_notes: "branches must contain 2-4 objects shaped {label, outcome?, risk?}; selected_path_label must exactly match one branch label or outcome. Never invent hidden choices."
-          capability_matrix_scene:
-            description: Compare products, models, or platforms across capability dimensions such as speed, cost, context, multimodal support, and tooling.
-            best_for:
-              - model or product comparisons
-              - capability tradeoffs
-              - platform positioning
-              - viewer decision support
-            required_payload_fields:
-              - headline
-              - columns
-              - rows
-              - highlight_cell
-              - motion_style
-              - background_motif
-            avoid_when:
-              - there are no comparable dimensions
-              - ratings would imply unsupported precision
-            render_notes: "columns must contain 2-4 labels; rows must contain 2-5 objects shaped {label, values, highlight?}, where values has exactly one supported value per column."
-          timeline_zoom_scene:
-            description: Show a short sequence of events, then zoom into the critical event that changes the story.
-            best_for:
-              - launch sequence
-              - follow-up events
-              - date-based story arcs
-              - before and after context
-            required_payload_fields:
-              - headline
-              - events
-              - focus_event_label
-              - zoom_note
-              - motion_style
-              - background_motif
-            avoid_when:
-              - the sequence would become a generic timeline
-              - there are not at least two meaningful events
-            render_notes: "events must contain 2-5 objects shaped {label, date?, detail?}; focus_event_label must exactly match an event label and zoom_note must describe that supported event."
-          document_stack_scene:
-            description: Show reports, papers, release notes, GitHub issues, docs, or source documents as layered evidence cards with parallax motion.
-            best_for:
-              - multiple source records
-              - research or documentation-heavy stories
-              - evidence stacks
-              - showing that several documents point in the same direction
-            required_payload_fields:
-              - headline
-              - documents
-              - focus_document_label
-              - motion_style
-              - background_motif
-            avoid_when:
-              - there is only one source and a source screenshot would be clearer
-              - document labels would be invented
-            render_notes: "documents must contain 1-5 objects shaped {title, source, document_type?, date?, detail?}; focus_document_label must exactly match one document title."
-          signal_radar_scene:
-            description: Show a scanning radar-like field for emerging signals, companies, topics, risks, or watchlist items.
-            best_for:
-              - watch this trend
-              - emerging signal
-              - multiple weak signals
-              - market or ecosystem sensing
-            required_payload_fields:
-              - headline
-              - signals
-              - scan_label
-              - motion_style
-              - background_motif
-            avoid_when:
-              - the narration needs source proof rather than signal framing
-              - signals would be vague labels without context
-            render_notes: "signals must contain 2-6 objects shaped {label, strength, detail?}; strength is a source-supported 0-100 value, not an invented confidence score. If no numeric strength exists, use another scene kind."
-          interface_transform_scene:
-            description: Show a before/after interface or workflow transformation, such as chat to agent workflow or manual process to automated tool loop.
-            best_for:
-              - AI moves from chat to workflow
-              - manual to automated transformation
-              - old UI versus new UI
-              - productivity workflow changes
-            required_payload_fields:
-              - headline
-              - before
-              - after
-              - transformation_label
-              - motion_style
-              - background_motif
-            avoid_when:
-              - there is no before/after contrast
-              - the visual would imply a real UI that is not shown
-            render_notes: "before and after must each be objects shaped {label, items}, with at least two supplied items; transformation_label must state the supported change."
-          transition_stinger_scene:
-            description: Create a short high-energy motion bumper between stories or visual sections using abstract newsroom graphics, entity hints, and one compact label.
-            best_for:
-              - story-to-story transitions
-              - tempo resets
-              - brief visual breaths between dense source or diagram scenes
-              - setting up the next story without creating a static title card
-            required_payload_fields:
-              - transition_label
-              - subtitle
-              - motion_style
-              - background_motif
-            avoid_when:
-              - the narration is making a source-specific claim
-              - the scene would last longer than a short transition beat
-              - a real article, logo, chart, map, or flow would explain the moment better
-            render_notes: Keep it short, kinetic, and cinematic. This is a motion bumper, not a title card.
-        source_policy:
-          use_selected_stories_only: true
-          include_full_records: true
-          max_story_context_chars: 500000
-
-      media_discovery:
-        force: true
-        output_dir: ""
-        user_agent: "AIContentCreation/2.0 (visual-media-discovery)"
-        request_timeout_seconds: 25
-        download_timeout_seconds: 90
-        max_download_bytes: 250000000
-        ffmpeg_path: ffmpeg
-        ffprobe_path: ffprobe
-        video_output_width: 1280
-        video_clip_padding_seconds: 0.75
-        max_queries_per_scene: 3
-        max_candidates_per_query: 8
-        candidate_catalog_limit_per_scene: 12
-        min_image_width: 1280
-        min_image_height: 720
-        preferred_aspect_ratio: 1.7777777778
-        trusted_catalog_only: true
-        allow_query_fallback: false
-        reuse_equivalent_image_requests: true
-        max_fallback_requests: 0
-        unresolved_fallback_render_kind: null
-        semantic_verification:
-          enabled: false
-          provider: openai
-          model: gpt-4o-mini
-          prompt_version: v1
-          temperature: 0.0
-          max_candidates_per_scene: 4
-          max_attempts: 2
-          verify_video_clip_frames: true
-          max_video_sample_frames: 5
-          video_clip_failure_policy: reject
-        providers:
-          wikimedia:
-            enabled: true
-            endpoint: "https://commons.wikimedia.org/w/api.php"
-            include_images: true
-            include_videos: false
-          pexels:
-            enabled: false
-            api_key_env: PEXELS_API_KEY
-            photo_endpoint: "https://api.pexels.com/v1/search"
-            video_endpoint: "https://api.pexels.com/videos/search"
-          pixabay:
-            enabled: false
-            api_key_env: PIXABAY_API_KEY
-            photo_endpoint: "https://pixabay.com/api/"
-            video_endpoint: "https://pixabay.com/api/videos/"
-
-      asset_resolver:
-        force: true
-        output_dir: ""
-        target_width: 2560
-        target_height: 1440
-        browser:
-          headless: true
-          timeout_ms: 25000
-          post_load_wait_ms: 1200
-          device_scale_factor: 1.0
-          user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-        source_screenshots:
-          enabled: true
-          capture_mode: target_text_focus
-          save_full_page_debug: false
-          save_raw_capture_debug: true
-          target_miss_policy: failed
-          focus_zoom: 1.3
-          highlight_target: true
-        logos:
-          local_logo_dir: ""
-          simple_icons_enabled: true
-          favicon_fallback_enabled: false
-          text_fallback_enabled: true
-          favicon_timeout_seconds: 10
-
-      render:
-        force: true
-        output_dir: ""
-        remotion_engine_dir: ""
-        active_mode: preview
-        render_mode: preview
-        cache_dir: "{PROJECT_ROOT}/.cache/ai_content_creation/visual_renders"
-        reuse_cached_scenes: true
-        batch_renderer_enabled: true
-        hardware_acceleration: if-possible
-        selected_scene_ids: []
-        selected_story_ids: []
-        quality_preset: 2k
-        width: 2560
-        height: 1440
-        fps: 30
-        codec: h264
-        crf: 15
-        x264_preset: veryfast
-        pixel_format: yuv420p
-        video_bitrate: null
-        bundle_timeout_seconds: 240
-        render_timeout_seconds: 240
-        worker_count: 4
-        frame_concurrency: 2
-        max_render_attempts: 2
-        keep_render_logs: true
-        max_scene_duration_seconds: null
-        scene_limit: null
-        profiles:
-          preview:
-            render_mode: preview
-            quality_preset: custom
-            width: 1280
-            height: 720
-            crf: null
-            video_bitrate: 4M
-            x264_preset: null
-            worker_count: 4
-            frame_concurrency: 2
-            max_render_attempts: 1
-          final:
-            render_mode: final
-            quality_preset: 2k
-            width: 2560
-            height: 1440
-            crf: 15
-            x264_preset: veryfast
-            worker_count: 4
-            frame_concurrency: 2
-            max_render_attempts: 2
-
-      assembly:
-        force: true
-        output_dir: ""
-        ffmpeg_path: ffmpeg
-        ffprobe_path: ffprobe
-        final_video_filename: final_video.mp4
-        # Independent Remotion clips must be normalized across H.264 boundaries.
-        video_codec: libx264
-        normalize_scene_boundaries: true
-        audio_codec: aac
-        audio_bitrate: 192k
-        audio_sample_rate_hz: 48000
-        audio_channels: 2
-        shortest: true
-        movflags_faststart: true
-        allow_reencode_fallback: true
-        reencode_video_codec: libx264
-        reencode_preset: veryfast
-        reencode_crf: 18
-        pixel_format: yuv420p
-        duration_tolerance_seconds: 2.0
-
-      review:
-        force: true
-        output_dir: ""
-        ffmpeg_path: ffmpeg
-        ffprobe_path: ffprobe
-        sample_count: 20
-        columns: 5
-        thumbnail_width: 420
-        jpeg_quality: 90
-        keep_frames: false
-
-    voiceover:
-      provider: openai
-      style: general_youtube
-      speed: 1.0
-      voice: null
-      language_code: a
-      sample_rate_hz: 24000
-      keep_chunks: true
-      force: true
-      output_dir: ""
-      chunking:
-        chunk_max_chars: 900
-        max_sentences_per_chunk: 4
-        chunk_pause_seconds: 0.12
-        paragraph_pause_seconds: 0.38
-      alignment:
-        require_script_beats: true
-        beat_pause_seconds: 0.08
-        section_pause_seconds: 0.32
-      mastering:
-        enabled: true
-        ffmpeg_path: ffmpeg
-        target_lufs: -16.0
-        true_peak_db: -1.0
-        loudness_range_lu: 7.0
-        two_pass: true
-        measure_output: true
-        keep_raw_audio: false
-        duration_tolerance_seconds: 0.08
-        failure_mode: fail
-      captions:
-        enabled: true
-        formats:
-          - srt
-          - vtt
-        max_chars_per_cue: 48
-        max_words_per_cue: 12
-        min_cue_seconds: 0.8
-      kokoro:
-        voice: af_heart
-      openai:
-        model: gpt-4o-mini-tts
-        voice: cedar
-        response_format: wav
-        instructions: >-
-          Speak like a confident, conversational YouTube technology-news host.
-          Sound curious, engaged, and human rather than like a broadcast anchor
-          or advertisement. Vary pace and emphasis naturally, let punchlines
-          breathe, and keep dense explanations crisp. Avoid sing-song cadence,
-          melodrama, and exaggerated hype.
-
-        api_key_envs:
-          - OPENAI_API_KEY
-          - OPENAI_API_KEY_A_C_C
-        request_timeout_seconds: 180
-        max_retries: 3
-        retry_initial_delay_seconds: 1.0
-        retry_max_delay_seconds: 8.0
-        worker_count: 3
-        max_input_chars: 4096
-      gemini:
-        model: gemini-2.5-flash-preview-tts
-        voice: Kore
-        language_code: en-US
-        instructions: >-
-          Deliver the narration as an expressive, conversational YouTube
-          technology-news host. Use natural emphasis, tempo changes, and short
-          dramatic pauses without sounding theatrical or promotional. Keep
-          technical explanations clear and let humorous lines land lightly.
-        api_key_envs:
-          - GEMINI_TTS_API_KEY
-          - GEMINI_API_KEY
-          - GOOGLE_API_KEY
-        request_timeout_seconds: 180
-        max_retries: 3
-        retry_initial_delay_seconds: 1.0
-        retry_max_delay_seconds: 8.0
-        worker_count: 1
-        max_input_chars: 4000
-      chatterbox:
-        device: auto
-        exaggeration: 0.65
-        cfg_weight: 0.5
-        audio_prompt_path: null
-        cache_dir: "{CACHE_ROOT}/huggingface_local"
-      f5_tts:
-        model: F5TTS_v1_Base
-        device: cpu
-        ref_audio_path: null
-        ref_text: Today, we are testing a more expressive local voiceover model for the new pipeline.
-        cache_dir: "{CACHE_ROOT}/f5_tts"
-        nfe_step: 16
-        cfg_strength: 2.0
-        sway_sampling_coef: -1.0
-        target_rms: 0.1
-        cross_fade_duration: 0.15
-        remove_silence: false
-        seed: 1234
-      dia:
-        model_checkpoint: nari-labs/Dia-1.6B-0626
-        device: cpu
-        cache_dir: "{CACHE_ROOT}/dia"
-        max_new_tokens: 256
-        guidance_scale: 3.0
-        temperature: 1.8
-        top_p: 0.9
-        top_k: 45
-        speaker_tag: S1
-
+    profile_file: profiles/daily_48h_all_sources/profile.yaml
+    stages:
+      content:
+        news_collection: profiles/daily_48h_all_sources/content/news_collection.yaml
+        evidence_prep: profiles/daily_48h_all_sources/content/evidence_prep.yaml
+        editorial_triage: profiles/daily_48h_all_sources/content/editorial_triage.yaml
+        story_mapping: profiles/daily_48h_all_sources/content/story_mapping.yaml
+        editorial_selection: profiles/daily_48h_all_sources/content/editorial_selection.yaml
+        video_packaging: profiles/daily_48h_all_sources/content/video_packaging.yaml
+        script_generation: profiles/daily_48h_all_sources/content/script_generation.yaml
+        metadata_creator: profiles/daily_48h_all_sources/content/metadata_creator.yaml
+        metadata_finalizer: profiles/daily_48h_all_sources/content/metadata_finalizer.yaml
+      voiceover:
+        voiceover: profiles/daily_48h_all_sources/voiceover/voiceover.yaml
+      visuals:
+        asset_catalog: profiles/daily_48h_all_sources/visuals/asset_catalog.yaml
+        planner: profiles/daily_48h_all_sources/visuals/planner.yaml
+        media_discovery: profiles/daily_48h_all_sources/visuals/media_discovery.yaml
+        asset_resolver: profiles/daily_48h_all_sources/visuals/asset_resolver.yaml
+        render: profiles/daily_48h_all_sources/visuals/render.yaml
+        assembly: profiles/daily_48h_all_sources/visuals/assembly.yaml
+        review: profiles/daily_48h_all_sources/visuals/review.yaml
+        publish_handoff: profiles/daily_48h_all_sources/visuals/publish_handoff.yaml
 experiments:
   voiceover_delivery_comparison:
     section_type: intro
@@ -1360,535 +33,626 @@ experiments:
     provider_request_intervals_seconds:
       gemini: 2.0
     default_variant_ids:
-      - marin_dynamic_creator
-      - marin_warm_witty
-      - cedar_punchy_explainer
-      - coral_bright_storyteller
+    - marin_dynamic_creator
+    - marin_warm_witty
+    - cedar_punchy_explainer
+    - coral_bright_storyteller
     variants:
-      - id: marin_dynamic_creator
-        label: Marin - Dynamic Creator
-        description: Controlled surprise, contrast, and forward momentum for a roundup opening.
-        config:
-          provider: openai
-          style: general_youtube
-          speed: 0.98
-          openai:
-            voice: marin
-            instructions: >-
-              Perform this as an expressive YouTube technology-news opening, not
-              as a newsreader. Begin with controlled disbelief at the first
-              number, sharpen the contrast in the second sentence, then build
-              curiosity toward the final line. Use meaningful pitch and pace
-              changes, stress the key numbers and the words confidence and
-              evidence, and leave a brief pause before the final reveal.
-      - id: marin_warm_witty
-        label: Marin - Warm and Witty
-        description: More conversational personality with a lightly amused edge.
-        config:
-          provider: openai
-          style: general_youtube
-          speed: 0.96
-          openai:
-            voice: marin
-            instructions: >-
-              Speak like a smart technology creator sharing an eyebrow-raising
-              discovery with one viewer. Sound warm, curious, and lightly amused
-              by the mismatch between confidence and evidence. Vary rhythm
-              naturally, give the numbers room to land, and finish with quiet
-              intrigue rather than announcer-style intensity.
-      - id: cedar_punchy_explainer
-        label: Cedar - Punchy Explainer
-        description: Crisp, confident delivery with stronger contrast and less theatricality.
-        config:
-          provider: openai
-          style: general_youtube
-          speed: 1.01
-          openai:
-            voice: cedar
-            instructions: >-
-              Deliver this like a sharp, modern YouTube explainer. Keep the first
-              two figures crisp and distinct, accelerate slightly through the
-              setup, then slow down and emphasize the contrast between confidence
-              and evidence. Sound confident and energized, with natural pitch
-              variation, but never like a television anchor or advertisement.
-      - id: coral_bright_storyteller
-        label: Coral - Bright Storyteller
-        description: Brighter personality and visible curiosity without exaggerated hype.
-        config:
-          provider: openai
-          style: general_youtube
-          speed: 0.99
-          openai:
-            voice: coral
-            instructions: >-
-              Tell this opening with bright curiosity and an expressive creator
-              voice. Treat each number as a surprising clue, use a quick reset
-              between the first two sentences, and make the final contrast feel
-              like the reason the viewer should keep watching. Keep it human,
-              lively, and conversational without shouting or sounding promotional.
-      - id: gemini31_kore_director
-        label: Gemini 3.1 Kore - Directed and Firm
-        description: Controlled authority with explicit reveal and contrast direction.
-        config:
-          provider: gemini
-          style: general_youtube
-          speed: 0.98
-          gemini:
-            model: gemini-3.1-flash-tts-preview
-            voice: Kore
-            worker_count: 1
-            instructions: >-
-              Audio profile: an incisive but personable technology creator.
-              Scene: opening a tightly edited YouTube roundup with two figures
-              that sound impressive until the evidence catches up. Director's
-              notes: begin with measured surprise, articulate both numbers
-              cleanly, pause briefly after each contrast, then lower the pace
-              and add intrigue on the final sentence. Avoid broadcast-news
-              cadence, sales energy, and melodrama.
-      - id: gemini31_achird_friendly
-        label: Gemini 3.1 Achird - Friendly Creator
-        description: Direct-to-viewer warmth, curiosity, and conversational rhythm.
-        config:
-          provider: gemini
-          style: general_youtube
-          speed: 0.97
-          gemini:
-            model: gemini-3.1-flash-tts-preview
-            voice: Achird
-            worker_count: 1
-            instructions: >-
-              Audio profile: a smart, friendly YouTube technology host speaking
-              to one curious viewer. Scene: the host has just noticed that the
-              confidence in this week's AI headlines arrived before the proof.
-              Director's notes: sound genuinely intrigued, let the two numbers
-              land without rushing, use a lightly amused turn on confidence,
-              and finish evidence is the interesting part as an inviting reveal.
-              Keep the performance natural and unscripted rather than announcer-like.
-      - id: gemini31_sadachbia_lively
-        label: Gemini 3.1 Sadachbia - Lively Hook
-        description: Higher energy and sharper momentum while preserving clarity.
-        config:
-          provider: gemini
-          style: general_youtube
-          speed: 1.0
-          gemini:
-            model: gemini-3.1-flash-tts-preview
-            voice: Sadachbia
-            worker_count: 1
-            instructions: >-
-              Audio profile: a lively, quick-thinking technology creator with
-              strong control of emphasis. Scene: a cold open designed to stop a
-              viewer without shouting. Director's notes: hit the first figure
-              with surprise, reset before the security rating, build momentum
-              through the contradiction, and make the final clause feel like a
-              promise that the real story is about to begin. Use expressive pitch
-              and tempo changes while keeping every number easy to understand.
+    - id: marin_dynamic_creator
+      label: Marin - Dynamic Creator
+      description: Controlled surprise, contrast, and forward momentum for a roundup opening.
+      config:
+        provider: openai
+        style: general_youtube
+        speed: 0.98
+        openai:
+          voice: marin
+          instructions: Perform this as an expressive YouTube technology-news opening, not as a newsreader. Begin
+            with controlled disbelief at the first number, sharpen the contrast in the second sentence, then build
+            curiosity toward the final line. Use meaningful pitch and pace changes, stress the key numbers and the
+            words confidence and evidence, and leave a brief pause before the final reveal.
+    - id: marin_warm_witty
+      label: Marin - Warm and Witty
+      description: More conversational personality with a lightly amused edge.
+      config:
+        provider: openai
+        style: general_youtube
+        speed: 0.96
+        openai:
+          voice: marin
+          instructions: Speak like a smart technology creator sharing an eyebrow-raising discovery with one viewer.
+            Sound warm, curious, and lightly amused by the mismatch between confidence and evidence. Vary rhythm
+            naturally, give the numbers room to land, and finish with quiet intrigue rather than announcer-style
+            intensity.
+    - id: cedar_punchy_explainer
+      label: Cedar - Punchy Explainer
+      description: Crisp, confident delivery with stronger contrast and less theatricality.
+      config:
+        provider: openai
+        style: general_youtube
+        speed: 1.01
+        openai:
+          voice: cedar
+          instructions: Deliver this like a sharp, modern YouTube explainer. Keep the first two figures crisp and
+            distinct, accelerate slightly through the setup, then slow down and emphasize the contrast between confidence
+            and evidence. Sound confident and energized, with natural pitch variation, but never like a television
+            anchor or advertisement.
+    - id: coral_bright_storyteller
+      label: Coral - Bright Storyteller
+      description: Brighter personality and visible curiosity without exaggerated hype.
+      config:
+        provider: openai
+        style: general_youtube
+        speed: 0.99
+        openai:
+          voice: coral
+          instructions: Tell this opening with bright curiosity and an expressive creator voice. Treat each number
+            as a surprising clue, use a quick reset between the first two sentences, and make the final contrast
+            feel like the reason the viewer should keep watching. Keep it human, lively, and conversational without
+            shouting or sounding promotional.
+    - id: gemini31_kore_director
+      label: Gemini 3.1 Kore - Directed and Firm
+      description: Controlled authority with explicit reveal and contrast direction.
+      config:
+        provider: gemini
+        style: general_youtube
+        speed: 0.98
+        gemini:
+          model: gemini-3.1-flash-tts-preview
+          voice: Kore
+          worker_count: 1
+          instructions: 'Audio profile: an incisive but personable technology creator. Scene: opening a tightly
+            edited YouTube roundup with two figures that sound impressive until the evidence catches up. Director''s
+            notes: begin with measured surprise, articulate both numbers cleanly, pause briefly after each contrast,
+            then lower the pace and add intrigue on the final sentence. Avoid broadcast-news cadence, sales energy,
+            and melodrama.'
+    - id: gemini31_achird_friendly
+      label: Gemini 3.1 Achird - Friendly Creator
+      description: Direct-to-viewer warmth, curiosity, and conversational rhythm.
+      config:
+        provider: gemini
+        style: general_youtube
+        speed: 0.97
+        gemini:
+          model: gemini-3.1-flash-tts-preview
+          voice: Achird
+          worker_count: 1
+          instructions: 'Audio profile: a smart, friendly YouTube technology host speaking to one curious viewer.
+            Scene: the host has just noticed that the confidence in this week''s AI headlines arrived before the
+            proof. Director''s notes: sound genuinely intrigued, let the two numbers land without rushing, use a
+            lightly amused turn on confidence, and finish evidence is the interesting part as an inviting reveal.
+            Keep the performance natural and unscripted rather than announcer-like.'
+    - id: gemini31_sadachbia_lively
+      label: Gemini 3.1 Sadachbia - Lively Hook
+      description: Higher energy and sharper momentum while preserving clarity.
+      config:
+        provider: gemini
+        style: general_youtube
+        speed: 1.0
+        gemini:
+          model: gemini-3.1-flash-tts-preview
+          voice: Sadachbia
+          worker_count: 1
+          instructions: 'Audio profile: a lively, quick-thinking technology creator with strong control of emphasis.
+            Scene: a cold open designed to stop a viewer without shouting. Director''s notes: hit the first figure
+            with surprise, reset before the security rating, build momentum through the contradiction, and make
+            the final clause feel like a promise that the real story is about to begin. Use expressive pitch and
+            tempo changes while keeping every number easy to understand.'
     matrices:
-      - id: gemini31_creator_matrix
-        label: Gemini 3.1 Creator Voice Matrix
-        provider: gemini
-        model: gemini-3.1-flash-tts-preview
-        style: general_youtube
-        provider_config:
-          language_code: en-US
-          worker_count: 1
-        pricing:
-          text_input_usd_per_million_tokens: 1.0
-          audio_output_usd_per_million_tokens: 20.0
-          audio_tokens_per_second: 25.0
-          projected_audio_seconds: 20.0
-        voices:
-          - id: kore
-            voice: Kore
-            label: Kore
-            character: Firm and controlled
-          - id: achird
-            voice: Achird
-            label: Achird
-            character: Friendly and direct-to-viewer
-          - id: sadachbia
-            voice: Sadachbia
-            label: Sadachbia
-            character: Lively and energetic
-          - id: charon
-            voice: Charon
-            label: Charon
-            character: Informative and composed
-          - id: puck
-            voice: Puck
-            label: Puck
-            character: Upbeat and playful
-          - id: sulafat
-            voice: Sulafat
-            label: Sulafat
-            character: Warm and inviting
-          - id: iapetus
-            voice: Iapetus
-            label: Iapetus
-            character: Clear and precise
-          - id: gacrux
-            voice: Gacrux
-            label: Gacrux
-            character: Mature and grounded
-          - id: algieba
-            voice: Algieba
-            label: Algieba
-            character: Smooth and polished
-          - id: zephyr
-            voice: Zephyr
-            label: Zephyr
-            character: Bright and attention-forward
-        directions:
-          - id: dynamic_hook
-            label: Dynamic Hook
-            description: Strong contrast, energetic pacing, and a clear final reveal
-            speed: 0.99
-            instructions: >-
-              Audio profile: an expressive YouTube technology creator with
-              confident control, not a television newsreader. Scene: a cold open
-              built around two surprising numbers and the gap between confidence
-              and evidence. Director's notes: land the first number with measured
-              surprise, reset before the second figure, accelerate through the
-              contradiction, then slow down slightly and make the final clause an
-              irresistible reveal. Use meaningful pitch, rhythm, and emphasis
-              changes without shouting, melodrama, or promotional energy.
-          - id: conversational_intrigue
-            label: Conversational Intrigue
-            description: Warmer one-to-one delivery with curiosity and restrained wit
-            speed: 0.96
-            instructions: >-
-              Audio profile: a smart, personable technology creator speaking to
-              one curious viewer. Scene: the host has noticed something slightly
-              absurd in this week's biggest AI claims and is inviting the viewer
-              to inspect it together. Director's notes: sound warm and genuinely
-              curious, let both numbers breathe, add a lightly amused turn on the
-              word confidence, and finish the evidence line with quiet intrigue.
-              Keep the rhythm spontaneous, intimate, and human rather than formal
-              or announcer-like.
-
-      # Research suite: all 30 official Gemini voices on one identical fast creator direction.
-      - id: gemini31_all_voices_fast
-        label: Gemini 3.1 All Voices - Fast Creator
-        provider: gemini
-        model: gemini-3.1-flash-tts-preview
-        style: general_youtube
-        provider_config:
-          language_code: en-US
-          worker_count: 1
-        pricing:
-          text_input_usd_per_million_tokens: 1.0
-          audio_output_usd_per_million_tokens: 20.0
-          audio_tokens_per_second: 25.0
-          projected_audio_seconds: 20.0
-        voices:
-          - {id: zephyr, voice: Zephyr, label: Zephyr, character: Bright}
-          - {id: puck, voice: Puck, label: Puck, character: Upbeat}
-          - {id: charon, voice: Charon, label: Charon, character: Informative}
-          - {id: kore, voice: Kore, label: Kore, character: Firm}
-          - {id: fenrir, voice: Fenrir, label: Fenrir, character: Excitable}
-          - {id: leda, voice: Leda, label: Leda, character: Youthful}
-          - {id: orus, voice: Orus, label: Orus, character: Firm}
-          - {id: aoede, voice: Aoede, label: Aoede, character: Breezy}
-          - {id: callirrhoe, voice: Callirrhoe, label: Callirrhoe, character: Easy-going}
-          - {id: autonoe, voice: Autonoe, label: Autonoe, character: Bright}
-          - {id: enceladus, voice: Enceladus, label: Enceladus, character: Breathy}
-          - {id: iapetus, voice: Iapetus, label: Iapetus, character: Clear}
-          - {id: umbriel, voice: Umbriel, label: Umbriel, character: Easy-going}
-          - {id: algieba, voice: Algieba, label: Algieba, character: Smooth}
-          - {id: despina, voice: Despina, label: Despina, character: Smooth}
-          - {id: erinome, voice: Erinome, label: Erinome, character: Clear}
-          - {id: algenib, voice: Algenib, label: Algenib, character: Gravelly}
-          - {id: rasalgethi, voice: Rasalgethi, label: Rasalgethi, character: Informative}
-          - {id: laomedeia, voice: Laomedeia, label: Laomedeia, character: Upbeat}
-          - {id: achernar, voice: Achernar, label: Achernar, character: Soft}
-          - {id: alnilam, voice: Alnilam, label: Alnilam, character: Firm}
-          - {id: schedar, voice: Schedar, label: Schedar, character: Even}
-          - {id: gacrux, voice: Gacrux, label: Gacrux, character: Mature}
-          - {id: pulcherrima, voice: Pulcherrima, label: Pulcherrima, character: Forward}
-          - {id: achird, voice: Achird, label: Achird, character: Friendly}
-          - {id: zubenelgenubi, voice: Zubenelgenubi, label: Zubenelgenubi, character: Casual}
-          - {id: vindemiatrix, voice: Vindemiatrix, label: Vindemiatrix, character: Gentle}
-          - {id: sadachbia, voice: Sadachbia, label: Sadachbia, character: Lively}
-          - {id: sadaltager, voice: Sadaltager, label: Sadaltager, character: Knowledgeable}
-          - {id: sulafat, voice: Sulafat, label: Sulafat, character: Warm}
-        directions:
-          - id: fast_creator
-            label: Fast Creator
-            description: Energetic 170-180 WPM creator delivery with crisp numbers and no dead air
-            speed: 1.10
-            instructions: >-
-              Audio profile: a modern YouTube technology creator who sounds
-              quick-thinking, confident, and genuinely curious. Scene: a tightly
-              edited roundup cold open where surprising figures lead into a
-              contradiction. Director's notes: aim for roughly 170 to 180 words
-              per minute, maintain forward momentum with no dead air, articulate
-              every number clearly, vary pitch on contrasts, and make the final
-              clause an inviting reveal. Sound conversational and alive, never
-              like a television anchor, advertisement, or rushed disclaimer.
-
-      # Shortlist sweep: two faster expressive deliveries in addition to each voice's base sample above.
-      - id: gemini31_focused_fast_deliveries
-        label: Gemini 3.1 Shortlist - Faster Deliveries
-        provider: gemini
-        model: gemini-3.1-flash-tts-preview
-        style: general_youtube
-        provider_config:
-          language_code: en-US
-          worker_count: 1
-        pricing:
-          text_input_usd_per_million_tokens: 1.0
-          audio_output_usd_per_million_tokens: 20.0
-          audio_tokens_per_second: 25.0
-          projected_audio_seconds: 18.0
-        voices:
-          - {id: achird, voice: Achird, label: Achird, character: Friendly}
-          - {id: sadachbia, voice: Sadachbia, label: Sadachbia, character: Lively}
-          - {id: charon, voice: Charon, label: Charon, character: Informative}
-          - {id: sulafat, voice: Sulafat, label: Sulafat, character: Warm}
-          - {id: puck, voice: Puck, label: Puck, character: Upbeat}
-          - {id: iapetus, voice: Iapetus, label: Iapetus, character: Clear}
-          - {id: gacrux, voice: Gacrux, label: Gacrux, character: Mature}
-          - {id: zephyr, voice: Zephyr, label: Zephyr, character: Bright}
-        directions:
-          - id: rapid_punchy
-            label: Rapid Punchy
-            description: High-retention 180-190 WPM hook with sharp contrasts and controlled excitement
-            speed: 1.18
-            transcript_prefix: "[excitedly] [very fast but clear]"
-            instructions: >-
-              Audio profile: a witty, high-retention YouTube technology host with
-              a vocal smile and sharp timing. Scene: the first seconds of a cold
-              open where each sentence must earn attention. Director's notes:
-              aim for roughly 180 to 190 words per minute, use punchy consonants,
-              quick clean resets, and strong contrast without shouting. Keep all
-              names and numbers intelligible. Land the final reveal with a tiny
-              pause before it, not with announcer-style drama.
-          - id: conversational_fast
-            label: Conversational Fast
-            description: Natural 160-170 WPM one-to-one delivery with curiosity and restrained wit
-            speed: 1.08
-            transcript_prefix: "[curious] [lightly amused]"
-            instructions: >-
-              Audio profile: a smart technology creator talking directly to one
-              viewer, warm but brisk, with dry understated humor. Scene: the host
-              has found a contradiction worth inspecting together. Director's
-              notes: aim for roughly 160 to 170 words per minute, keep the rhythm
-              spontaneous, give important figures just enough space to land, and
-              let amusement color the contrast without slowing the episode down.
-              Avoid formal narration, theatrical pauses, and sales energy.
-
-      - id: gemini25_flash_model_compare
-        label: Gemini 2.5 Flash - Model Comparison
-        provider: gemini
-        model: gemini-2.5-flash-preview-tts
-        style: general_youtube
-        provider_config:
-          language_code: en-US
-          worker_count: 1
-        pricing:
-          text_input_usd_per_million_tokens: 0.5
-          audio_output_usd_per_million_tokens: 10.0
-          audio_tokens_per_second: 25.0
-          projected_audio_seconds: 20.0
-        voices:
-          - {id: achird, voice: Achird, label: Achird, character: Friendly}
-          - {id: sadachbia, voice: Sadachbia, label: Sadachbia, character: Lively}
-          - {id: charon, voice: Charon, label: Charon, character: Informative}
-          - {id: sulafat, voice: Sulafat, label: Sulafat, character: Warm}
-        directions:
-          - id: fast_creator
-            label: Fast Creator
-            description: Same 170-180 WPM direction used for the Gemini 3.1 baseline
-            speed: 1.10
-            instructions: >-
-              Audio profile: a modern YouTube technology creator who sounds
-              quick-thinking, confident, and genuinely curious. Scene: a tightly
-              edited roundup cold open where surprising figures lead into a
-              contradiction. Director's notes: aim for roughly 170 to 180 words
-              per minute, maintain forward momentum with no dead air, articulate
-              every number clearly, vary pitch on contrasts, and make the final
-              clause an inviting reveal. Sound conversational and alive, never
-              like a television anchor, advertisement, or rushed disclaimer.
-
-      - id: gemini25_pro_model_compare
-        label: Gemini 2.5 Pro - Model Comparison
-        provider: gemini
-        model: gemini-2.5-pro-preview-tts
-        style: general_youtube
-        provider_config:
-          language_code: en-US
-          worker_count: 1
-        pricing:
-          text_input_usd_per_million_tokens: 1.0
-          audio_output_usd_per_million_tokens: 20.0
-          audio_tokens_per_second: 25.0
-          projected_audio_seconds: 20.0
-        voices:
-          - {id: achird, voice: Achird, label: Achird, character: Friendly}
-          - {id: sadachbia, voice: Sadachbia, label: Sadachbia, character: Lively}
-          - {id: charon, voice: Charon, label: Charon, character: Informative}
-          - {id: sulafat, voice: Sulafat, label: Sulafat, character: Warm}
-        directions:
-          - id: fast_creator
-            label: Fast Creator
-            description: Same 170-180 WPM direction used for the Gemini 3.1 baseline
-            speed: 1.10
-            instructions: >-
-              Audio profile: a modern YouTube technology creator who sounds
-              quick-thinking, confident, and genuinely curious. Scene: a tightly
-              edited roundup cold open where surprising figures lead into a
-              contradiction. Director's notes: aim for roughly 170 to 180 words
-              per minute, maintain forward momentum with no dead air, articulate
-              every number clearly, vary pitch on contrasts, and make the final
-              clause an inviting reveal. Sound conversational and alive, never
-              like a television anchor, advertisement, or rushed disclaimer.
-
+    - id: gemini31_creator_matrix
+      label: Gemini 3.1 Creator Voice Matrix
+      provider: gemini
+      model: gemini-3.1-flash-tts-preview
+      style: general_youtube
+      provider_config:
+        language_code: en-US
+        worker_count: 1
+      pricing:
+        text_input_usd_per_million_tokens: 1.0
+        audio_output_usd_per_million_tokens: 20.0
+        audio_tokens_per_second: 25.0
+        projected_audio_seconds: 20.0
+      voices:
+      - id: kore
+        voice: Kore
+        label: Kore
+        character: Firm and controlled
+      - id: achird
+        voice: Achird
+        label: Achird
+        character: Friendly and direct-to-viewer
+      - id: sadachbia
+        voice: Sadachbia
+        label: Sadachbia
+        character: Lively and energetic
+      - id: charon
+        voice: Charon
+        label: Charon
+        character: Informative and composed
+      - id: puck
+        voice: Puck
+        label: Puck
+        character: Upbeat and playful
+      - id: sulafat
+        voice: Sulafat
+        label: Sulafat
+        character: Warm and inviting
+      - id: iapetus
+        voice: Iapetus
+        label: Iapetus
+        character: Clear and precise
+      - id: gacrux
+        voice: Gacrux
+        label: Gacrux
+        character: Mature and grounded
+      - id: algieba
+        voice: Algieba
+        label: Algieba
+        character: Smooth and polished
+      - id: zephyr
+        voice: Zephyr
+        label: Zephyr
+        character: Bright and attention-forward
+      directions:
+      - id: dynamic_hook
+        label: Dynamic Hook
+        description: Strong contrast, energetic pacing, and a clear final reveal
+        speed: 0.99
+        instructions: 'Audio profile: an expressive YouTube technology creator with confident control, not a television
+          newsreader. Scene: a cold open built around two surprising numbers and the gap between confidence and
+          evidence. Director''s notes: land the first number with measured surprise, reset before the second figure,
+          accelerate through the contradiction, then slow down slightly and make the final clause an irresistible
+          reveal. Use meaningful pitch, rhythm, and emphasis changes without shouting, melodrama, or promotional
+          energy.'
+      - id: conversational_intrigue
+        label: Conversational Intrigue
+        description: Warmer one-to-one delivery with curiosity and restrained wit
+        speed: 0.96
+        instructions: 'Audio profile: a smart, personable technology creator speaking to one curious viewer. Scene:
+          the host has noticed something slightly absurd in this week''s biggest AI claims and is inviting the viewer
+          to inspect it together. Director''s notes: sound warm and genuinely curious, let both numbers breathe,
+          add a lightly amused turn on the word confidence, and finish the evidence line with quiet intrigue. Keep
+          the rhythm spontaneous, intimate, and human rather than formal or announcer-like.'
+    - id: gemini31_all_voices_fast
+      label: Gemini 3.1 All Voices - Fast Creator
+      provider: gemini
+      model: gemini-3.1-flash-tts-preview
+      style: general_youtube
+      provider_config:
+        language_code: en-US
+        worker_count: 1
+      pricing:
+        text_input_usd_per_million_tokens: 1.0
+        audio_output_usd_per_million_tokens: 20.0
+        audio_tokens_per_second: 25.0
+        projected_audio_seconds: 20.0
+      voices:
+      - id: zephyr
+        voice: Zephyr
+        label: Zephyr
+        character: Bright
+      - id: puck
+        voice: Puck
+        label: Puck
+        character: Upbeat
+      - id: charon
+        voice: Charon
+        label: Charon
+        character: Informative
+      - id: kore
+        voice: Kore
+        label: Kore
+        character: Firm
+      - id: fenrir
+        voice: Fenrir
+        label: Fenrir
+        character: Excitable
+      - id: leda
+        voice: Leda
+        label: Leda
+        character: Youthful
+      - id: orus
+        voice: Orus
+        label: Orus
+        character: Firm
+      - id: aoede
+        voice: Aoede
+        label: Aoede
+        character: Breezy
+      - id: callirrhoe
+        voice: Callirrhoe
+        label: Callirrhoe
+        character: Easy-going
+      - id: autonoe
+        voice: Autonoe
+        label: Autonoe
+        character: Bright
+      - id: enceladus
+        voice: Enceladus
+        label: Enceladus
+        character: Breathy
+      - id: iapetus
+        voice: Iapetus
+        label: Iapetus
+        character: Clear
+      - id: umbriel
+        voice: Umbriel
+        label: Umbriel
+        character: Easy-going
+      - id: algieba
+        voice: Algieba
+        label: Algieba
+        character: Smooth
+      - id: despina
+        voice: Despina
+        label: Despina
+        character: Smooth
+      - id: erinome
+        voice: Erinome
+        label: Erinome
+        character: Clear
+      - id: algenib
+        voice: Algenib
+        label: Algenib
+        character: Gravelly
+      - id: rasalgethi
+        voice: Rasalgethi
+        label: Rasalgethi
+        character: Informative
+      - id: laomedeia
+        voice: Laomedeia
+        label: Laomedeia
+        character: Upbeat
+      - id: achernar
+        voice: Achernar
+        label: Achernar
+        character: Soft
+      - id: alnilam
+        voice: Alnilam
+        label: Alnilam
+        character: Firm
+      - id: schedar
+        voice: Schedar
+        label: Schedar
+        character: Even
+      - id: gacrux
+        voice: Gacrux
+        label: Gacrux
+        character: Mature
+      - id: pulcherrima
+        voice: Pulcherrima
+        label: Pulcherrima
+        character: Forward
+      - id: achird
+        voice: Achird
+        label: Achird
+        character: Friendly
+      - id: zubenelgenubi
+        voice: Zubenelgenubi
+        label: Zubenelgenubi
+        character: Casual
+      - id: vindemiatrix
+        voice: Vindemiatrix
+        label: Vindemiatrix
+        character: Gentle
+      - id: sadachbia
+        voice: Sadachbia
+        label: Sadachbia
+        character: Lively
+      - id: sadaltager
+        voice: Sadaltager
+        label: Sadaltager
+        character: Knowledgeable
+      - id: sulafat
+        voice: Sulafat
+        label: Sulafat
+        character: Warm
+      directions:
+      - id: fast_creator
+        label: Fast Creator
+        description: Energetic 170-180 WPM creator delivery with crisp numbers and no dead air
+        speed: 1.1
+        instructions: 'Audio profile: a modern YouTube technology creator who sounds quick-thinking, confident,
+          and genuinely curious. Scene: a tightly edited roundup cold open where surprising figures lead into a
+          contradiction. Director''s notes: aim for roughly 170 to 180 words per minute, maintain forward momentum
+          with no dead air, articulate every number clearly, vary pitch on contrasts, and make the final clause
+          an inviting reveal. Sound conversational and alive, never like a television anchor, advertisement, or
+          rushed disclaimer.'
+    - id: gemini31_focused_fast_deliveries
+      label: Gemini 3.1 Shortlist - Faster Deliveries
+      provider: gemini
+      model: gemini-3.1-flash-tts-preview
+      style: general_youtube
+      provider_config:
+        language_code: en-US
+        worker_count: 1
+      pricing:
+        text_input_usd_per_million_tokens: 1.0
+        audio_output_usd_per_million_tokens: 20.0
+        audio_tokens_per_second: 25.0
+        projected_audio_seconds: 18.0
+      voices:
+      - id: achird
+        voice: Achird
+        label: Achird
+        character: Friendly
+      - id: sadachbia
+        voice: Sadachbia
+        label: Sadachbia
+        character: Lively
+      - id: charon
+        voice: Charon
+        label: Charon
+        character: Informative
+      - id: sulafat
+        voice: Sulafat
+        label: Sulafat
+        character: Warm
+      - id: puck
+        voice: Puck
+        label: Puck
+        character: Upbeat
+      - id: iapetus
+        voice: Iapetus
+        label: Iapetus
+        character: Clear
+      - id: gacrux
+        voice: Gacrux
+        label: Gacrux
+        character: Mature
+      - id: zephyr
+        voice: Zephyr
+        label: Zephyr
+        character: Bright
+      directions:
+      - id: rapid_punchy
+        label: Rapid Punchy
+        description: High-retention 180-190 WPM hook with sharp contrasts and controlled excitement
+        speed: 1.18
+        transcript_prefix: '[excitedly] [very fast but clear]'
+        instructions: 'Audio profile: a witty, high-retention YouTube technology host with a vocal smile and sharp
+          timing. Scene: the first seconds of a cold open where each sentence must earn attention. Director''s notes:
+          aim for roughly 180 to 190 words per minute, use punchy consonants, quick clean resets, and strong contrast
+          without shouting. Keep all names and numbers intelligible. Land the final reveal with a tiny pause before
+          it, not with announcer-style drama.'
+      - id: conversational_fast
+        label: Conversational Fast
+        description: Natural 160-170 WPM one-to-one delivery with curiosity and restrained wit
+        speed: 1.08
+        transcript_prefix: '[curious] [lightly amused]'
+        instructions: 'Audio profile: a smart technology creator talking directly to one viewer, warm but brisk,
+          with dry understated humor. Scene: the host has found a contradiction worth inspecting together. Director''s
+          notes: aim for roughly 160 to 170 words per minute, keep the rhythm spontaneous, give important figures
+          just enough space to land, and let amusement color the contrast without slowing the episode down. Avoid
+          formal narration, theatrical pauses, and sales energy.'
+    - id: gemini25_flash_model_compare
+      label: Gemini 2.5 Flash - Model Comparison
+      provider: gemini
+      model: gemini-2.5-flash-preview-tts
+      style: general_youtube
+      provider_config:
+        language_code: en-US
+        worker_count: 1
+      pricing:
+        text_input_usd_per_million_tokens: 0.5
+        audio_output_usd_per_million_tokens: 10.0
+        audio_tokens_per_second: 25.0
+        projected_audio_seconds: 20.0
+      voices:
+      - id: achird
+        voice: Achird
+        label: Achird
+        character: Friendly
+      - id: sadachbia
+        voice: Sadachbia
+        label: Sadachbia
+        character: Lively
+      - id: charon
+        voice: Charon
+        label: Charon
+        character: Informative
+      - id: sulafat
+        voice: Sulafat
+        label: Sulafat
+        character: Warm
+      directions:
+      - id: fast_creator
+        label: Fast Creator
+        description: Same 170-180 WPM direction used for the Gemini 3.1 baseline
+        speed: 1.1
+        instructions: 'Audio profile: a modern YouTube technology creator who sounds quick-thinking, confident,
+          and genuinely curious. Scene: a tightly edited roundup cold open where surprising figures lead into a
+          contradiction. Director''s notes: aim for roughly 170 to 180 words per minute, maintain forward momentum
+          with no dead air, articulate every number clearly, vary pitch on contrasts, and make the final clause
+          an inviting reveal. Sound conversational and alive, never like a television anchor, advertisement, or
+          rushed disclaimer.'
+    - id: gemini25_pro_model_compare
+      label: Gemini 2.5 Pro - Model Comparison
+      provider: gemini
+      model: gemini-2.5-pro-preview-tts
+      style: general_youtube
+      provider_config:
+        language_code: en-US
+        worker_count: 1
+      pricing:
+        text_input_usd_per_million_tokens: 1.0
+        audio_output_usd_per_million_tokens: 20.0
+        audio_tokens_per_second: 25.0
+        projected_audio_seconds: 20.0
+      voices:
+      - id: achird
+        voice: Achird
+        label: Achird
+        character: Friendly
+      - id: sadachbia
+        voice: Sadachbia
+        label: Sadachbia
+        character: Lively
+      - id: charon
+        voice: Charon
+        label: Charon
+        character: Informative
+      - id: sulafat
+        voice: Sulafat
+        label: Sulafat
+        character: Warm
+      directions:
+      - id: fast_creator
+        label: Fast Creator
+        description: Same 170-180 WPM direction used for the Gemini 3.1 baseline
+        speed: 1.1
+        instructions: 'Audio profile: a modern YouTube technology creator who sounds quick-thinking, confident,
+          and genuinely curious. Scene: a tightly edited roundup cold open where surprising figures lead into a
+          contradiction. Director''s notes: aim for roughly 170 to 180 words per minute, maintain forward momentum
+          with no dead air, articulate every number clearly, vary pitch on contrasts, and make the final clause
+          an inviting reveal. Sound conversational and alive, never like a television anchor, advertisement, or
+          rushed disclaimer.'
   script_model_comparison:
     variants:
-      - id: openai_gpt4o_role_baseline
-        config:
-          provider: openai
-          model: gpt-4o
-          temperature: 0.4
-          provider_options:
-            request_timeout_seconds: 300
-          structured_output:
-            method: json_schema
-            strict: true
-        pricing_per_million_tokens:
+    - id: openai_gpt4o_role_baseline
+      config:
+        provider: openai
+        model: gpt-4o
+        temperature: 0.4
+        provider_options:
+          request_timeout_seconds: 300
+        structured_output:
+          method: json_schema
+          strict: true
+      pricing_per_million_tokens:
+        input_cache_miss: 2.5
+        input_cache_hit: 1.25
+        output: 10.0
+    - id: moonshot_kimi_k26_non_thinking
+      config:
+        provider: moonshot
+        model: kimi-k2.6
+        temperature: 0.6
+        provider_options:
+          thinking: disabled
+          omit_temperature: false
+          request_timeout_seconds: 240
+        llm_retry:
+          enabled: true
+          max_attempts: 2
+          max_structured_output_attempts: 2
+          initial_delay_seconds: 1.0
+          max_delay_seconds: 10.0
+        structured_output:
+          method: function_calling
+          strict: true
+      pricing_per_million_tokens:
+        input_cache_miss: 0.95
+        input_cache_hit: 0.16
+        output: 4.0
+    - id: moonshot_kimi_k3_max_thinking
+      config:
+        provider: moonshot
+        model: kimi-k3
+        temperature: 1.0
+        provider_options:
+          thinking: null
+          omit_temperature: true
+          request_timeout_seconds: 300
+        llm_retry:
+          enabled: true
+          max_attempts: 1
+          max_structured_output_attempts: 1
+          initial_delay_seconds: 1.0
+          max_delay_seconds: 10.0
+        structured_output:
+          method: json_schema
+          strict: true
+      pricing_per_million_tokens:
+        input_cache_miss: 3.0
+        input_cache_hit: 0.3
+        output: 15.0
+    - id: hybrid_k3_creative_worker2
+      config:
+        provider: openai
+        model: gpt-4o
+        temperature: 0.4
+        worker_count: 2
+        provider_options:
+          request_timeout_seconds: 300
+        structured_output:
+          method: json_schema
+          strict: true
+        llm_roles:
+          story_writer:
+            provider: moonshot
+            model: kimi-k3
+            temperature: 1.0
+            provider_options:
+              thinking: null
+              omit_temperature: true
+              request_timeout_seconds: 360
+            structured_output:
+              method: json_schema
+              strict: true
+            llm_retry:
+              enabled: true
+              max_attempts: 1
+              max_structured_output_attempts: 2
+              initial_delay_seconds: 1.0
+              max_delay_seconds: 10.0
+          story_reviewer:
+            provider: moonshot
+            model: kimi-k3
+            temperature: 1.0
+            provider_options:
+              thinking: null
+              omit_temperature: true
+              request_timeout_seconds: 480
+            structured_output:
+              method: json_schema
+              strict: true
+            llm_retry:
+              enabled: true
+              max_attempts: 1
+              max_structured_output_attempts: 2
+              initial_delay_seconds: 1.0
+              max_delay_seconds: 10.0
+          bookend_writer:
+            provider: moonshot
+            model: kimi-k3
+            temperature: 1.0
+            provider_options:
+              thinking: null
+              omit_temperature: true
+              request_timeout_seconds: 360
+            structured_output:
+              method: json_schema
+              strict: true
+            llm_retry:
+              enabled: true
+              max_attempts: 1
+              max_structured_output_attempts: 2
+              initial_delay_seconds: 1.0
+              max_delay_seconds: 10.0
+          bookend_reviewer:
+            provider: moonshot
+            model: kimi-k3
+            temperature: 1.0
+            provider_options:
+              thinking: null
+              omit_temperature: true
+              request_timeout_seconds: 480
+            structured_output:
+              method: json_schema
+              strict: true
+            llm_retry:
+              enabled: true
+              max_attempts: 1
+              max_structured_output_attempts: 2
+              initial_delay_seconds: 1.0
+              max_delay_seconds: 10.0
+      pricing_by_route:
+        openai/gpt-4o:
           input_cache_miss: 2.5
           input_cache_hit: 1.25
           output: 10.0
-      - id: moonshot_kimi_k26_non_thinking
-        config:
-          provider: moonshot
-          model: kimi-k2.6
-          temperature: 0.6
-          provider_options:
-            thinking: disabled
-            omit_temperature: false
-            request_timeout_seconds: 240
-          llm_retry:
-            enabled: true
-            max_attempts: 2
-            max_structured_output_attempts: 2
-            initial_delay_seconds: 1.0
-            max_delay_seconds: 10.0
-          structured_output:
-            method: function_calling
-            strict: true
-        pricing_per_million_tokens:
-          input_cache_miss: 0.95
-          input_cache_hit: 0.16
-          output: 4.0
-      - id: moonshot_kimi_k3_max_thinking
-        config:
-          provider: moonshot
-          model: kimi-k3
-          temperature: 1.0
-          provider_options:
-            thinking: null
-            omit_temperature: true
-            request_timeout_seconds: 300
-          llm_retry:
-            enabled: true
-            max_attempts: 1
-            max_structured_output_attempts: 1
-            initial_delay_seconds: 1.0
-            max_delay_seconds: 10.0
-          structured_output:
-            method: json_schema
-            strict: true
-        pricing_per_million_tokens:
+        moonshot/kimi-k3:
           input_cache_miss: 3.0
           input_cache_hit: 0.3
           output: 15.0
-      - id: hybrid_k3_creative_worker2
-        config:
-          provider: openai
-          model: gpt-4o
-          temperature: 0.4
-          worker_count: 2
-          provider_options:
-            request_timeout_seconds: 300
-          structured_output:
-            method: json_schema
-            strict: true
-          llm_roles:
-            story_writer:
-              provider: moonshot
-              model: kimi-k3
-              temperature: 1.0
-              provider_options:
-                thinking: null
-                omit_temperature: true
-                request_timeout_seconds: 360
-              structured_output:
-                method: json_schema
-                strict: true
-              llm_retry:
-                enabled: true
-                max_attempts: 1
-                max_structured_output_attempts: 2
-                initial_delay_seconds: 1.0
-                max_delay_seconds: 10.0
-            story_reviewer:
-              provider: moonshot
-              model: kimi-k3
-              temperature: 1.0
-              provider_options:
-                thinking: null
-                omit_temperature: true
-                request_timeout_seconds: 480
-              structured_output:
-                method: json_schema
-                strict: true
-              llm_retry:
-                enabled: true
-                max_attempts: 1
-                max_structured_output_attempts: 2
-                initial_delay_seconds: 1.0
-                max_delay_seconds: 10.0
-            bookend_writer:
-              provider: moonshot
-              model: kimi-k3
-              temperature: 1.0
-              provider_options:
-                thinking: null
-                omit_temperature: true
-                request_timeout_seconds: 360
-              structured_output:
-                method: json_schema
-                strict: true
-              llm_retry:
-                enabled: true
-                max_attempts: 1
-                max_structured_output_attempts: 2
-                initial_delay_seconds: 1.0
-                max_delay_seconds: 10.0
-            bookend_reviewer:
-              provider: moonshot
-              model: kimi-k3
-              temperature: 1.0
-              provider_options:
-                thinking: null
-                omit_temperature: true
-                request_timeout_seconds: 480
-              structured_output:
-                method: json_schema
-                strict: true
-              llm_retry:
-                enabled: true
-                max_attempts: 1
-                max_structured_output_attempts: 2
-                initial_delay_seconds: 1.0
-                max_delay_seconds: 10.0
-        pricing_by_route:
-          openai/gpt-4o:
-            input_cache_miss: 2.5
-            input_cache_hit: 1.25
-            output: 10.0
-          moonshot/kimi-k3:
-            input_cache_miss: 3.0
-            input_cache_hit: 0.3
-            output: 15.0

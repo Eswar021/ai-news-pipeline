@@ -1,0 +1,2 @@
+require_all_script_sections: true
+first_chapter_tolerance_seconds: 0.25
