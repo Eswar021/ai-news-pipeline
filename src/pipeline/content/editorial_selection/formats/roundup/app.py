@@ -12,11 +12,13 @@ from .contract import (
     CandidateScreenDraft,
     EditorialSelectionRequest,
     EditorialSelectionResponse,
+    RoundupDuplicateAudit,
     RoundupSlateDraft,
     RoundupSlateReviewDraft,
 )
 from .config import (
     DEFAULT_PREFERRED_FINALIST_STORY_COUNT,
+    DUPLICATE_AUDIT_PROMPT_MODULE,
     SCREENING_PROMPT_MODULE,
     SLATE_REVIEW_PROMPT_MODULE,
 )
@@ -80,8 +82,11 @@ def run(input_json: dict) -> dict:
     slate_diversity_assessment = ""
     slate_diversity_reason = ""
     duplicate_story_groups: list[dict[str, Any]] = []
+    focused_duplicate_audit: RoundupDuplicateAudit | None = None
     slate_review_config = dict(config.get("slate_review") or {})
     slate_review_prompt_bundle = None
+    duplicate_audit_prompt_bundle = None
+    slate_review_llm = llm
     review_pool = list(candidate_pool)
     review_recovery = {
         "requested_count": 0,
@@ -94,6 +99,25 @@ def run(input_json: dict) -> dict:
             slate_review_config["prompt_version"],
             module=SLATE_REVIEW_PROMPT_MODULE,
         )
+        review_provider = slate_review_config.get("provider") or config["provider"]
+        review_model = slate_review_config.get("model") or config["model"]
+        review_temperature = slate_review_config.get("temperature")
+        if review_temperature is None:
+            review_temperature = config["temperature"]
+        slate_review_config["effective_provider"] = review_provider
+        slate_review_config["effective_model"] = review_model
+        slate_review_config["effective_temperature"] = float(review_temperature)
+        slate_review_llm = make_llm(
+            provider=review_provider,
+            model=review_model,
+            temperature=float(review_temperature),
+            base_url=slate_review_config.get("base_url") or config.get("base_url"),
+        )
+        if bool(slate_review_config.get("duplicate_audit_enabled")):
+            duplicate_audit_prompt_bundle = load_prompt_bundle(
+                slate_review_config["duplicate_audit_prompt_version"],
+                module=DUPLICATE_AUDIT_PROMPT_MODULE,
+            )
         review_pool, review_recovery = _build_slate_review_pool(
             candidate_pool=candidate_pool,
             screened_out=screened_out,
@@ -114,6 +138,25 @@ def run(input_json: dict) -> dict:
                 original_story_count=len(stories),
             )
             _validate_slate(draft, candidate_pool, config)
+            focused_duplicate_audit = None
+            if duplicate_audit_prompt_bundle is not None:
+                story_by_id = {
+                    clean_text(story.get("story_id")): story
+                    for story in candidate_pool
+                }
+                selected_story_contexts = [
+                    story_by_id[decision.story_id]
+                    for decision in draft.selected
+                ]
+                focused_duplicate_audit = _invoke_duplicate_auditor(
+                    stories=selected_story_contexts,
+                    config=config,
+                    review_config=slate_review_config,
+                    prompt_bundle=duplicate_audit_prompt_bundle,
+                    llm=slate_review_llm,
+                    llm_calls=llm_calls,
+                    attempt=attempt,
+                )
             materialization_pool = candidate_pool
             if slate_review_prompt_bundle is not None:
                 proposed_for_review = _complete_proposed_slate_for_review(
@@ -127,13 +170,18 @@ def run(input_json: dict) -> dict:
                     config=config,
                     review_config=slate_review_config,
                     prompt_bundle=slate_review_prompt_bundle,
-                    llm=llm,
+                    llm=slate_review_llm,
                     llm_calls=llm_calls,
                     attempt=attempt,
                     primary_candidate_count=len(candidate_pool),
                     recovery_story_ids=set(review_recovery["included_story_ids"]),
+                    focused_duplicate_audit=focused_duplicate_audit,
                 )
                 _validate_slate(reviewed_draft, review_pool, config)
+                _validate_slate_resolves_duplicate_audit(
+                    reviewed_draft,
+                    focused_duplicate_audit,
+                )
                 draft = reviewed_draft
                 materialization_pool = review_pool
                 slate_review_changed = bool(reviewed_draft.review_changed)
@@ -193,6 +241,21 @@ def run(input_json: dict) -> dict:
                 for call in llm_calls
                 if call.get("module_name") == SLATE_REVIEW_PROMPT_MODULE
             ),
+            "focused_duplicate_audit_enabled": bool(
+                slate_review_config.get("duplicate_audit_enabled")
+            ),
+            "focused_duplicate_audit_call_count": sum(
+                1
+                for call in llm_calls
+                if call.get("module_name") == DUPLICATE_AUDIT_PROMPT_MODULE
+            ),
+            "focused_duplicate_group_count": len(
+                focused_duplicate_audit.duplicate_story_groups
+                if focused_duplicate_audit is not None
+                else []
+            ),
+            "slate_review_provider": slate_review_config.get("effective_provider", ""),
+            "slate_review_model": slate_review_config.get("effective_model", ""),
             "slate_review_changed": slate_review_changed,
             "slate_review_reason": slate_review_reason,
             "slate_diversity_assessment": slate_diversity_assessment,
@@ -223,6 +286,121 @@ def run(input_json: dict) -> dict:
     return response.model_dump(mode="json")
 
 
+def _invoke_duplicate_auditor(
+    *,
+    stories: list[dict],
+    config: dict[str, Any],
+    review_config: dict[str, Any],
+    prompt_bundle: dict[str, str],
+    llm,
+    llm_calls: list[dict[str, Any]],
+    attempt: int,
+) -> RoundupDuplicateAudit:
+    story_contexts, selection_ref_to_story_id = _selection_contexts_with_refs(
+        stories,
+        config,
+    )
+    serialized_context_chars, serialized_context_tokens = _validate_call_context(
+        story_contexts,
+        config,
+    )
+    payload = {
+        "task": "Audit the proposed selected stories for duplicate event coverage.",
+        "constraints": {
+            "compare_every_selected_story": True,
+            "resolve_indirect_or_unnamed_event_descriptions": True,
+            "shared_company_or_topic_is_not_duplication": True,
+            "return_every_story_assessment_exactly_once": True,
+        },
+        "selection_identity": {
+            "story_id_values_are_opaque_selection_refs": True,
+            "copy_story_id_values_exactly": True,
+        },
+        "selected_stories": story_contexts,
+        "required_story_ids": [item["story_id"] for item in story_contexts],
+    }
+    prompt_inputs = {
+        "system_prompt": prompt_bundle["system"],
+        "user_preamble": prompt_bundle["user_preamble"],
+        "task_payload": json.dumps(payload, ensure_ascii=False, indent=2),
+    }
+    rendered_prompt = TASK_PROMPT.format(**prompt_inputs)
+    chain = TASK_PROMPT | llm.with_structured_output(
+        RoundupDuplicateAudit,
+        include_raw=True,
+    )
+    raw = None
+    parsed_dict = None
+    last_error = ""
+    for audit_attempt in range(1, int(review_config["max_attempts"]) + 1):
+        started = time.time()
+        try:
+            result = chain.invoke(prompt_inputs)
+            raw = result.get("raw") if isinstance(result, dict) else None
+            parsed = result.get("parsed") if isinstance(result, dict) else result
+            parsing_error = result.get("parsing_error") if isinstance(result, dict) else None
+            if parsing_error is not None or parsed is None:
+                raise ValueError(f"structured output parsing failed: {parsing_error}")
+            transport_output = (
+                parsed
+                if isinstance(parsed, RoundupDuplicateAudit)
+                else RoundupDuplicateAudit.model_validate(parsed)
+            )
+            parsed_dict = transport_output.model_dump(mode="json")
+            output = _restore_duplicate_audit_story_ids(
+                transport_output,
+                selection_ref_to_story_id,
+            )
+            _validate_duplicate_audit(output, stories)
+            llm_calls.append(
+                build_llm_call_log(
+                    provider=review_config["effective_provider"],
+                    model=review_config["effective_model"],
+                    rendered_prompt=rendered_prompt,
+                    raw_response=raw,
+                    parsed_output=parsed_dict,
+                    metadata={
+                        **_selection_context_metadata(
+                            story_contexts,
+                            attempt=attempt,
+                            serialized_context_chars=serialized_context_chars,
+                            serialized_context_tokens=serialized_context_tokens,
+                            selection_ref_to_story_id=selection_ref_to_story_id,
+                        ),
+                        "audit_attempt": audit_attempt,
+                    },
+                    duration_seconds=time.time() - started,
+                    module_name=DUPLICATE_AUDIT_PROMPT_MODULE,
+                )
+            )
+            return output
+        except Exception as exc:
+            last_error = clean_text(exc)
+            llm_calls.append(
+                build_llm_call_log(
+                    provider=review_config["effective_provider"],
+                    model=review_config["effective_model"],
+                    rendered_prompt=rendered_prompt,
+                    raw_response=raw,
+                    parsed_output=parsed_dict,
+                    metadata={
+                        **_selection_context_metadata(
+                            story_contexts,
+                            attempt=attempt,
+                            serialized_context_chars=serialized_context_chars,
+                            serialized_context_tokens=serialized_context_tokens,
+                            selection_ref_to_story_id=selection_ref_to_story_id,
+                        ),
+                        "audit_attempt": audit_attempt,
+                    },
+                    duration_seconds=time.time() - started,
+                    parse_error=last_error,
+                    module_name=DUPLICATE_AUDIT_PROMPT_MODULE,
+                )
+            )
+    raise RuntimeError(f"focused duplicate audit unresolved after bounded retries: {last_error}")
+
+
 def _invoke_slate_reviewer(
     *,
     stories: list[dict],
@@ -235,6 +413,7 @@ def _invoke_slate_reviewer(
     attempt: int,
     primary_candidate_count: int,
     recovery_story_ids: set[str],
+    focused_duplicate_audit: RoundupDuplicateAudit | None,
 ) -> RoundupSlateReviewDraft:
     story_contexts, selection_ref_to_story_id = _selection_contexts_with_refs(
         stories,
@@ -246,6 +425,10 @@ def _invoke_slate_reviewer(
     )
     proposed_transport = _slate_with_selection_refs(
         proposed,
+        selection_ref_to_story_id,
+    )
+    duplicate_audit_transport = _duplicate_audit_with_selection_refs(
+        focused_duplicate_audit,
         selection_ref_to_story_id,
     )
     recovery_selection_refs = [
@@ -276,6 +459,7 @@ def _invoke_slate_reviewer(
             "copy_story_id_values_exactly": True,
         },
         "proposed_slate": proposed_transport,
+        "focused_duplicate_audit": duplicate_audit_transport,
         "candidate_stories": story_contexts,
         "required_story_ids": [item["story_id"] for item in story_contexts],
     }
@@ -313,8 +497,8 @@ def _invoke_slate_reviewer(
             )
             llm_calls.append(
                 build_llm_call_log(
-                    provider=config["provider"],
-                    model=config["model"],
+                    provider=review_config["effective_provider"],
+                    model=review_config["effective_model"],
                     rendered_prompt=rendered_prompt,
                     raw_response=raw,
                     parsed_output=parsed_dict,
@@ -339,8 +523,8 @@ def _invoke_slate_reviewer(
             last_error = clean_text(exc)
             llm_calls.append(
                 build_llm_call_log(
-                    provider=config["provider"],
-                    model=config["model"],
+                    provider=review_config["effective_provider"],
+                    model=review_config["effective_model"],
                     rendered_prompt=rendered_prompt,
                     raw_response=raw,
                     parsed_output=parsed_dict,
@@ -1038,6 +1222,37 @@ def _slate_with_selection_refs(
     return payload
 
 
+def _duplicate_audit_with_selection_refs(
+    audit: RoundupDuplicateAudit | None,
+    selection_ref_to_story_id: dict[str, str],
+) -> dict[str, Any] | None:
+    if audit is None:
+        return None
+    story_id_to_selection_ref = {
+        story_id: selection_ref
+        for selection_ref, story_id in selection_ref_to_story_id.items()
+    }
+    payload = audit.model_dump(mode="json")
+    for assessment in payload["assessments"]:
+        story_id = clean_text(assessment.get("story_id"))
+        selection_ref = story_id_to_selection_ref.get(story_id)
+        if selection_ref is None:
+            raise ValueError(
+                "focused duplicate audit references a story outside the slate-review pool: "
+                f"{story_id}"
+            )
+        assessment["story_id"] = selection_ref
+    for group in payload["duplicate_story_groups"]:
+        group["story_ids"] = [
+            story_id_to_selection_ref[story_id]
+            for story_id in group["story_ids"]
+        ]
+        group["preferred_story_id"] = story_id_to_selection_ref[
+            group["preferred_story_id"]
+        ]
+    return payload
+
+
 def _complete_proposed_slate_for_review(
     draft: RoundupSlateDraft,
     *,
@@ -1096,6 +1311,109 @@ def _restore_slate_review_story_ids(
             restored_ids.append(selection_ref_to_story_id[selection_ref])
         group["story_ids"] = restored_ids
     return RoundupSlateReviewDraft.model_validate(payload)
+
+
+def _restore_duplicate_audit_story_ids(
+    audit: RoundupDuplicateAudit,
+    selection_ref_to_story_id: dict[str, str],
+) -> RoundupDuplicateAudit:
+    payload = audit.model_dump(mode="json")
+    for assessment in payload["assessments"]:
+        selection_ref = clean_text(assessment.get("story_id"))
+        if selection_ref not in selection_ref_to_story_id:
+            raise ValueError(
+                "focused duplicate audit returned unknown selection reference: "
+                f"{selection_ref}"
+            )
+        assessment["story_id"] = selection_ref_to_story_id[selection_ref]
+    for group in payload["duplicate_story_groups"]:
+        restored_ids: list[str] = []
+        for selection_ref in group["story_ids"]:
+            if selection_ref not in selection_ref_to_story_id:
+                raise ValueError(
+                    "focused duplicate audit group returned unknown selection reference: "
+                    f"{selection_ref}"
+                )
+            restored_ids.append(selection_ref_to_story_id[selection_ref])
+        preferred_ref = clean_text(group.get("preferred_story_id"))
+        if preferred_ref not in selection_ref_to_story_id:
+            raise ValueError(
+                "focused duplicate audit returned unknown preferred selection reference: "
+                f"{preferred_ref}"
+            )
+        group["story_ids"] = restored_ids
+        group["preferred_story_id"] = selection_ref_to_story_id[preferred_ref]
+    return RoundupDuplicateAudit.model_validate(payload)
+
+
+def _validate_duplicate_audit(
+    audit: RoundupDuplicateAudit,
+    stories: list[dict[str, Any]],
+) -> None:
+    expected = {clean_text(story.get("story_id")) for story in stories}
+    returned = [assessment.story_id for assessment in audit.assessments]
+    if len(returned) != len(set(returned)) or set(returned) != expected:
+        raise ValueError(
+            "focused duplicate audit story coverage mismatch; "
+            f"missing={sorted(expected - set(returned))}, "
+            f"unknown={sorted(set(returned) - expected)}"
+        )
+    group_ids: set[str] = set()
+    grouped_story_ids: set[str] = set()
+    for group in audit.duplicate_story_groups:
+        if not group.group_id or group.group_id in group_ids:
+            raise ValueError("focused duplicate audit group IDs must be non-empty and unique")
+        group_ids.add(group.group_id)
+        members = list(group.story_ids)
+        if len(members) != len(set(members)):
+            raise ValueError(
+                f"focused duplicate audit group {group.group_id} repeats a story ID"
+            )
+        unknown = set(members) - expected
+        if unknown:
+            raise ValueError(
+                f"focused duplicate audit group {group.group_id} has unknown IDs: "
+                f"{sorted(unknown)}"
+            )
+        if group.preferred_story_id not in members:
+            raise ValueError(
+                f"focused duplicate audit group {group.group_id} preferred story is not a member"
+            )
+        grouped_story_ids.update(members)
+    for assessment in audit.assessments:
+        group_id = clean_text(assessment.duplicate_group_id)
+        if group_id and group_id not in group_ids:
+            raise ValueError(
+                "focused duplicate audit assessment references unknown group ID: "
+                f"{group_id}"
+            )
+        if not group_id and assessment.story_id in grouped_story_ids:
+            raise ValueError(
+                "focused duplicate audit grouped story is missing its duplicate_group_id: "
+                f"{assessment.story_id}"
+            )
+
+
+def _validate_slate_resolves_duplicate_audit(
+    slate: RoundupSlateReviewDraft,
+    audit: RoundupDuplicateAudit | None,
+) -> None:
+    if audit is None:
+        return
+    selected_ids = {decision.story_id for decision in slate.selected}
+    unresolved = [
+        {
+            "group_id": group.group_id,
+            "selected_story_ids": sorted(selected_ids & set(group.story_ids)),
+        }
+        for group in audit.duplicate_story_groups
+        if len(selected_ids & set(group.story_ids)) > 1
+    ]
+    if unresolved:
+        raise ValueError(
+            "final slate did not resolve focused semantic duplicate groups: "
+            f"{unresolved}"
+        )
 
 
 def _validate_call_context(

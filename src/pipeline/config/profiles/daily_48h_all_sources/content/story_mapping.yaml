@@ -28,6 +28,15 @@ clustering:
     max_batch_chars: 180000
     max_single_pair_chars: 300000
     confirm_same_event_with_full_records: true
+    review_ambiguous_pairs_with_full_records: true
+    full_record_review_relationships:
+    - follow_up
+    - broader_story_arc
+    - uncertain
+    full_record_review:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.0
   cluster_reconciliation:
     enabled: true
     provider: openai

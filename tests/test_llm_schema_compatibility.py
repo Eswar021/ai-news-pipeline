@@ -4,6 +4,7 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from src.pipeline.content.editorial_selection.formats.roundup.contract import (
     CandidateScreenDraft,
+    RoundupDuplicateAudit,
     RoundupSlateDraft,
     RoundupSlateReviewDraft,
 )
@@ -73,6 +74,7 @@ def test_all_active_llm_output_models_are_openai_strict_schema_compatible() -> N
         ComponentReconciliationOutput,
         StoryLabelOutput,
         CandidateScreenDraft,
+        RoundupDuplicateAudit,
         RoundupSlateDraft,
         RoundupSlateReviewDraft,
         MetadataDraftOutput,

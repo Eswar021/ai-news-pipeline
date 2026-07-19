@@ -5,6 +5,7 @@ import numpy as np
 
 from src.pipeline.content.editorial_selection.formats.roundup import app as selection_app
 from src.pipeline.content.editorial_selection.formats.roundup.contract import (
+    RoundupDuplicateAudit,
     RoundupSlateDraft,
     RoundupSlateReviewDraft,
 )
@@ -30,6 +31,13 @@ def test_event_identity_reads_complete_record_context() -> None:
             "primary_entity": "Moonshot AI",
             "owning_org": "Moonshot AI",
             "product_or_project": "Kimi K3",
+            "named_identity_supported": True,
+            "canonical_named_entity": "Moonshot AI",
+            "canonical_named_product": "Kimi K3",
+            "identity_resolution": "explicit",
+            "identity_evidence": ["The record names Moonshot AI and Kimi K3."],
+            "entity_aliases": ["Moonshot AI"],
+            "product_aliases": ["Kimi K3"],
             "event_action": "announced",
             "event_type": "announcement",
             "event_status": "announced",
@@ -37,6 +45,7 @@ def test_event_identity_reads_complete_record_context() -> None:
             "canonical_event": "Moonshot AI announces Kimi K3",
             "story_family": "Kimi K3 release cycle",
             "distinguishing_details": ["Weights were promised for later"],
+            "event_fingerprint": ["Moonshot AI", "Kimi K3", "2026-07-17"],
         }
     )
 
@@ -180,6 +189,7 @@ def test_pair_adjudication_uses_capsule_then_complete_record_confirmation() -> N
                         "relationship": "same_event",
                         "confidence": 0.91,
                         "reason": "The capsules identify the same launch.",
+                        "requires_full_record_review": False,
                     }
                 ]
             }
@@ -192,6 +202,7 @@ def test_pair_adjudication_uses_capsule_then_complete_record_confirmation() -> N
                         "relationship": "same_event",
                         "confidence": 0.97,
                         "reason": "The complete records confirm the same event.",
+                        "requires_full_record_review": False,
                     }
                 ]
             }
@@ -225,6 +236,92 @@ def test_pair_adjudication_uses_capsule_then_complete_record_confirmation() -> N
         "pair_adjudication",
         "pair_adjudication_full_confirmation",
     ]
+    assert marker not in llm_calls[0]["messages"][0]["content"]
+    assert marker in llm_calls[1]["messages"][0]["content"]
+
+
+def test_pair_adjudication_honors_semantic_request_for_full_record_review() -> None:
+    marker = "INDIRECT_IDENTITY_FULL_CONTEXT"
+    candidate = {
+        "pair_id": "pair_indirect_identity",
+        "similarity": 0.8,
+        "left_record": {
+            "record_key": "record_named",
+            "title": "Moonshot releases Kimi K3",
+            "semantic_content": "Moonshot released Kimi K3.",
+            "story_mapping_event_identity": {
+                "primary_entity": "Moonshot AI",
+                "product_or_project": "Kimi K3",
+                "identity_resolution": "explicit",
+                "event_fingerprint": ["largest open model", "stocks slid"],
+            },
+        },
+        "right_record": {
+            "record_key": "record_digest",
+            "title": "China's latest AI leap",
+            "url": "https://example.com/china-moonshot-ai",
+            "semantic_content": f"A Chinese startup released the largest open model. {marker}",
+            "story_mapping_event_identity": {
+                "primary_entity": "Chinese startup",
+                "product_or_project": "largest open model",
+                "identity_resolution": "descriptive_only",
+                "event_fingerprint": ["largest open model", "stocks slid"],
+            },
+        },
+    }
+    outputs = [
+        PairDecisionBatch.model_validate(
+            {
+                "decisions": [
+                    {
+                        "pair_id": "pair_indirect_identity",
+                        "relationship": "uncertain",
+                        "confidence": 0.7,
+                        "reason": "The generic identity needs complete-record review.",
+                        "requires_full_record_review": True,
+                    }
+                ]
+            }
+        ),
+        PairDecisionBatch.model_validate(
+            {
+                "decisions": [
+                    {
+                        "pair_id": "pair_indirect_identity",
+                        "relationship": "same_event",
+                        "confidence": 0.95,
+                        "reason": "The complete records identify the same Kimi K3 launch.",
+                        "requires_full_record_review": False,
+                    }
+                ]
+            }
+        ),
+    ]
+
+    class FakeLLM:
+        def with_structured_output(self, _output_model, **_kwargs):
+            parsed = outputs.pop(0)
+            return RunnableLambda(
+                lambda _prompt: {"parsed": parsed, "raw": None, "parsing_error": None}
+            )
+
+    llm_calls: list[dict] = []
+    decisions = _invoke_batch(
+        batch=[candidate],
+        batch_index=1,
+        attempt=1,
+        config={
+            "provider": "openai",
+            "model": "fixture",
+            "confirm_same_event_with_full_records": True,
+            "review_ambiguous_pairs_with_full_records": True,
+        },
+        llm=FakeLLM(),
+        system_prompt="Judge indirect event identity.",
+        llm_calls=llm_calls,
+    )
+
+    assert decisions[0]["relationship"] == "same_event"
     assert marker not in llm_calls[0]["messages"][0]["content"]
     assert marker in llm_calls[1]["messages"][0]["content"]
 
@@ -419,6 +516,40 @@ def test_final_slate_review_replaces_duplicate_story(monkeypatch) -> None:
             "human_review_warning": "",
         }
     )
+    duplicate_audit = RoundupDuplicateAudit.model_validate(
+        {
+            "assessments": [
+                {
+                    "story_id": "candidate_001",
+                    "event_summary": "Moonshot releases Kimi K3.",
+                    "duplicate_group_id": "duplicate_1",
+                    "reason": "Named coverage of the Kimi K3 launch.",
+                },
+                {
+                    "story_id": "candidate_002",
+                    "event_summary": "A digest previews the same Kimi K3 launch.",
+                    "duplicate_group_id": "duplicate_1",
+                    "reason": "Indirect coverage of the same release cycle.",
+                },
+                {
+                    "story_id": "candidate_003",
+                    "event_summary": "A distinct GPT-Red story.",
+                    "duplicate_group_id": "",
+                    "reason": "Different event and product.",
+                },
+            ],
+            "duplicate_story_groups": [
+                {
+                    "group_id": "duplicate_1",
+                    "story_ids": ["candidate_001", "candidate_002"],
+                    "relationship": "same_editorial_story",
+                    "preferred_story_id": "candidate_001",
+                    "reason": "Both stories cover the Kimi K3 launch.",
+                }
+            ],
+            "audit_summary": "One duplicate group was found.",
+        }
+    )
     reviewer_draft = RoundupSlateReviewDraft.model_validate(
         {
             "episode_shape": "mixed_news_roundup",
@@ -448,11 +579,12 @@ def test_final_slate_review_replaces_duplicate_story(monkeypatch) -> None:
     class FakeLLM:
         def with_structured_output(self, output_model, include_raw):
             assert include_raw is True
-            parsed = (
-                selector_draft
-                if output_model is RoundupSlateDraft
-                else reviewer_draft
-            )
+            if output_model is RoundupSlateDraft:
+                parsed = selector_draft
+            elif output_model is RoundupDuplicateAudit:
+                parsed = duplicate_audit
+            else:
+                parsed = reviewer_draft
             return RunnableLambda(
                 lambda _prompt: {"parsed": parsed, "raw": None, "parsing_error": None}
             )
@@ -475,6 +607,8 @@ def test_final_slate_review_replaces_duplicate_story(monkeypatch) -> None:
                     "enabled": True,
                     "prompt_version": "v1",
                     "max_attempts": 2,
+                    "duplicate_audit_enabled": True,
+                    "duplicate_audit_prompt_version": "v1",
                 },
             },
             "input": {
@@ -494,6 +628,7 @@ def test_final_slate_review_replaces_duplicate_story(monkeypatch) -> None:
     ]
     assert result["summary"]["slate_review_changed"] is True
     assert result["summary"]["duplicate_story_group_count"] == 1
+    assert result["summary"]["focused_duplicate_group_count"] == 1
 
 
 def test_editorial_screening_preserves_wide_finalist_target() -> None:

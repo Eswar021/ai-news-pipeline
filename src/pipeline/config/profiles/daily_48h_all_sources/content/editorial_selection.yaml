@@ -17,6 +17,11 @@ tokenizer_encoding: o200k_base
 max_attempts: 3
 slate_review:
   enabled: true
+  provider: openai
+  model: gpt-4o
+  temperature: 0.0
   prompt_version: v1
   max_attempts: 3
   recovery_candidate_count: 4
+  duplicate_audit_enabled: true
+  duplicate_audit_prompt_version: v1

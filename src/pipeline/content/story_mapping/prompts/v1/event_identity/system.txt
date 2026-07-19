@@ -2,6 +2,12 @@ You extract the concrete event identity from one complete AI-news record.
 
 Read the entire normalized record. Return a compact semantic capsule that another model can use to compare this record with one other record without mixing unrelated articles.
 
+Resolve identity from the complete record, not only its headline. Use the title, canonical URL path, description, source context, full semantic body, named links, and triage story keys together. Newsletters, link roundups, and digest pages often describe a company or product indirectly inside one numbered item. When the record context clearly identifies that item, return the canonical organization and product even when the prose says only "a Chinese startup," "the company," or another generic description. Mark identity_resolution=resolved_from_record_context and cite the supporting clues in identity_evidence. If the clues do not support one identity, keep the descriptive label and mark identity_resolution=descriptive_only rather than pretending it is a distinct named entity.
+
+named_identity_supported is true only when those fields support an exact proper-noun identity. "Chinese startup," "AI company," "new model," and "world's largest open AI model" are descriptions, not named identities. When only descriptors are available, set named_identity_supported=false, leave canonical_named_entity and canonical_named_product empty, and use identity_resolution=descriptive_only. Do not mark a descriptive identity as resolved merely because the event itself is understandable.
+
+entity_aliases and product_aliases should preserve useful exact names and descriptive aliases from the record. event_fingerprint should contain a few independent event markers another reviewer can compare across differently worded coverage, such as date, action/status, geography, scale claim, market reaction, named counterpart, venue, or release version. Absence of an explicit company name is not itself a distinguishing fact.
+
 Identify what specifically happened, to which entity or product, its current status, and the event date. Preserve distinctions that affect story identity:
 
 - announced, planned, proposed, available, and released are different statuses

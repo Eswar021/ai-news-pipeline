@@ -30,6 +30,7 @@ class PairDecision(BaseModel):
     ]
     confidence: float = Field(ge=0, le=1)
     reason: str
+    requires_full_record_review: bool
 
 
 class PairDecisionBatch(BaseModel):
@@ -45,6 +46,7 @@ def adjudicate_candidate_pairs(
     llm,
     system_prompt: str,
     llm_calls: list[dict[str, Any]],
+    full_record_llm=None,
 ) -> list[dict]:
     decisions: list[dict] = []
     batches = _candidate_batches(
@@ -69,6 +71,7 @@ def adjudicate_candidate_pairs(
                     llm=llm,
                     system_prompt=system_prompt,
                     llm_calls=local_calls,
+                    full_record_llm=full_record_llm,
                 )
                 break
             except Exception as exc:
@@ -80,6 +83,7 @@ def adjudicate_candidate_pairs(
                     "relationship": "uncertain",
                     "confidence": 0.0,
                     "reason": f"Pair adjudication unresolved after bounded retries: {last_error}",
+                    "requires_full_record_review": False,
                     "decision_source": "unresolved",
                 }
                 for item in batch
@@ -119,6 +123,7 @@ def _invoke_batch(
     llm,
     system_prompt: str,
     llm_calls: list[dict[str, Any]],
+    full_record_llm=None,
 ) -> list[dict]:
     if len(batch) != 1:
         raise ValueError("Pair adjudication requires exactly one candidate per LLM call")
@@ -137,26 +142,58 @@ def _invoke_batch(
     decision = capsule_output[0]
     if not bool(config.get("confirm_same_event_with_full_records", True)):
         return capsule_output
-    if decision.get("relationship") != "same_event":
+    needs_confirmation = decision.get("relationship") == "same_event"
+    needs_ambiguity_review = bool(
+        config.get("review_ambiguous_pairs_with_full_records", True)
+        and (
+            decision.get("requires_full_record_review")
+            or _pair_has_unresolved_named_identity(batch)
+            or decision.get("relationship")
+            in set(
+                config.get(
+                    "full_record_review_relationships",
+                    ["follow_up", "broader_story_arc", "uncertain"],
+                )
+            )
+        )
+    )
+    if not needs_confirmation and not needs_ambiguity_review:
         return capsule_output
 
     confirmation_prompt = (
         system_prompt
-        + "\n\nThis is a full-record confirmation of a proposed same_event merge. Read both "
-        "complete records independently. Confirm same_event only when they describe the same "
-        "concrete event; otherwise return the correct relationship."
+        + "\n\nThis is the authoritative full-record review. Read both complete records "
+        "independently and resolve generic or unnamed entities from the supplied record context "
+        "when the evidence supports it. Return same_event only when both records describe the "
+        "same concrete event; otherwise return the correct relationship. Set "
+        "requires_full_record_review=false because complete records are already present."
     )
+    full_record_config = {
+        **config,
+        **dict(config.get("full_record_review") or {}),
+    }
     return _invoke_context(
         batch=batch,
         batch_index=batch_index,
         attempt=attempt,
-        config=config,
-        llm=llm,
+        config=full_record_config,
+        llm=full_record_llm or llm,
         system_prompt=confirmation_prompt,
         llm_calls=llm_calls,
         include_full_records=True,
         module_name="pair_adjudication_full_confirmation",
     )
+
+
+def _pair_has_unresolved_named_identity(batch: list[dict[str, Any]]) -> bool:
+    for item in batch:
+        for field_name in ("left_record", "right_record"):
+            identity = dict(
+                (item.get(field_name) or {}).get("story_mapping_event_identity") or {}
+            )
+            if identity.get("named_identity_supported") is False:
+                return True
+    return False
 
 
 def _invoke_context(

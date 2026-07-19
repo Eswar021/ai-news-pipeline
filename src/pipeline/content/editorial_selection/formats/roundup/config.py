@@ -4,6 +4,7 @@ from __future__ import annotations
 PROMPT_MODULE = "roundup_editorial_selector"
 SCREENING_PROMPT_MODULE = "roundup_candidate_screen"
 SLATE_REVIEW_PROMPT_MODULE = "roundup_slate_review"
+DUPLICATE_AUDIT_PROMPT_MODULE = "roundup_duplicate_audit"
 DEFAULT_MAX_CANDIDATE_STORIES = 80
 DEFAULT_SCREENING_SHORTLIST_PER_BATCH = 10
 DEFAULT_TARGET_FINALIST_STORIES = None

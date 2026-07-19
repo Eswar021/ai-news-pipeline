@@ -146,6 +146,31 @@ class ClusteringConfig(BaseModel):
         return value
 
 
+class PairFullRecordReviewConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: Literal["openai", "gemini", "lmstudio"] = "openai"
+    model: str = "gpt-4o"
+    base_url: str | None = None
+    temperature: float = 0.0
+
+    @field_validator("model")
+    @classmethod
+    def model_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("pair_adjudication.full_record_review.model must not be empty")
+        return value
+
+    @field_validator("temperature")
+    @classmethod
+    def temperature_must_be_valid(cls, value: float) -> float:
+        if value < 0 or value > 2:
+            raise ValueError(
+                "pair_adjudication.full_record_review.temperature must be between 0 and 2"
+            )
+        return value
+
+
 class PairAdjudicationConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -161,6 +186,11 @@ class PairAdjudicationConfig(BaseModel):
     max_batch_chars: int = DEFAULT_PAIR_ADJUDICATION_MAX_BATCH_CHARS
     max_single_pair_chars: int = DEFAULT_PAIR_ADJUDICATION_MAX_SINGLE_PAIR_CHARS
     confirm_same_event_with_full_records: bool = True
+    review_ambiguous_pairs_with_full_records: bool = True
+    full_record_review_relationships: list[
+        Literal["follow_up", "broader_story_arc", "uncertain"]
+    ] = Field(default_factory=lambda: ["follow_up", "broader_story_arc", "uncertain"])
+    full_record_review: PairFullRecordReviewConfig | None = None
 
     @field_validator("model", "prompt_version")
     @classmethod

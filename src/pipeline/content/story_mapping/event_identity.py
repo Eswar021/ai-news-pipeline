@@ -24,6 +24,27 @@ class EventIdentityOutput(BaseModel):
     primary_entity: str
     owning_org: str
     product_or_project: str
+    named_identity_supported: bool = Field(
+        description=(
+            "True only when the record supports an exact proper-noun organization/entity and "
+            "product identity. Generic labels such as 'a Chinese startup' are false."
+        )
+    )
+    canonical_named_entity: str = Field(
+        description="Exact supported entity/organization name, or an empty string when unresolved."
+    )
+    canonical_named_product: str = Field(
+        description="Exact supported product/model/project name, or an empty string when unresolved."
+    )
+    identity_resolution: Literal[
+        "explicit",
+        "resolved_from_record_context",
+        "descriptive_only",
+        "unknown",
+    ]
+    identity_evidence: list[str]
+    entity_aliases: list[str]
+    product_aliases: list[str]
     event_action: str
     event_type: Literal[
         "announcement",
@@ -58,7 +79,8 @@ class EventIdentityOutput(BaseModel):
     event_date: str
     canonical_event: str
     story_family: str
-    distinguishing_details: list[str] = Field(default_factory=list)
+    distinguishing_details: list[str]
+    event_fingerprint: list[str]
 
 
 def attach_event_identities(

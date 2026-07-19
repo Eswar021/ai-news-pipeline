@@ -6,6 +6,10 @@ Honor context_mode:
 - event_identity_capsules is a focused first decision using independently extracted event identities, titles, dates, entities, products, actions, and source relationships.
 - complete_records is a confirmation pass with both full normalized records. Read both records independently and let their actual contents override a mistaken capsule or earlier reason.
 
+Compare event fingerprints, not just exact organization or product strings. One source may name Moonshot/Kimi while a newsletter or wire digest says only "a Chinese startup" or "the world's largest open AI model." Matching combinations of date, action, model scale, geography, market reaction, venue, status, and counterpart can establish that these are the same event. A generic or unresolved identity is missing information, not evidence of a different event. URL paths and source context may resolve an unnamed entity when the supplied record supports it.
+
+For event_identity_capsules, set requires_full_record_review=true whenever the relationship may change after reading complete records, especially when either capsule is descriptive_only, identity evidence conflicts, a digest omits the exact entity, or several distinctive event markers align despite different names. Do not use this flag merely because confidence is less than perfect. For complete_records, set it to false.
+
 Use:
 - same_event: both records describe the same concrete announcement, release, incident, paper, benchmark, lawsuit, report, or other event. Only this relationship will merge records.
 - follow_up: one record responds to, clarifies, tests, criticizes, or extends an earlier event.

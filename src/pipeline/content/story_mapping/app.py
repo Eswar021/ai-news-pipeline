@@ -61,6 +61,8 @@ def run(input_json: dict) -> dict:
     pair_adjudication_batch_count = 0
     pair_adjudication_worker_count = 0
     pair_adjudication_enabled = False
+    pair_full_record_review_provider = ""
+    pair_full_record_review_model = ""
     reconciliation_cfg = request.config.clustering.cluster_reconciliation.model_dump(
         mode="json"
     )
@@ -79,6 +81,19 @@ def run(input_json: dict) -> dict:
                 temperature=float(pair_cfg["temperature"]),
                 base_url=pair_cfg.get("base_url"),
             )
+            full_record_llm = None
+            full_record_cfg = dict(pair_cfg.get("full_record_review") or {})
+            if full_record_cfg:
+                pair_full_record_review_provider = clean_text(
+                    full_record_cfg.get("provider")
+                )
+                pair_full_record_review_model = clean_text(full_record_cfg.get("model"))
+                full_record_llm = make_llm(
+                    provider=full_record_cfg["provider"],
+                    model=full_record_cfg["model"],
+                    temperature=float(full_record_cfg["temperature"]),
+                    base_url=full_record_cfg.get("base_url"),
+                )
 
             def pair_adjudicator(candidates: list[dict]) -> list[dict]:
                 return adjudicate_candidate_pairs(
@@ -87,6 +102,7 @@ def run(input_json: dict) -> dict:
                     llm=pair_llm,
                     system_prompt=pair_prompt,
                     llm_calls=llm_calls,
+                    full_record_llm=full_record_llm,
                 )
 
         cluster_reconciler = None
@@ -197,6 +213,12 @@ def run(input_json: dict) -> dict:
             item.get("module_name") == "cluster_reconciliation" for item in llm_calls
         ),
         reconciliation_worker_count=reconciliation_worker_count,
+    )
+    summary["llm_runtime"]["pair_full_record_review_provider"] = (
+        pair_full_record_review_provider
+    )
+    summary["llm_runtime"]["pair_full_record_review_model"] = (
+        pair_full_record_review_model
     )
 
     response = StoryMappingResponse(

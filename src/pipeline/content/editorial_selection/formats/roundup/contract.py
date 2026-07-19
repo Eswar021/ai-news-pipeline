@@ -55,15 +55,35 @@ class SlateReviewConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
+    provider: Literal["openai", "gemini", "lmstudio"] | None = None
+    model: str | None = None
+    base_url: str | None = None
+    temperature: float | None = None
     prompt_version: str = "v1"
     max_attempts: int = DEFAULT_SLATE_REVIEW_MAX_ATTEMPTS
     recovery_candidate_count: int = DEFAULT_SLATE_REVIEW_RECOVERY_CANDIDATE_COUNT
+    duplicate_audit_enabled: bool = False
+    duplicate_audit_prompt_version: str = "v1"
 
-    @field_validator("prompt_version")
+    @field_validator("prompt_version", "duplicate_audit_prompt_version")
     @classmethod
     def prompt_version_must_not_be_empty(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("config.slate_review.prompt_version must not be empty")
+            raise ValueError("config.slate_review prompt versions must not be empty")
+        return value
+
+    @field_validator("model")
+    @classmethod
+    def model_must_not_be_empty(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("config.slate_review.model must not be empty when provided")
+        return value
+
+    @field_validator("temperature")
+    @classmethod
+    def temperature_must_be_valid(cls, value: float | None) -> float | None:
+        if value is not None and (value < 0 or value > 2):
+            raise ValueError("config.slate_review.temperature must be between 0 and 2")
         return value
 
     @field_validator("max_attempts")
@@ -287,6 +307,37 @@ class DuplicateStoryGroup(BaseModel):
         "immediate_follow_up",
     ]
     reason: str
+
+
+class DuplicateAuditStoryAssessment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    story_id: str
+    event_summary: str
+    duplicate_group_id: str
+    reason: str
+
+
+class FocusedDuplicateStoryGroup(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    group_id: str
+    story_ids: list[str] = Field(min_length=2)
+    relationship: Literal[
+        "same_event",
+        "same_editorial_story",
+        "immediate_follow_up",
+    ]
+    preferred_story_id: str
+    reason: str
+
+
+class RoundupDuplicateAudit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assessments: list[DuplicateAuditStoryAssessment]
+    duplicate_story_groups: list[FocusedDuplicateStoryGroup]
+    audit_summary: str
 
 
 class RoundupSlateReviewDraft(RoundupSlateDraft):
