@@ -231,6 +231,31 @@ def visual_plan_artifact_payload(plan: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def visual_assets_artifact_payload(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "resolved_assets": [
+            {
+                "scene_id": asset.get("scene_id", ""),
+                "asset_type": asset.get("asset_type", ""),
+                "status": asset.get("status", ""),
+                "asset_path": asset.get("asset_path", ""),
+                "asset_paths": [
+                    nested.get("asset_path", "")
+                    for nested in asset.get("assets", [])
+                    if isinstance(nested, dict)
+                ],
+            }
+            for asset in manifest.get("resolved_assets", [])
+            if isinstance(asset, dict)
+        ],
+        "scene_ids": [
+            scene.get("scene_id", "")
+            for scene in manifest.get("render_scenes", [])
+            if isinstance(scene, dict)
+        ],
+    }
+
+
 def voiceover_artifact_payload(package: dict[str, Any]) -> dict[str, Any]:
     audio = package.get("audio") if isinstance(package.get("audio"), dict) else {}
     payload = {

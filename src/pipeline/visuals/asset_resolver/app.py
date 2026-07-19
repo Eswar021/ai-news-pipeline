@@ -14,6 +14,7 @@ from src.pipeline.contracts import (
     require_matching_run_id,
     require_parent_fingerprint,
     validate_artifact_provenance,
+    visual_assets_artifact_payload,
     visual_plan_artifact_payload,
 )
 
@@ -657,7 +658,7 @@ def _build_manifest(
         run_id=run_id,
         parents=parents,
         script_source=plan_provenance.get("script_source", ""),
-        payload=_asset_identity_payload(manifest),
+        payload=visual_assets_artifact_payload(manifest),
     )
     return manifest
 
@@ -753,29 +754,4 @@ def _media_identity_payload(package: dict[str, Any]) -> dict[str, Any]:
         "fallbacks": package.get("fallbacks", []),
         "unresolved": package.get("unresolved", []),
         "scene_timeline": plan.get("scene_timeline", []),
-    }
-
-
-def _asset_identity_payload(manifest: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "resolved_assets": [
-            {
-                "scene_id": asset.get("scene_id", ""),
-                "asset_type": asset.get("asset_type", ""),
-                "status": asset.get("status", ""),
-                "asset_path": asset.get("asset_path", ""),
-                "asset_paths": [
-                    nested.get("asset_path", "")
-                    for nested in asset.get("assets", [])
-                    if isinstance(nested, dict)
-                ],
-            }
-            for asset in manifest.get("resolved_assets", [])
-            if isinstance(asset, dict)
-        ],
-        "scene_ids": [
-            scene.get("scene_id", "")
-            for scene in manifest.get("render_scenes", [])
-            if isinstance(scene, dict)
-        ],
     }

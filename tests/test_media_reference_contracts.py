@@ -17,6 +17,7 @@ from src.pipeline.contracts import (
     file_sha256,
     final_video_artifact_payload,
     validate_script_provenance,
+    visual_assets_artifact_payload,
     visual_plan_artifact_payload,
     voiceover_artifact_payload,
 )
@@ -35,6 +36,8 @@ from src.pipeline.visuals.planner.contract import VisualPlannerResponse
 from src.pipeline.visuals.planner import app as visual_planner_app
 from src.pipeline.visuals.planner.retime import retime_visual_plan_result
 from src.pipeline.visuals.asset_catalog import run as build_visual_asset_catalog
+from src.pipeline.visuals.asset_resolver.app import _build_manifest
+from src.pipeline.visuals.render.app import _required_asset_provenance
 
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "media_roundup_reference"
@@ -742,6 +745,58 @@ def test_visual_plan_identity_changes_with_asset_catalog_fingerprint() -> None:
     plan["asset_catalog"]["provenance"]["artifact_fingerprint"] = "sha256:" + "2" * 64
     second = artifact_fingerprint(visual_plan_artifact_payload(plan))
     assert first != second
+
+
+def test_visual_asset_manifest_identity_is_shared_by_resolver_and_renderer(
+    tmp_path: Path,
+) -> None:
+    run_id = "run_asset_identity"
+    visual_plan_fingerprint = "sha256:" + "1" * 64
+    script_fingerprint = "sha256:" + "2" * 64
+    voiceover_fingerprint = "sha256:" + "3" * 64
+    manifest = _build_manifest(
+        run_id=run_id,
+        generated_at="2026-07-19T00:00:00+00:00",
+        output_dir=tmp_path,
+        visual_scene_plan={
+            "scene_timeline": [
+                {
+                    "scene_id": "scene_001",
+                    "scene_order": 1,
+                    "render_kind": "source_article_scene",
+                }
+            ]
+        },
+        visual_media_package={},
+        resolved_assets=[
+            {
+                "scene_id": "scene_001",
+                "asset_type": "source_montage",
+                "status": "resolved",
+                "asset_path": "montage.png",
+                "assets": [
+                    {"asset_path": "source-a.png"},
+                    {"asset_path": "source-b.png"},
+                ],
+            }
+        ],
+        plan_provenance={
+            "visual_plan_fingerprint": visual_plan_fingerprint,
+            "script_fingerprint": script_fingerprint,
+            "voiceover_fingerprint": voiceover_fingerprint,
+            "script_source": "native_app",
+        },
+    )
+
+    payload = visual_assets_artifact_payload(manifest)
+    assert payload["resolved_assets"][0]["asset_paths"] == [
+        "source-a.png",
+        "source-b.png",
+    ]
+    provenance = _required_asset_provenance(manifest, run_id)
+    assert provenance["artifact_fingerprint"] == manifest["provenance"][
+        "artifact_fingerprint"
+    ]
 
 
 def test_committed_notebooks_are_clean_and_canonical() -> None:

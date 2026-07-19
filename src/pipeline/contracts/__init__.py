@@ -12,6 +12,7 @@ from .artifact_identity import (
     require_parent_fingerprint,
     validate_artifact_provenance,
     validate_script_provenance,
+    visual_assets_artifact_payload,
     visual_plan_artifact_payload,
     voiceover_artifact_payload,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "require_parent_fingerprint",
     "validate_artifact_provenance",
     "validate_script_provenance",
+    "visual_assets_artifact_payload",
     "visual_plan_artifact_payload",
     "voiceover_artifact_payload",
 ]
