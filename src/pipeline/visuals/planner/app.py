@@ -434,6 +434,7 @@ def _resolved_llm_configs(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "provider_options": dict(config.get("provider_options") or {}),
         "structured_output": dict(config.get("structured_output") or {}),
         "max_attempts": int(config.get("max_attempts", 2)),
+        "content_filter_fallback": None,
     }
     overrides = dict(config.get("llm_roles") or {})
     resolved: dict[str, dict[str, Any]] = {}
@@ -453,8 +454,26 @@ def _resolved_llm_configs(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
             )
             if override.get("max_attempts") is not None:
                 role_config["max_attempts"] = int(override["max_attempts"])
+            role_config["content_filter_fallback"] = _resolved_content_filter_fallback(
+                override.get("content_filter_fallback")
+            )
         resolved[role] = role_config
     return resolved
+
+
+def _resolved_content_filter_fallback(raw_config: Any) -> dict[str, Any] | None:
+    if not raw_config:
+        return None
+    fallback = dict(raw_config)
+    return {
+        "provider": fallback["provider"],
+        "model": fallback["model"],
+        "temperature": float(fallback["temperature"]),
+        "base_url": fallback.get("base_url"),
+        "provider_options": dict(fallback.get("provider_options") or {}),
+        "structured_output": dict(fallback.get("structured_output") or {}),
+        "max_attempts": int(fallback.get("max_attempts", 2)),
+    }
 
 
 def _build_llm_runtimes(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -470,6 +489,18 @@ def _build_llm_runtimes(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 provider_options=role_config.get("provider_options"),
             ),
         }
+        fallback_config = role_config.get("content_filter_fallback")
+        if fallback_config:
+            runtimes[role]["content_filter_fallback"] = {
+                "config": fallback_config,
+                "llm": make_llm(
+                    provider=fallback_config["provider"],
+                    model=fallback_config["model"],
+                    temperature=float(fallback_config["temperature"]),
+                    base_url=fallback_config.get("base_url"),
+                    provider_options=fallback_config.get("provider_options"),
+                ),
+            }
     return runtimes
 
 
@@ -492,8 +523,25 @@ def _llm_route_summary(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
             "request_timeout_seconds": (
                 route.get("provider_options") or {}
             ).get("request_timeout_seconds"),
+            "content_filter_fallback": _fallback_route_summary(
+                route.get("content_filter_fallback")
+            ),
         }
         for role, route in _resolved_llm_configs(config).items()
+    }
+
+
+def _fallback_route_summary(fallback: Any) -> dict[str, Any] | None:
+    if not fallback:
+        return None
+    return {
+        "trigger": "content_filter",
+        "provider": fallback["provider"],
+        "model": fallback["model"],
+        "structured_output": fallback["structured_output"],
+        "request_timeout_seconds": (
+            fallback.get("provider_options") or {}
+        ).get("request_timeout_seconds"),
     }
 
 
@@ -578,8 +626,7 @@ def run(input_json: dict) -> dict:
         story_sections=story_sections,
         config=config,
         prompt_bundle=episode_prompt_bundle,
-        llm=llm_runtimes[EPISODE_DIRECTOR_PROMPT_MODULE]["llm"],
-        llm_config=llm_runtimes[EPISODE_DIRECTOR_PROMPT_MODULE]["config"],
+        llm_runtime=llm_runtimes[EPISODE_DIRECTOR_PROMPT_MODULE],
         llm_calls=llm_calls,
     )
     bookend_drafts = _generate_bookend_visual_plan(
@@ -590,8 +637,7 @@ def run(input_json: dict) -> dict:
         episode_direction=episode_direction,
         config=config,
         prompt_bundle=bookend_prompt_bundle,
-        llm=llm_runtimes[BOOKEND_VISUAL_PLANNER_PROMPT_MODULE]["llm"],
-        llm_config=llm_runtimes[BOOKEND_VISUAL_PLANNER_PROMPT_MODULE]["config"],
+        llm_runtime=llm_runtimes[BOOKEND_VISUAL_PLANNER_PROMPT_MODULE],
         llm_calls=llm_calls,
     )
     story_drafts = _generate_story_visual_plans(
@@ -603,8 +649,7 @@ def run(input_json: dict) -> dict:
         episode_direction=episode_direction,
         config=config,
         prompt_bundle=story_prompt_bundle,
-        llm=llm_runtimes[STORY_VISUAL_PLANNER_PROMPT_MODULE]["llm"],
-        llm_config=llm_runtimes[STORY_VISUAL_PLANNER_PROMPT_MODULE]["config"],
+        llm_runtime=llm_runtimes[STORY_VISUAL_PLANNER_PROMPT_MODULE],
         llm_calls=llm_calls,
     )
     preliminary_scene_plan = _build_visual_scene_plan(
@@ -640,8 +685,7 @@ def run(input_json: dict) -> dict:
         episode_direction=episode_direction,
         config=config,
         prompt_bundle=story_editor_prompt_bundle,
-        llm=llm_runtimes[STORY_VISUAL_EDITOR_PROMPT_MODULE]["llm"],
-        llm_config=llm_runtimes[STORY_VISUAL_EDITOR_PROMPT_MODULE]["config"],
+        llm_runtime=llm_runtimes[STORY_VISUAL_EDITOR_PROMPT_MODULE],
         llm_calls=llm_calls,
     )
     visual_scene_plan = _build_visual_scene_plan(
@@ -1243,12 +1287,9 @@ def _generate_episode_direction(
     story_sections: list[dict[str, Any]],
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
-    llm,
-    llm_config: dict[str, Any],
+    llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    structured_llm = _structured_llm(llm, EpisodeDirectorDraft, llm_config)
-    chain = TASK_PROMPT | structured_llm
     total_duration = _total_duration(script_units, voiceover_package, video_packet)
     timed_script = _episode_script_context(script_units)
     payload = {
@@ -1273,10 +1314,9 @@ def _generate_episode_direction(
     return _invoke_chain_with_attempts(
         module_name=EPISODE_DIRECTOR_PROMPT_MODULE,
         output_model=EpisodeDirectorDraft,
-        chain=chain,
+        llm_runtime=llm_runtime,
         prompt_bundle=prompt_bundle,
         task_payload=payload,
-        config=llm_config,
         metadata={
             "story_count": len(stories),
             "script_unit_count": len(script_units),
@@ -1296,8 +1336,7 @@ def _generate_bookend_visual_plan(
     episode_direction: dict[str, Any],
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
-    llm,
-    llm_config: dict[str, Any],
+    llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
     sections = [
@@ -1310,8 +1349,6 @@ def _generate_bookend_visual_plan(
 
     allowed_render_kinds = _bookend_allowed_render_kinds(config, asset_catalog_index)
     output_model = _bookend_visual_plan_output_model(allowed_render_kinds)
-    structured_llm = _structured_llm(llm, output_model, llm_config)
-    chain = TASK_PROMPT | structured_llm
     bookend_config = deepcopy(config)
     bookend_config["scene_policy"] = {
         **config["scene_policy"],
@@ -1373,10 +1410,9 @@ def _generate_bookend_visual_plan(
     draft = _invoke_chain_with_attempts(
         module_name=BOOKEND_VISUAL_PLANNER_PROMPT_MODULE,
         output_model=output_model,
-        chain=chain,
+        llm_runtime=llm_runtime,
         prompt_bundle=prompt_bundle,
         task_payload=task_payload,
-        config=llm_config,
         metadata={
             "section_types": [clean_text(section.get("section_type")) for section in sections],
             "script_unit_count": sum(len(section.get("script_units", [])) for section in sections),
@@ -1408,8 +1444,7 @@ def _generate_story_visual_plans(
     episode_direction: dict[str, Any],
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
-    llm,
-    llm_config: dict[str, Any],
+    llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
     stories_by_id = {clean_text(story.get("story_id", "")): story for story in stories}
@@ -1442,8 +1477,6 @@ def _generate_story_visual_plans(
             "allowed_render_kinds": story_allowed_render_kinds,
         }
         output_model = _story_visual_plan_output_model(story_allowed_render_kinds)
-        structured_llm = _structured_llm(llm, output_model, llm_config)
-        chain = TASK_PROMPT | structured_llm
         story_context = _story_for_prompt(
             story,
             source_index,
@@ -1520,10 +1553,9 @@ def _generate_story_visual_plans(
             draft = _invoke_chain_with_attempts(
                 module_name=STORY_VISUAL_PLANNER_PROMPT_MODULE,
                 output_model=output_model,
-                chain=chain,
+                llm_runtime=llm_runtime,
                 prompt_bundle=prompt_bundle,
                 task_payload=payload,
-                config=llm_config,
                 metadata=metadata,
                 llm_calls=llm_calls,
                 validate_output=lambda candidate: _story_draft_errors(
@@ -1599,8 +1631,7 @@ def _edit_story_visual_plans(
     episode_direction: dict[str, Any],
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
-    llm,
-    llm_config: dict[str, Any],
+    llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     editor_config = dict(config.get("visual_editor") or {})
@@ -1677,8 +1708,6 @@ def _edit_story_visual_plans(
         )
         story_plan_model = _story_visual_plan_output_model(story_allowed_render_kinds)
         output_model = _story_visual_edit_output_model(story_plan_model)
-        structured_llm = _structured_llm(llm, output_model, llm_config)
-        chain = TASK_PROMPT | structured_llm
         story_context = _story_for_prompt(
             story,
             source_index,
@@ -1762,10 +1791,9 @@ def _edit_story_visual_plans(
             decision = _invoke_chain_with_attempts(
                 module_name=STORY_VISUAL_EDITOR_PROMPT_MODULE,
                 output_model=output_model,
-                chain=chain,
+                llm_runtime=llm_runtime,
                 prompt_bundle=prompt_bundle,
                 task_payload=payload,
-                config=llm_config,
                 metadata={
                     "story_id": story_id,
                     "story_title": clean_text(story.get("story_title")),
@@ -1856,10 +1884,9 @@ def _edit_story_visual_plans(
                 second_decision = _invoke_chain_with_attempts(
                     module_name=STORY_VISUAL_EDITOR_PROMPT_MODULE,
                     output_model=output_model,
-                    chain=chain,
+                    llm_runtime=llm_runtime,
                     prompt_bundle=prompt_bundle,
                     task_payload=second_payload,
-                    config=llm_config,
                     metadata={
                         "story_id": story_id,
                         "story_title": clean_text(story.get("story_title")),
@@ -1978,14 +2005,71 @@ def _invoke_chain_with_attempts(
     *,
     module_name: str,
     output_model,
-    chain,
+    llm_runtime: dict[str, Any],
+    prompt_bundle: dict[str, str],
+    task_payload: dict[str, Any],
+    metadata: dict[str, Any],
+    llm_calls: list[dict[str, Any]],
+    validate_output=None,
+) -> dict[str, Any]:
+    primary_config = llm_runtime["config"]
+    fallback_runtime = llm_runtime.get("content_filter_fallback")
+    try:
+        return _invoke_single_route_with_attempts(
+            module_name=module_name,
+            output_model=output_model,
+            llm=llm_runtime["llm"],
+            prompt_bundle=prompt_bundle,
+            task_payload=task_payload,
+            config=primary_config,
+            metadata={
+                **metadata,
+                "route_attempt": "primary",
+                "content_filter_fallback_configured": fallback_runtime is not None,
+            },
+            llm_calls=llm_calls,
+            validate_output=validate_output,
+            propagate_content_filter=fallback_runtime is not None,
+        )
+    except Exception as exc:
+        if fallback_runtime is None or not _is_content_filter_error(exc):
+            raise
+
+    fallback_config = fallback_runtime["config"]
+    return _invoke_single_route_with_attempts(
+        module_name=module_name,
+        output_model=output_model,
+        llm=fallback_runtime["llm"],
+        prompt_bundle=prompt_bundle,
+        task_payload=task_payload,
+        config=fallback_config,
+        metadata={
+            **metadata,
+            "route_attempt": "content_filter_fallback",
+            "fallback_trigger": "content_filter",
+            "fallback_from_provider": primary_config.get("provider", ""),
+            "fallback_from_model": primary_config.get("model", ""),
+        },
+        llm_calls=llm_calls,
+        validate_output=validate_output,
+        propagate_content_filter=False,
+    )
+
+
+def _invoke_single_route_with_attempts(
+    *,
+    module_name: str,
+    output_model,
+    llm,
     prompt_bundle: dict[str, str],
     task_payload: dict[str, Any],
     config: dict[str, Any],
     metadata: dict[str, Any],
     llm_calls: list[dict[str, Any]],
     validate_output=None,
+    propagate_content_filter: bool,
 ) -> dict[str, Any]:
+    chain = TASK_PROMPT | _structured_llm(llm, output_model, config)
     last_error = ""
     max_attempts = int(config.get("max_attempts", 2))
     for attempt in range(1, max_attempts + 1):
@@ -2048,6 +2132,8 @@ def _invoke_chain_with_attempts(
                 raise ValueError("; ".join(validation_errors))
             return result
         except Exception as exc:
+            if propagate_content_filter and _is_content_filter_error(exc):
+                raise
             last_error = f"{type(exc).__name__}: {exc}"
     raise RuntimeError(
         f"{module_name} failed after {max_attempts} bounded attempt(s): {last_error}"
@@ -2623,7 +2709,24 @@ def _invoke_chain(
     }
     rendered_prompt = TASK_PROMPT.format(**prompt_inputs)
     started = time.time()
-    result = chain.invoke(prompt_inputs)
+    try:
+        result = chain.invoke(prompt_inputs)
+    except Exception as exc:
+        duration = time.time() - started
+        llm_calls.append(
+            build_llm_call_log(
+                module_name=module_name,
+                provider=config["provider"],
+                model=config["model"],
+                rendered_prompt=rendered_prompt,
+                raw_response=None,
+                parsed_output=None,
+                metadata=metadata,
+                duration_seconds=duration,
+                parse_error=f"{type(exc).__name__}: {exc}",
+            )
+        )
+        raise
     duration = time.time() - started
 
     raw = result.get("raw") if isinstance(result, dict) else None
@@ -2664,6 +2767,22 @@ def _invoke_chain(
         )
     )
     return parsed_output
+
+
+def _exception_status_code(exc: Exception) -> int | None:
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int):
+        return status_code
+    response = getattr(exc, "response", None)
+    response_status = getattr(response, "status_code", None)
+    return response_status if isinstance(response_status, int) else None
+
+
+def _is_content_filter_error(exc: Exception) -> bool:
+    status_code = _exception_status_code(exc)
+    text = str(exc).casefold().replace("_", " ")
+    markers = ("content filter", "high risk", "highrisk")
+    return status_code in {400, 403} and any(marker in text for marker in markers)
 
 
 def _build_visual_scene_plan(
@@ -5746,6 +5865,29 @@ def _story_planner_failures(visual_scene_plan: dict[str, Any]) -> list[str]:
     )
 
 
+def _provider_failover_summary(llm_calls: list[dict[str, Any]]) -> dict[str, Any]:
+    events: list[dict[str, Any]] = []
+    for call in llm_calls:
+        metadata = call.get("metadata") if isinstance(call.get("metadata"), dict) else {}
+        if metadata.get("route_attempt") != "content_filter_fallback":
+            continue
+        events.append(
+            {
+                "module_name": clean_text(call.get("module_name", "")),
+                "story_id": clean_text(metadata.get("story_id", "")) or None,
+                "trigger": clean_text(metadata.get("fallback_trigger", "")) or "content_filter",
+                "from_provider": clean_text(metadata.get("fallback_from_provider", "")),
+                "from_model": clean_text(metadata.get("fallback_from_model", "")),
+                "to_provider": clean_text(call.get("provider", "")),
+                "to_model": clean_text(call.get("model", "")),
+            }
+        )
+    return {
+        "content_filter_fallback_call_count": len(events),
+        "events": events,
+    }
+
+
 def _build_summary(visual_scene_plan: dict[str, Any], llm_calls: list[dict[str, Any]], failure_reason: str) -> dict[str, Any]:
     scenes = visual_scene_plan.get("scene_timeline", [])
     kinds = [scene.get("render_kind", "") for scene in scenes]
@@ -5878,6 +6020,7 @@ def _build_summary(visual_scene_plan: dict[str, Any], llm_calls: list[dict[str, 
         ),
         "adjacent_duplicate_visual_count": len(_adjacent_duplicate_visual_payloads(scenes)),
         "llm_call_count": len(llm_calls),
+        "provider_failover": _provider_failover_summary(llm_calls),
         "visual_editor_enabled": bool(editor_report.get("enabled")),
         "visual_editor_reviewed_story_count": safe_int(
             editor_report.get("reviewed_story_count"), 0

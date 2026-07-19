@@ -38,6 +38,16 @@ llm_roles:
     structured_output:
       method: json_schema
       strict: true
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      max_attempts: 2
+      provider_options:
+        request_timeout_seconds: 300
+      structured_output:
+        method: json_schema
+        strict: true
   story_visual_editor:
     provider: moonshot
     model: kimi-k3
@@ -50,6 +60,16 @@ llm_roles:
     structured_output:
       method: json_schema
       strict: true
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      max_attempts: 2
+      provider_options:
+        request_timeout_seconds: 300
+      structured_output:
+        method: json_schema
+        strict: true
 max_attempts: 3
 diagnostic_words_per_minute: 150
 allow_deterministic_story_fallbacks: false

@@ -6,15 +6,18 @@ from pathlib import Path
 
 import pytest
 import yaml
+from langchain_core.runnables import RunnableLambda
+from pydantic import BaseModel, ValidationError
 
 from src.pipeline.config import ConfigRepository
-from pydantic import ValidationError
 
 from src.pipeline.handoffs.chatgpt_exporter.app import _prepare_artifact
 from src.pipeline.visuals.asset_resolver.app import NO_ASSET_RENDER_KINDS
 from src.pipeline.visuals.payload_validation import validate_scene_payload
 from src.pipeline.visuals.planner.app import (
+    _invoke_chain_with_attempts,
     _normalize_provider_scene_fields,
+    _provider_failover_summary,
     _resolved_llm_configs,
     _story_visual_edit_output_model,
     _story_visual_plan_output_model,
@@ -73,6 +76,9 @@ def test_production_visual_planner_uses_kimi_for_story_creative_roles() -> None:
         "omit_temperature": True,
         "request_timeout_seconds": 600.0,
     }
+    assert routes["story_visual_planner"]["content_filter_fallback"]["provider"] == "openai"
+    assert routes["story_visual_planner"]["content_filter_fallback"]["model"] == "gpt-4o"
+    assert routes["story_visual_planner"]["content_filter_fallback"]["max_attempts"] == 2
     assert routes["story_visual_editor"]["provider"] == "moonshot"
     assert routes["story_visual_editor"]["model"] == "kimi-k3"
     assert routes["story_visual_editor"]["max_attempts"] == 1
@@ -81,6 +87,142 @@ def test_production_visual_planner_uses_kimi_for_story_creative_roles() -> None:
         "omit_temperature": True,
         "request_timeout_seconds": 600.0,
     }
+    assert routes["story_visual_editor"]["content_filter_fallback"]["provider"] == "openai"
+    assert routes["story_visual_editor"]["content_filter_fallback"]["model"] == "gpt-4o"
+
+
+def test_visual_story_call_uses_openai_only_after_explicit_content_filter_rejection() -> None:
+    class Draft(BaseModel):
+        value: str
+
+    class ProviderContentFilterError(Exception):
+        status_code = 400
+
+    class RejectingLLM:
+        def with_structured_output(self, _model, **_kwargs):
+            return RunnableLambda(
+                lambda _prompt: (_ for _ in ()).throw(
+                    ProviderContentFilterError("request rejected as high risk by content_filter")
+                )
+            )
+
+    class WorkingLLM:
+        def with_structured_output(self, model, **_kwargs):
+            return RunnableLambda(
+                lambda _prompt: {
+                    "raw": None,
+                    "parsed": model(value="usable visual plan"),
+                    "parsing_error": None,
+                }
+            )
+
+    calls: list[dict] = []
+    output = _invoke_chain_with_attempts(
+        module_name="story_visual_planner",
+        output_model=Draft,
+        llm_runtime={
+            "llm": RejectingLLM(),
+            "config": {
+                "provider": "moonshot",
+                "model": "kimi-k3",
+                "structured_output": {"method": "json_schema", "strict": True},
+                "max_attempts": 1,
+            },
+            "content_filter_fallback": {
+                "llm": WorkingLLM(),
+                "config": {
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "structured_output": {"method": "json_schema", "strict": True},
+                    "max_attempts": 2,
+                },
+            },
+        },
+        prompt_bundle={"system": "System", "user_preamble": "User"},
+        task_payload={},
+        metadata={"story_id": "story_sensitive"},
+        llm_calls=calls,
+    )
+
+    assert output == {"value": "usable visual plan"}
+    assert [call["provider"] for call in calls] == ["moonshot", "openai"]
+    assert calls[0]["metadata"]["route_attempt"] == "primary"
+    assert calls[0]["metadata"]["parse_error"]
+    assert calls[1]["metadata"]["route_attempt"] == "content_filter_fallback"
+    assert _provider_failover_summary(calls) == {
+        "content_filter_fallback_call_count": 1,
+        "events": [
+            {
+                "module_name": "story_visual_planner",
+                "story_id": "story_sensitive",
+                "trigger": "content_filter",
+                "from_provider": "moonshot",
+                "from_model": "kimi-k3",
+                "to_provider": "openai",
+                "to_model": "gpt-4o",
+            }
+        ],
+    }
+
+
+def test_visual_story_call_does_not_switch_provider_for_unrelated_bad_request() -> None:
+    class Draft(BaseModel):
+        value: str
+
+    class InvalidRequestError(Exception):
+        status_code = 400
+
+    class RejectingLLM:
+        def with_structured_output(self, _model, **_kwargs):
+            return RunnableLambda(
+                lambda _prompt: (_ for _ in ()).throw(
+                    InvalidRequestError("invalid structured output schema")
+                )
+            )
+
+    class UnexpectedFallbackLLM:
+        called = False
+
+        def with_structured_output(self, model, **_kwargs):
+            self.called = True
+            return RunnableLambda(
+                lambda _prompt: {
+                    "raw": None,
+                    "parsed": model(value="unexpected"),
+                    "parsing_error": None,
+                }
+            )
+
+    fallback = UnexpectedFallbackLLM()
+    with pytest.raises(RuntimeError, match="failed after 1 bounded attempt"):
+        _invoke_chain_with_attempts(
+            module_name="story_visual_planner",
+            output_model=Draft,
+            llm_runtime={
+                "llm": RejectingLLM(),
+                "config": {
+                    "provider": "moonshot",
+                    "model": "kimi-k3",
+                    "structured_output": {"method": "json_schema", "strict": True},
+                    "max_attempts": 1,
+                },
+                "content_filter_fallback": {
+                    "llm": fallback,
+                    "config": {
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "structured_output": {"method": "json_schema", "strict": True},
+                        "max_attempts": 1,
+                    },
+                },
+            },
+            prompt_bundle={"system": "System", "user_preamble": "User"},
+            task_payload={},
+            metadata={"story_id": "story_regular"},
+            llm_calls=[],
+        )
+
+    assert fallback.called is False
 
 
 def test_kimi_k3_rejects_an_explicit_temperature_before_api_use() -> None:

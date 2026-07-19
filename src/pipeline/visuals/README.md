@@ -170,6 +170,12 @@ GPT-4o-mini. K3 produced a more varied and better-grounded plan on that sample,
 so visual-plan quality now takes priority over its higher latency for the
 story-local creative roles. K3 role config omits temperature, uses a
 600-second timeout, and permits one provider attempt per bounded role call.
+Both K3 story roles declare a GPT-4o route that is invoked only when Moonshot
+returns an explicit HTTP 400/403 content-filter or high-risk rejection. The
+planner records the rejected primary request and successful secondary request
+in `llm_calls`, and reports the switch under `summary.provider_failover`.
+Timeouts, rate limits, malformed schemas, and semantic scene validation errors
+never trigger this provider switch.
 
 The planner should not generate generic presentation-card outputs. The banned
 old card language is enforced in code and prompts.

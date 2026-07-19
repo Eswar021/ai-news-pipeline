@@ -589,7 +589,24 @@ story-plan editor because quality takes priority over the roughly 17x latency
 on this request. Episode direction and bookends remain GPT-4o-mini because the
 bounded comparison did not establish a K3 advantage for those roles. K3 omits
 temperature, uses a 600-second timeout, and has one provider attempt per
-bounded role call.
+bounded role call. A fresh five-story run then exposed a provider-policy edge:
+Moonshot rejected two otherwise ordinary story prompts as high risk before
+returning output. The planner now keeps K3 primary but uses a config-declared
+GPT-4o route only for explicit 400/403 content-filter rejections. Rejected and
+secondary calls are both logged, and unrelated API, schema, validation, or
+timing failures do not trigger provider rotation.
+
+The exact five-story July 19 regression input passed after this change with 37
+scenes, all 35 audio-aligned units covered, and zero gaps, overlaps, long
+scenes, or story-planner failures. Moonshot rejected the Kimi and perimenopause
+story prompts plus one Kimi editor prompt; those calls alone rotated to GPT-4o.
+One fallback scene plan needed its second bounded structured attempt. A separate
+Kimi story call timed out at 600 seconds and correctly did not rotate providers;
+the existing LLM visual editor later supplied a valid complete plan. Total LLM
+latency was 2,268.59 seconds: 1,271.90 seconds in Kimi story planning and 847.92
+seconds in Kimi visual editing. Correctness is now verified, but per-story cache
+or a faster editor route should be evaluated before treating this latency as a
+routine iteration loop.
 
 ### Standing Semantic Policy (`KEEP`)
 
@@ -658,10 +675,10 @@ product tasks visible without mixing them into the current evaluation:
   accepted. Re-enable them only through an explicit profile and human-reviewed
   cost/quality comparison.
 
-- Validate the new Kimi K3 story-planning default on a fresh multi-story
-  production episode. The measured large prompt took roughly five minutes for
-  one story, so inspect total latency and Moonshot rate behavior before adding
-  provider-safe story-call concurrency.
+- Inspect Kimi K3 story-planning latency and Moonshot rate behavior over several
+  fresh episodes before adding provider-safe story-call concurrency. The
+  content-filter-only GPT-4o route is operational resilience, not evidence that
+  more parallel K3 calls are safe.
 
 - Reassess the HyperFrames backend after its transitive `adm-zip` advisory is
   fixed upstream. Until then, keep Remotion as production default and run

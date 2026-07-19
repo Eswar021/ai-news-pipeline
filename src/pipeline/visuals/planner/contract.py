@@ -226,6 +226,39 @@ class StructuredOutputConfig(BaseModel):
     strict: bool = True
 
 
+class ContentFilterFallbackConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: LLMProvider
+    model: str
+    temperature: float = 0.4
+    base_url: str | None = None
+    provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
+    structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
+    max_attempts: int = 2
+
+    @field_validator("model")
+    @classmethod
+    def model_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("content_filter_fallback model must not be empty")
+        return value.strip()
+
+    @field_validator("temperature")
+    @classmethod
+    def temperature_must_be_valid(cls, value: float) -> float:
+        if value < 0 or value > 2:
+            raise ValueError("content_filter_fallback temperature must be between 0 and 2")
+        return value
+
+    @field_validator("max_attempts")
+    @classmethod
+    def max_attempts_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 4:
+            raise ValueError("content_filter_fallback max_attempts must be between 1 and 4")
+        return value
+
+
 class RoleLLMConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -236,6 +269,7 @@ class RoleLLMConfig(BaseModel):
     provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
     structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
     max_attempts: int | None = None
+    content_filter_fallback: ContentFilterFallbackConfig | None = None
 
     @field_validator("model")
     @classmethod

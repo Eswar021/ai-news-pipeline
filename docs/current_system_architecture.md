@@ -639,7 +639,11 @@ Robotics story prompt, Kimi K3 completed six structurally valid scenes in
 GPT-4o-mini, which completed in 17.95 seconds. The quality gain justified
 promoting K3 for story-local creative decisions. Its config omits temperature,
 uses a 600-second timeout, and permits one provider attempt per bounded role
-call; it is not an error fallback.
+call. A separate config-owned GPT-4o route handles only explicit Moonshot
+HTTP 400/403 content-filter or high-risk rejections for those story roles.
+Both attempts remain visible in the LLM ledger and provider-failover summary;
+timeouts, rate limits, schema failures, and scene-contract failures do not
+rotate providers.
 
 Visual rendering has one stable JSON contract and two explicit engines.
 Remotion remains the default production engine and supports the complete
