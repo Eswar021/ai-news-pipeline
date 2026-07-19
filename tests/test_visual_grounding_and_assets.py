@@ -1331,9 +1331,10 @@ def test_story_title_echo_and_missing_real_anchor_are_quality_warnings_by_defaul
                 "evidence_text": "",
                 "grounding_basis": "selected_record",
                 "payload_json": json.dumps(
-                    {
-                        "asset_id": "asset_source_page_apple",
-                        "url": "https://apple.example/release",
+                        {
+                            "recipe_id": "source_proof_scan",
+                            "asset_id": "asset_source_page_apple",
+                            "url": "https://apple.example/release",
                         "source_record_key": "record_apple",
                         "target_text": "Apple release",
                         "highlight_phrases": ["Apple release"],
@@ -1356,8 +1357,9 @@ def test_story_title_echo_and_missing_real_anchor_are_quality_warnings_by_defaul
                 "evidence_text": "",
                 "grounding_basis": "script_beat",
                 "payload_json": json.dumps(
-                    {
-                        "headline": "What changes for users",
+                        {
+                            "recipe_id": "editorial_hook",
+                            "headline": "What changes for users",
                         "accent_words": ["changes"],
                         "composition": "editorial_center",
                         "motion_style": "word_reveal",

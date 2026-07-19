@@ -105,19 +105,19 @@ class VisualsRun(BaseModel):
 class VisualStyleConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    style_id: str = "legacy_motion"
-    visual_language: str = "premium YouTube AI news motion graphics"
-    motion_style: str = "fast editorial cuts, article zooms, logo reveals, kinetic type"
-    color_system: str = "dark graphite newsroom with electric cyan, warm white, and restrained red accents"
-    typography: str = "bold broadcast sans, large kinetic phrases, minimal small text"
-    background_color: str = "#070b10"
-    text_color: str = "#f7fbff"
-    accent_color: str = "#63d7ff"
-    muted_color: str = "#9fb2c7"
-    editorial_font: str = "Georgia, Times New Roman, serif"
-    sans_font: str = "Avenir Next, Helvetica Neue, Arial, sans-serif"
-    surface_treatment: str = "subtle depth"
-    card_policy: str = "avoid decorative cards"
+    style_id: str = "editorial_minimal"
+    visual_language: str = "asset-first editorial YouTube visuals"
+    motion_style: str = "purposeful source scans, focus pushes, chapter wipes, and restrained kinetic type"
+    color_system: str = "warm paper, near-black ink, and one burnt-orange accent"
+    typography: str = "editorial serif display headlines with condensed sans labels"
+    background_color: str = "#f4efe6"
+    text_color: str = "#171611"
+    accent_color: str = "#b64b2d"
+    muted_color: str = "#69645c"
+    editorial_font: str = "EB Garamond"
+    sans_font: str = "Oswald"
+    surface_treatment: str = "paper texture, thin rules, and generous whitespace"
+    card_policy: str = "no decorative cards; surfaces represent real sources or interfaces only"
     avoid: list[str] = Field(
         default_factory=lambda: [
             "PPT-style cards",
@@ -186,6 +186,7 @@ class VisualRecipePolicyConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
+    require_recipe_id: bool = True
     allowed_recipe_ids: list[str] = Field(default_factory=recipe_ids)
     required_backend_support: list[Literal["remotion", "hyperframes"]] = Field(
         default_factory=lambda: ["remotion", "hyperframes"]
@@ -516,6 +517,25 @@ class VisualPlannerConfig(BaseModel):
         ]
         if missing:
             raise ValueError(f"config.visual_capabilities is missing allowed render kinds: {missing}")
+        if self.recipe_policy.enabled and self.recipe_policy.require_recipe_id:
+            required_backends = set(self.recipe_policy.required_backend_support)
+            allowed_recipes = set(self.recipe_policy.allowed_recipe_ids)
+            unimplemented = []
+            for render_kind in self.scene_policy.allowed_render_kinds:
+                compatible = [
+                    recipe_id
+                    for recipe_id, recipe in RECIPE_REGISTRY.items()
+                    if recipe_id in allowed_recipes
+                    and recipe.get("render_kind") == render_kind
+                    and required_backends.issubset(set(recipe.get("supported_backends") or []))
+                ]
+                if not compatible:
+                    unimplemented.append(render_kind)
+            if unimplemented:
+                raise ValueError(
+                    "config.scene_policy.allowed_render_kinds contains scene families without "
+                    f"an enabled recipe for the required backends: {unimplemented}"
+                )
         return self
 
 

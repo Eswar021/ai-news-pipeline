@@ -24,6 +24,10 @@ make it a direct match. Do not use a person, interface, photograph, or product
 image just because it belongs to the same article; it must fit the sentence
 being spoken.
 
+Every retained or revised scene must use one exact available recipe from its
+active capability. recipe_id is mandatory in payload_json and must not be
+invented or moved across render kinds.
+
 Preserve every required scene slot exactly. Do not author seconds, combine
 beats, move visuals across stories, invent asset IDs, URLs, quotes, numbers,
 relationships, process steps, or product imagery. For source screenshots,

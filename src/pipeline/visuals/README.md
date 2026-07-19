@@ -42,8 +42,8 @@ intentionally want fallback visuals for debugging.
 The authoring catalog may define additional future or disabled capabilities,
 but neither the native LLM planner nor the ChatGPT handoff may advertise them.
 
-The default production profile uses the `editorial_minimal` style and a compact
-planner vocabulary:
+The default production profile uses the `editorial_minimal` style and a
+recipe-backed planner vocabulary:
 
 ```text
 source_article_scene
@@ -53,13 +53,22 @@ logo_reveal_scene
 editorial_text_scene
 simple_explainer_scene
 story_transition_scene  # inserted by the system, not the story LLM
+quote_or_claim_highlight_scene
+data_counter_scene
+benchmark_delta_scene
+architecture_flow_scene
+process_zoom_scene
+browser_walkthrough_scene
+document_stack_scene
+interface_transform_scene
 ```
 
-This is intentionally smaller than the renderer's full authoring catalog. The
-legacy charts, matrices, maps, and other specialist motion components remain
-renderable for explicit profiles and historical plans, but they are not shown
-to the production planner by default. Adding a specialist scene to a profile is
-a deliberate editorial choice, not automatic variety.
+Every advertised kind must expose at least one named recipe that supports the
+configured production backend. The LLM selects that exact `payload.recipe_id`;
+it does not ask the renderer to improvise a design from a broad scene type. The
+legacy charts, matrices, maps, and other specialist components remain available
+to explicit profiles and historical plans, but they are not shown to the daily
+planner by default.
 
 The visuals stage router or interactive notebook owns file orchestration. The
 modules receive JSON/dict inputs, return JSON/dict outputs, and write only the
@@ -395,8 +404,10 @@ interface_transform_scene        -> none
 transition_stinger_scene         -> none
 ```
 
-If a new scene type is added, update the planner contracts, asset resolver
-classification, Remotion render types, and workbench config together.
+If a new scene type is added, implement and visually verify its named recipe,
+then update the planner contracts, asset resolver classification, selected
+render backends, and workbench config together. Do not advertise an unrendered
+capability to the LLM.
 
 Text-identity fallbacks are explicitly not verified logos. They preserve and
 fit the complete entity name instead of clipping it or substituting an invented
@@ -469,29 +480,28 @@ max_render_attempts   bounded attempts per scene; retries run serially
 reuse_cached_scenes   restore unchanged clips from the persistent cache
 ```
 
-The default production backend remains Remotion. It bundles once, and with
-batch rendering enabled each bounded
-worker keeps one browser alive and renders several scene jobs through it. Ten or
-fifteen workers are not automatically faster: Chromium, ffmpeg, memory
-bandwidth, and encoders become the bottleneck. The profile caps scene workers
-and frame concurrency to improve throughput without making failures more
-likely.
-
-HyperFrames is an explicit opt-in backend for the active production vocabulary:
+The daily production profile uses HyperFrames for the active recipe-backed
+vocabulary:
 source proof, contextual image/video, logo identity, editorial typography,
 simple explainers, story transitions, claim highlights, metrics and contrasts,
-ecosystem/process/interface motion, capability comparison, and evidence stacks.
+process/interface motion, and evidence stacks.
 Named recipes such as `source_proof_montage`, `annotated_image_focus`,
 `metric_contrast`, and `process_trace` share the same payload and provenance
 contract across HyperFrames and Remotion. HyperFrames uses pinned local
-dependencies, strict composition checks, isolated per-scene projects, and the
-same cache envelope. Selecting an unsupported scene fails before rendering; it
-never falls back to Remotion. When scene-level concurrency is active, each
-HyperFrames render uses one internal frame worker to avoid nested process
-multiplication. The current upstream `hyperframes@0.7.64` dependency has an
-unresolved high-severity `adm-zip` denial-of-service advisory, so this backend
-is not the default and should process only pipeline-owned compositions and
-trusted local assets until upstream ships a fix.
+dependencies, a copied `frame.md` design contract, strict composition checks,
+isolated per-scene projects, and the same cache envelope. Selecting a scene
+without a valid named recipe fails before rendering and never falls back to
+Remotion. When scene-level concurrency is active, each HyperFrames render uses
+one internal frame worker to avoid nested process multiplication.
+
+Remotion remains a supported compatibility and visual-lab backend for the
+historical component catalog. Ten or fifteen workers are not automatically
+faster on either backend: Chromium, ffmpeg, memory bandwidth, and encoders
+become the bottleneck, so the profile keeps scene and frame concurrency bounded.
+The pinned `hyperframes@0.7.64` dependency still carries an unresolved
+high-severity transitive `adm-zip` denial-of-service advisory. Production must
+therefore continue to render only pipeline-owned compositions and trusted local
+assets until upstream ships a fix.
 
 Cache identity includes the scene payload, render settings, resolved asset
 content, and selected engine source. A prompt, asset, scene, or renderer change
@@ -680,8 +690,8 @@ Relevant config sections:
   structural duplicate filtering, logo hints, fetch limits, anchor policy, and
   contact-sheet settings.
 - `visuals.planner`: default and role-specific LLM provider/model routes,
-  structured-output policy, scene policy, visual capabilities, and the
-  text-supporting visual-mix target.
+  structured-output policy, scene policy, named recipe policy, visual
+  capabilities, and the text-supporting visual-mix target.
 - `visuals.media_discovery`: provider enablement, environment-key names,
   candidate/download limits, semantic verifier and clip-selector models,
   identity confidence, video clipping, and explicit fallback behavior.

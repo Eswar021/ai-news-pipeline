@@ -5190,11 +5190,18 @@ def _visual_capabilities_for_prompt(
             if recipes_enabled
             else []
         )
+        if recipes_enabled and bool(recipe_policy.get("require_recipe_id", True)) and not recipes:
+            continue
         if recipes:
             capability["available_recipes"] = recipes
-            optional = dict(structural_contract.get("optional") or {})
-            optional["recipe_id"] = "one exact available_recipes[].recipe_id value"
-            structural_contract["optional"] = optional
+            if bool(recipe_policy.get("require_recipe_id", True)):
+                required = dict(structural_contract.get("required") or {})
+                required["recipe_id"] = "one exact available_recipes[].recipe_id value"
+                structural_contract["required"] = required
+            else:
+                optional = dict(structural_contract.get("optional") or {})
+                optional["recipe_id"] = "one exact available_recipes[].recipe_id value"
+                structural_contract["optional"] = optional
         if key in catalog_required and structural_contract:
             required = dict(structural_contract.get("required") or {})
             optional = dict(structural_contract.get("optional") or {})
@@ -5243,6 +5250,9 @@ def _scene_recipe_policy_errors(
     payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
     recipe_id = clean_text(scene.get("recipe_id") or payload.get("recipe_id"))
     if not recipe_id:
+        policy = config.get("recipe_policy", {})
+        if bool(policy.get("enabled", True)) and bool(policy.get("require_recipe_id", True)):
+            return ["payload.recipe_id is required by config.recipe_policy"]
         return []
     policy = config.get("recipe_policy", {})
     if not bool(policy.get("enabled", True)):

@@ -49,6 +49,20 @@ RECIPE_REGISTRY: dict[str, dict[str, Any]] = {
         "best_for": ["demos", "robot motion", "interfaces in use", "physical action"],
         "avoid_when": ["the clip does not show the active narration beat"],
     },
+    "identity_reveal": {
+        "render_kind": "logo_reveal_scene",
+        "supported_backends": ["remotion", "hyperframes"],
+        "description": "A verified identity mark or clean name treatment enters as part of an editorial composition, not inside a logo card.",
+        "best_for": ["first company or product mention", "identity resets", "brand relationships"],
+        "avoid_when": ["the identity is ambiguous", "a real product or source image communicates the beat better"],
+    },
+    "mechanism_steps": {
+        "render_kind": "simple_explainer_scene",
+        "supported_backends": ["remotion", "hyperframes"],
+        "description": "Two to four large editorial labels assemble into a readable causal or process sequence with one moving focus.",
+        "best_for": ["short mechanisms", "cause and effect", "small workflows"],
+        "avoid_when": ["more than four steps are required", "the relationship is not stated by the narration"],
+    },
     "metric_countup": {
         "render_kind": "data_counter_scene",
         "supported_backends": ["remotion", "hyperframes"],

@@ -24,6 +24,7 @@ from src.pipeline.contracts import (
 
 from ..common import clean_text, counter_dict, iso_now, safe_float
 from ..payload_validation import validate_scene_payload
+from ..recipes import RECIPE_REGISTRY, validate_scene_recipe
 from .config import (
     NEXT_MODULE,
     PACKAGE_TYPE,
@@ -37,23 +38,9 @@ from .contract import VisualRenderRequest, VisualRenderResponse
 _RETRY_LOCK = Lock()
 _LOGGER = logging.getLogger("ai_content_creation.runtime.visual_render")
 _HYPERFRAMES_RENDER_KINDS = {
-    "source_article_scene",
-    "context_image_scene",
-    "broll_video_scene",
-    "logo_reveal_scene",
-    "editorial_text_scene",
-    "simple_explainer_scene",
-    "story_transition_scene",
-    "quote_or_claim_highlight_scene",
-    "data_counter_scene",
-    "benchmark_delta_scene",
-    "ecosystem_map_scene",
-    "architecture_flow_scene",
-    "process_zoom_scene",
-    "browser_walkthrough_scene",
-    "capability_matrix_scene",
-    "document_stack_scene",
-    "interface_transform_scene",
+    clean_text(recipe.get("render_kind"))
+    for recipe in RECIPE_REGISTRY.values()
+    if "hyperframes" in (recipe.get("supported_backends") or [])
 }
 
 
@@ -376,6 +363,22 @@ def _render_scenes_hyperframes(
                 f"HyperFrames backend does not support render_kind {render_kind!r}",
             )
             continue
+        payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
+        recipe_id = clean_text(payload.get("recipe_id"))
+        recipe_errors = validate_scene_recipe(render_kind, payload)
+        recipe = RECIPE_REGISTRY.get(recipe_id, {})
+        if not recipe_id:
+            recipe_errors.append("HyperFrames production scenes require payload.recipe_id")
+        elif "hyperframes" not in (recipe.get("supported_backends") or []):
+            recipe_errors.append(f"recipe {recipe_id!r} does not support HyperFrames")
+        if recipe_errors:
+            rendered_by_index[index] = _failed_scene(
+                scene,
+                spec_path,
+                output_path,
+                "; ".join(recipe_errors),
+            )
+            continue
         if engine_error:
             rendered_by_index[index] = _failed_scene(
                 scene,
@@ -616,6 +619,9 @@ def _write_hyperframes_project(
     if not node_modules.exists():
         node_modules.symlink_to(engine_dir / "node_modules", target_is_directory=True)
     shutil.copy2(engine_dir / "hyperframes.json", project_dir / "hyperframes.json")
+    design_spec = engine_dir / "frame.md"
+    if design_spec.exists():
+        shutil.copy2(design_spec, project_dir / "frame.md")
 
     scene = spec.get("scene") if isinstance(spec.get("scene"), dict) else {}
     asset = scene.get("resolved_asset") if isinstance(scene.get("resolved_asset"), dict) else {}
@@ -1214,6 +1220,15 @@ def _scene_render_spec(scene: dict[str, Any], request: VisualRenderRequest, rend
     render_kind = clean_text(enriched.get("render_kind", ""))
     payload = enriched.get("payload") if isinstance(enriched.get("payload"), dict) else {}
     payload_errors = validate_scene_payload(render_kind, payload)
+    if request.config.backend == "hyperframes":
+        payload_errors.extend(validate_scene_recipe(render_kind, payload))
+        recipe_id = clean_text(payload.get("recipe_id"))
+        if not recipe_id:
+            payload_errors.append("HyperFrames production scenes require payload.recipe_id")
+        elif "hyperframes" not in (
+            RECIPE_REGISTRY.get(recipe_id, {}).get("supported_backends") or []
+        ):
+            payload_errors.append(f"recipe {recipe_id!r} does not support HyperFrames")
     if payload_errors:
         raise ValueError("; ".join(payload_errors))
     asset = enriched.get("resolved_asset") if isinstance(enriched.get("resolved_asset"), dict) else {}
@@ -1492,6 +1507,7 @@ def _engine_fingerprint(engine_dir: Path) -> str:
         engine_dir / "tsconfig.json",
         engine_dir / "hyperframes.json",
         engine_dir / "index.template.html",
+        engine_dir / "frame.md",
     ]
     files.extend(sorted((engine_dir / "src").rglob("*")))
     files.extend(sorted((engine_dir / "scripts").rglob("*")))

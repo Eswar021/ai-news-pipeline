@@ -2,7 +2,7 @@
 
 Status: Canonical runtime reference
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 ## Runtime
 
@@ -102,7 +102,7 @@ flowchart LR
         visualPlan[visual_planner<br/>generate or load canonical visual plan]
         discover[Resolve catalog media<br/>or deliberate external research]
         resolve[Capture screenshots and resolve assets]
-        render[visual_render<br/>render independent scene clips<br/>Remotion or explicit HyperFrames]
+        render[visual_render<br/>render independent scene clips<br/>recipe-first HyperFrames by default]
         assemble[video_assembly<br/>assemble clips with authoritative WAV]
         review[visual_review<br/>create review package and contact sheet]
         publish[publish_handoff<br/>final mode only]
@@ -397,11 +397,13 @@ flowchart TD
     voice --> finalAssembly
 ```
 
-The production planner menu is intentionally compact: source articles,
-story-owned images, story-owned direct video, verified identity/logo moments,
-clean editorial text, simple explainers, and deterministic story transitions.
-The larger Remotion component library remains available to explicit specialist
-profiles and visual-lab tests.
+The production planner menu is intentionally bounded and recipe-backed: source
+proof, story-owned image/video, verified identity, editorial hooks, simple
+explainers, deterministic story transitions, grounded metrics, process and
+interface motion, and evidence stacks. Each advertised kind carries an exact
+render recipe. The larger historical Remotion component library remains
+available to explicit specialist profiles and visual-lab tests, but it is not
+the daily design authority.
 
 ### Runtime Boundaries
 
@@ -409,7 +411,7 @@ profiles and visual-lab tests.
 | ------------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------- |
 | Content apps, LLM planning, orchestration, metadata    | Main project Python             | Canonical Pydantic/LangChain application environment                    |
 | Hosted and local TTS synthesis                         | `.venv-voiceover` Python 3.12 | Keeps one stable synthesis boundary for API and local speech providers  |
-| Scene rendering                                        | Node, Chromium, Remotion or explicit HyperFrames | Renders each validated scene specification into an MP4 clip without changing its semantic plan |
+| Scene rendering                                        | Node, Chromium, HyperFrames by default; Remotion compatibility path | Renders each validated recipe specification into an MP4 clip without changing its semantic plan |
 | Audio/video probing, mastering, clipping, and assembly | `ffmpeg` and `ffprobe`      | Provides deterministic media transformation and verification            |
 | External model calls and enabled news sources          | Configured APIs                 | Credentials are loaded from`.env` and never copied into run artifacts |
 
@@ -470,12 +472,15 @@ the candidate ledger together with those decisions; unresolved items remain in
 a recoverable reserve instead of disappearing. Story mapping retains singleton
 clusters so semantic labeling, rather than a lexical singleton rule, can judge
 them. Embeddings and triage story keys nominate a high-recall, bounded pair pool;
-they do not approve merges. Complete candidate records go to bounded LLM
-adjudication, and only `same_event` decisions merge. Explicit `follow_up`,
-`broader_story_arc`, and `unrelated` cross-pair decisions block unsafe
-transitive merges, while the absence of an un-nominated cross-pair does not
-become a false veto. Exact structural identity and objective pair-window checks
-remain deterministic.
+they do not approve merges. Event identity explicitly distinguishes supported
+proper-noun organizations/products from generic descriptions. Each nominated
+pair is judged in its own structured LLM call so one pair cannot leak into
+another. Proposed same-event merges, unresolved named identities, and ambiguous
+follow-up/story-arc decisions receive an authoritative full-record review route.
+Only `same_event` decisions merge. Explicit `follow_up`, `broader_story_arc`,
+and `unrelated` cross-pair decisions block unsafe transitive merges, while the
+absence of an un-nominated cross-pair does not become a false veto. Exact
+structural identity and objective pair-window checks remain deterministic.
 
 Story-mapping scores and priority buckets are telemetry, not episode-selection
 authority. `editorial_selection.formats.roundup` receives every mapped story
@@ -489,6 +494,11 @@ therefore limits one model call rather than rejecting a run or dropping a story
 in code.
 Prompt bounds compact context; they do not remove candidate story IDs or
 downstream full records.
+Before the slate is finalized, a focused full-context duplicate audit compares
+only the proposed episode stories and reports same-event groups to the slate
+reviewer. The reviewer must retain at most one member of each reported group.
+This semantic audit is deliberately separate from deterministic topic or title
+matching; shared companies and broad themes are not automatically duplicates.
 Video packaging then applies only machine-verifiable format structure and caps
 to that approved slate. Source authority remains profile-driven and uses each
 record's actual relationship and URL; a collector label alone does not turn a
@@ -645,17 +655,19 @@ Both attempts remain visible in the LLM ledger and provider-failover summary;
 timeouts, rate limits, schema failures, and scene-contract failures do not
 rotate providers.
 
-Visual rendering has one stable JSON contract and two explicit engines.
-Remotion remains the default production engine and supports the complete
-historical scene catalog. HyperFrames supports the active production scene
-families, including source-proof montages, annotated media, metric contrasts,
-evidence stacks, and process/interface motion, and can be selected per run with
-`--render-backend hyperframes`; unsupported scene kinds fail before render and
-never cross-fallback. Both paths preserve
+Visual rendering has one stable JSON contract and two explicit engines. The
+daily profile now uses HyperFrames for the active production scene families,
+including source-proof montages, annotated media, identity reveals, metric
+contrasts, evidence stacks, and process/interface motion. Every production
+scene must name a recipe that supports HyperFrames; unsupported or recipe-less
+scenes fail before render and never cross-fallback. Remotion supports the
+complete historical scene catalog and remains available for compatibility,
+specialist profiles, and visual-lab work. Both paths preserve
 scene timing, parent fingerprints, content-addressed cache identity, video-only
-clip validation, assembly, and review. HyperFrames remains opt-in while its
-pinned upstream package carries an unresolved transitive ZIP denial-of-service
-advisory.
+clip validation, assembly, and review. HyperFrames projects receive the shared
+`frame.md` design contract and use only pipeline-owned composition code and
+trusted local assets while its pinned upstream package carries an unresolved
+transitive ZIP denial-of-service advisory.
 
 When one aligned audio unit is longer than the configured scene cap, the story
 planner must return multiple distinct semantic treatments for that same unit.
@@ -721,22 +733,19 @@ into a contact sheet. Human inspection remains required because timing,
 legibility, relevance, and creative quality cannot be approved from metadata
 alone.
 
-Remotion scenes use a 1920x1080 reference canvas that is uniformly scaled and
-centered for each configured 16:9 quality preset. This keeps layout invariant
-across 720p fixture renders, 1080p, 2K, and 4K instead of clipping fixed
-coordinates or moving graphics off center. The `editorial_minimal` renderer
-uses warm paper, near-black ink, one burnt-orange accent, expressive serif
-headlines, condensed sans labels, generous whitespace, and no decorative card
-containers. Real browser/document surfaces remain permitted because they
-represent source material rather than slide furniture.
+Both render paths preserve a fixed 16:9 composition across 720p fixture
+renders, 1080p, 2K, and 4K. The `editorial_minimal` design contract uses warm
+paper, near-black ink, one burnt-orange accent, expressive serif headlines,
+condensed sans labels, generous whitespace, and no decorative card containers.
+Real browser/document surfaces remain permitted because they represent source
+material rather than slide furniture.
 
 Rendering has separate `preview` and `final` profiles. Preview uses 720p and a
 bitrate-based hardware-friendly encoder, accepts optional scene/story selections, and restores unchanged
 clips from a persistent content-addressed cache. Final mode renders the complete
-manifest at the configured delivery resolution. The renderer bundles Remotion
-once and uses a bounded set of persistent browser workers; each worker renders
-multiple scene jobs without paying browser startup for every clip. Cache keys
-include scene payload, render settings, resolved asset content, and the Remotion
+manifest at the configured delivery resolution. Each backend uses bounded
+scene/frame concurrency appropriate to its runtime. Cache keys include scene
+payload, named recipe, render settings, resolved asset content, and selected
 engine source, so creative or code changes invalidate only affected clips.
 The production notebook writes previews under `render_preview`,
 `assembly_preview`, and `review_preview`; canonical delivery artifacts remain

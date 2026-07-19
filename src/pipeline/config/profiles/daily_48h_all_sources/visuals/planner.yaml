@@ -85,10 +85,10 @@ style:
   typography: expressive editorial serif headlines with condensed uppercase sans labels
   background_color: '#f4efe6'
   text_color: '#171611'
-  accent_color: '#bd4e2f'
-  muted_color: '#6f6a61'
-  editorial_font: Iowan Old Style, Baskerville, Georgia, Times New Roman, serif
-  sans_font: Avenir Next Condensed, Avenir Next, Helvetica Neue, Arial, sans-serif
+  accent_color: '#b64b2d'
+  muted_color: '#69645c'
+  editorial_font: EB Garamond
+  sans_font: Oswald
   surface_treatment: generous whitespace, subtle paper texture, thin rules, and no dashboard chrome
   card_policy: no decorative cards; use a surface only when it represents a real browser, document, or interface
   avoid:
@@ -107,6 +107,7 @@ visual_mix_policy:
   kinetic_text_is_supporting_only: true
 recipe_policy:
   enabled: true
+  require_recipe_id: true
   required_backend_support:
   - remotion
   - hyperframes
@@ -117,6 +118,8 @@ recipe_policy:
   - layered_evidence_reveal
   - annotated_image_focus
   - annotated_video_focus
+  - identity_reveal
+  - mechanism_steps
   - metric_countup
   - metric_contrast
   - entity_orbit
@@ -196,11 +199,9 @@ scene_policy:
   - quote_or_claim_highlight_scene
   - data_counter_scene
   - benchmark_delta_scene
-  - ecosystem_map_scene
   - architecture_flow_scene
   - process_zoom_scene
   - browser_walkthrough_scene
-  - capability_matrix_scene
   - document_stack_scene
   - interface_transform_scene
 visual_capabilities:

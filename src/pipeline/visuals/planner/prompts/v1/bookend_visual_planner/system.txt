@@ -14,6 +14,10 @@ an image's visual_description, alt_text, and figure_caption from surrounding
 page context. A nearby paragraph or article topic does not prove what an image
 depicts.
 
+Choose one exact available_recipes[].recipe_id for every scene and include it
+in payload_json. The recipe is mandatory and defines the tested motion
+composition; do not return an un-reciped generic scene.
+
 Plan one visual idea for every required scene slot. Keep hooks concise and
 complete rather than copying arbitrary narration fragments. Prefer an authored
 headline, a real source or identity anchor, a compact explanatory composition,

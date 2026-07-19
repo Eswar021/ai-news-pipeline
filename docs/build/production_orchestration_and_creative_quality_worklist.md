@@ -1,9 +1,9 @@
 # Production Orchestration and Creative Quality Worklist
 
-Status: Active implementation tracker. Q-01 through Q-24 are implemented and
+Status: Active implementation tracker. Q-01 through Q-26 are implemented and
 now require a fresh production episode plus human quality review.
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 Target runtime: `src/pipeline/`
 
@@ -516,7 +516,7 @@ source-proof scenes and held text-like duration to about 25.5 percent. Planner
 LLM roles are provider/model configurable. The earlier full-run Kimi attempt
 was too broad to diagnose and was superseded by the bounded comparison in Q-24.
 
-### Q-20: Explicit HyperFrames render backend (`P2`, implemented as opt-in 2026-07-19)
+### Q-20: Explicit HyperFrames render backend (`P2`, implemented 2026-07-19; production default superseded by Q-26)
 
 Visual rendering now has an explicit `remotion|hyperframes` backend boundary.
 The optional HyperFrames adapter supports the active production vocabulary,
@@ -524,11 +524,11 @@ isolates one generated project per scene, copies only resolved local assets,
 uses bounded scene/frame concurrency, participates in cache identity, and
 never silently falls back to Remotion. Seven real scene-family smokes rendered
 successfully; a five-scene 720p batch completed in 17.7 seconds with three scene
-workers. Remotion remains the production default because the current
-HyperFrames dependency graph contains an unresolved high-severity `adm-zip`
-denial-of-service advisory. HyperFrames must process pipeline-owned
-compositions and trusted local assets only until upstream dependencies are
-fixed.
+workers. The initial release kept Remotion as production default while the
+recipe compiler was incomplete. Q-26 later promoted the hardened recipe-first
+HyperFrames path. HyperFrames must still process pipeline-owned compositions
+and trusted local assets only while the current dependency graph contains an
+unresolved high-severity `adm-zip` denial-of-service advisory.
 
 ### Q-21: Capture-ready source assets and duplicate capture reuse (`P0`, implemented and real-run tested 2026-07-19)
 
@@ -608,6 +608,62 @@ seconds in Kimi visual editing. Correctness is now verified, but per-story cache
 or a faster editor route should be evaluated before treating this latency as a
 routine iteration loop.
 
+### Q-25: Named event identity and focused slate duplicate audit (`P0`, implemented and regression-tested 2026-07-20)
+
+Story identity now separates supported proper-noun entity/product names from
+generic descriptions, preserves aliases and identity evidence, and emits an
+event fingerprint. Pair adjudication is isolated to one candidate pair per LLM
+call. Same-event proposals, unresolved named identities, and ambiguous
+follow-up/story-arc decisions receive a full-record GPT-4o review before a
+merge decision is accepted. This fixes the failure mode where one large batch
+described unrelated records while adjudicating a different pair.
+
+Editorial selection now performs a second focused semantic duplicate audit on
+only the proposed roundup stories. Its result is supplied to the final slate
+reviewer, and the final structured slate may retain at most one story from each
+reported same-event group. This is not a title/keyword deduper: broad themes and
+shared companies remain valid when the concrete events differ. A focused Kimi
+K3/Comic Chat/TechCrunch regression recreates the observed failure: indirect
+and named Kimi coverage resolves to one event while the unrelated Microsoft
+Comic Chat record remains separate.
+
+### Q-26: Recipe-first HyperFrames production design (`P0`, implemented and rendered 2026-07-20)
+
+The daily visual profile now uses HyperFrames with the shared
+`editorial_minimal` design contract. Every planner-advertised render kind must
+have an allowed named recipe supporting the configured production backends, and
+every production scene must return its exact `payload.recipe_id`. Missing,
+unknown, mismatched, or unsupported recipes fail before rendering. The planner
+can no longer hand a broad scene type to a renderer and receive unrelated
+legacy styling.
+
+The recipe compiler implements editorial hooks and chapters, source proof,
+annotated image/video, identity reveals, short mechanisms, metric countups and
+contrasts, process traces and detail zooms, interface walkthroughs, evidence
+stacks/montages, and interface transformations. All projects receive
+`frame.md`: warm paper, near-black ink, one burnt-orange accent, EB Garamond
+headlines, Oswald labels, large readable zones, restrained motion, and no
+decorative cards. The circular identity treatment and montage label overlays
+were removed during frame QA.
+
+Eleven representative recipe projects pass HyperFrames runtime, layout, motion,
+and WCAG contrast checks and render as valid 1280x720 MP4 clips. The inspected
+contact sheet is stored at
+`output/labs/hyperframes_recipe_qa/contact_sheet.png`. Remotion remains a
+compatibility and visual-lab backend for historical scene families, not the
+daily design authority. The upstream ZIP advisory remains an operational
+constraint: use only pipeline-owned composition code and trusted local assets.
+
+The frozen July 19 production episode also completed the full live path with
+Kimi planning: five stories, 37 scenes, 35 aligned audio units covered, zero
+gaps/overlaps/fallbacks, and no missing recipe IDs. HyperFrames rendered all 37
+720p preview clips in 80.44 seconds with four scene workers, then assembly and
+review completed successfully at the authoritative 397.31-second voiceover
+duration. The contact sheet confirms one coherent visual system. Its remaining
+creative limitation is asset mix: 10 editorial-text scenes versus only two
+context images and one source-owned video, which belongs to future asset/planner
+quality work rather than renderer architecture.
+
 ### Standing Semantic Policy (`KEEP`)
 
 Engagement, humor, hook quality, claim interpretation, tone, visual meaning,
@@ -630,7 +686,7 @@ pass human review.
 
 ## 6. Next Evaluation Gate
 
-Q-01 through Q-24 are implemented. The next gate is a fresh production episode
+Q-01 through Q-26 are implemented. The next gate is a fresh production episode
 from evidence preparation onward, followed by artifact inspection rather than
 summary-only review. External provider search and paid vision verification stay
 disabled during this evaluation so source-context, grouping, script quality,
@@ -656,6 +712,8 @@ Visual review:
 - Intro beats receive distinct treatments instead of one overloaded screen.
 - Repeated catalog assets and repeated render kinds are visible in the contact
   sheet and corrected before final render.
+- Every planned production scene carries a valid named recipe and the complete
+  episode stays within the shared `editorial_minimal` HyperFrames design system.
 - Audio/video synchronization remains exact at story boundaries and episode
   end.
 - Mastered voiceover measures near the configured loudness target without
@@ -667,7 +725,7 @@ Visual review:
 
 ## 7. Other Deferred Work
 
-After the validated Q-01 through Q-24 foundation, keep these operational and
+After the validated Q-01 through Q-26 foundation, keep these operational and
 product tasks visible without mixing them into the current evaluation:
 
 - Keep Wikimedia, Pexels, Pixabay, and paid frame-level vision verification
@@ -680,9 +738,10 @@ product tasks visible without mixing them into the current evaluation:
   content-filter-only GPT-4o route is operational resilience, not evidence that
   more parallel K3 calls are safe.
 
-- Reassess the HyperFrames backend after its transitive `adm-zip` advisory is
-  fixed upstream. Until then, keep Remotion as production default and run
-  HyperFrames only on pipeline-owned compositions and trusted local assets.
+- Monitor the HyperFrames transitive `adm-zip` advisory and upgrade when
+  upstream ships a fixed release. Until then, render only pipeline-owned
+  compositions and trusted local assets; do not accept arbitrary composition
+  archives or untrusted project trees.
 
 - Compare the verified OpenAI `gpt-4o-mini-tts` baseline against a
   non-deprecated hosted speech path before production lock. The model still
@@ -738,8 +797,9 @@ python -m src.pipeline.orchestration.runner visuals \
   --render-mode preview
 ```
 
-Compare the opt-in HyperFrames renderer after a valid plan and resolved assets
-already exist:
+Rerender with the daily HyperFrames backend after a valid plan and resolved
+assets already exist (`--render-backend` is optional because the profile now
+selects it):
 
 ```bash
 python -m src.pipeline.orchestration.runner visuals \

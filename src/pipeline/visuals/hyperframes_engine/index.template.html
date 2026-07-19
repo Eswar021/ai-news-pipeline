@@ -6,9 +6,12 @@
     <script src="node_modules/gsap/dist/gsap.min.js"></script>
     <style>
       * { box-sizing: border-box; }
+      :root { --paper: #f4efe6; --ink: #171611; --accent: #b64b2d; --muted: #69645c; --serif: "EB Garamond"; --sans: "Oswald"; }
       html, body { margin: 0; width: __WIDTH__px; height: __HEIGHT__px; overflow: hidden; }
-      body { background: #f4efe6; color: #171611; font-family: "Avenir Next", Helvetica, sans-serif; }
-      #stage { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--paper); }
+      body { background: var(--paper); color: var(--ink); font-family: var(--sans); }
+      #root { position: relative; width: __WIDTH__px; height: __HEIGHT__px; overflow: hidden; }
+      #stage { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; overflow: hidden; color: var(--ink); font-family: var(--sans); }
+      .canvas-fill { position: absolute; inset: 0; z-index: -3; background: var(--paper); }
       #stage::before {
         content: "";
         position: absolute;
@@ -19,14 +22,17 @@
       }
       .accent-rule { position: absolute; left: 5.4%; top: 7%; width: 8%; height: 7px; background: var(--accent); transform-origin: left center; }
       .eyebrow { color: var(--accent); font-size: clamp(18px, 1.35vw, 27px); font-weight: 850; letter-spacing: .17em; text-transform: uppercase; }
-      .headline { margin: 0; font-family: "EB Garamond", Georgia, serif; font-size: clamp(64px, 6.4vw, 124px); line-height: .9; letter-spacing: -.052em; font-weight: 700; text-wrap: balance; }
+      .headline { margin: 0; font-family: var(--serif); font-size: clamp(64px, 6.4vw, 124px); line-height: .9; letter-spacing: -.052em; font-weight: 700; text-wrap: balance; }
       .headline.small { font-size: clamp(54px, 4.8vw, 94px); }
+      .accent-word { color: var(--accent); text-decoration: underline; text-decoration-thickness: .07em; text-underline-offset: .08em; }
       .support { color: var(--muted); font-size: clamp(25px, 2vw, 39px); line-height: 1.15; font-weight: 560; text-wrap: balance; }
       .media-fill { width: 100%; height: 100%; object-fit: cover; }
-      .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(18,16,13,.80), rgba(18,16,13,.12) 58%, rgba(18,16,13,.04)); }
-      .source-credit { position: absolute; right: 3.2%; bottom: 3.4%; padding: 8px 12px; color: #fffaf2; background: rgba(23,22,17,.86); font-size: clamp(14px, 1vw, 20px); font-weight: 750; letter-spacing: .04em; }
+      .shade { position: absolute; inset: 0; z-index: 2; background: linear-gradient(90deg, rgba(18,16,13,.92), rgba(18,16,13,.48) 58%, rgba(18,16,13,.12)); }
+      .source-credit { position: absolute; right: 3.2%; bottom: 3.4%; z-index: 12; padding: 8px 12px; color: #fffaf2; background: rgba(23,22,17,.9); font-size: clamp(14px, 1vw, 20px); font-weight: 750; letter-spacing: .04em; }
       .full-copy { position: absolute; left: 7.2%; top: 17%; width: 66%; z-index: 4; }
+      .full-copy .headline { margin-top: 34px; }
       .full-copy .support { margin-top: 30px; max-width: 82%; }
+      .ghost-word { position: absolute; right: 2.5%; bottom: -2%; z-index: 0; max-width: 48%; overflow: hidden; color: color-mix(in srgb, var(--accent) 10%, transparent); font-family: var(--sans); font-size: clamp(128px, 15vw, 286px); line-height: .78; font-weight: 700; letter-spacing: -.045em; text-transform: uppercase; text-align: right; white-space: nowrap; }
       .split-media { position: absolute; inset: 0 0 0 40%; overflow: hidden; clip-path: polygon(11% 0,100% 0,100% 100%,0 100%); }
       .split-copy { position: absolute; left: 5.4%; top: 14%; bottom: 10%; width: 47%; z-index: 4; display: flex; flex-direction: column; justify-content: center; }
       .split-copy .headline { margin-top: 34px; }
@@ -38,14 +44,16 @@
       .source-title { position: absolute; left: 5%; top: 5%; right: 5%; z-index: 4; display: flex; justify-content: space-between; gap: 40px; align-items: flex-start; }
       .source-title .headline { max-width: 82%; font-size: clamp(43px, 3.5vw, 68px); }
       .highlight { position: absolute; left: 7%; right: 7%; bottom: 8%; z-index: 6; padding: 18px 28px; color: var(--ink); background: rgba(255,253,250,.95); border-left: 8px solid var(--accent); box-shadow: 0 14px 42px rgba(42,35,25,.18); font-size: clamp(21px, 1.7vw, 33px); line-height: 1.12; font-weight: 700; text-align: center; }
-      .identity { position: absolute; right: 8.5%; top: 25%; width: 24%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 50%; background: rgba(255,253,248,.76); box-shadow: 0 30px 80px rgba(45,34,22,.16); text-align: center; }
-      .identity-name { width: 82%; font-family: "EB Garamond", Georgia, serif; font-size: clamp(42px, 4vw, 78px); line-height: .93; letter-spacing: -.045em; font-weight: 700; }
-      .identity img { width: 58%; height: 58%; object-fit: contain; }
+      .identity { position: absolute; right: 7%; top: 24%; width: 32%; height: 52%; display: flex; align-items: center; justify-content: center; padding: 5%; border-top: 5px solid var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--ink) 24%, transparent); text-align: center; }
+      .identity::before { content: ""; position: absolute; left: -10%; top: 19%; width: 32%; aspect-ratio: 1; border: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); transform: rotate(45deg); }
+      .identity-name { position: relative; width: 100%; font-family: var(--serif); font-size: clamp(48px, 4.6vw, 90px); line-height: .9; letter-spacing: -.05em; font-weight: 700; }
+      .identity img { position: relative; width: 72%; height: 72%; object-fit: contain; }
       .explainer { position: absolute; inset: 0; padding: 8% 7%; }
       .explainer .headline { width: 76%; font-size: clamp(52px, 4.4vw, 86px); }
+      .explainer > .headline, .metric-stage > .headline, .map-stage > .headline, .trace-stage > .headline, .docs-stage > .headline, .matrix-stage > .headline, .transform-stage > .headline { margin-top: 26px; }
       .flow { position: absolute; left: 7%; right: 7%; top: 43%; display: flex; align-items: center; justify-content: center; gap: 2.2%; }
       .flow-item { position: relative; min-width: 17%; max-width: 23%; text-align: center; }
-      .flow-label { font-family: "EB Garamond", Georgia, serif; font-size: clamp(32px, 2.7vw, 53px); line-height: .96; font-weight: 700; }
+      .flow-label { font-family: var(--serif); font-size: clamp(32px, 2.7vw, 53px); line-height: .96; font-weight: 700; }
       .flow-detail { margin-top: 14px; color: var(--muted); font-size: clamp(18px, 1.35vw, 27px); line-height: 1.1; font-weight: 650; }
       .connector { width: 9%; height: 3px; background: var(--accent); transform-origin: left center; }
       .story-number { color: var(--accent); font-size: clamp(22px, 1.6vw, 31px); font-weight: 850; letter-spacing: .18em; text-transform: uppercase; }
@@ -53,6 +61,8 @@
       .transition-copy .headline { max-width: 82%; }
       .transition-media .transition-copy { color: #fffaf2; width: 64%; }
       .transition-media .headline { text-shadow: 0 8px 38px rgba(0,0,0,.56); }
+      .context-media .full-copy { z-index: 6; }
+      .annotated-media .full-copy { left: 5%; width: 43%; }
       .annotation-scrim { position: absolute; right: 0; top: 0; bottom: 0; width: 46%; z-index: 7; background: linear-gradient(90deg, transparent, rgba(15,13,10,.72) 28%, rgba(15,13,10,.94)); }
       .annotation-rail { position: absolute; right: 5.2%; top: 13%; bottom: 13%; width: 32%; z-index: 8; display: flex; flex-direction: column; justify-content: center; gap: 28px; }
       .annotation { padding: 12px 0 12px 22px; border-left: 5px solid var(--accent); color: #fffaf2; font-size: clamp(20px, 1.42vw, 28px); line-height: 1.12; font-weight: 760; text-wrap: balance; text-shadow: 0 4px 20px rgba(0,0,0,.58); }
@@ -60,41 +70,41 @@
       .metric-stage .headline { max-width: 78%; font-size: clamp(52px, 4.7vw, 92px); }
       .metric-grid { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 10%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4%; align-items: stretch; }
       .metric { display: flex; flex-direction: column; justify-content: center; border-top: 3px solid color-mix(in srgb, var(--accent) 76%, transparent); }
-      .metric-value { margin-top: 18px; font-family: "EB Garamond", Georgia, serif; font-size: clamp(82px, 8vw, 154px); line-height: .78; letter-spacing: -.065em; font-weight: 720; }
+      .metric-value { margin-top: 18px; font-family: var(--serif); font-size: clamp(82px, 8vw, 154px); line-height: .78; letter-spacing: -.065em; font-weight: 720; }
       .metric-label { margin-top: 25px; color: var(--muted); font-size: clamp(22px, 1.7vw, 34px); font-weight: 760; }
       .delta-grid { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 11%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 5%; }
       .delta { display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: auto 1fr auto; align-items: center; column-gap: 6%; border-top: 3px solid var(--accent); padding-top: 20px; }
       .delta-label { grid-column: 1 / -1; color: var(--muted); font-size: clamp(20px, 1.45vw, 29px); font-weight: 820; text-transform: uppercase; letter-spacing: .1em; }
-      .delta-side { font-family: "EB Garamond", Georgia, serif; font-size: clamp(55px, 5vw, 98px); line-height: .84; font-weight: 700; }
+      .delta-side { font-family: var(--serif); font-size: clamp(55px, 5vw, 98px); line-height: .84; font-weight: 700; }
       .delta-arrow { color: var(--accent); font-size: clamp(44px, 4vw, 78px); }
       .delta-result { grid-column: 1 / -1; color: var(--accent); font-size: clamp(34px, 2.9vw, 56px); font-weight: 900; }
       .map-stage, .trace-stage, .docs-stage, .matrix-stage, .transform-stage { position: absolute; inset: 0; padding: 7% 6.5%; }
       .map-stage .headline, .trace-stage .headline, .matrix-stage .headline, .transform-stage .headline { max-width: 75%; font-size: clamp(50px, 4.5vw, 88px); }
       .docs-stage .headline { max-width: 36%; font-size: clamp(48px, 4.1vw, 80px); }
       .orbit { position: absolute; left: 12%; right: 12%; top: 35%; bottom: 9%; }
-      .orbit-core { position: absolute; left: 50%; top: 50%; width: 25%; aspect-ratio: 1; transform: translate(-50%,-50%); border: 3px solid var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-family: "EB Garamond", Georgia, serif; font-size: clamp(31px, 2.6vw, 50px); line-height: .92; font-weight: 700; background: color-mix(in srgb, var(--paper) 88%, transparent); }
+      .orbit-core { position: absolute; left: 50%; top: 50%; width: 25%; aspect-ratio: 1; transform: translate(-50%,-50%); border: 3px solid var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-family: var(--serif); font-size: clamp(31px, 2.6vw, 50px); line-height: .92; font-weight: 700; background: color-mix(in srgb, var(--paper) 88%, transparent); }
       .orbit-ring { position: absolute; left: 10%; right: 10%; top: 4%; bottom: 4%; border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 50%; }
       .orbit-node { position: absolute; width: 19%; min-height: 84px; display: flex; align-items: center; justify-content: center; padding: 14px 18px; border-bottom: 3px solid var(--accent); background: color-mix(in srgb, var(--paper) 90%, transparent); font-size: clamp(21px, 1.55vw, 31px); line-height: 1; text-align: center; font-weight: 800; }
       .trace { position: absolute; left: 7%; right: 7%; top: 44%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: center; gap: 2%; }
       .trace-step { min-height: 190px; padding: 28px 22px; border-top: 5px solid color-mix(in srgb, var(--accent) 35%, transparent); display: flex; flex-direction: column; justify-content: center; }
       .trace-step.active { border-color: var(--accent); }
-      .trace-label { font-family: "EB Garamond", Georgia, serif; font-size: clamp(31px, 2.45vw, 48px); line-height: .94; font-weight: 700; }
+      .trace-label { font-family: var(--serif); font-size: clamp(31px, 2.45vw, 48px); line-height: .94; font-weight: 700; }
       .trace-detail { margin-top: 15px; color: var(--muted); font-size: clamp(18px, 1.2vw, 24px); line-height: 1.08; font-weight: 650; }
       .trace-arrow { color: var(--accent); font-size: clamp(36px, 3vw, 60px); text-align: center; }
-      .focus-note { position: absolute; left: 7%; bottom: 7%; max-width: 70%; padding-left: 24px; border-left: 6px solid var(--accent); color: var(--muted); font-size: clamp(23px, 1.75vw, 35px); line-height: 1.08; font-weight: 720; }
+      .focus-note { position: absolute; left: 7%; bottom: 7%; min-height: 44px; max-width: 70%; padding: 7px 0 7px 24px; border-left: 6px solid var(--accent); color: var(--muted); font-size: clamp(21px, 1.55vw, 31px); line-height: 1.12; font-weight: 720; }
       .walkthrough-markers { position: absolute; right: 5%; top: 24%; z-index: 9; width: 31%; display: flex; flex-direction: column; gap: 18px; }
       .walkthrough-step { padding: 16px 20px; background: rgba(255,253,250,.94); border-left: 6px solid var(--accent); box-shadow: 0 16px 42px rgba(30,24,17,.18); font-size: clamp(19px, 1.35vw, 27px); line-height: 1.05; font-weight: 770; }
       .docs { position: absolute; right: 4.5%; top: 20%; width: 55%; height: 73%; }
       .document { position: absolute; width: 75%; min-height: 40%; padding: 28px 32px; background: #fffdfa; border: 1px solid rgba(23,22,17,.25); box-shadow: 0 25px 65px rgba(35,29,21,.18); }
       .document-type { color: var(--accent); font-size: clamp(16px, 1vw, 21px); font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
-      .document-title { margin-top: 16px; font-family: "EB Garamond", Georgia, serif; font-size: clamp(29px, 2.2vw, 43px); line-height: .93; font-weight: 700; }
+      .document-title { margin-top: 16px; font-family: var(--serif); font-size: clamp(29px, 2.2vw, 43px); line-height: .93; font-weight: 700; }
       .document-source { margin-top: 15px; color: var(--muted); font-size: clamp(17px, 1.1vw, 23px); font-weight: 700; }
       .source-montage { position: absolute; left: 40%; right: 4.2%; top: 17%; bottom: 7%; }
       .proof-page { position: absolute; width: 78%; height: 76%; overflow: hidden; border: 1px solid rgba(23,22,17,.22); border-radius: 10px; background: #fffdfa; box-shadow: 0 30px 80px rgba(35,29,21,.22); transform-origin: center center; }
       .proof-page.active { z-index: 6; border: 3px solid var(--accent); }
-      .proof-bar { height: 44px; padding: 0 18px; display: flex; align-items: center; gap: 10px; color: var(--muted); background: #e9e1d5; border-bottom: 1px solid rgba(23,22,17,.16); font-size: clamp(14px, .95vw, 19px); font-weight: 760; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .proof-image { width: 100%; height: calc(100% - 44px); object-fit: cover; object-position: center 24%; }
-      .proof-label { position: absolute; left: 20px; right: 20px; bottom: 18px; padding: 10px 14px; color: #fffaf2; background: rgba(23,22,17,.84); border-left: 5px solid var(--accent); font-size: clamp(16px, 1.1vw, 22px); line-height: 1.05; font-weight: 780; }
+      .proof-bar { position: relative; z-index: 3; height: 44px; padding: 0 18px; display: flex; align-items: center; gap: 10px; color: #625e56; background: #e9e1d5; border-bottom: 1px solid rgba(23,22,17,.16); font-size: clamp(14px, .95vw, 19px); font-weight: 760; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .proof-image-frame { position: relative; z-index: 1; width: 100%; height: calc(100% - 44px); overflow: hidden; }
+      .proof-image { width: 100%; height: 100%; object-fit: cover; object-position: center 24%; }
       .matrix { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 10%; display: grid; align-content: center; }
       .matrix-row { display: grid; grid-template-columns: 1.35fr repeat(var(--cols), 1fr); border-bottom: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); }
       .matrix-cell { padding: 16px 18px; min-height: 60px; display: flex; align-items: center; font-size: clamp(18px, 1.25vw, 25px); line-height: 1; font-weight: 720; }
@@ -103,14 +113,16 @@
       .transform-panels { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 10%; display: grid; grid-template-columns: 1fr auto 1fr; gap: 4%; align-items: center; }
       .transform-panel { border-top: 4px solid color-mix(in srgb, var(--accent) 45%, transparent); padding-top: 22px; }
       .transform-panel.after { border-color: var(--accent); }
-      .transform-label { font-family: "EB Garamond", Georgia, serif; font-size: clamp(36px, 3vw, 58px); font-weight: 700; }
+      .transform-label { font-family: var(--serif); font-size: clamp(36px, 3vw, 58px); font-weight: 700; }
       .transform-item { margin-top: 15px; color: var(--muted); font-size: clamp(21px, 1.5vw, 30px); font-weight: 690; }
       .transform-arrow { color: var(--accent); font-size: clamp(54px, 5vw, 96px); }
       .grain { position: absolute; inset: 0; z-index: 20; pointer-events: none; opacity: .22; background-image: radial-gradient(rgba(23,22,17,.16) .7px, transparent .7px); background-size: 5px 5px; }
     </style>
   </head>
   <body>
-    <main id="stage" data-composition-id="main" data-start="0" data-duration="__DURATION__" data-width="__WIDTH__" data-height="__HEIGHT__" data-fps="__FPS__"></main>
+    <main id="root" data-composition-id="main" data-start="0" data-duration="__DURATION__" data-width="__WIDTH__" data-height="__HEIGHT__" data-fps="__FPS__">
+      <section id="stage" class="clip" data-start="0" data-duration="__DURATION__" data-track-index="1"></section>
+    </main>
     <script id="scene-spec" type="application/json">__SCENE_SPEC_JSON__</script>
     <script>
       const spec = JSON.parse(document.querySelector("#scene-spec").textContent);
@@ -118,6 +130,7 @@
       const payload = scene.payload || {};
       const asset = scene.resolved_asset || {};
       const style = spec.visual_style || {};
+      const root = document.querySelector("#root");
       const stage = document.querySelector("#stage");
       const text = (value, fallback = "") => typeof value === "string" && value.trim() ? value.trim() : fallback;
       const list = (value) => Array.isArray(value) ? value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()) : [];
@@ -128,6 +141,23 @@
         if (value) element.textContent = value;
         return element;
       };
+      const normalizeWord = (value) => text(value).toLocaleLowerCase().replace(/[^\p{L}\p{N}'’-]+/gu, "");
+      const accentWords = new Set(list(payload.accent_words).flatMap((value) => value.split(/\s+/)).map(normalizeWord).filter(Boolean));
+      const headlineNode = (value, className = "headline hf-enter") => {
+        const element = node("h1", className);
+        text(value).split(/(\s+)/).forEach((part) => {
+          if (!part.trim()) {
+            element.appendChild(document.createTextNode(part));
+            return;
+          }
+          if (accentWords.has(normalizeWord(part))) {
+            element.appendChild(node("span", "accent-word", part));
+          } else {
+            element.appendChild(document.createTextNode(part));
+          }
+        });
+        return element;
+      };
       const append = (parent, ...children) => children.filter(Boolean).forEach((child) => parent.appendChild(child));
       const assetUrl = text(asset.asset_render_url) || text(asset.asset_data_uri);
       const headline = text(payload.headline) || text(payload.overlay_headline) || text(payload.companion_text) || text(scene.script_excerpt, "Untitled story");
@@ -135,12 +165,15 @@
       const sourceLabel = text(payload.source_label) || text(asset.capture && asset.capture.domain);
       const recipeId = text(payload.recipe_id);
 
-      stage.style.setProperty("--paper", text(style.background_color, "#f4efe6"));
-      stage.style.setProperty("--ink", text(style.text_color, "#171611"));
-      stage.style.setProperty("--accent", text(style.accent_color, "#bd4e2f"));
-      stage.style.setProperty("--muted", text(style.muted_color, "#6f6a61"));
-      stage.style.setProperty("--sans", text(style.sans_font, '"Avenir Next", Helvetica, sans-serif'));
+      root.style.setProperty("--paper", text(style.background_color, "#f4efe6"));
+      root.style.setProperty("--ink", text(style.text_color, "#171611"));
+      root.style.setProperty("--accent", text(style.accent_color, "#b64b2d"));
+      root.style.setProperty("--muted", text(style.muted_color, "#69645c"));
+      root.style.setProperty("--sans", text(style.sans_font, 'Oswald, "Avenir Next Condensed", Helvetica, sans-serif'));
+      root.style.setProperty("--serif", text(style.editorial_font, '"EB Garamond", Georgia, serif'));
       stage.dataset.recipeId = recipeId;
+      stage.classList.add(`recipe-${recipeId}`);
+      stage.appendChild(node("div", "canvas-fill"));
 
       const addGrain = () => stage.appendChild(node("div", "grain"));
       const addRule = () => stage.appendChild(node("div", "accent-rule hf-rule"));
@@ -158,37 +191,50 @@
         addRule();
         const copy = node("section", "full-copy");
         const eyebrow = node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE POINT"));
-        const title = node("h1", "headline hf-enter", headline);
+        const title = headlineNode(headline);
         const body = support ? node("div", "support hf-enter", support) : null;
         append(copy, eyebrow, title, body);
         stage.appendChild(copy);
+        const ghost = list(payload.accent_words)[0];
+        if (ghost) {
+          const ghostNode = node("div", "ghost-word hf-ghost", ghost);
+          ghostNode.setAttribute("data-layout-allow-overlap", "");
+          stage.appendChild(ghostNode);
+        }
       };
 
       const renderContextMedia = (video = false) => {
+        stage.classList.add("context-media");
+        const canvasFill = stage.querySelector(".canvas-fill");
+        if (canvasFill) canvasFill.style.display = "none";
         const mediaWrap = node("div", "hf-media-wrap");
         mediaWrap.style.position = "absolute";
         mediaWrap.style.inset = "0";
         if (video && assetUrl) {
-          const media = node("video", "media-fill hf-media");
+          const media = node("video", "media-fill hf-media root-media");
           media.src = assetUrl;
           media.muted = true;
           media.preload = "auto";
           media.setAttribute("playsinline", "");
-          mediaWrap.appendChild(media);
+          media.style.position = "absolute";
+          media.style.inset = "0";
+          media.style.zIndex = "0";
+          root.appendChild(media);
         } else {
           addImage(mediaWrap);
         }
-        stage.appendChild(mediaWrap);
+        if (!video || !assetUrl) stage.appendChild(mediaWrap);
         stage.appendChild(node("div", "shade"));
         if (payload.show_overlay === true && headline) {
           const copy = node("section", "full-copy");
           copy.style.color = "#fffaf2";
           copy.style.top = "56%";
-          append(copy, node("h1", "headline small hf-enter", headline));
+          append(copy, headlineNode(headline, "headline small hf-enter"));
           stage.appendChild(copy);
         }
         const annotations = list(payload.annotations || payload.callouts).slice(0, 3);
         if (annotations.length) {
+          stage.classList.add("annotated-media");
           stage.appendChild(node("div", "annotation-scrim hf-annotation-scrim"));
           const rail = node("div", "annotation-rail");
           annotations.forEach((item) => rail.appendChild(node("div", "annotation hf-annotation", item)));
@@ -199,7 +245,7 @@
 
       const renderSource = () => {
         const titleRow = node("section", "source-title");
-        append(titleRow, node("h1", "headline hf-enter", text(payload.overlay_headline, headline)));
+        append(titleRow, headlineNode(text(payload.overlay_headline, headline)));
         stage.appendChild(titleRow);
         const browser = node("section", "browser hf-enter");
         const bar = node("div", "browser-bar");
@@ -220,7 +266,7 @@
         append(
           copy,
           node("div", "eyebrow hf-enter", text(payload.eyebrow, "IDENTITY")),
-          node("h1", "headline hf-enter", support || headline),
+          headlineNode(support || headline),
         );
         stage.appendChild(copy);
         const identity = node("div", "identity hf-enter");
@@ -231,7 +277,7 @@
 
       const renderExplainer = () => {
         const wrap = node("section", "explainer");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "HOW IT WORKS")), node("h1", "headline hf-enter", headline));
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "HOW IT WORKS")), headlineNode(headline));
         const flow = node("div", "flow");
         const items = Array.isArray(payload.items) ? payload.items.slice(0, 4) : [];
         items.forEach((item, index) => {
@@ -257,7 +303,7 @@
         } else addRule();
         const copy = node("section", "transition-copy");
         const ordinal = text(payload.story_number) || (scene.scene_order ? `Story ${scene.scene_order}` : "Next story");
-        append(copy, node("div", "story-number hf-enter", ordinal), node("h1", "headline hf-enter", headline));
+        append(copy, node("div", "story-number hf-enter", ordinal), headlineNode(headline));
         stage.appendChild(copy);
       };
 
@@ -273,7 +319,7 @@
 
       const renderMetricCounter = () => {
         const wrap = node("section", "metric-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE NUMBER")), node("h1", "headline hf-enter", headline));
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE NUMBER")), headlineNode(headline));
         const grid = node("div", "metric-grid");
         objects(payload.metrics).slice(0, 3).forEach((metric) => {
           const item = node("div", "metric hf-metric");
@@ -287,7 +333,7 @@
 
       const renderMetricContrast = () => {
         const wrap = node("section", "metric-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE DELTA")), node("h1", "headline hf-enter", headline));
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE DELTA")), headlineNode(headline));
         const grid = node("div", "delta-grid");
         objects(payload.benchmarks).slice(0, 3).forEach((metric) => {
           const item = node("div", "delta hf-metric");
@@ -300,7 +346,7 @@
 
       const renderEcosystem = () => {
         const wrap = node("section", "map-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE ECOSYSTEM")), node("h1", "headline hf-enter", headline));
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE ECOSYSTEM")), headlineNode(headline));
         const orbit = node("div", "orbit");
         orbit.appendChild(node("div", "orbit-ring hf-orbit"));
         const nodes = objects(payload.nodes).slice(0, 7);
@@ -322,7 +368,7 @@
 
       const renderTrace = (zoom = false) => {
         const wrap = node("section", "trace-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, zoom ? "ZOOM IN" : "HOW IT MOVES")), node("h1", "headline hf-enter", headline));
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, zoom ? "ZOOM IN" : "HOW IT MOVES")), headlineNode(headline));
         const trace = node("div", "trace");
         const steps = objects(payload.steps).slice(0, 6);
         const focus = text(zoom ? payload.focus_step_label : payload.active_step_label);
@@ -350,25 +396,27 @@
 
       const renderDocuments = () => {
         const wrap = node("section", "docs-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE RECEIPTS")), node("h1", "headline hf-enter", headline));
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE RECEIPTS")), headlineNode(headline));
         const resolvedDocuments = objects(asset.assets).slice(0, 3);
         if (resolvedDocuments.length) {
           const montage = node("div", "source-montage");
           const focus = text(payload.focus_document_label).toLowerCase();
           resolvedDocuments.forEach((resolved, index) => {
             const documentPayload = objects(payload.documents).find((doc) => text(doc.asset_id) === text(resolved.asset_id)) || objects(payload.documents)[index] || {};
-            const active = !focus || text(documentPayload.title).toLowerCase() === focus;
+            const active = focus ? text(documentPayload.title).toLowerCase() === focus : index === 0;
             const page = node("article", `proof-page hf-proof${active ? " active hf-focus" : ""}`);
             page.style.left = `${index * 9}%`;
             page.style.top = `${index * 9}%`;
             page.style.transform = `rotate(${(index - 1) * 2.4}deg)`;
+            page.style.zIndex = active ? "8" : String(index + 1);
             const bar = node("div", "proof-bar", text(resolved.domain) || text(documentPayload.source) || "SOURCE");
             page.appendChild(bar);
+            const imageFrame = node("div", "proof-image-frame");
             const image = node("img", "proof-image hf-proof-image");
             image.src = text(resolved.asset_render_url) || text(resolved.asset_data_uri);
             image.alt = text(documentPayload.title, "Source document");
-            page.appendChild(image);
-            page.appendChild(node("div", "proof-label", text(documentPayload.title) || text(documentPayload.source)));
+            imageFrame.appendChild(image);
+            page.appendChild(imageFrame);
             montage.appendChild(page);
           });
           wrap.appendChild(montage);
@@ -392,7 +440,7 @@
 
       const renderMatrix = () => {
         const wrap = node("section", "matrix-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "COMPARE")), node("h1", "headline hf-enter", headline));
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "COMPARE")), headlineNode(headline));
         const columns = list(payload.columns).slice(0, 4);
         const matrix = node("div", "matrix"); matrix.style.setProperty("--cols", String(columns.length));
         const header = node("div", "matrix-row hf-matrix-row");
@@ -411,7 +459,7 @@
 
       const renderTransform = () => {
         const wrap = node("section", "transform-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE SHIFT")), node("h1", "headline hf-enter", headline));
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE SHIFT")), headlineNode(headline));
         const panels = node("div", "transform-panels");
         [payload.before || {}, payload.after || {}].forEach((panel, index) => {
           if (index) panels.appendChild(node("div", "transform-arrow hf-arrow", "→"));
@@ -425,27 +473,30 @@
         stage.appendChild(wrap);
       };
 
-      const renderers = {
-        source_article_scene: renderSource,
-        context_image_scene: () => renderContextMedia(false),
-        broll_video_scene: () => renderContextMedia(true),
-        logo_reveal_scene: renderLogo,
-        editorial_text_scene: renderEditorial,
-        simple_explainer_scene: renderExplainer,
-        story_transition_scene: renderTransition,
-        quote_or_claim_highlight_scene: renderEvidence,
-        data_counter_scene: renderMetricCounter,
-        benchmark_delta_scene: renderMetricContrast,
-        ecosystem_map_scene: renderEcosystem,
-        architecture_flow_scene: () => renderTrace(false),
-        process_zoom_scene: () => renderTrace(true),
-        browser_walkthrough_scene: renderWalkthrough,
-        capability_matrix_scene: renderMatrix,
-        document_stack_scene: renderDocuments,
-        interface_transform_scene: renderTransform,
+      const recipeRenderers = {
+        editorial_hook: renderEditorial,
+        chapter_opener: renderTransition,
+        source_proof_scan: renderSource,
+        layered_evidence_reveal: renderEvidence,
+        annotated_image_focus: () => renderContextMedia(false),
+        annotated_video_focus: () => renderContextMedia(true),
+        identity_reveal: renderLogo,
+        mechanism_steps: renderExplainer,
+        metric_countup: renderMetricCounter,
+        metric_contrast: renderMetricContrast,
+        entity_orbit: renderEcosystem,
+        process_trace: () => renderTrace(false),
+        process_detail_zoom: () => renderTrace(true),
+        interface_walkthrough: renderWalkthrough,
+        evidence_stack: renderDocuments,
+        source_proof_montage: renderDocuments,
+        interface_before_after: renderTransform,
+        capability_compare: renderMatrix,
       };
-      if (!renderers[scene.render_kind]) throw new Error(`Unsupported HyperFrames render_kind: ${scene.render_kind}`);
-      renderers[scene.render_kind]();
+      if (!recipeId || !recipeRenderers[recipeId]) {
+        throw new Error(`Unsupported or missing HyperFrames recipe_id: ${recipeId || "<empty>"}`);
+      }
+      recipeRenderers[recipeId]();
       addGrain();
 
       window.__timelines = window.__timelines || {};
@@ -478,8 +529,9 @@
       animate(".hf-document", { y: 80, rotate: -6, opacity: 0 }, { y: 0, rotate: 0, opacity: 1, duration: .62, stagger: .18, ease: "power3.out" }, .8);
       animate(".hf-matrix-row", { x: 36, opacity: 0 }, { x: 0, opacity: 1, duration: .42, stagger: .14, ease: "power2.out" }, .78);
       animate(".hf-transform", { y: 42, opacity: 0 }, { y: 0, opacity: 1, duration: .62, stagger: .32, ease: "power3.out" }, .86);
-      animate(".hf-focus", { filter: "brightness(.88)" }, { filter: "brightness(1.08)", duration: .42, yoyo: true, repeat: 1, ease: "sine.inOut" }, midBeat);
+      animate(".hf-focus", { scale: .96 }, { scale: 1, duration: .48, ease: "power2.out" }, midBeat);
       animate(".hf-evidence", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: .75, ease: "power3.out" }, midBeat);
+      animate(".hf-ghost", { x: 90, opacity: 0 }, { x: 0, opacity: 1, duration: 1.1, ease: "power3.out" }, .35);
       window.__timelines.main = timeline;
     </script>
   </body>

@@ -12,6 +12,12 @@ render kinds listed there and follow each capability's payload contract. A
 catalog-dependent kind is omitted when this story has no compatible asset, so
 never recreate an omitted kind from memory or from a previous run.
 
+Every capability lists one or more available_recipes. Choose one exact
+recipe_id for every scene and put it in payload_json. The recipe is the actual
+motion composition contract; render_kind only identifies its broad media
+family. Never omit recipe_id, invent a recipe, or use a recipe from another
+capability.
+
 Work asset-first:
 
 1. For each beat, first ask whether a verified source page, source image,

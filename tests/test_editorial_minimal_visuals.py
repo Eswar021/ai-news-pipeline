@@ -50,11 +50,9 @@ def test_production_profile_exposes_renderable_editorial_vocabulary() -> None:
         "quote_or_claim_highlight_scene",
         "data_counter_scene",
         "benchmark_delta_scene",
-        "ecosystem_map_scene",
         "architecture_flow_scene",
         "process_zoom_scene",
         "browser_walkthrough_scene",
-        "capability_matrix_scene",
         "document_stack_scene",
         "interface_transform_scene",
     ]
@@ -250,14 +248,17 @@ def test_story_planner_prompt_hides_system_managed_transition() -> None:
         "quote_or_claim_highlight_scene",
         "data_counter_scene",
         "benchmark_delta_scene",
-        "ecosystem_map_scene",
         "architecture_flow_scene",
         "process_zoom_scene",
         "browser_walkthrough_scene",
-        "capability_matrix_scene",
         "document_stack_scene",
         "interface_transform_scene",
     }
+    assert all(capability["available_recipes"] for capability in capabilities.values())
+    assert all(
+        "recipe_id" in capability["payload_field_contract"]["required"]
+        for capability in capabilities.values()
+    )
     explainer_contract = capabilities["simple_explainer_scene"][
         "payload_field_contract"
     ]

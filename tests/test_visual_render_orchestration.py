@@ -69,6 +69,7 @@ def test_hyperframes_project_copies_media_and_embeds_scene_spec(tmp_path: Path) 
     engine_dir.mkdir()
     (engine_dir / "node_modules").mkdir()
     (engine_dir / "hyperframes.json").write_text("{}", encoding="utf-8")
+    (engine_dir / "frame.md").write_text("# Editorial frame", encoding="utf-8")
     (engine_dir / "index.template.html").write_text(
         "__WIDTH__ __HEIGHT__ __FPS__ __DURATION__ "
         '<script type="application/json">__SCENE_SPEC_JSON__</script>',
@@ -100,6 +101,41 @@ def test_hyperframes_project_copies_media_and_embeds_scene_spec(tmp_path: Path) 
     assert "1280 720 30 6.25" in html
     assert '"asset_render_url":"assets/scene_001.jpg"' in html
     assert (project_dir / "assets" / "scene_001.jpg").read_bytes() == b"fixture-image"
+    assert (project_dir / "frame.md").read_text(encoding="utf-8") == "# Editorial frame"
+
+
+def test_hyperframes_rejects_recipe_backed_kind_without_recipe_id(tmp_path: Path) -> None:
+    request = _request(tmp_path, backend="hyperframes")
+    specs_dir = tmp_path / "specs"
+    scenes_dir = tmp_path / "scenes"
+    specs_dir.mkdir()
+    scenes_dir.mkdir()
+
+    result = render_app._render_scenes_hyperframes(
+        render_scenes=[
+            {
+                "scene_id": "scene_missing_recipe",
+                "scene_order": 1,
+                "render_kind": "editorial_text_scene",
+                "duration_seconds": 5,
+                "payload": {
+                    "headline": "One complete editorial thought",
+                    "accent_words": ["editorial"],
+                    "composition": "editorial_center",
+                    "motion_style": "word_reveal",
+                },
+            }
+        ],
+        engine_dir=tmp_path / "missing-engine",
+        specs_dir=specs_dir,
+        scenes_dir=scenes_dir,
+        request=request,
+        render_settings={"width": 1280, "height": 720, "fps": 30},
+        duration_cap=14,
+    )
+
+    assert result[0]["status"] == "failed"
+    assert "require payload.recipe_id" in result[0]["error"]
 
 
 def test_hyperframes_rejects_unsupported_scene_before_render(tmp_path: Path) -> None:
