@@ -27,20 +27,26 @@ llm_roles:
       method: json_schema
       strict: true
   story_visual_planner:
-    provider: openai
-    model: gpt-4o-mini
-    temperature: 0.3
+    provider: moonshot
+    model: kimi-k3
+    temperature: 1.0
+    max_attempts: 1
     provider_options:
-      request_timeout_seconds: 300
+      thinking: null
+      omit_temperature: true
+      request_timeout_seconds: 600
     structured_output:
       method: json_schema
       strict: true
   story_visual_editor:
-    provider: openai
-    model: gpt-4o-mini
-    temperature: 0.3
+    provider: moonshot
+    model: kimi-k3
+    temperature: 1.0
+    max_attempts: 1
     provider_options:
-      request_timeout_seconds: 300
+      thinking: null
+      omit_temperature: true
+      request_timeout_seconds: 600
     structured_output:
       method: json_schema
       strict: true

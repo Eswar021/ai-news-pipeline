@@ -584,10 +584,12 @@ the same prompt in 17.95 seconds.
 K3's plan was materially stronger on this sample: it avoided duplicated scene
 payloads, used two distinct exact source passages, selected a verified robot
 image, preserved the narration's “once” contrast, and closed on a supported
-two-node explainer. The daily profile remains GPT-4o-mini because K3 is about
-17x slower on this request. K3 remains an explicit role-level quality option;
-its provider config must omit temperature, use an adequate timeout, and set a
-role-specific bounded retry count.
+two-node explainer. The daily profile now uses K3 for the per-story planner and
+story-plan editor because quality takes priority over the roughly 17x latency
+on this request. Episode direction and bookends remain GPT-4o-mini because the
+bounded comparison did not establish a K3 advantage for those roles. K3 omits
+temperature, uses a 600-second timeout, and has one provider attempt per
+bounded role call.
 
 ### Standing Semantic Policy (`KEEP`)
 
@@ -656,10 +658,10 @@ product tasks visible without mixing them into the current evaluation:
   accepted. Re-enable them only through an explicit profile and human-reviewed
   cost/quality comparison.
 
-- Keep Kimi K3 available as a role-level visual-planning quality option. Before
-  promoting it to the daily default, repeat the bounded comparison on several
-  story shapes and decide whether its stronger plans justify roughly five
-  minutes per story or require provider-safe story-call concurrency.
+- Validate the new Kimi K3 story-planning default on a fresh multi-story
+  production episode. The measured large prompt took roughly five minutes for
+  one story, so inspect total latency and Moonshot rate behavior before adding
+  provider-safe story-call concurrency.
 
 - Reassess the HyperFrames backend after its transitive `adm-zip` advisory is
   fixed upstream. Until then, keep Remotion as production default and run

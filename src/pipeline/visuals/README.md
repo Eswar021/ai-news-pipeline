@@ -162,13 +162,14 @@ src/pipeline/visuals/planner/prompts/
 
 The episode director, bookend planner, story planner, and visual editor each
 have an independent `llm_roles` provider/model route in
-`visuals/planner.yaml`. The daily profile uses GPT-4o-mini for all four.
-Moonshot/Kimi K3 is supported through the same strict structured boundary. An
-exact frozen one-story comparison completed in 303.79 seconds with six valid
-scenes, versus 17.95 seconds for GPT-4o-mini. K3 produced a more varied and
-better-grounded plan on that sample, but its roughly 17x latency keeps it an
-explicit quality experiment rather than the daily default. K3 role config must
-omit temperature and should set a role-specific bounded `max_attempts`.
+`visuals/planner.yaml`. The daily profile uses GPT-4o-mini for episode
+direction and bookends, then Kimi K3 for the main per-story plan and any
+story-plan editor pass. An exact frozen one-story comparison completed in
+303.79 seconds with six valid Kimi scenes, versus 17.95 seconds for
+GPT-4o-mini. K3 produced a more varied and better-grounded plan on that sample,
+so visual-plan quality now takes priority over its higher latency for the
+story-local creative roles. K3 role config omits temperature, uses a
+600-second timeout, and permits one provider attempt per bounded role call.
 
 The planner should not generate generic presentation-card outputs. The banned
 old card language is enforced in code and prompts.

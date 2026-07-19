@@ -632,12 +632,14 @@ assets, or convert one semantic scene family into another.
 
 Episode direction, bookend planning, per-story planning, and visual editing
 have independent provider/model routes in the planner module config. The daily
-profile keeps GPT-4o-mini for all four. On the exact frozen Agility Robotics
-story prompt, Kimi K3 completed six structurally valid scenes in 303.79 seconds
-and produced stronger source usage and visual variety than GPT-4o-mini, which
-completed in 17.95 seconds. K3 therefore remains an explicit high-quality role
-experiment rather than a hidden fallback or daily default. Its config omits
-temperature, uses a longer timeout, and can set a role-specific retry cap.
+profile keeps GPT-4o-mini for episode direction and bookends while Kimi K3 owns
+the per-story planner and story-plan editor. On the exact frozen Agility
+Robotics story prompt, Kimi K3 completed six structurally valid scenes in
+303.79 seconds and produced stronger source usage and visual variety than
+GPT-4o-mini, which completed in 17.95 seconds. The quality gain justified
+promoting K3 for story-local creative decisions. Its config omits temperature,
+uses a 600-second timeout, and permits one provider attempt per bounded role
+call; it is not an error fallback.
 
 Visual rendering has one stable JSON contract and two explicit engines.
 Remotion remains the default production engine and supports the complete

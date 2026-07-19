@@ -57,30 +57,30 @@ def test_production_profile_exposes_renderable_editorial_vocabulary() -> None:
     ]
 
 
-def test_visual_planner_supports_role_specific_provider_routes() -> None:
+def test_production_visual_planner_uses_kimi_for_story_creative_roles() -> None:
     config = VisualPlannerConfig.model_validate(_planner_config()).model_dump(mode="json")
-    config["llm_roles"]["story_visual_planner"] = {
-        "provider": "moonshot",
-        "model": "kimi-k3",
-        "temperature": 1.0,
-        "base_url": None,
-        "max_attempts": 1,
-        "provider_options": {
-            "thinking": None,
-            "omit_temperature": True,
-            "request_timeout_seconds": 480.0,
-        },
-        "structured_output": {"method": "json_schema", "strict": True},
-    }
     routes = _resolved_llm_configs(config)
 
     assert routes["episode_director"]["provider"] == "openai"
     assert routes["episode_director"]["model"] == "gpt-4o-mini"
+    assert routes["bookend_visual_planner"]["provider"] == "openai"
+    assert routes["bookend_visual_planner"]["model"] == "gpt-4o-mini"
     assert routes["story_visual_planner"]["provider"] == "moonshot"
     assert routes["story_visual_planner"]["model"] == "kimi-k3"
     assert routes["story_visual_planner"]["max_attempts"] == 1
-    assert routes["story_visual_editor"]["provider"] == "openai"
-    assert routes["story_visual_editor"]["model"] == "gpt-4o-mini"
+    assert routes["story_visual_planner"]["provider_options"] == {
+        "thinking": None,
+        "omit_temperature": True,
+        "request_timeout_seconds": 600.0,
+    }
+    assert routes["story_visual_editor"]["provider"] == "moonshot"
+    assert routes["story_visual_editor"]["model"] == "kimi-k3"
+    assert routes["story_visual_editor"]["max_attempts"] == 1
+    assert routes["story_visual_editor"]["provider_options"] == {
+        "thinking": None,
+        "omit_temperature": True,
+        "request_timeout_seconds": 600.0,
+    }
 
 
 def test_kimi_k3_rejects_an_explicit_temperature_before_api_use() -> None:
