@@ -329,6 +329,32 @@ class StructuredOutputConfig(BaseModel):
     strict: bool = True
 
 
+class ContentFilterFallbackConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: LLMProvider
+    model: str
+    temperature: float
+    base_url: str | None = None
+    provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
+    structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
+    llm_retry: LLMRetryConfig | None = None
+
+    @field_validator("model")
+    @classmethod
+    def fallback_model_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("content_filter_fallback model must not be empty")
+        return value.strip()
+
+    @field_validator("temperature")
+    @classmethod
+    def fallback_temperature_must_be_valid(cls, value: float) -> float:
+        if value < 0 or value > 2:
+            raise ValueError("content_filter_fallback temperature must be between 0 and 2")
+        return value
+
+
 class RoleLLMConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -339,6 +365,7 @@ class RoleLLMConfig(BaseModel):
     provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
     structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
     llm_retry: LLMRetryConfig | None = None
+    content_filter_fallback: ContentFilterFallbackConfig | None = None
 
     @field_validator("model")
     @classmethod

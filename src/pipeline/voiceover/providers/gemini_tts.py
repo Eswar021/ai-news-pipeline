@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from threading import local
+from time import monotonic
 from typing import Any
 
 from .api_utils import (
@@ -12,6 +13,7 @@ from .api_utils import (
     write_audio_bytes_to_wav,
 )
 from ..delivery import compose_delivery_instructions
+from ..tts_logging import build_request_record
 
 
 INSTALL_HINT = (
@@ -59,6 +61,8 @@ def synthesize_chunks_to_wav(
             provider="gemini",
             config=delivery_config or {},
         )
+        retry_metadata: dict[str, Any] = {}
+        started_at = monotonic()
 
         def request_audio() -> tuple[bytes, str]:
             output_path.unlink(missing_ok=True)
@@ -84,16 +88,30 @@ def synthesize_chunks_to_wav(
             initial_delay_seconds=retry_initial_delay_seconds,
             max_delay_seconds=retry_max_delay_seconds,
             label=f"Gemini TTS {chunk_id}",
+            metadata=retry_metadata,
+        )
+        audio = write_audio_bytes_to_wav(
+            audio_bytes=audio_bytes,
+            output_path=output_path,
+            sample_rate_hz=sample_rate_hz,
         )
         return {
-            **write_audio_bytes_to_wav(
-                audio_bytes=audio_bytes,
-                output_path=output_path,
-                sample_rate_hz=sample_rate_hz,
-            ),
+            **audio,
             "model": model,
             "voice": voice,
             "mime_type": mime_type,
+            "_tts_request": build_request_record(
+                provider="gemini",
+                model=model,
+                voice=voice,
+                chunk=chunk,
+                effective_instructions=chunk_instructions,
+                direction_applied=bool(chunk.get("delivery_direction"))
+                and chunk_instructions.strip() != instructions.strip(),
+                attempt_count=int(retry_metadata.get("attempt_count", 1)),
+                latency_seconds=monotonic() - started_at,
+                audio_path=output_path,
+            ),
         }
 
     return synthesize_in_parallel(chunks=chunks, worker_count=worker_count, worker=worker)

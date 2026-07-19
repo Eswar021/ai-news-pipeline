@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import shutil
 from pathlib import Path
+from time import time
 from typing import Any
 
 from playwright.sync_api import sync_playwright
@@ -21,7 +23,12 @@ from ..generators.source_screenshot import capture_source_viewport
 from .config import NEXT_MODULE, PACKAGE_TYPE
 from .contract import AssetResolverRequest, AssetResolverResponse
 
-SOURCE_SCREENSHOT_RENDER_KINDS = {"source_article_scene", "quote_or_claim_highlight_scene"}
+SOURCE_SCREENSHOT_RENDER_KINDS = {
+    "source_article_scene",
+    "quote_or_claim_highlight_scene",
+    "browser_walkthrough_scene",
+}
+SOURCE_MONTAGE_RECIPE = "source_proof_montage"
 DISCOVERED_MEDIA_RENDER_KINDS = {"context_image_scene", "broll_video_scene"}
 NO_ASSET_RENDER_KINDS = {
     "editorial_text_scene",
@@ -40,7 +47,6 @@ NO_ASSET_RENDER_KINDS = {
     "ecosystem_map_scene",
     "architecture_flow_scene",
     "process_zoom_scene",
-    "browser_walkthrough_scene",
     "decision_tree_scene",
     "capability_matrix_scene",
     "timeline_zoom_scene",
@@ -66,12 +72,14 @@ def run(input_json: dict) -> dict:
 
     assets_dir = output_dir / "assets"
     screenshots_dir = assets_dir / "source_screenshots"
+    montages_dir = assets_dir / "source_montages"
     logos_dir = assets_dir / "logos"
     raw_capture_dir = output_dir / "debug_raw_screenshots"
     full_page_dir = output_dir / "debug_full_pages"
     output_dir.mkdir(parents=True, exist_ok=True)
     assets_dir.mkdir(parents=True, exist_ok=True)
     screenshots_dir.mkdir(parents=True, exist_ok=True)
+    montages_dir.mkdir(parents=True, exist_ok=True)
     logos_dir.mkdir(parents=True, exist_ok=True)
 
     visual_media_package = _visual_media_package(request)
@@ -111,10 +119,16 @@ def run(input_json: dict) -> dict:
     }
 
     source_scenes = [scene for scene in scenes if scene.get("render_kind") in SOURCE_SCREENSHOT_RENDER_KINDS]
-    other_scenes = [scene for scene in scenes if scene.get("render_kind") not in SOURCE_SCREENSHOT_RENDER_KINDS]
+    montage_scenes = [scene for scene in scenes if _is_source_montage_scene(scene)]
+    source_scene_ids = {
+        clean_text(scene.get("scene_id")) for scene in [*source_scenes, *montage_scenes]
+    }
+    other_scenes = [
+        scene for scene in scenes if clean_text(scene.get("scene_id")) not in source_scene_ids
+    ]
     source_capture_cache: dict[tuple[str, str, str, float, bool], dict[str, Any]] = {}
 
-    if source_scenes and request.config.source_screenshots.enabled:
+    if (source_scenes or montage_scenes) and request.config.source_screenshots.enabled:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=request.config.browser.headless)
             context = browser.new_context(
@@ -136,12 +150,26 @@ def run(input_json: dict) -> dict:
                             capture_cache=source_capture_cache,
                         )
                     )
+                for scene in montage_scenes:
+                    resolved_assets.append(
+                        _resolve_source_montage(
+                            context=context,
+                            scene=scene,
+                            request=request,
+                            screenshots_dir=montages_dir,
+                            raw_capture_dir=raw_capture_dir,
+                            full_page_dir=full_page_dir,
+                            capture_cache=source_capture_cache,
+                        )
+                    )
             finally:
                 context.close()
                 browser.close()
     else:
         for scene in source_scenes:
             resolved_assets.append(_disabled_source_screenshot(scene))
+        for scene in montage_scenes:
+            resolved_assets.append(_disabled_source_montage(scene))
 
     for scene in other_scenes:
         if scene.get("render_kind") == "logo_reveal_scene":
@@ -218,13 +246,31 @@ def _resolve_source_screenshot(
         capture_mode=source_config.capture_mode,
         focus_zoom=source_config.focus_zoom,
         highlight_target=source_config.highlight_target,
+        reuse_page_capture_across_targets=bool(
+            getattr(source_config, "reuse_page_capture_across_targets", False)
+        ),
     )
     cached_capture = capture_cache.get(cache_key) if source_config.reuse_identical_captures else None
+    persistent_cache_dir = getattr(source_config, "persistent_cache_dir", None)
+    persistent_cache_ttl_hours = float(
+        getattr(source_config, "persistent_cache_ttl_hours", 168.0)
+    )
+    if cached_capture is None and persistent_cache_dir:
+        cached_capture = _load_persistent_capture(
+            cache_key,
+            cache_dir=Path(persistent_cache_dir),
+            ttl_hours=persistent_cache_ttl_hours,
+        )
     if cached_capture is not None:
         capture = {
             **cached_capture,
             "cache_hit": True,
         }
+        requested_target = clean_text((capture_scene.get("payload") or {}).get("target_text"))
+        cached_target = clean_text(capture.get("cached_target_text"))
+        if requested_target and cached_target.casefold() != requested_target.casefold():
+            capture["target_found"] = False
+            capture["capture_reused_across_targets"] = True
         if source_config.save_raw_capture_debug:
             raw_path = raw_capture_dir / f"{scene_id}_raw.png"
             raw_path.parent.mkdir(parents=True, exist_ok=True)
@@ -252,7 +298,16 @@ def _resolve_source_screenshot(
         capture["cache_hit"] = False
         if capture.get("ok") and source_config.reuse_identical_captures:
             capture["cache_source_scene_id"] = scene_id
+            capture["cached_target_text"] = clean_text(
+                (capture_scene.get("payload") or {}).get("target_text")
+            )
             capture_cache[cache_key] = dict(capture)
+            if persistent_cache_dir:
+                _store_persistent_capture(
+                    cache_key,
+                    capture,
+                    cache_dir=Path(persistent_cache_dir),
+                )
     if capture.get("ok"):
         output_path.write_bytes(capture["screenshot_bytes"])
         target_text = clean_text((capture_scene.get("payload") or {}).get("target_text", ""))
@@ -284,14 +339,71 @@ def _source_capture_cache_key(
     capture_mode: str,
     focus_zoom: float,
     highlight_target: bool,
+    reuse_page_capture_across_targets: bool = False,
 ) -> tuple[str, str, str, float, bool]:
     payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
     return (
         clean_text(payload.get("url", "")).rstrip("/"),
-        clean_text(payload.get("target_text", "")).casefold(),
+        (
+            ""
+            if reuse_page_capture_across_targets
+            else clean_text(payload.get("target_text", "")).casefold()
+        ),
         clean_text(capture_mode),
         round(float(focus_zoom), 4),
         bool(highlight_target),
+    )
+
+
+def _persistent_capture_paths(
+    cache_key: tuple[str, str, str, float, bool],
+    cache_dir: Path,
+) -> tuple[Path, Path]:
+    digest = hashlib.sha256(
+        json.dumps(cache_key, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return cache_dir / f"{digest}.png", cache_dir / f"{digest}.json"
+
+
+def _load_persistent_capture(
+    cache_key: tuple[str, str, str, float, bool],
+    *,
+    cache_dir: Path,
+    ttl_hours: float,
+) -> dict[str, Any] | None:
+    image_path, metadata_path = _persistent_capture_paths(cache_key, cache_dir)
+    if not image_path.is_file() or not metadata_path.is_file():
+        return None
+    if time() - min(image_path.stat().st_mtime, metadata_path.stat().st_mtime) > ttl_hours * 3600:
+        return None
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if not isinstance(metadata, dict):
+            return None
+        return {**metadata, "screenshot_bytes": image_path.read_bytes(), "persistent_cache_hit": True}
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _store_persistent_capture(
+    cache_key: tuple[str, str, str, float, bool],
+    capture: dict[str, Any],
+    *,
+    cache_dir: Path,
+) -> None:
+    screenshot_bytes = capture.get("screenshot_bytes")
+    if not isinstance(screenshot_bytes, bytes) or not screenshot_bytes:
+        return
+    image_path, metadata_path = _persistent_capture_paths(cache_key, cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(screenshot_bytes)
+    metadata_path.write_text(
+        json.dumps(
+            {key: value for key, value in capture.items() if key != "screenshot_bytes"},
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
     )
 
 
@@ -301,8 +413,90 @@ def _scene_with_capture_target(scene: dict[str, Any]) -> dict[str, Any]:
         payload.get("target_text")
         or payload.get("supporting_text")
         or payload.get("claim_text")
+        or payload.get("focus_text")
     )
     return {**scene, "payload": payload}
+
+
+def _is_source_montage_scene(scene: dict[str, Any]) -> bool:
+    payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
+    return (
+        clean_text(scene.get("render_kind")) == "document_stack_scene"
+        and clean_text(payload.get("recipe_id")) == SOURCE_MONTAGE_RECIPE
+    )
+
+
+def _resolve_source_montage(
+    *,
+    context,
+    scene: dict[str, Any],
+    request: AssetResolverRequest,
+    screenshots_dir: Path,
+    raw_capture_dir: Path,
+    full_page_dir: Path,
+    capture_cache: dict[tuple[str, str, str, float, bool], dict[str, Any]],
+) -> dict[str, Any]:
+    scene_id = clean_text(scene.get("scene_id", "scene_unknown"))
+    payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
+    documents = [
+        document
+        for document in payload.get("documents", [])
+        if isinstance(document, dict)
+    ][:3]
+    montage_assets: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, document in enumerate(documents, start=1):
+        document_scene = {
+            **scene,
+            "scene_id": f"{scene_id}_{index:02d}",
+            "payload": {
+                "url": clean_text(document.get("url")),
+                "target_text": clean_text(document.get("target_text")),
+            },
+        }
+        resolved = _resolve_source_screenshot(
+            context=context,
+            scene=document_scene,
+            request=request,
+            screenshots_dir=screenshots_dir,
+            raw_capture_dir=raw_capture_dir,
+            full_page_dir=full_page_dir,
+            capture_cache=capture_cache,
+        )
+        if resolved.get("status") in {"resolved", "partial"} and clean_text(
+            resolved.get("asset_path")
+        ):
+            montage_assets.append(
+                {
+                    "asset_id": clean_text(document.get("asset_id")),
+                    "source_record_key": clean_text(document.get("source_record_key")),
+                    "source_url": clean_text(document.get("url")),
+                    "title": clean_text(document.get("title")),
+                    "source": clean_text(document.get("source")),
+                    "asset_path": clean_text(resolved.get("asset_path")),
+                    "capture": resolved.get("capture", {}),
+                    "status": resolved.get("status"),
+                    "domain": clean_text((resolved.get("capture") or {}).get("domain")),
+                }
+            )
+        if clean_text(resolved.get("error")):
+            errors.append(f"document {index}: {clean_text(resolved.get('error'))}")
+
+    if not montage_assets:
+        status = "failed"
+    elif len(montage_assets) != len(documents) or any(
+        asset.get("status") != "resolved" for asset in montage_assets
+    ):
+        status = "partial"
+    else:
+        status = "resolved"
+    return _base_asset(scene) | {
+        "asset_type": "source_montage",
+        "status": status,
+        "asset_path": clean_text(montage_assets[0].get("asset_path")) if montage_assets else "",
+        "assets": montage_assets,
+        "error": "; ".join(errors),
+    }
 
 
 def _resolve_logo(scene: dict[str, Any], request: AssetResolverRequest, logos_dir: Path) -> dict[str, Any]:
@@ -390,6 +584,16 @@ def _disabled_source_screenshot(scene: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _disabled_source_montage(scene: dict[str, Any]) -> dict[str, Any]:
+    return _base_asset(scene) | {
+        "asset_type": "source_montage",
+        "status": "failed",
+        "asset_path": "",
+        "assets": [],
+        "error": "source screenshot capture is disabled",
+    }
+
+
 def _unsupported_scene(scene: dict[str, Any]) -> dict[str, Any]:
     return _base_asset(scene) | {
         "asset_type": "unsupported",
@@ -471,6 +675,12 @@ def _build_summary(
         "requested_scene_count": requested_scene_count,
         "resolved_asset_count": len([asset for asset in resolved_assets if asset.get("status") in {"resolved", "ready", "partial", "fallback"}]),
         "source_screenshot_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "source_screenshot" and asset.get("status") in {"resolved", "partial"}]),
+        "source_montage_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "source_montage" and asset.get("status") in {"resolved", "partial"}]),
+        "source_montage_capture_count": sum(
+            len(asset.get("assets", []))
+            for asset in resolved_assets
+            if asset.get("asset_type") == "source_montage"
+        ),
         "logo_asset_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "logo_asset" and asset.get("status") in {"resolved", "fallback"}]),
         "context_image_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "context_image" and asset.get("status") == "resolved"]),
         "broll_video_count": len([asset for asset in resolved_assets if asset.get("asset_type") == "broll_video" and asset.get("status") == "resolved"]),
@@ -554,6 +764,11 @@ def _asset_identity_payload(manifest: dict[str, Any]) -> dict[str, Any]:
                 "asset_type": asset.get("asset_type", ""),
                 "status": asset.get("status", ""),
                 "asset_path": asset.get("asset_path", ""),
+                "asset_paths": [
+                    nested.get("asset_path", "")
+                    for nested in asset.get("assets", [])
+                    if isinstance(nested, dict)
+                ],
             }
             for asset in manifest.get("resolved_assets", [])
             if isinstance(asset, dict)

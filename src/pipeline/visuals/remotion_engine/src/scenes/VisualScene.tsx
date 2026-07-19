@@ -29,6 +29,7 @@ import { ContextMediaScene } from "./ContextMediaScene";
 import { EditorialTextScene } from "./EditorialTextScene";
 import { SimpleExplainerScene } from "./SimpleExplainerScene";
 import { StoryTransitionScene } from "./StoryTransitionScene";
+import { SourceProofMontageScene } from "./SourceProofMontageScene";
 import { designCanvas, editorialStyle, isEditorialMinimal, palette } from "./style";
 
 export const VisualScene: React.FC<{ sceneSpec: VisualSceneSpec }> = ({ sceneSpec }) => {
@@ -81,7 +82,9 @@ export const VisualScene: React.FC<{ sceneSpec: VisualSceneSpec }> = ({ sceneSpe
   } else if (kind === "timeline_zoom_scene") {
     scene = <TimelineZoomScene spec={sceneSpec} />;
   } else if (kind === "document_stack_scene") {
-    scene = <DocumentStackScene spec={sceneSpec} />;
+    scene = sceneSpec.scene.payload?.recipe_id === "source_proof_montage"
+      ? <SourceProofMontageScene spec={sceneSpec} />
+      : <DocumentStackScene spec={sceneSpec} />;
   } else if (kind === "signal_radar_scene") {
     scene = <SignalRadarScene spec={sceneSpec} />;
   } else if (kind === "interface_transform_scene") {

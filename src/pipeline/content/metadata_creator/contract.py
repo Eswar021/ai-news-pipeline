@@ -134,6 +134,32 @@ class MetadataLLMRetryConfig(BaseModel):
         return self
 
 
+class ContentFilterFallbackConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: LLMProvider
+    model: str
+    base_url: str | None = None
+    provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
+    structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
+    llm_retry: MetadataLLMRetryConfig | None = None
+    temperature: float = 0.4
+
+    @field_validator("model")
+    @classmethod
+    def fallback_model_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("content_filter_fallback model must not be empty")
+        return value.strip()
+
+    @field_validator("temperature")
+    @classmethod
+    def fallback_temperature_must_be_valid(cls, value: float) -> float:
+        if value < 0 or value > 2:
+            raise ValueError("content_filter_fallback temperature must be between 0 and 2")
+        return value
+
+
 class MetadataConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -143,6 +169,7 @@ class MetadataConfig(BaseModel):
     provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
     structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
     llm_retry: MetadataLLMRetryConfig = Field(default_factory=MetadataLLMRetryConfig)
+    content_filter_fallback: ContentFilterFallbackConfig | None = None
     prompt_version: str
     temperature: float = 0.4
     channel: ChannelConfig

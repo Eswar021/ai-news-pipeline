@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from .common import clean_text
+from .recipes import validate_scene_recipe
 
 
 SOURCE_ARTICLE_KINDS = {"source_article_scene", "quote_or_claim_highlight_scene"}
@@ -94,6 +95,9 @@ PROMPT_PAYLOAD_CONTRACTS: dict[str, dict[str, Any]] = {
             "motion_style": "slow_push | gentle_pan | detail_zoom",
             "show_overlay": "boolean",
         },
+        "optional": {
+            "annotations": "list of 1-3 short callouts supported by the active narration",
+        },
     },
     "broll_video_scene": {
         "required": {
@@ -104,6 +108,7 @@ PROMPT_PAYLOAD_CONTRACTS: dict[str, dict[str, Any]] = {
         },
         "optional": {
             "asset_id": "exact available source_video asset ID",
+            "annotations": "list of 1-3 short callouts supported by the active narration",
             "search_queries": "list[str] used only when deliberate external discovery is enabled",
             "must_show": "list[str] used only when deliberate external discovery is enabled",
             "must_avoid": "list[str] used only when deliberate external discovery is enabled",
@@ -157,6 +162,108 @@ PROMPT_PAYLOAD_CONTRACTS: dict[str, dict[str, Any]] = {
             "background_render_kind": "original LLM-selected opening render kind",
         },
     },
+    "quote_or_claim_highlight_scene": {
+        "required": {
+            "url": "absolute selected-story http(s) URL",
+            "source_record_key": "exact selected-story record key",
+            "claim_text": "short source-supported claim shown prominently",
+            "supporting_text": "exact supporting source phrase or concise beat explanation",
+            "target_text": "exact supplied screenshot target",
+        },
+        "optional": {
+            "asset_id": "exact available source_page asset ID",
+            "highlight_phrases": "list[str] copied from claim_text or target_text",
+            "motion_style": "layered_reveal | highlight_scan | proof_push",
+        },
+    },
+    "data_counter_scene": {
+        "required": {
+            "headline": "one concise string",
+            "metrics": "list of 1-3 objects shaped {label: str, value: numeric string, unit?: str, context?: str}",
+        },
+        "optional": {"motion_style": "count_up | slot_reveal | scale_land"},
+    },
+    "benchmark_delta_scene": {
+        "required": {
+            "headline": "one concise string",
+            "benchmarks": "list of 1-3 objects shaped {label, before, after, delta, unit?, context?}",
+        },
+        "optional": {
+            "kicker_text": "short outcome label",
+            "motion_style": "delta_land | before_after | split_reveal",
+        },
+    },
+    "ecosystem_map_scene": {
+        "required": {
+            "headline": "one concise string",
+            "nodes": "list of 2-7 objects shaped {id, label, role?}",
+            "edges": "list of objects shaped {from, to, label} using supplied node IDs",
+            "focus_entity": "exact nodes[].label",
+        },
+        "optional": {"motion_style": "orbit_reveal | relationship_trace | focus_pull"},
+    },
+    "architecture_flow_scene": {
+        "required": {
+            "headline": "one concise string",
+            "steps": "list of 2-6 objects shaped {label, detail?}",
+            "active_step_label": "exact steps[].label",
+        },
+        "optional": {
+            "direction": "left_to_right | top_to_bottom",
+            "motion_style": "signal_trace | sequential_focus | pipeline_build",
+        },
+    },
+    "process_zoom_scene": {
+        "required": {
+            "headline": "one concise string",
+            "steps": "list of 2-6 objects shaped {label, detail?}",
+            "focus_step_label": "exact steps[].label",
+            "zoom_note": "short explanation of the focal step",
+        },
+        "optional": {"motion_style": "focus_zoom | sequence_then_zoom"},
+    },
+    "browser_walkthrough_scene": {
+        "required": {
+            "url": "absolute selected-story http(s) URL",
+            "source_record_key": "exact selected-story record key",
+            "headline": "one concise string",
+            "focus_text": "exact supplied screenshot target or interface label",
+            "walkthrough_steps": "list of 2-4 objects shaped {label, detail? or target_text?}",
+        },
+        "optional": {
+            "asset_id": "exact available source_page asset ID",
+            "motion_style": "guided_focus | cursor_trace | browser_zoom",
+        },
+    },
+    "capability_matrix_scene": {
+        "required": {
+            "headline": "one concise string",
+            "columns": "list of 2-4 column labels",
+            "rows": "list of 2-5 objects shaped {label, values: list matching columns}",
+            "focus_row_label": "exact rows[].label",
+        },
+        "optional": {"motion_style": "row_focus | matrix_reveal"},
+    },
+    "document_stack_scene": {
+        "required": {
+            "headline": "one concise string",
+            "documents": "list of 1-5 objects shaped {title, source, date?, document_type?, asset_id?, source_record_key?, url?, target_text?}",
+            "focus_document_label": "exact documents[].title",
+        },
+        "optional": {
+            "stack_summary": "one short takeaway",
+            "motion_style": "evidence_stack | focal_document",
+        },
+    },
+    "interface_transform_scene": {
+        "required": {
+            "headline": "one concise string",
+            "before": "object shaped {label, items: list[str] with at least 2 items}",
+            "after": "object shaped {label, items: list[str] with at least 2 items}",
+            "transformation_label": "short supported transformation phrase",
+        },
+        "optional": {"motion_style": "panel_morph | workflow_shift"},
+    },
 }
 
 
@@ -174,6 +281,7 @@ def validate_scene_payload(render_kind: str, payload: dict[str, Any]) -> list[st
         return ["payload must be an object"]
     if render_kind not in SUPPORTED_RENDER_KINDS:
         return [f"unsupported render_kind: {render_kind or '<empty>'}"]
+    errors.extend(validate_scene_recipe(render_kind, payload))
 
     if render_kind in HEADLINE_KINDS:
         _require_text(payload, "headline", errors)
@@ -312,6 +420,20 @@ def validate_scene_payload(render_kind: str, payload: dict[str, Any]) -> list[st
             errors.append("payload.focus_document_label is required")
         elif focus.lower() not in {clean_text(row.get("title", "")).lower() for row in rows}:
             errors.append("payload.focus_document_label must match a document title")
+        if clean_text(payload.get("recipe_id")) == "source_proof_montage":
+            if len(rows) < 2 or len(rows) > 3:
+                errors.append("source_proof_montage requires 2-3 source documents")
+            for index, row in enumerate(rows, start=1):
+                for field in ("asset_id", "source_record_key", "url"):
+                    if not clean_text(row.get(field)):
+                        errors.append(
+                            f"payload.documents[{index}].{field} is required for source_proof_montage"
+                        )
+                url = clean_text(row.get("url"))
+                if url and not url.startswith(("http://", "https://")):
+                    errors.append(
+                        f"payload.documents[{index}].url must be an absolute http(s) URL"
+                    )
     elif render_kind == "signal_radar_scene":
         rows = _require_object_rows(payload, "signals", errors, minimum=2, required_text=("label", "strength"))
         _require_numeric_fields(rows, "signals", ("strength",), errors, minimum=0, maximum=100)

@@ -232,7 +232,11 @@ Kimi K3 handles the per-story writer and reviewer plus the bookend writer and
 reviewer, because those calls directly author or replace viewer-facing prose.
 The metadata creator also uses one Kimi K3 call for titles, thumbnail text,
 description copy, tags, and complete chapter labels; code still owns chapter
-timestamps and source URLs. High-volume triage, story mapping, and editorial
+timestamps and source URLs. These Kimi creative routes retain their primary
+model but use an explicitly configured OpenAI failover only when Moonshot
+rejects a prompt through its provider content filter. Transient, structured,
+and application-contract failures follow their own bounded policies and do not
+trigger this route change. High-volume triage, story mapping, and editorial
 selection remain on their configured fast models.
 
 | Module                  | Main input                                                        | Main responsibility                                                                                                                           | Canonical output                           |
@@ -308,6 +312,7 @@ flowchart TD
     variant[Resolve provider, voice, style,<br/>speed, and deterministic variant]
     py312[Launch .venv-voiceover Python 3.12]
     provider[OpenAI, Gemini, Kokoro, Chatterbox, F5-TTS, or Dia]
+    ledger[Provider-neutral TTS request ledger<br/>beat direction, request hash, latency, usage]
     chunks[Provider audio chunks<br/>retaining section, story, beat IDs]
     units[Section-aware audio units<br/>with aligned beat timing]
     raw[Concatenated raw WAV]
@@ -319,6 +324,7 @@ flowchart TD
     metadataFinal[Final chapters based on observed audio starts]
 
     script --> variant --> py312 --> provider --> chunks
+    provider --> ledger
     chunks --> units
     chunks --> raw --> mastered --> package
     units --> captions --> package
@@ -332,6 +338,22 @@ Synthesis timing, not a requested episode duration, controls every later visual
 timestamp. Mastering is accepted only when it preserves duration within the
 effective module-config tolerance.
 
+Every provider request is recorded in `tts_requests.jsonl` without API keys or
+binary audio. The ledger keeps canonical section/story/beat identity, exact
+spoken-text hash, provider-facing direction hash, latency, status, retry
+attempt, and available usage metadata. Package summary telemetry reports how
+many directed beats reached synthesis, so expressive-delivery coverage can be
+audited independently of listening review.
+
+The voiceover runner has two config-backed execution modes with the same output
+contract. `--synthesis-mode preview` overlays the profile's fast local Kokoro
+settings for visual iteration without consuming a hosted speech quota.
+`--synthesis-mode final` uses the profile's production provider, currently
+Gemini. Provider, mode, script fingerprint, and effective settings remain
+visible in the variant and config snapshot. Visuals created against preview
+audio are provisional and must be regenerated or retimed against the final
+voiceover before delivery.
+
 ### Visuals Stage
 
 ```mermaid
@@ -342,7 +364,7 @@ flowchart TD
 
     catalog[asset_catalog<br/>source pages, source images,<br/>direct and source-linked videos, identities]
 
-    nativePlan[visual_planner<br/>native episode plus per-story LLM planning]
+    nativePlan[visual_planner<br/>episode direction, bookends,<br/>and per-story LLM planning]
     handoff[ChatGPT visual export,<br/>authoring, and parser]
     plan[Canonical visual scene plan<br/>bound to script and voiceover fingerprints]
 
@@ -572,8 +594,11 @@ direct video is exposed.
 
 The visual planner receives canonical script beats, selected-story records,
 authoritative voiceover timing, and the trusted asset catalog. It makes one
-episode-direction call and bounded story-local planning calls. A config-driven
-visual editor may then make at most one additional story-local pass. Its default
+episode-direction call, one bounded intro/closing bookend call, and bounded
+story-local planning calls. The bookend planner receives each authored
+`visual_brief`, including on-screen text and preferred/must-show assets; code
+does not generate display copy by slicing narration. A config-driven visual
+editor may then make at most one additional story-local pass. Its default
 decision is keep; it returns a complete replacement only for a material
 narration-fit, comprehension, source-proof, or repetition problem. The same
 scene, ownership, payload, and slot validators recheck any replacement. An
@@ -583,14 +608,13 @@ never creates a generic code fallback.
 The planner requests at least one available catalog-backed source, image,
 direct video, or identity scene per story. Whether a missing anchor warns or
 fails is an explicit profile policy, not a hidden semantic code gate. The
-default profile uses an
-`editorial_minimal` art direction and advertises only source pages,
-story-owned images, story-owned direct video, verified identities, clean
-editorial text, and a small two-to-four-item explainer to the story planner.
-One story transition is inserted deterministically. The larger Remotion
-component catalog remains available only to explicit specialist profiles; it
-is not the production planner's default menu. The planner may not substitute
-an unrelated stock image for an unresolved request. Provider-facing structured
+default profile uses an `editorial_minimal` art direction and advertises the
+scene families implemented by both active render contracts: source and context
+media, identity, clean typography, small explainers, source-proof montages,
+metrics and contrasts, relationship/process/interface motion, and focused
+evidence stacks. One story transition is inserted deterministically. The
+planner may not substitute an unrelated stock image for an unresolved request.
+Provider-facing structured
 output carries dynamic scene payloads as validated JSON text; the app decodes
 them, Pydantic enforces the selected render-family shape, and the app verifies
 them through one shared render-kind payload contract, verifies
@@ -606,17 +630,22 @@ prompt. Available asset IDs are a closed story-owned set. Provider mistakes are
 returned to the bounded retry; code does not strip IDs, choose replacement
 assets, or convert one semantic scene family into another.
 
-Episode direction, per-story planning, and visual editing have independent
-provider/model routes in the planner module config. The daily profile keeps
-GPT-4o-mini for all three after a same-input Kimi K3 comparison exceeded roughly
-ten minutes without completing. Moonshot/K3 remains a supported config-only
-experiment rather than a hidden fallback or automatic escalation.
+Episode direction, bookend planning, per-story planning, and visual editing
+have independent provider/model routes in the planner module config. The daily
+profile keeps GPT-4o-mini for all four. On the exact frozen Agility Robotics
+story prompt, Kimi K3 completed six structurally valid scenes in 303.79 seconds
+and produced stronger source usage and visual variety than GPT-4o-mini, which
+completed in 17.95 seconds. K3 therefore remains an explicit high-quality role
+experiment rather than a hidden fallback or daily default. Its config omits
+temperature, uses a longer timeout, and can set a role-specific retry cap.
 
 Visual rendering has one stable JSON contract and two explicit engines.
 Remotion remains the default production engine and supports the complete
-historical scene catalog. HyperFrames supports the compact active vocabulary
-and can be selected per run with `--render-backend hyperframes`; unsupported
-scene kinds fail before render and never cross-fallback. Both paths preserve
+historical scene catalog. HyperFrames supports the active production scene
+families, including source-proof montages, annotated media, metric contrasts,
+evidence stacks, and process/interface motion, and can be selected per run with
+`--render-backend hyperframes`; unsupported scene kinds fail before render and
+never cross-fallback. Both paths preserve
 scene timing, parent fingerprints, content-addressed cache identity, video-only
 clip validation, assembly, and review. HyperFrames remains opt-in while its
 pinned upstream package carries an unresolved transitive ZIP denial-of-service
@@ -673,6 +702,13 @@ Icons aliases are accepted only when that export exists in the installed
 package; otherwise the renderer uses the honest full-name treatment rather
 than fabricated initials. Source capture focus zoom and target highlighting are
 profile-driven.
+
+Successful source-page pixels can be reused inside one resolver run and from a
+profile-configured persistent capture cache with an explicit TTL. This reduces
+repeat requests to publishers without turning blocked or missing pages into
+successful assets. A `source_proof_montage` binds two or three exact
+story-owned source-page IDs, captures each page independently, and gives either
+renderer the same local asset bundle and provenance.
 
 After rendering and audio assembly, the review stage samples the final video
 into a contact sheet. Human inspection remains required because timing,
@@ -815,8 +851,13 @@ Final assembly verifies:
 Repeatable stage commands:
 
     python3 -m src.pipeline.orchestration.runner content --profile daily_48h_all_sources
-    python3 -m src.pipeline.orchestration.runner voiceover --run-id current --script-source app
+    python3 -m src.pipeline.orchestration.runner voiceover --run-id current --script-source app --synthesis-mode preview
     python3 -m src.pipeline.orchestration.runner visuals --run-id current --plan-source generate --render-mode preview
+
+After creative iteration, synthesize the final hosted voice and rerun visual
+timing against that exact voiceover variant:
+
+    python3 -m src.pipeline.orchestration.runner voiceover --run-id current --script-source app --synthesis-mode final
 
 After preview review, render delivery media without rerunning upstream visual
 work:

@@ -184,6 +184,8 @@ def test_runner_builds_voiceover_envelope_and_accepts_config_overrides(monkeypat
             "run_test",
             "--script-source",
             "app",
+            "--synthesis-mode",
+            "preview",
             "--config-overrides-json",
             '{"voice":"af_heart","speed":1.05}',
         ]
@@ -193,6 +195,7 @@ def test_runner_builds_voiceover_envelope_and_accepts_config_overrides(monkeypat
     assert exit_code == 0
     assert captured["run"]["run_id"] == "run_test"
     assert captured["config"]["script_source"] == "app"
+    assert captured["config"]["synthesis_mode"] == "preview"
     assert captured["input"]["voiceover_config_overrides"] == {
         "voice": "af_heart",
         "speed": 1.05,

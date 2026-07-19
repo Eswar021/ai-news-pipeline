@@ -17,6 +17,7 @@ from .models import (
     StoryReviewOutput,
     StorySegmentOutput,
     StorySourceBriefOutput,
+    story_source_brief_output_model,
 )
 from .review_acceptance import (
     bookend_review_beat_ids,
@@ -134,18 +135,27 @@ def research_story_sources(
     def research(index: int, story: dict[str, Any]):
         local_calls = call_logs_by_index[index]
         source_context = build_source_research_context(story)
+        allowed_record_keys = source_record_keys(story)
+        output_model = story_source_brief_output_model(
+            required_story_id=story_id(story),
+            allowed_record_keys=allowed_record_keys,
+        )
         payload = {
             "task": "Read the complete assigned records and build one semantic source brief without writing narration.",
             "required_story_id": story_id(story),
+            "allowed_source_record_keys": allowed_record_keys,
             "complete_story_context": source_context,
+            "identity_rule": (
+                "Copy required_story_id and record_key values exactly from this payload; never shorten, "
+                "rewrite, or invent an identifier."
+            ),
         }
-        response = _invoke_chain(
+        response = _invoke_runtime_chain(
             module_name="roundup_source_researcher",
-            output_model=StorySourceBriefOutput,
-            llm=llm_runtime["llm"],
+            output_model=output_model,
+            llm_runtime=llm_runtime,
             prompt_bundle=prompt_bundle,
             task_payload=json_dumps(payload),
-            script_cfg=llm_runtime["config"],
             metadata={
                 "story_id": story_id(story),
                 "source_context_mode": "complete_records_plus_semantic_brief",
@@ -216,13 +226,12 @@ def direct_episode(
         "story_context_packets": context_packets,
         "section_guidance": _compact_section_plan(section_plan),
     }
-    response = _invoke_chain(
+    response = _invoke_runtime_chain(
         module_name="roundup_director",
         output_model=EpisodeDirectorOutput,
-        llm=llm_runtime["llm"],
+        llm_runtime=llm_runtime,
         prompt_bundle=prompt_bundle,
         task_payload=json_dumps(payload),
-        script_cfg=llm_runtime["config"],
         metadata={
             "story_count": len(video_packet.get("stories", [])),
             "truth_item_count": sum(
@@ -379,13 +388,12 @@ def _write_one_story(
             "Build the mini-story around tension, explanation, and payoff instead of reading the records in source order.",
         ],
     }
-    response = _invoke_chain(
+    response = _invoke_runtime_chain(
         module_name="roundup_story_writer",
         output_model=StorySegmentOutput,
-        llm=writer_llm_runtime["llm"],
+        llm_runtime=writer_llm_runtime,
         prompt_bundle=writer_prompt_bundle,
         task_payload=json_dumps(payload),
-        script_cfg=writer_llm_runtime["config"],
         metadata={
             "story_id": sid,
             "story_role": plan.get("role", ""),
@@ -425,13 +433,12 @@ def _write_one_story(
             "allowed_source_record_keys": source_record_keys(story),
             "current_segment": current,
         }
-        review_response = _invoke_chain(
+        review_response = _invoke_runtime_chain(
             module_name="roundup_story_reviewer",
             output_model=StoryReviewOutput,
-            llm=reviewer_llm_runtime["llm"],
+            llm_runtime=reviewer_llm_runtime,
             prompt_bundle=reviewer_prompt_bundle,
             task_payload=json_dumps(review_payload),
-            script_cfg=reviewer_llm_runtime["config"],
             metadata={
                 "story_id": sid,
                 "pass_index": pass_index,
@@ -533,13 +540,12 @@ def write_bookends(
             "Follow channel_voice.language.profanity_mode.",
         ],
     }
-    response = _invoke_chain(
+    response = _invoke_runtime_chain(
         module_name="roundup_bookend_writer",
         output_model=BookendOutput,
-        llm=writer_llm_runtime["llm"],
+        llm_runtime=writer_llm_runtime,
         prompt_bundle=writer_prompt_bundle,
         task_payload=json_dumps(payload),
-        script_cfg=writer_llm_runtime["config"],
         metadata={"story_count": len(story_segments)},
         llm_calls=llm_calls,
     )
@@ -577,13 +583,12 @@ def write_bookends(
                 "Reject invented or inexact quotations and verbatim intro repetition from a story body.",
             ],
         }
-        review_response = _invoke_chain(
+        review_response = _invoke_runtime_chain(
             module_name="roundup_bookend_reviewer",
             output_model=BookendReviewOutput,
-            llm=reviewer_llm_runtime["llm"],
+            llm_runtime=reviewer_llm_runtime,
             prompt_bundle=reviewer_prompt_bundle,
             task_payload=json_dumps(review_payload),
-            script_cfg=reviewer_llm_runtime["config"],
             metadata={
                 "pass_index": pass_index,
             },
@@ -625,6 +630,57 @@ def write_bookends(
         if not applied:
             break
     return current, passes
+
+
+def _invoke_runtime_chain(
+    *,
+    module_name: str,
+    output_model,
+    llm_runtime: dict[str, Any],
+    prompt_bundle: dict[str, str],
+    task_payload: str,
+    metadata: dict[str, Any],
+    llm_calls: list[dict[str, Any]],
+):
+    primary_config = llm_runtime["config"]
+    fallback_runtime = llm_runtime.get("content_filter_fallback")
+    primary_metadata = {
+        **metadata,
+        "route_attempt": "primary",
+        "content_filter_fallback_configured": fallback_runtime is not None,
+    }
+    try:
+        return _invoke_chain(
+            module_name=module_name,
+            output_model=output_model,
+            llm=llm_runtime["llm"],
+            prompt_bundle=prompt_bundle,
+            task_payload=task_payload,
+            script_cfg=primary_config,
+            metadata=primary_metadata,
+            llm_calls=llm_calls,
+        )
+    except Exception as exc:
+        if fallback_runtime is None or not _is_content_filter_error(exc):
+            raise
+
+    fallback_config = fallback_runtime["config"]
+    return _invoke_chain(
+        module_name=module_name,
+        output_model=output_model,
+        llm=fallback_runtime["llm"],
+        prompt_bundle=prompt_bundle,
+        task_payload=task_payload,
+        script_cfg=fallback_config,
+        metadata={
+            **metadata,
+            "route_attempt": "content_filter_fallback",
+            "fallback_trigger": "content_filter",
+            "fallback_from_provider": primary_config.get("provider", ""),
+            "fallback_from_model": primary_config.get("model", ""),
+        },
+        llm_calls=llm_calls,
+    )
 
 
 def _invoke_chain(
@@ -814,6 +870,13 @@ def _is_retryable_llm_error(exc: Exception, *, status_code: int | None) -> bool:
         "RateLimitError",
         "ServiceUnavailableError",
     }
+
+
+def _is_content_filter_error(exc: Exception) -> bool:
+    status_code = _exception_status_code(exc)
+    text = str(exc).casefold().replace("_", " ")
+    markers = ("content filter", "high risk", "highrisk")
+    return status_code in {400, 403} and any(marker in text for marker in markers)
 
 
 def _is_structured_output_error(exc: Exception) -> bool:

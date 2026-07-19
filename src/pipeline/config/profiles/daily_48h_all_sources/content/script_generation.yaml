@@ -25,6 +25,15 @@ llm_roles:
       max_structured_output_attempts: 2
       initial_delay_seconds: 1.0
       max_delay_seconds: 10.0
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      provider_options:
+        request_timeout_seconds: 300
+      structured_output:
+        method: json_schema
+        strict: true
   story_reviewer:
     provider: moonshot
     model: kimi-k3
@@ -42,6 +51,15 @@ llm_roles:
       max_structured_output_attempts: 2
       initial_delay_seconds: 1.0
       max_delay_seconds: 10.0
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      provider_options:
+        request_timeout_seconds: 300
+      structured_output:
+        method: json_schema
+        strict: true
   bookend_writer:
     provider: moonshot
     model: kimi-k3
@@ -59,6 +77,15 @@ llm_roles:
       max_structured_output_attempts: 2
       initial_delay_seconds: 1.0
       max_delay_seconds: 10.0
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      provider_options:
+        request_timeout_seconds: 300
+      structured_output:
+        method: json_schema
+        strict: true
   bookend_reviewer:
     provider: moonshot
     model: kimi-k3
@@ -76,6 +103,15 @@ llm_roles:
       max_structured_output_attempts: 2
       initial_delay_seconds: 1.0
       max_delay_seconds: 10.0
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      provider_options:
+        request_timeout_seconds: 300
+      structured_output:
+        method: json_schema
+        strict: true
 diagnostic_words_per_minute: 140
 worker_count: 2
 title_card_seconds: 2.8

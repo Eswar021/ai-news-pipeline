@@ -17,6 +17,15 @@ llm_roles:
     structured_output:
       method: json_schema
       strict: true
+  bookend_visual_planner:
+    provider: openai
+    model: gpt-4o-mini
+    temperature: 0.3
+    provider_options:
+      request_timeout_seconds: 300
+    structured_output:
+      method: json_schema
+      strict: true
   story_visual_planner:
     provider: openai
     model: gpt-4o-mini
@@ -70,10 +79,32 @@ visual_mix_policy:
   prefer_catalog_assets_for_concrete_subjects: true
   prefer_explanatory_motion_for_mechanisms: true
   kinetic_text_is_supporting_only: true
+recipe_policy:
+  enabled: true
+  required_backend_support:
+  - remotion
+  - hyperframes
+  allowed_recipe_ids:
+  - editorial_hook
+  - chapter_opener
+  - source_proof_scan
+  - layered_evidence_reveal
+  - annotated_image_focus
+  - annotated_video_focus
+  - metric_countup
+  - metric_contrast
+  - entity_orbit
+  - process_trace
+  - process_detail_zoom
+  - interface_walkthrough
+  - evidence_stack
+  - source_proof_montage
+  - interface_before_after
+  - capability_compare
 visual_editor:
   enabled: true
-  max_passes: 1
-  max_story_calls: 8
+  max_passes: 2
+  max_story_calls: 12
   review_all_stories: false
   failure_mode: keep_original
 asset_availability_policy:
@@ -82,6 +113,7 @@ asset_availability_policy:
   - quote_or_claim_highlight_scene
   - context_image_scene
   - broll_video_scene
+  - browser_walkthrough_scene
 scene_policy:
   target_aspect_ratio: '16:9'
   max_scenes: 64
@@ -135,6 +167,16 @@ scene_policy:
   - editorial_text_scene
   - simple_explainer_scene
   - story_transition_scene
+  - quote_or_claim_highlight_scene
+  - data_counter_scene
+  - benchmark_delta_scene
+  - ecosystem_map_scene
+  - architecture_flow_scene
+  - process_zoom_scene
+  - browser_walkthrough_scene
+  - capability_matrix_scene
+  - document_stack_scene
+  - interface_transform_scene
 visual_capabilities:
   editorial_text_scene:
     description: Present one concise editorial idea with large expressive typography, generous whitespace, and one
@@ -627,8 +669,8 @@ visual_capabilities:
     render_notes: events must contain 2-5 objects shaped {label, date?, detail?}; focus_event_label must exactly
       match an event label and zoom_note must describe that supported event.
   document_stack_scene:
-    description: Show reports, papers, release notes, GitHub issues, docs, or source documents as layered evidence
-      cards with parallax motion.
+    description: Layer named evidence documents or two to three verified source-page captures, then focus the
+      source supporting the active beat.
     best_for:
     - multiple source records
     - research or documentation-heavy stories
@@ -643,8 +685,10 @@ visual_capabilities:
     avoid_when:
     - there is only one source and a source screenshot would be clearer
     - document labels would be invented
-    render_notes: documents must contain 1-5 objects shaped {title, source, document_type?, date?, detail?}; focus_document_label
-      must exactly match one document title.
+    render_notes: documents must contain 1-5 objects shaped {title, source, document_type?, date?, detail?,
+      asset_id?, source_record_key?, url?, target_text?}; focus_document_label must exactly match one document
+      title. For recipe_id=source_proof_montage, provide 2-3 exact available source_page asset IDs from this story;
+      the system binds all URL and record metadata.
   signal_radar_scene:
     description: Show a scanning radar-like field for emerging signals, companies, topics, risks, or watchlist items.
     best_for:

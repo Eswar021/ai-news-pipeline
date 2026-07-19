@@ -5,7 +5,9 @@ Run from the project root with the main project Python, not `.venv-voiceover`::
     python3 -m src.pipeline.orchestration.runner content \
       --profile daily_48h_all_sources
     python3 -m src.pipeline.orchestration.runner voiceover \
-      --run-id current --script-source app
+      --run-id current --script-source app --synthesis-mode final
+    python3 -m src.pipeline.orchestration.runner voiceover \
+      --run-id current --script-source app --synthesis-mode preview
     python3 -m src.pipeline.orchestration.runner visuals \
       --run-id current --plan-source generate --render-mode preview
 
@@ -72,13 +74,19 @@ def _build_parser() -> argparse.ArgumentParser:
     voiceover = subparsers.add_parser("voiceover", help="Synthesize the selected script and finalize metadata.")
     _add_common_arguments(voiceover, default_run_id="current")
     voiceover.add_argument("--script-source", choices=("auto", "app", "native", "chatgpt"), default="auto")
+    voiceover.add_argument(
+        "--synthesis-mode",
+        choices=("preview", "final"),
+        default="final",
+        help="Use the profile's fast local preview voice or its final production voice.",
+    )
     voiceover.add_argument("--variant")
     voiceover.add_argument("--voiceover-python", default=".venv-voiceover/bin/python")
     voiceover.add_argument("--no-resume", action="store_true")
     voiceover.add_argument("--skip-metadata-finalization", action="store_true")
     voiceover.add_argument(
         "--config-overrides-json",
-        help="Optional JSON object merged into the frozen voiceover config for this invocation.",
+        help="Optional JSON object merged into the effective voiceover config for this invocation.",
     )
 
     visuals = subparsers.add_parser("visuals", help="Plan, resolve, render, assemble, and review visuals.")
@@ -139,6 +147,7 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
         request["config"] = {
             "config_mode": args.config_mode,
             "script_source": args.script_source,
+            "synthesis_mode": args.synthesis_mode,
             "variant": args.variant,
             "voiceover_python": args.voiceover_python,
             "resume_completed": not args.no_resume,

@@ -236,6 +236,14 @@ class DeliveryDirectionConfig(BaseModel):
         return list(dict.fromkeys(item.strip() for item in value if item.strip()))
 
 
+class TTSRequestLoggingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    include_transcript: bool = True
+    include_effective_instructions: bool = True
+
+
 class AudioMasteringConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -459,6 +467,7 @@ class VoiceoverConfig(BaseModel):
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     alignment: AlignmentConfig = Field(default_factory=AlignmentConfig)
     delivery_direction: DeliveryDirectionConfig = Field(default_factory=DeliveryDirectionConfig)
+    request_logging: TTSRequestLoggingConfig = Field(default_factory=TTSRequestLoggingConfig)
     mastering: AudioMasteringConfig = Field(default_factory=AudioMasteringConfig)
     captions: CaptionConfig = Field(default_factory=CaptionConfig)
     kokoro: KokoroConfig = Field(default_factory=KokoroConfig)

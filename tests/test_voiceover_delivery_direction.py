@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from src.pipeline.voiceover.delivery import compose_delivery_instructions
 from src.pipeline.voiceover.script_units import _beat_chunks
+from src.pipeline.voiceover.tts_logging import build_request_record
 
 
 def _direction() -> dict:
@@ -80,3 +83,35 @@ def test_delivery_can_be_disabled_per_provider() -> None:
     )
 
     assert instructions == base
+
+
+def test_tts_request_record_keeps_canonical_beat_identity(tmp_path: Path) -> None:
+    audio_path = tmp_path / "chunk.wav"
+    audio_path.write_bytes(b"wav")
+    record = build_request_record(
+        provider="gemini",
+        model="gemini-tts",
+        voice="Puck",
+        chunk={
+            "chunk_id": "chunk_001",
+            "audio_unit_id": "audio_section_01_story",
+            "section_id": "section_01_story",
+            "story_id": "story_fixture",
+            "beat_id": "section_01_story_beat_01",
+            "beat_order": 1,
+            "beat_type": "what_changed",
+            "beat_function": "reveal",
+            "text": "The smaller model finished first.",
+            "delivery_direction": _direction(),
+        },
+        effective_instructions="Speak with curiosity.",
+        direction_applied=True,
+        attempt_count=1,
+        latency_seconds=0.5,
+        audio_path=audio_path,
+    )
+
+    assert record["beat_id"] == "section_01_story_beat_01"
+    assert record["beat_order"] == 1
+    assert record["beat_type"] == "what_changed"
+    assert record["beat_function"] == "reveal"

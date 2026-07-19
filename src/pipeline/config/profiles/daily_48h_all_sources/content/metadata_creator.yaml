@@ -15,6 +15,15 @@ llm_retry:
   max_structured_output_attempts: 2
   initial_delay_seconds: 1.0
   max_delay_seconds: 10.0
+content_filter_fallback:
+  provider: openai
+  model: gpt-4o
+  temperature: 0.4
+  provider_options:
+    request_timeout_seconds: 300
+  structured_output:
+    method: json_schema
+    strict: true
 metadata_policy:
   title_option_count: 8
   thumbnail_text_option_count: 5

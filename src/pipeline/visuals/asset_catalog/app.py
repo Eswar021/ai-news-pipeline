@@ -66,20 +66,68 @@ class _MetadataParser(HTMLParser):
         self.image_candidates: list[dict[str, Any]] = []
         self.video_candidates: list[dict[str, Any]] = []
         self.linked_video_candidates: list[dict[str, Any]] = []
+        self._active_text_tag: str | None = None
+        self._active_text_parts: list[str] = []
+        self._current_heading = ""
+        self._recent_text_blocks: list[str] = []
+        self._figure_depth = 0
+        self._figure_image_indexes: list[int] = []
+
+    def _nearby_text(self) -> str:
+        active_text = clean_text(" ".join(self._active_text_parts))
+        blocks = [*self._recent_text_blocks[-2:], active_text]
+        return clean_text(" ".join(block for block in blocks if block))[:600]
+
+    def _image_context(self) -> dict[str, Any]:
+        return {
+            "figure_caption": "",
+            "page_section_heading": self._current_heading,
+            "nearby_text": self._nearby_text(),
+        }
+
+    def _begin_text_capture(self, tag: str) -> None:
+        if self._active_text_tag is None:
+            self._active_text_tag = tag
+            self._active_text_parts = []
+
+    def _finish_text_capture(self, tag: str) -> None:
+        if self._active_text_tag != tag:
+            return
+        value = clean_text(" ".join(self._active_text_parts))
+        if value:
+            if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+                self._current_heading = value
+            elif tag == "figcaption":
+                for index in self._figure_image_indexes:
+                    if 0 <= index < len(self.image_candidates):
+                        self.image_candidates[index]["figure_caption"] = value
+            else:
+                self._recent_text_blocks.append(value)
+                self._recent_text_blocks = self._recent_text_blocks[-6:]
+        self._active_text_tag = None
+        self._active_text_parts = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
         values = {clean_text(key).lower(): clean_text(value) for key, value in attrs}
-        if tag.lower() == "meta":
+        if tag == "figure":
+            self._figure_depth += 1
+            if self._figure_depth == 1:
+                self._figure_image_indexes = []
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "figcaption"}:
+            self._begin_text_capture(tag)
+
+        if tag == "meta":
             name = clean_text(values.get("property") or values.get("name")).lower()
             content = clean_text(values.get("content"))
             if name and content and name not in self.metadata:
                 self.metadata[name] = content
-        elif tag.lower() == "link":
+        elif tag == "link":
             rel = clean_text(values.get("rel")).lower()
             href = clean_text(values.get("href"))
             if rel == "image_src" and href:
                 self.metadata.setdefault("image_src", href)
-        elif tag.lower() == "img":
+        elif tag == "img":
             src = clean_text(
                 values.get("src")
                 or values.get("data-src")
@@ -89,29 +137,33 @@ class _MetadataParser(HTMLParser):
             srcset = clean_text(values.get("srcset") or values.get("data-srcset"))
             src = _largest_srcset_url(srcset) or src
             if src:
-                self.image_candidates.append(
-                    {
-                        "url": src,
-                        "alt": clean_text(values.get("alt")),
-                        "title": clean_text(values.get("title")),
-                        "declared_width": _optional_int(values.get("width")),
-                        "declared_height": _optional_int(values.get("height")),
-                        "image_role": "article_image",
-                    }
-                )
-        elif tag.lower() == "video":
+                candidate = {
+                    "url": src,
+                    "alt": clean_text(values.get("alt")),
+                    "title": clean_text(values.get("title")),
+                    "declared_width": _optional_int(values.get("width")),
+                    "declared_height": _optional_int(values.get("height")),
+                    "image_role": "article_image",
+                    **self._image_context(),
+                }
+                self.image_candidates.append(candidate)
+                if self._figure_depth:
+                    self._figure_image_indexes.append(len(self.image_candidates) - 1)
+        elif tag == "video":
             poster = clean_text(values.get("poster"))
             if poster:
-                self.image_candidates.append(
-                    {
-                        "url": poster,
-                        "alt": "",
-                        "title": "",
-                        "declared_width": _optional_int(values.get("width")),
-                        "declared_height": _optional_int(values.get("height")),
-                        "image_role": "video_poster",
-                    }
-                )
+                candidate = {
+                    "url": poster,
+                    "alt": "",
+                    "title": "",
+                    "declared_width": _optional_int(values.get("width")),
+                    "declared_height": _optional_int(values.get("height")),
+                    "image_role": "video_poster",
+                    **self._image_context(),
+                }
+                self.image_candidates.append(candidate)
+                if self._figure_depth:
+                    self._figure_image_indexes.append(len(self.image_candidates) - 1)
             src = clean_text(values.get("src"))
             if src:
                 self.video_candidates.append(
@@ -121,7 +173,7 @@ class _MetadataParser(HTMLParser):
                         "video_role": "embedded_video",
                     }
                 )
-        elif tag.lower() == "source":
+        elif tag == "source":
             src = clean_text(values.get("src"))
             mime_type = clean_text(values.get("type")).lower()
             suffix = Path(urlparse(src).path).suffix.lower()
@@ -133,9 +185,9 @@ class _MetadataParser(HTMLParser):
                         "video_role": "embedded_video_source",
                     }
                 )
-        elif tag.lower() in {"a", "iframe"}:
+        elif tag in {"a", "iframe"}:
             candidate_url = clean_text(
-                values.get("href") if tag.lower() == "a" else values.get("src")
+                values.get("href") if tag == "a" else values.get("src")
             )
             provider = _source_video_provider(candidate_url)
             if provider:
@@ -145,11 +197,26 @@ class _MetadataParser(HTMLParser):
                         "provider": provider,
                         "video_role": (
                             "source_page_video_link"
-                            if tag.lower() == "a"
+                            if tag == "a"
                             else "source_page_video_embed"
                         ),
                     }
                 )
+
+    def handle_data(self, data: str) -> None:
+        if self._active_text_tag is not None:
+            value = clean_text(data)
+            if value:
+                self._active_text_parts.append(value)
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "figcaption"}:
+            self._finish_text_capture(tag)
+        if tag == "figure" and self._figure_depth:
+            self._figure_depth -= 1
+            if self._figure_depth == 0:
+                self._figure_image_indexes = []
 
 
 def run(input_json: dict) -> dict:
@@ -731,6 +798,9 @@ def _source_media_for_record(
                 "url": hero_url,
                 "alt": clean_text(parser.metadata.get("og:image:alt")),
                 "title": clean_text(parser.metadata.get("og:title")),
+                "figure_caption": "",
+                "page_section_heading": "",
+                "nearby_text": "",
                 "declared_width": _optional_int(parser.metadata.get("og:image:width")),
                 "declared_height": _optional_int(parser.metadata.get("og:image:height")),
                 "image_role": "source_hero",
@@ -1405,6 +1475,9 @@ def _download_source_image_candidate(
 
     alt_text = clean_text(candidate.get("alt"))
     candidate_title = clean_text(candidate.get("title"))
+    figure_caption = clean_text(candidate.get("figure_caption"))
+    page_section_heading = clean_text(candidate.get("page_section_heading"))
+    nearby_text = clean_text(candidate.get("nearby_text"))
     page_title = clean_text(parser.metadata.get("og:title") or record.get("title"))
     page_description = clean_text(
         parser.metadata.get("og:description")
@@ -1412,7 +1485,29 @@ def _download_source_image_candidate(
         or record.get("summary")
         or record.get("description")
     )
-    description = clean_text(" ".join(item for item in (alt_text, candidate_title, page_description) if item))
+    visual_description = clean_text(
+        " ".join(item for item in (figure_caption, alt_text, candidate_title) if item)
+    )
+    contextual_description = clean_text(
+        " ".join(item for item in (page_section_heading, nearby_text) if item)
+    )
+    if visual_description:
+        descriptor_quality = "image_specific"
+    elif contextual_description:
+        descriptor_quality = "nearby_context_only"
+    else:
+        descriptor_quality = "unlabeled"
+    descriptor_provenance = [
+        {"field": field, "source": source, "value": value}
+        for field, source, value in (
+            ("figure_caption", "html_figcaption", figure_caption),
+            ("alt_text", "html_img_alt", alt_text),
+            ("candidate_title", "html_img_title_or_open_graph_title", candidate_title),
+            ("page_section_heading", "nearest_preceding_heading", page_section_heading),
+            ("nearby_text", "nearby_document_text", nearby_text),
+        )
+        if value
+    ]
     return {
         "asset_id": asset_id,
         "story_id": story_id,
@@ -1424,9 +1519,20 @@ def _download_source_image_candidate(
         "asset_url": image_url,
         "local_path": str(output_path),
         "content_sha256": file_sha256(output_path),
-        "title": alt_text or candidate_title or page_title,
-        "description": description,
+        "title": alt_text or figure_caption or candidate_title or f"Source image {candidate_order}",
+        "description": visual_description,
+        "visual_description": visual_description,
+        "contextual_description": contextual_description,
+        "descriptor_quality": descriptor_quality,
+        "descriptor_provenance": descriptor_provenance,
         "alt_text": alt_text,
+        "figure_caption": figure_caption,
+        "page_section_heading": page_section_heading,
+        "nearby_text": nearby_text,
+        "page_context": {
+            "title": page_title,
+            "description": page_description,
+        },
         "image_role": clean_text(candidate.get("image_role")) or "article_image",
         "candidate_order": candidate_order,
         "source_name": clean_text(record.get("source_name") or record.get("source")),

@@ -152,6 +152,7 @@ def test_visual_planner_passes_provenance_to_plan_builder_not_episode_director(
         "_generate_episode_direction",
         lambda **kwargs: {"visual_thesis": "fixture"},
     )
+    monkeypatch.setattr(visual_planner_app, "_generate_bookend_visual_plan", lambda **kwargs: {})
     monkeypatch.setattr(visual_planner_app, "_generate_story_visual_plans", lambda **kwargs: {})
 
     def fake_build_visual_scene_plan(**kwargs: object) -> dict:

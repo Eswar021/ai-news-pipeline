@@ -21,6 +21,7 @@ from src.pipeline.visuals.planner.app import (
     _visual_capabilities_for_prompt,
 )
 from src.pipeline.visuals.planner.contract import VisualPlannerConfig
+from src.pipeline.visuals.planner.llm_client import make_llm
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +32,7 @@ def _planner_config() -> dict:
     return deepcopy(repository.module("daily_48h_all_sources", "visuals", "planner").value)
 
 
-def test_production_profile_exposes_compact_editorial_vocabulary() -> None:
+def test_production_profile_exposes_renderable_editorial_vocabulary() -> None:
     config = VisualPlannerConfig.model_validate(_planner_config()).model_dump(mode="json")
 
     assert config["style"]["style_id"] == "editorial_minimal"
@@ -43,6 +44,16 @@ def test_production_profile_exposes_compact_editorial_vocabulary() -> None:
         "editorial_text_scene",
         "simple_explainer_scene",
         "story_transition_scene",
+        "quote_or_claim_highlight_scene",
+        "data_counter_scene",
+        "benchmark_delta_scene",
+        "ecosystem_map_scene",
+        "architecture_flow_scene",
+        "process_zoom_scene",
+        "browser_walkthrough_scene",
+        "capability_matrix_scene",
+        "document_stack_scene",
+        "interface_transform_scene",
     ]
 
 
@@ -53,6 +64,7 @@ def test_visual_planner_supports_role_specific_provider_routes() -> None:
         "model": "kimi-k3",
         "temperature": 1.0,
         "base_url": None,
+        "max_attempts": 1,
         "provider_options": {
             "thinking": None,
             "omit_temperature": True,
@@ -66,8 +78,19 @@ def test_visual_planner_supports_role_specific_provider_routes() -> None:
     assert routes["episode_director"]["model"] == "gpt-4o-mini"
     assert routes["story_visual_planner"]["provider"] == "moonshot"
     assert routes["story_visual_planner"]["model"] == "kimi-k3"
+    assert routes["story_visual_planner"]["max_attempts"] == 1
     assert routes["story_visual_editor"]["provider"] == "openai"
     assert routes["story_visual_editor"]["model"] == "gpt-4o-mini"
+
+
+def test_kimi_k3_rejects_an_explicit_temperature_before_api_use() -> None:
+    with pytest.raises(ValueError, match="omit_temperature=true"):
+        make_llm(
+            provider="moonshot",
+            model="kimi-k3",
+            temperature=1.0,
+            provider_options={"omit_temperature": False},
+        )
 
 
 def test_story_planner_prompt_hides_system_managed_transition() -> None:
@@ -82,6 +105,16 @@ def test_story_planner_prompt_hides_system_managed_transition() -> None:
         "logo_reveal_scene",
         "editorial_text_scene",
         "simple_explainer_scene",
+        "quote_or_claim_highlight_scene",
+        "data_counter_scene",
+        "benchmark_delta_scene",
+        "ecosystem_map_scene",
+        "architecture_flow_scene",
+        "process_zoom_scene",
+        "browser_walkthrough_scene",
+        "capability_matrix_scene",
+        "document_stack_scene",
+        "interface_transform_scene",
     }
     explainer_contract = capabilities["simple_explainer_scene"][
         "payload_field_contract"

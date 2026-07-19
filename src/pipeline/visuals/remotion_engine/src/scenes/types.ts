@@ -51,6 +51,19 @@ export type ResolvedAsset = {
     fallback_svg_path?: string;
   };
   capture?: Record<string, unknown>;
+  assets?: Array<{
+    asset_id?: string;
+    source_record_key?: string;
+    source_url?: string;
+    title?: string;
+    source?: string;
+    domain?: string;
+    asset_path?: string;
+    asset_data_uri?: string;
+    asset_render_url?: string;
+    status?: string;
+    capture?: Record<string, unknown>;
+  }>;
 };
 
 export type VisualScenePayload = Record<string, unknown>;

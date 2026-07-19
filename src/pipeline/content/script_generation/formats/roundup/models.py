@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
 
 
 BeatType = Literal[
@@ -200,6 +200,60 @@ class StorySourceBriefOutput(BaseModel):
         if not value.strip():
             raise ValueError("story source brief text fields must not be empty")
         return value.strip()
+
+
+def story_source_brief_output_model(
+    *,
+    required_story_id: str,
+    allowed_record_keys: list[str],
+) -> type[StorySourceBriefOutput]:
+    """Bind source-research identity fields to the records assigned to one call."""
+
+    story_id = required_story_id.strip()
+    record_keys = list(
+        dict.fromkeys(key.strip() for key in allowed_record_keys if isinstance(key, str) and key.strip())
+    )
+    if not story_id:
+        raise ValueError("required_story_id must not be empty")
+    if not record_keys:
+        raise ValueError(f"{story_id} has no source record keys")
+
+    story_id_literal = Literal.__getitem__((story_id,))
+    record_key_literal = Literal.__getitem__(tuple(record_keys))
+    assigned_detail_model = create_model(
+        "AssignedSourceDetailDraft",
+        __base__=SourceDetailDraft,
+        record_key=(
+            record_key_literal,
+            Field(description="One exact record_key from allowed_source_record_keys."),
+        ),
+    )
+    assigned_boundary_model = create_model(
+        "AssignedSourceMeaningBoundaryDraft",
+        __base__=SourceMeaningBoundaryDraft,
+        record_keys=(
+            list[record_key_literal],
+            Field(description="Exact record keys from allowed_source_record_keys."),
+        ),
+    )
+    return create_model(
+        "AssignedStorySourceBriefOutput",
+        __base__=StorySourceBriefOutput,
+        story_id=(
+            story_id_literal,
+            Field(description="The exact required_story_id supplied in the task payload."),
+        ),
+        distinctive_details=(list[assigned_detail_model], Field(min_length=1)),
+        meaning_boundaries=(
+            list[assigned_boundary_model],
+            Field(
+                description=(
+                    "Material source meaning boundaries using only assigned record keys; return an empty "
+                    "list when no such boundary exists."
+                )
+            ),
+        ),
+    )
 
 
 class VisualBriefDraft(BaseModel):

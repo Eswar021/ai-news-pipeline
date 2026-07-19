@@ -322,6 +322,7 @@ def _build_summary(
             "role_routes": _llm_route_summary(config),
             "token_usage": token_usage,
             "usage_by_model": usage_by_model,
+            "provider_failover": _provider_failover_summary(llm_calls),
             "source_context": {
                 "mode": "complete_records_plus_semantic_brief",
                 "story_packet_count": len(context_packets),
@@ -370,6 +371,19 @@ def _build_llm_runtimes(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 provider_options=role_config.get("provider_options"),
             ),
         }
+        fallback_config = role_config.get("content_filter_fallback")
+        if fallback_config:
+            runtimes[role]["content_filter_fallback"] = {
+                "config": fallback_config,
+                "llm": make_llm(
+                    provider=fallback_config["provider"],
+                    model=fallback_config["model"],
+                    temperature=float(fallback_config["temperature"]),
+                    base_url=fallback_config.get("base_url"),
+                    max_retries=0,
+                    provider_options=fallback_config.get("provider_options"),
+                ),
+            }
     return runtimes
 
 
@@ -382,6 +396,7 @@ def _resolved_llm_configs(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "provider_options": dict(config.get("provider_options") or {}),
         "structured_output": dict(config.get("structured_output") or {}),
         "llm_retry": dict(config.get("llm_retry") or {}),
+        "content_filter_fallback": None,
     }
     overrides = dict(config.get("llm_roles") or {})
     resolved: dict[str, dict[str, Any]] = {}
@@ -401,6 +416,10 @@ def _resolved_llm_configs(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
             "provider_options": dict(override.get("provider_options") or {}),
             "structured_output": dict(override.get("structured_output") or {}),
             "llm_retry": dict(override.get("llm_retry") or default_config["llm_retry"]),
+            "content_filter_fallback": _resolved_content_filter_fallback(
+                override.get("content_filter_fallback"),
+                default_retry=default_config["llm_retry"],
+            ),
         }
         resolved[role] = role_config
     return resolved
@@ -415,8 +434,44 @@ def _llm_route_summary(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
             "request_timeout_seconds": (
                 role_config.get("provider_options") or {}
             ).get("request_timeout_seconds"),
+            "content_filter_fallback": _fallback_route_summary(
+                role_config.get("content_filter_fallback")
+            ),
         }
         for role, role_config in _resolved_llm_configs(config).items()
+    }
+
+
+def _resolved_content_filter_fallback(
+    raw_config: Any,
+    *,
+    default_retry: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not raw_config:
+        return None
+    fallback = dict(raw_config)
+    return {
+        "provider": fallback["provider"],
+        "model": fallback["model"],
+        "temperature": float(fallback["temperature"]),
+        "base_url": fallback.get("base_url"),
+        "provider_options": dict(fallback.get("provider_options") or {}),
+        "structured_output": dict(fallback.get("structured_output") or {}),
+        "llm_retry": dict(fallback.get("llm_retry") or default_retry),
+    }
+
+
+def _fallback_route_summary(fallback: Any) -> dict[str, Any] | None:
+    if not fallback:
+        return None
+    return {
+        "trigger": "content_filter",
+        "provider": fallback["provider"],
+        "model": fallback["model"],
+        "structured_output": fallback["structured_output"],
+        "request_timeout_seconds": (
+            fallback.get("provider_options") or {}
+        ).get("request_timeout_seconds"),
     }
 
 
@@ -434,6 +489,29 @@ def _usage_by_model(llm_calls: list[dict[str, Any]]) -> dict[str, dict[str, int]
         bucket["completion_tokens"] += int(call_usage.get("completion_tokens", 0) or 0)
         bucket["total_tokens"] += int(call_usage.get("total_tokens", 0) or 0)
     return usage
+
+
+def _provider_failover_summary(llm_calls: list[dict[str, Any]]) -> dict[str, Any]:
+    events = []
+    for call in llm_calls:
+        metadata = call.get("metadata") or {}
+        if metadata.get("route_attempt") != "content_filter_fallback":
+            continue
+        events.append(
+            {
+                "module_name": call.get("module_name", ""),
+                "story_id": metadata.get("story_id"),
+                "trigger": metadata.get("fallback_trigger", "content_filter"),
+                "from_provider": metadata.get("fallback_from_provider", ""),
+                "from_model": metadata.get("fallback_from_model", ""),
+                "to_provider": call.get("provider", ""),
+                "to_model": call.get("model", ""),
+            }
+        )
+    return {
+        "content_filter_fallback_call_count": len(events),
+        "events": events,
+    }
 
 
 def _duration_policy(video_packet: dict[str, Any]) -> dict[str, Any]:

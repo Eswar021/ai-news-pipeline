@@ -125,6 +125,8 @@ Purpose:
 - read the video packet, script, voiceover package, trusted asset catalog, and
   visual config
 - create an episode-level direction
+- plan intro and closing visuals in one bounded bookend call using the authored
+  beat-level visual briefs
 - plan renderable scenes per selected story
 - consume canonical beat IDs, beat functions, creative devices, visual goals,
   support truth IDs, source keys, visual briefs, and aligned voice timing
@@ -158,12 +160,15 @@ render cap. Durable prompt text lives under:
 src/pipeline/visuals/planner/prompts/
 ```
 
-The episode director, story planner, and visual editor each have an independent
-`llm_roles` provider/model route in `visuals/planner.yaml`. The daily profile
-uses GPT-4o-mini for all three. Moonshot/Kimi K3 is supported through the same
-structured boundary, but remains opt-in: the first same-input full-context K3
-benchmark exceeded roughly ten minutes without completing, while the verified
-GPT route completed all five stories without fallback.
+The episode director, bookend planner, story planner, and visual editor each
+have an independent `llm_roles` provider/model route in
+`visuals/planner.yaml`. The daily profile uses GPT-4o-mini for all four.
+Moonshot/Kimi K3 is supported through the same strict structured boundary. An
+exact frozen one-story comparison completed in 303.79 seconds with six valid
+scenes, versus 17.95 seconds for GPT-4o-mini. K3 produced a more varied and
+better-grounded plan on that sample, but its roughly 17x latency keeps it an
+explicit quality experiment rather than the daily default. K3 role config must
+omit temperature and should set a role-specific bounded `max_attempts`.
 
 The planner should not generate generic presentation-card outputs. The banned
 old card language is enforced in code and prompts.
@@ -335,6 +340,11 @@ Purpose:
   same URL, target text, capture mode, zoom, and highlight treatment, avoiding
   repeated publisher requests and anti-bot throttling while retaining one
   scene-owned output file per scene
+- optionally reuse a persistent page capture across runs, with a config-driven
+  cache directory and TTL, so repeated article treatments do not repeatedly hit
+  the publisher
+- resolve `source_proof_montage` scenes into two or three independently captured
+  story-owned source pages
 - resolve logo assets for logo reveal scenes and report their actual quality
   class (`verified_logo`, `simple_icon`, `domain_favicon`, or
   `text_identity_fallback`)
@@ -349,6 +359,7 @@ Current asset mapping:
 ```text
 source_article_scene             -> source_screenshot
 quote_or_claim_highlight_scene   -> source_screenshot
+browser_walkthrough_scene        -> source_screenshot
 context_image_scene              -> context_image
 broll_video_scene                -> broll_video
 logo_reveal_scene                -> logo_asset
@@ -368,11 +379,10 @@ benchmark_delta_scene            -> none
 ecosystem_map_scene              -> none
 architecture_flow_scene          -> none
 process_zoom_scene               -> none
-browser_walkthrough_scene        -> none
 decision_tree_scene              -> none
 capability_matrix_scene          -> none
 timeline_zoom_scene              -> none
-document_stack_scene             -> none
+document_stack_scene             -> source_montage for source_proof_montage; otherwise none
 signal_radar_scene               -> none
 interface_transform_scene        -> none
 transition_stinger_scene         -> none
@@ -460,17 +470,21 @@ bandwidth, and encoders become the bottleneck. The profile caps scene workers
 and frame concurrency to improve throughput without making failures more
 likely.
 
-HyperFrames is an explicit opt-in backend for the compact production scene
-vocabulary: source article, context image, trusted B-roll, logo/identity,
-editorial text, simple explainer, and story transition. It uses pinned local
+HyperFrames is an explicit opt-in backend for the active production vocabulary:
+source proof, contextual image/video, logo identity, editorial typography,
+simple explainers, story transitions, claim highlights, metrics and contrasts,
+ecosystem/process/interface motion, capability comparison, and evidence stacks.
+Named recipes such as `source_proof_montage`, `annotated_image_focus`,
+`metric_contrast`, and `process_trace` share the same payload and provenance
+contract across HyperFrames and Remotion. HyperFrames uses pinned local
 dependencies, strict composition checks, isolated per-scene projects, and the
-same cache/provenance envelope. Selecting an unsupported scene fails before
-rendering; it never falls back to Remotion. When scene-level concurrency is
-active, each HyperFrames render uses one internal frame worker to avoid nested
-process multiplication. The current upstream `hyperframes@0.7.64` dependency
-has an unresolved high-severity `adm-zip` denial-of-service advisory, so this
-backend is not the default and should process only pipeline-owned compositions
-and trusted local assets until upstream ships a fix.
+same cache envelope. Selecting an unsupported scene fails before rendering; it
+never falls back to Remotion. When scene-level concurrency is active, each
+HyperFrames render uses one internal frame worker to avoid nested process
+multiplication. The current upstream `hyperframes@0.7.64` dependency has an
+unresolved high-severity `adm-zip` denial-of-service advisory, so this backend
+is not the default and should process only pipeline-owned compositions and
+trusted local assets until upstream ships a fix.
 
 Cache identity includes the scene payload, render settings, resolved asset
 content, and selected engine source. A prompt, asset, scene, or renderer change

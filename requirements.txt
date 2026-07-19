@@ -8,6 +8,7 @@ google-auth-oauthlib
 pydantic>=2,<3
 playwright
 pillow
+pdfplumber>=0.11,<1
 
 # ── LLM (existing) ──
 langchain-openai

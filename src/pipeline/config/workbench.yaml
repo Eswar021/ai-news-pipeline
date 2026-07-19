@@ -16,6 +16,7 @@ profiles:
         metadata_finalizer: profiles/daily_48h_all_sources/content/metadata_finalizer.yaml
       voiceover:
         voiceover: profiles/daily_48h_all_sources/voiceover/voiceover.yaml
+        voiceover_preview: profiles/daily_48h_all_sources/voiceover/voiceover_preview.yaml
       visuals:
         asset_catalog: profiles/daily_48h_all_sources/visuals/asset_catalog.yaml
         planner: profiles/daily_48h_all_sources/visuals/planner.yaml

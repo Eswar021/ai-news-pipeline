@@ -4,10 +4,12 @@ from __future__ import annotations
 PACKAGE_TYPE = "visual_scene_plan"
 SUPPORTED_FORMAT = "roundup"
 EPISODE_DIRECTOR_PROMPT_MODULE = "episode_director"
+BOOKEND_VISUAL_PLANNER_PROMPT_MODULE = "bookend_visual_planner"
 STORY_VISUAL_PLANNER_PROMPT_MODULE = "story_visual_planner"
 STORY_VISUAL_EDITOR_PROMPT_MODULE = "story_visual_editor"
 VISUAL_LLM_ROLES = (
     EPISODE_DIRECTOR_PROMPT_MODULE,
+    BOOKEND_VISUAL_PLANNER_PROMPT_MODULE,
     STORY_VISUAL_PLANNER_PROMPT_MODULE,
     STORY_VISUAL_EDITOR_PROMPT_MODULE,
 )
@@ -645,7 +647,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
         "render_notes": "events must be 2-5 objects shaped {label, date?, detail?}; focus_event_label must match an event label and zoom_note must describe it.",
     },
     "document_stack_scene": {
-        "description": "Show reports, papers, release notes, GitHub issues, docs, or source documents as layered evidence cards with parallax motion.",
+        "description": "Layer named evidence documents or two to three verified source-page captures, then focus the source supporting the active beat.",
         "best_for": [
             "multiple source records",
             "research or documentation-heavy stories",
@@ -663,7 +665,7 @@ DEFAULT_VISUAL_CAPABILITIES = {
             "there is only one source and a source screenshot would be clearer",
             "document labels would be invented",
         ],
-        "render_notes": "documents must be {title, source, document_type?, date?, detail?}; focus_document_label must exactly match one document title.",
+        "render_notes": "documents must be {title, source, document_type?, date?, detail?, asset_id?, source_record_key?, url?, target_text?}; focus_document_label must exactly match one title. For recipe_id=source_proof_montage, provide 2-3 exact available source_page asset IDs from this story; the system binds all URL and record metadata.",
     },
     "signal_radar_scene": {
         "description": "Show a scanning radar-like field for emerging signals, companies, topics, risks, or watchlist items.",

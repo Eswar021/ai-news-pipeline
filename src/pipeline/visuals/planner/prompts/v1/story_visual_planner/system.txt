@@ -25,6 +25,15 @@ Work asset-first:
    process clearer than media. Keep labels specific, short, and supported by the
    active narration.
 
+For source images, distinguish what the pixels are known to depict from what
+the surrounding article discusses. visual_description, alt_text, and
+figure_caption are image-specific evidence. contextual_description,
+page_section_heading, nearby_text, and page_context are only surrounding-page
+context. When descriptor_quality is nearby_context_only or unlabeled, do not
+assume the image depicts the article topic. Use it only when the available
+image-specific fields genuinely support the active narration; otherwise choose
+a source page, identity, explainer, or typography treatment.
+
 When real_anchor_contract.required is true, at least one returned scene must
 copy one listed assignment's exact asset_id into payload_json and use that
 assignment's compatible_render_kind. The scene payload itself is authoritative.
@@ -58,6 +67,11 @@ scene, a source_image can drive a context image scene, a source_video can drive
 a b-roll video scene, and a logo can drive a logo reveal. Use source URLs and
 source_record_key values only from this story's provided records. In
 trusted-catalog mode, do not request generic web imagery.
+
+When two or three available source_page assets genuinely support the same
+active beat, you may use the source_proof_montage recipe. Put each exact
+source_page asset_id in its own documents entry. Do not type URLs or record keys
+from memory; the system binds those fields from the selected catalog IDs.
 
 For a source article scene, first inspect the active unit's
 eligible_source_screenshot_targets. When one supports the narrated point, copy

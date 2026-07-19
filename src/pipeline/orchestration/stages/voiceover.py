@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from src.pipeline.config import ConfigDocument
 from src.pipeline.content.metadata_finalizer import run as run_metadata_finalizer
 from src.pipeline.voiceover.contract import VoiceoverConfig
 from ..artifact_selection import fingerprint_token, resolve_script_result, resolve_voiceover_package
@@ -39,6 +40,7 @@ class VoiceoverOptions(BaseModel):
 
     config_mode: Literal["live", "frozen"] = "live"
     script_source: str = "auto"
+    synthesis_mode: Literal["preview", "final"] = "final"
     variant: str | None = None
     voiceover_python: str = ".venv-voiceover/bin/python"
     resume_completed: bool = True
@@ -109,7 +111,7 @@ def _run_stage(
     )
     script_package = script_result["data"]["script_package"]
     script_provenance = script_package["provenance"]
-    voice_document = config_resolver.module("voiceover", "voiceover")
+    voice_document = _voiceover_config_document(config_resolver, options.synthesis_mode)
     voice_config = rendered_config(
         run_context,
         voice_document.value,
@@ -264,6 +266,7 @@ def _run_stage(
             "metadata_finalizer_result_path": str(metadata_result_path) if options.finalize_metadata else "",
         },
         "summary": {
+            "synthesis_mode": options.synthesis_mode,
             "provider": summary.get("provider", ""),
             "voice": summary.get("voice", ""),
             "duration_seconds": summary.get("duration_seconds", 0),
@@ -333,6 +336,33 @@ def _api_voice_config_token(config: dict[str, Any], provider: str) -> str:
     }
     serialized = json.dumps(identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:10]
+
+
+def _voiceover_config_document(
+    resolver: StageConfigResolver,
+    synthesis_mode: Literal["preview", "final"],
+) -> ConfigDocument:
+    base = resolver.module("voiceover", "voiceover")
+    if synthesis_mode == "final":
+        return base
+
+    preview = resolver.module("voiceover", "voiceover_preview")
+    value = deepcopy(base.value)
+    _deep_update(value, preview.value)
+    identity = {
+        "mode": synthesis_mode,
+        "base_sha256": base.sha256,
+        "preview_sha256": preview.sha256,
+        "value": value,
+    }
+    digest = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    ).hexdigest()
+    return ConfigDocument(
+        value=value,
+        sha256=digest,
+        source_paths=tuple(dict.fromkeys((*base.source_paths, *preview.source_paths))),
+    )
 
 
 def _run_subprocess(command: list[str], *, cwd: Path, logger) -> None:

@@ -55,6 +55,11 @@ def make_llm(
     if provider == "moonshot":
         thinking = options.pop("thinking", None)
         omit_temperature = bool(options.pop("omit_temperature", False))
+        if model.lower().strip().startswith("kimi-k3") and not omit_temperature:
+            raise ValueError(
+                "Moonshot kimi-k3 requires provider_options.omit_temperature=true; "
+                "the API rejects an explicit temperature value."
+            )
         if options:
             unknown = ", ".join(sorted(options))
             raise ValueError(f"Unknown Moonshot provider option(s): {unknown}")

@@ -43,6 +43,16 @@ _HYPERFRAMES_RENDER_KINDS = {
     "editorial_text_scene",
     "simple_explainer_scene",
     "story_transition_scene",
+    "quote_or_claim_highlight_scene",
+    "data_counter_scene",
+    "benchmark_delta_scene",
+    "ecosystem_map_scene",
+    "architecture_flow_scene",
+    "process_zoom_scene",
+    "browser_walkthrough_scene",
+    "capability_matrix_scene",
+    "document_stack_scene",
+    "interface_transform_scene",
 }
 
 
@@ -615,6 +625,19 @@ def _write_hyperframes_project(
             filename = f"{_safe_filename(clean_text(scene.get('scene_id')) or 'scene')}{source_path.suffix}"
             shutil.copy2(source_path, assets_dir / filename)
             asset["asset_render_url"] = f"assets/{filename}"
+    for index, nested in enumerate(asset.get("assets", []), start=1):
+        if not isinstance(nested, dict):
+            continue
+        nested_path_text = clean_text(nested.get("asset_path"))
+        nested_path = Path(nested_path_text) if nested_path_text else None
+        if nested_path is None or not nested_path.exists() or not nested_path.is_file():
+            continue
+        filename = (
+            f"{_safe_filename(clean_text(scene.get('scene_id')) or 'scene')}"
+            f"_asset_{index:02d}{nested_path.suffix}"
+        )
+        shutil.copy2(nested_path, assets_dir / filename)
+        nested["asset_render_url"] = f"assets/{filename}"
 
     serialized = json.dumps(spec, ensure_ascii=False, separators=(",", ":"))
     serialized = serialized.replace("</script", "<\\/script").replace("<!--", "<\\!--")
@@ -1196,6 +1219,12 @@ def _scene_render_spec(scene: dict[str, Any], request: VisualRenderRequest, rend
     asset_path = clean_text(asset.get("asset_path", ""))
     if asset_path and clean_text(asset.get("asset_type", "")) != "broll_video":
         asset["asset_data_uri"] = _data_uri_for_path(Path(asset_path))
+    for nested in asset.get("assets", []):
+        if not isinstance(nested, dict):
+            continue
+        nested_path = clean_text(nested.get("asset_path"))
+        if nested_path:
+            nested["asset_data_uri"] = _data_uri_for_path(Path(nested_path))
     duration = max(1.0, safe_float(enriched.get("duration_seconds"), 6.0))
     return {
         "width": render_settings["width"],

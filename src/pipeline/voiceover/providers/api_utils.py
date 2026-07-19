@@ -55,8 +55,11 @@ def run_with_retries(
     initial_delay_seconds: float,
     max_delay_seconds: float,
     label: str,
+    metadata: dict[str, Any] | None = None,
 ) -> T:
     for attempt in range(max_retries + 1):
+        if metadata is not None:
+            metadata["attempt_count"] = attempt + 1
         try:
             return operation()
         except Exception as exc:

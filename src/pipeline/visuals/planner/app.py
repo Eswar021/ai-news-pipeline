@@ -47,7 +47,9 @@ from ..payload_validation import (
     prompt_payload_contract,
     validate_scene_payload,
 )
+from ..recipes import RECIPE_REGISTRY, recipe_specs_for_prompt
 from .config import (
+    BOOKEND_VISUAL_PLANNER_PROMPT_MODULE,
     EPISODE_DIRECTOR_PROMPT_MODULE,
     NEXT_MODULE,
     OLD_CARD_RENDER_KINDS,
@@ -282,6 +284,48 @@ class StoryVisualPlanDraft(BaseModel):
         return value
 
 
+class BookendSectionVisualPlanDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    section_type: Literal["intro", "closing"]
+    visual_strategy: str
+    scene_timeline: list[ProviderSceneDraft]
+    warnings: list[str] = Field(default_factory=list)
+
+    @field_validator("visual_strategy")
+    @classmethod
+    def visual_strategy_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("bookend visual_strategy must not be empty")
+        return value
+
+    @field_validator("scene_timeline")
+    @classmethod
+    def scene_timeline_must_not_be_empty(
+        cls,
+        value: list[ProviderSceneDraft],
+    ) -> list[ProviderSceneDraft]:
+        if not value:
+            raise ValueError("bookend scene_timeline must contain at least one scene")
+        return value
+
+
+class EpisodeBookendVisualPlanDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sections: list[BookendSectionVisualPlanDraft]
+
+    @field_validator("sections")
+    @classmethod
+    def sections_must_not_be_empty(
+        cls,
+        value: list[BookendSectionVisualPlanDraft],
+    ) -> list[BookendSectionVisualPlanDraft]:
+        if not value:
+            raise ValueError("bookend visual plan must contain at least one section")
+        return value
+
+
 def _story_visual_plan_output_model(allowed_render_kinds: list[str]) -> type[BaseModel]:
     """Build a strict provider schema for only the capabilities in this run."""
 
@@ -309,6 +353,44 @@ def _story_visual_plan_output_model(allowed_render_kinds: list[str]) -> type[Bas
         scene_timeline=(
             list[scene_model],
             Field(description="Renderable scenes covering the exact required visual slots."),
+        ),
+    )
+
+
+def _bookend_visual_plan_output_model(allowed_render_kinds: list[str]) -> type[BaseModel]:
+    allowed = tuple(
+        kind
+        for kind in dedupe([clean_text(kind) for kind in allowed_render_kinds])
+        if kind and kind != "story_transition_scene"
+    )
+    if not allowed:
+        raise ValueError("bookend visual planning requires at least one render kind")
+    render_kind_type = Literal.__getitem__(allowed)
+    scene_model = create_model(
+        "ActiveBookendProviderSceneDraft",
+        __base__=ProviderSceneDraft,
+        __module__=__name__,
+        render_kind=(
+            render_kind_type,
+            Field(description="One render kind from the active run capability registry."),
+        ),
+    )
+    section_model = create_model(
+        "ActiveBookendSectionVisualPlanDraft",
+        __base__=BookendSectionVisualPlanDraft,
+        __module__=__name__,
+        scene_timeline=(
+            list[scene_model],
+            Field(description="Renderable scenes covering the exact required bookend slots."),
+        ),
+    )
+    return create_model(
+        "ActiveEpisodeBookendVisualPlanDraft",
+        __base__=EpisodeBookendVisualPlanDraft,
+        __module__=__name__,
+        sections=(
+            list[section_model],
+            Field(description="One complete plan for each supplied intro or closing section."),
         ),
     )
 
@@ -369,6 +451,8 @@ def _resolved_llm_configs(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
                     "structured_output": dict(override.get("structured_output") or {}),
                 }
             )
+            if override.get("max_attempts") is not None:
+                role_config["max_attempts"] = int(override["max_attempts"])
         resolved[role] = role_config
     return resolved
 
@@ -477,6 +561,9 @@ def run(input_json: dict) -> dict:
     story_ranges = _story_time_ranges(story_sections, stories)
 
     episode_prompt_bundle = load_prompt_bundle(EPISODE_DIRECTOR_PROMPT_MODULE, config["prompt_version"])
+    bookend_prompt_bundle = load_prompt_bundle(
+        BOOKEND_VISUAL_PLANNER_PROMPT_MODULE, config["prompt_version"]
+    )
     story_prompt_bundle = load_prompt_bundle(STORY_VISUAL_PLANNER_PROMPT_MODULE, config["prompt_version"])
     story_editor_prompt_bundle = load_prompt_bundle(
         STORY_VISUAL_EDITOR_PROMPT_MODULE, config["prompt_version"]
@@ -493,6 +580,18 @@ def run(input_json: dict) -> dict:
         prompt_bundle=episode_prompt_bundle,
         llm=llm_runtimes[EPISODE_DIRECTOR_PROMPT_MODULE]["llm"],
         llm_config=llm_runtimes[EPISODE_DIRECTOR_PROMPT_MODULE]["config"],
+        llm_calls=llm_calls,
+    )
+    bookend_drafts = _generate_bookend_visual_plan(
+        story_sections=story_sections,
+        stories=stories,
+        source_index=source_index,
+        asset_catalog_index=asset_catalog_index,
+        episode_direction=episode_direction,
+        config=config,
+        prompt_bundle=bookend_prompt_bundle,
+        llm=llm_runtimes[BOOKEND_VISUAL_PLANNER_PROMPT_MODULE]["llm"],
+        llm_config=llm_runtimes[BOOKEND_VISUAL_PLANNER_PROMPT_MODULE]["config"],
         llm_calls=llm_calls,
     )
     story_drafts = _generate_story_visual_plans(
@@ -521,6 +620,7 @@ def run(input_json: dict) -> dict:
         story_sections=story_sections,
         source_index=source_index,
         episode_direction=episode_direction,
+        bookend_drafts=bookend_drafts,
         story_drafts=story_drafts,
         config=config,
         llm_calls=llm_calls,
@@ -557,6 +657,7 @@ def run(input_json: dict) -> dict:
         story_sections=story_sections,
         source_index=source_index,
         episode_direction=episode_direction,
+        bookend_drafts=bookend_drafts,
         story_drafts=story_drafts,
         config=config,
         llm_calls=llm_calls,
@@ -654,29 +755,95 @@ def _catalog_for_story_prompt(
             "unresolved_briefs_are_not_available_assets": True,
         },
         "available_assets": [
-            {
-                "asset_id": asset.get("asset_id"),
-                "asset_type": asset.get("asset_type"),
-                "title": asset.get("title"),
-                "description": short_text(clean_text(asset.get("description")), 420),
-                "source_record_key": asset.get("source_record_key"),
-                "source_url": asset.get("source_url"),
-                "asset_url": asset.get("asset_url"),
-                "review_status": asset.get("review_status"),
-                "image_role": asset.get("image_role"),
-                "video_role": asset.get("video_role"),
-                "alt_text": short_text(clean_text(asset.get("alt_text")), 240),
-                "duration_seconds": asset.get("duration_seconds"),
-                "width": asset.get("width"),
-                "height": asset.get("height"),
-                "screenshot_target_candidates": asset.get("screenshot_target_candidates", [])[:5],
-                "beat_screenshot_targets": asset.get("beat_screenshot_targets", [])[:8],
-            }
+            _catalog_asset_for_prompt(asset)
             for asset in assets
             if clean_text(asset.get("status")) == "available"
         ],
         "asset_briefs": story_catalog.get("asset_briefs", []),
     }
+
+
+def _catalog_asset_for_prompt(asset: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "asset_id": asset.get("asset_id"),
+        "story_id": asset.get("story_id"),
+        "asset_type": asset.get("asset_type"),
+        "title": asset.get("title"),
+        "description": short_text(clean_text(asset.get("description")), 420),
+        "visual_description": short_text(clean_text(asset.get("visual_description")), 420),
+        "contextual_description": short_text(
+            clean_text(asset.get("contextual_description")), 520
+        ),
+        "descriptor_quality": asset.get("descriptor_quality"),
+        "descriptor_provenance": asset.get("descriptor_provenance", []),
+        "figure_caption": short_text(clean_text(asset.get("figure_caption")), 320),
+        "page_section_heading": short_text(
+            clean_text(asset.get("page_section_heading")), 220
+        ),
+        "nearby_text": short_text(clean_text(asset.get("nearby_text")), 520),
+        "page_context": asset.get("page_context", {}),
+        "source_record_key": asset.get("source_record_key"),
+        "source_url": asset.get("source_url"),
+        "asset_url": asset.get("asset_url"),
+        "review_status": asset.get("review_status"),
+        "image_role": asset.get("image_role"),
+        "video_role": asset.get("video_role"),
+        "alt_text": short_text(clean_text(asset.get("alt_text")), 240),
+        "duration_seconds": asset.get("duration_seconds"),
+        "width": asset.get("width"),
+        "height": asset.get("height"),
+        "screenshot_target_candidates": asset.get("screenshot_target_candidates", [])[:5],
+        "beat_screenshot_targets": asset.get("beat_screenshot_targets", [])[:8],
+    }
+
+
+def _catalog_for_bookend_prompt(catalog_index: dict[str, Any]) -> dict[str, Any]:
+    assets = [
+        asset
+        for asset in catalog_index.get("assets_by_id", {}).values()
+        if clean_text(asset.get("status")) == "available"
+    ]
+    return {
+        "policy": {
+            "asset_ids_are_authoritative": True,
+            "asset_story_id_identifies_ownership": True,
+            "page_context_does_not_describe_image_pixels": True,
+            "external_search_is_not_available": True,
+        },
+        "available_assets": [_catalog_asset_for_prompt(asset) for asset in assets],
+    }
+
+
+def _bookend_allowed_render_kinds(
+    config: dict[str, Any],
+    catalog_index: dict[str, Any],
+) -> list[str]:
+    configured = [
+        clean_text(kind)
+        for kind in config["scene_policy"]["allowed_render_kinds"]
+        if clean_text(kind) and clean_text(kind) != "story_transition_scene"
+    ]
+    required_assets = {
+        clean_text(kind)
+        for kind in config.get("asset_availability_policy", {}).get(
+            "catalog_asset_required_render_kinds", []
+        )
+        if clean_text(kind)
+    }
+    available_types = {
+        clean_text(asset.get("asset_type"))
+        for asset in catalog_index.get("assets_by_id", {}).values()
+        if clean_text(asset.get("status")) == "available"
+    }
+    allowed = [
+        kind
+        for kind in configured
+        if kind not in required_assets
+        or bool(CATALOG_ASSET_TYPES_BY_RENDER_KIND.get(kind, set()) & available_types)
+    ]
+    if not allowed:
+        raise ValueError("No render kinds remain for bookend visual planning")
+    return allowed
 
 
 def _story_allowed_render_kinds(
@@ -833,13 +1000,102 @@ def _prepare_story_scene_draft(
         section=section,
         allowed_render_kinds=set(config["scene_policy"]["allowed_render_kinds"]),
     )
-    scene, _ = _normalize_catalog_scene_reference(
+    scene, catalog_errors = _normalize_catalog_scene_reference(
         scene,
         story_id=story_id,
         catalog_index=asset_catalog_index,
         allowed_render_kinds=set(config["scene_policy"]["allowed_render_kinds"]),
     )
+    scene, montage_errors = _normalize_montage_scene_references(
+        scene,
+        story_id=story_id,
+        catalog_index=asset_catalog_index,
+    )
+    contract_errors = [
+        *scene.get("contract_validation_errors", []),
+        *catalog_errors,
+        *montage_errors,
+    ]
+    if contract_errors:
+        scene["contract_validation_errors"] = dedupe(
+            [clean_text(error) for error in contract_errors if clean_text(error)]
+        )
     return scene
+
+
+def _prepare_bookend_scene_draft(
+    raw_scene: dict[str, Any],
+    *,
+    section: dict[str, Any],
+    source_index: dict[str, Any],
+    asset_catalog_index: dict[str, Any],
+    config: dict[str, Any],
+) -> tuple[dict[str, Any], str]:
+    scene = _expand_provider_scene_draft(raw_scene)
+    owner_story_id = _bookend_scene_owner_story_id(
+        scene,
+        source_index=source_index,
+        asset_catalog_index=asset_catalog_index,
+    )
+    scene, _ = _normalize_provider_scene_fields(
+        scene,
+        section=section,
+        allowed_render_kinds=set(config["scene_policy"]["allowed_render_kinds"]),
+    )
+    scene, catalog_errors = _normalize_catalog_scene_reference(
+        scene,
+        story_id=owner_story_id,
+        catalog_index=asset_catalog_index,
+        allowed_render_kinds=set(config["scene_policy"]["allowed_render_kinds"]),
+    )
+    scene, montage_errors = _normalize_montage_scene_references(
+        scene,
+        story_id=owner_story_id,
+        catalog_index=asset_catalog_index,
+    )
+    contract_errors = [
+        *scene.get("contract_validation_errors", []),
+        *catalog_errors,
+        *montage_errors,
+    ]
+    if contract_errors:
+        scene["contract_validation_errors"] = dedupe(
+            [clean_text(error) for error in contract_errors if clean_text(error)]
+        )
+    return scene, owner_story_id
+
+
+def _bookend_scene_owner_story_id(
+    scene: dict[str, Any],
+    *,
+    source_index: dict[str, Any],
+    asset_catalog_index: dict[str, Any],
+) -> str:
+    asset_id = clean_text(scene.get("asset_id"))
+    asset = asset_catalog_index.get("assets_by_id", {}).get(asset_id, {})
+    if isinstance(asset, dict) and clean_text(asset.get("story_id")):
+        return clean_text(asset.get("story_id"))
+    for document in scene.get("documents", []):
+        if not isinstance(document, dict):
+            continue
+        document_asset = asset_catalog_index.get("assets_by_id", {}).get(
+            clean_text(document.get("asset_id")), {}
+        )
+        if isinstance(document_asset, dict) and clean_text(document_asset.get("story_id")):
+            return clean_text(document_asset.get("story_id"))
+    record_keys = [
+        clean_text(scene.get("source_record_key")),
+        *[
+            clean_text(key)
+            for key in scene.get("evidence_record_keys", [])
+            if clean_text(key)
+        ],
+    ]
+    for record_key in record_keys:
+        record = source_index.get("records_by_key", {}).get(record_key, {})
+        if isinstance(record, dict) and clean_text(record.get("story_id")):
+            return clean_text(record.get("story_id"))
+    return ""
 
 
 def _normalize_provider_scene_fields(
@@ -882,6 +1138,89 @@ def _normalize_catalog_scene_reference(
         # not a semantic asset or scene-family substitution.
         normalized = _scene_with_catalog_asset(normalized, asset)
     return normalized, []
+
+
+def _normalize_montage_scene_references(
+    scene: dict[str, Any],
+    *,
+    story_id: str,
+    catalog_index: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    normalized = dict(scene)
+    if (
+        clean_text(normalized.get("render_kind")) != "document_stack_scene"
+        or clean_text(normalized.get("recipe_id")) != "source_proof_montage"
+    ):
+        return normalized, []
+
+    errors: list[str] = []
+    documents: list[dict[str, Any]] = []
+    record_keys = [
+        clean_text(value)
+        for value in normalized.get("evidence_record_keys", [])
+        if clean_text(value)
+    ]
+    for index, raw in enumerate(normalized.get("documents", []), start=1):
+        if not isinstance(raw, dict):
+            errors.append(f"source montage document {index} must be an object")
+            continue
+        asset_id = clean_text(raw.get("asset_id"))
+        asset = catalog_index.get("assets_by_id", {}).get(asset_id)
+        if not asset_id or not isinstance(asset, dict):
+            errors.append(
+                f"source montage document {index} references unknown asset_id {asset_id!r}"
+            )
+            continue
+        if clean_text(asset.get("story_id")) != story_id:
+            errors.append(
+                f"source montage asset_id {asset_id!r} is not owned by story {story_id!r}"
+            )
+            continue
+        if clean_text(asset.get("status")) != "available":
+            errors.append(f"source montage asset_id {asset_id!r} is not available")
+            continue
+        if clean_text(asset.get("asset_type")) != "source_page":
+            errors.append(f"source montage asset_id {asset_id!r} is not a source_page")
+            continue
+        candidates = [
+            clean_text(value)
+            for value in asset.get("screenshot_target_candidates", [])
+            if clean_text(value)
+        ]
+        requested_target = clean_text(raw.get("target_text"))
+        target_text = next(
+            (
+                candidate
+                for candidate in candidates
+                if candidate.casefold() == requested_target.casefold()
+            ),
+            candidates[0] if candidates else clean_text(asset.get("title")),
+        )
+        record_key = clean_text(asset.get("source_record_key"))
+        source_url = clean_text(asset.get("source_url") or asset.get("asset_url"))
+        record_keys.append(record_key)
+        documents.append(
+            {
+                "asset_id": asset_id,
+                "title": short_text(clean_text(asset.get("title")), 72),
+                "source": short_text(clean_text(asset.get("source_name")) or "Source", 32),
+                "document_type": short_text(
+                    clean_text(raw.get("document_type")) or "SOURCE", 18
+                ),
+                "date": short_text(clean_text(raw.get("date")), 20),
+                "detail": short_text(clean_text(raw.get("detail")), 72),
+                "source_record_key": record_key,
+                "url": source_url,
+                "target_text": short_text(target_text, 260),
+            }
+        )
+    normalized["documents"] = documents
+    normalized["evidence_record_keys"] = dedupe(record_keys)
+    normalized["payload_json"] = _updated_payload_json(
+        normalized,
+        {"documents": documents},
+    )
+    return normalized, errors
 
 
 def _updated_payload_json(scene: dict[str, Any], updates: dict[str, Any]) -> str:
@@ -946,6 +1285,117 @@ def _generate_episode_direction(
         },
         llm_calls=llm_calls,
     )
+
+
+def _generate_bookend_visual_plan(
+    *,
+    story_sections: list[dict[str, Any]],
+    stories: list[dict[str, Any]],
+    source_index: dict[str, Any],
+    asset_catalog_index: dict[str, Any],
+    episode_direction: dict[str, Any],
+    config: dict[str, Any],
+    prompt_bundle: dict[str, str],
+    llm,
+    llm_config: dict[str, Any],
+    llm_calls: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    sections = [
+        section
+        for section in story_sections
+        if clean_text(section.get("section_type")) in {"intro", "closing"}
+    ]
+    if not sections:
+        return {}
+
+    allowed_render_kinds = _bookend_allowed_render_kinds(config, asset_catalog_index)
+    output_model = _bookend_visual_plan_output_model(allowed_render_kinds)
+    structured_llm = _structured_llm(llm, output_model, llm_config)
+    chain = TASK_PROMPT | structured_llm
+    bookend_config = deepcopy(config)
+    bookend_config["scene_policy"] = {
+        **config["scene_policy"],
+        "allowed_render_kinds": allowed_render_kinds,
+    }
+    payload_sections = []
+    for section in sections:
+        payload_sections.append(
+            {
+                **_section_for_prompt(section),
+                "script_units": _script_units_for_bookend_prompt(
+                    section.get("script_units", []),
+                    source_index=source_index,
+                ),
+                "unit_coverage_contract": _story_coverage_contract(
+                    section,
+                    max_scene_seconds=safe_float(
+                        config["scene_policy"].get("max_scene_seconds"), 14.0
+                    ),
+                    hard_max_scene_seconds=_hard_max_scene_seconds(config["scene_policy"]),
+                    hard_cap_tolerance_seconds=safe_float(
+                        config["scene_policy"].get("hard_cap_tolerance_seconds"), 0.0
+                    ),
+                    unit_assignment_mode=clean_text(
+                        config["scene_policy"].get(
+                            "unit_assignment_mode", "one_scene_per_script_unit"
+                        )
+                    ),
+                ),
+            }
+        )
+    task_payload = {
+        "task": "Plan the intro and closing visuals for a finished AI news roundup.",
+        "selected_format": SUPPORTED_FORMAT,
+        "episode_direction": episode_direction,
+        "style": config["style"],
+        "visual_mix_policy": config.get("visual_mix_policy", {}),
+        "scene_policy": bookend_config["scene_policy"],
+        "visual_capabilities": _visual_capabilities_for_prompt(
+            bookend_config,
+            include_system_managed=False,
+            allowed_render_kinds=allowed_render_kinds,
+        ),
+        "selected_stories": _story_summaries_for_prompt(stories),
+        "verified_asset_catalog": _catalog_for_bookend_prompt(asset_catalog_index),
+        "bookend_sections": payload_sections,
+        "allowed_render_kinds": allowed_render_kinds,
+        "banned_visual_language": sorted(OLD_CARD_RENDER_KINDS),
+        "required_behavior": {
+            "plan_only_supplied_intro_and_closing_sections": True,
+            "honor_authored_visual_briefs": True,
+            "use_authored_on_screen_text_when_present": True,
+            "cover_every_required_scene_slot": True,
+            "do_not_author_seconds": True,
+            "do_not_slice_narration_into_display_copy": True,
+            "catalog_asset_ids_are_exact": True,
+        },
+    }
+    draft = _invoke_chain_with_attempts(
+        module_name=BOOKEND_VISUAL_PLANNER_PROMPT_MODULE,
+        output_model=output_model,
+        chain=chain,
+        prompt_bundle=prompt_bundle,
+        task_payload=task_payload,
+        config=llm_config,
+        metadata={
+            "section_types": [clean_text(section.get("section_type")) for section in sections],
+            "script_unit_count": sum(len(section.get("script_units", [])) for section in sections),
+            "allowed_render_kinds": allowed_render_kinds,
+        },
+        llm_calls=llm_calls,
+        validate_output=lambda candidate: _bookend_draft_errors(
+            candidate,
+            sections=sections,
+            source_index=source_index,
+            asset_catalog_index=asset_catalog_index,
+            config=bookend_config,
+        ),
+    )
+    return {
+        clean_text(section.get("section_type")): section
+        for section in draft.get("sections", [])
+        if isinstance(section, dict) and clean_text(section.get("section_type"))
+    }
 
 
 def _generate_story_visual_plans(
@@ -1180,11 +1630,12 @@ def _edit_story_visual_plans(
     reports: list[dict[str, Any]] = []
     call_limit = int(editor_config.get("max_story_calls", 8))
     reviewed = 0
+    editor_calls = 0
     for story in stories:
         story_id = clean_text(story.get("story_id"))
         section = sections_by_story.get(story_id)
         current = edited.get(story_id, {})
-        if not story_id or not section or reviewed >= call_limit:
+        if not story_id or not section or editor_calls >= call_limit:
             continue
         story_catalog = _catalog_for_story_prompt(asset_catalog_index, story_id)
         story_allowed_render_kinds = _story_allowed_render_kinds(config, story_catalog)
@@ -1276,6 +1727,8 @@ def _edit_story_visual_plans(
             "plan_quality_context": quality_context,
         }
 
+        validation_current_errors = list(current_errors)
+
         def validate_editor_output(candidate: dict[str, Any]) -> list[str]:
             revision_required = bool(candidate.get("revision_required"))
             diagnosis = [clean_text(item) for item in candidate.get("diagnosis", []) if clean_text(item)]
@@ -1284,7 +1737,7 @@ def _edit_story_visual_plans(
                 errors = []
                 if revised_plan is not None:
                     errors.append("revision_required=false requires revised_plan=null")
-                if current_errors:
+                if validation_current_errors:
                     errors.append("the current plan is invalid, so the editor must return a valid revised_plan")
                 return errors
             if not diagnosis:
@@ -1305,6 +1758,7 @@ def _edit_story_visual_plans(
             )
 
         try:
+            editor_calls += 1
             decision = _invoke_chain_with_attempts(
                 module_name=STORY_VISUAL_EDITOR_PROMPT_MODULE,
                 output_model=output_model,
@@ -1324,6 +1778,7 @@ def _edit_story_visual_plans(
                         for asset in story_catalog.get("available_assets", [])
                         if clean_text(asset.get("asset_id"))
                     ],
+                    "editor_pass": 1,
                 },
                 llm_calls=llm_calls,
                 validate_output=validate_editor_output,
@@ -1344,20 +1799,106 @@ def _edit_story_visual_plans(
             continue
 
         revision_required = bool(decision.get("revision_required"))
+        replacement = current
         if revision_required:
             replacement = dict(decision["revised_plan"])
             replacement["story_id"] = story_id
             replacement["editor_applied"] = True
             edited[story_id] = replacement
+
+        recheck_context: dict[str, Any] = {}
+        recheck_failure_reason = ""
+        second_revision_applied = False
+        if revision_required:
+            try:
+                normalized_replacement = _normalize_story_candidate_scenes(
+                    story=story,
+                    section=section,
+                    source_index=source_index,
+                    story_draft=replacement,
+                    asset_catalog_index=asset_catalog_index,
+                    counts=Counter(),
+                    config=story_config,
+                )
+                recheck_context = _story_visual_quality_context(
+                    story_id=story_id,
+                    scenes=normalized_replacement,
+                    asset_catalog_index=asset_catalog_index,
+                    config=config,
+                    current_errors=[],
+                )
+            except Exception as exc:
+                recheck_failure_reason = f"{type(exc).__name__}: {exc}"
+
+        if (
+            revision_required
+            and int(editor_config.get("max_passes", 1)) >= 2
+            and recheck_context.get("review_recommended")
+            and editor_calls < call_limit
+        ):
+            second_payload = dict(payload)
+            second_payload["current_story_plan"] = replacement
+            second_payload["current_normalized_scenes"] = [
+                {
+                    "start_unit_order": scene.get("start_unit_order"),
+                    "end_unit_order": scene.get("end_unit_order"),
+                    "render_kind": scene.get("render_kind"),
+                    "script_excerpt": short_text(clean_text(scene.get("script_excerpt")), 320),
+                    "payload": scene.get("payload", {}),
+                    "semantic_grounding": scene.get("semantic_grounding", {}),
+                }
+                for scene in normalized_replacement
+            ]
+            second_payload["plan_quality_context"] = recheck_context
+            validation_current_errors = []
+            try:
+                editor_calls += 1
+                second_decision = _invoke_chain_with_attempts(
+                    module_name=STORY_VISUAL_EDITOR_PROMPT_MODULE,
+                    output_model=output_model,
+                    chain=chain,
+                    prompt_bundle=prompt_bundle,
+                    task_payload=second_payload,
+                    config=llm_config,
+                    metadata={
+                        "story_id": story_id,
+                        "story_title": clean_text(story.get("story_title")),
+                        "current_plan_valid": True,
+                        "review_reasons": recheck_context.get("review_reasons", []),
+                        "source_context": story_context["context_telemetry"],
+                        "allowed_render_kinds": story_allowed_render_kinds,
+                        "available_asset_ids": [
+                            clean_text(asset.get("asset_id"))
+                            for asset in story_catalog.get("available_assets", [])
+                            if clean_text(asset.get("asset_id"))
+                        ],
+                        "editor_pass": 2,
+                    },
+                    llm_calls=llm_calls,
+                    validate_output=validate_editor_output,
+                )
+                if bool(second_decision.get("revision_required")):
+                    replacement = dict(second_decision["revised_plan"])
+                    replacement["story_id"] = story_id
+                    replacement["editor_applied"] = True
+                    replacement["editor_passes"] = 2
+                    edited[story_id] = replacement
+                    second_revision_applied = True
+                decision = second_decision
+            except Exception as exc:
+                recheck_failure_reason = f"{type(exc).__name__}: {exc}"
         reports.append(
             {
                 "story_id": story_id,
                 "decision": "revision_applied" if revision_required else "keep",
                 "revision_applied": revision_required,
+                "second_revision_applied": second_revision_applied,
                 "diagnosis": [
                     clean_text(item) for item in decision.get("diagnosis", []) if clean_text(item)
                 ],
                 "failure_reason": "",
+                "recheck_failure_reason": recheck_failure_reason,
+                "recheck_reasons": recheck_context.get("review_reasons", []),
                 "original_plan_valid": not current_errors,
             }
         )
@@ -1366,6 +1907,7 @@ def _edit_story_visual_plans(
         "enabled": True,
         "max_passes": int(editor_config.get("max_passes", 1)),
         "reviewed_story_count": reviewed,
+        "editor_call_count": editor_calls,
         "revision_count": sum(bool(item.get("revision_applied")) for item in reports),
         "failure_count": sum(bool(item.get("failure_reason")) for item in reports),
         "stories": reports,
@@ -1579,6 +2121,10 @@ def _story_draft_errors(
             for error in scene.get("contract_validation_errors", [])
             if clean_text(error)
         )
+        errors.extend(
+            f"{prefix} {error}"
+            for error in _scene_recipe_policy_errors(scene, config=config)
+        )
         if render_kind in OLD_CARD_RENDER_KINDS or render_kind not in allowed:
             errors.append(f"{prefix} uses unsupported render_kind {render_kind!r}")
             continue
@@ -1623,6 +2169,7 @@ def _story_draft_errors(
             source_index=source_index,
             asset_catalog_index=asset_catalog_index,
         )
+        payload = _payload_with_recipe(payload, scene)
         grounding = _semantic_grounding_for_scene(
             draft=scene,
             render_kind=render_kind,
@@ -1703,6 +2250,175 @@ def _story_draft_errors(
             "story plan must reference at least one available verified_asset_catalog asset_id"
         )
     return errors
+
+
+def _bookend_draft_errors(
+    draft: dict[str, Any],
+    *,
+    sections: list[dict[str, Any]],
+    source_index: dict[str, Any],
+    asset_catalog_index: dict[str, Any],
+    config: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    expected = {
+        clean_text(section.get("section_type")): section
+        for section in sections
+        if clean_text(section.get("section_type")) in {"intro", "closing"}
+    }
+    returned_sections = [
+        section for section in draft.get("sections", []) if isinstance(section, dict)
+    ]
+    returned_types = [clean_text(section.get("section_type")) for section in returned_sections]
+    if Counter(returned_types) != Counter(expected.keys()):
+        errors.append(
+            "bookend section coverage mismatch; "
+            f"expected={sorted(expected)}, returned={returned_types}"
+        )
+
+    allowed = set(config["scene_policy"]["allowed_render_kinds"])
+    catalog_required_kinds = {
+        clean_text(kind)
+        for kind in config.get("asset_availability_policy", {}).get(
+            "catalog_asset_required_render_kinds", []
+        )
+        if clean_text(kind)
+    }
+    for returned in returned_sections:
+        section_type = clean_text(returned.get("section_type"))
+        section = expected.get(section_type)
+        if not section:
+            continue
+        _normalize_overlong_story_scene_slots(returned, section=section, config=config)
+        section_start = safe_int(section.get("start_unit_order"), 1)
+        section_end = safe_int(section.get("end_unit_order"), section_start)
+        covered_unit_orders: set[int] = set()
+        timing_candidates: list[dict[str, Any]] = []
+        for raw_scene in returned.get("scene_timeline", []):
+            if not isinstance(raw_scene, dict):
+                errors.append(f"{section_type} contains a non-object scene")
+                continue
+            scene, owner_story_id = _prepare_bookend_scene_draft(
+                raw_scene,
+                section=section,
+                source_index=source_index,
+                asset_catalog_index=asset_catalog_index,
+                config=config,
+            )
+            scene_order = safe_int(scene.get("order"), 0)
+            prefix = f"{section_type} scene order {scene_order}"
+            render_kind = clean_text(scene.get("render_kind"))
+            errors.extend(
+                f"{prefix} {error}"
+                for error in _scene_recipe_policy_errors(scene, config=config)
+            )
+            if render_kind in OLD_CARD_RENDER_KINDS or render_kind not in allowed:
+                errors.append(f"{prefix} uses unsupported render_kind {render_kind!r}")
+                continue
+            if render_kind in catalog_required_kinds and not clean_text(scene.get("asset_id")):
+                errors.append(f"{prefix} requires an exact available catalog asset_id")
+            catalog_asset, catalog_errors = _catalog_asset_for_scene(
+                scene,
+                story_id=owner_story_id,
+                render_kind=render_kind,
+                catalog_index=asset_catalog_index,
+            )
+            errors.extend(f"{prefix} {error}" for error in catalog_errors)
+            if catalog_asset:
+                scene = _scene_with_catalog_asset(scene, catalog_asset)
+            start_unit = safe_int(scene.get("start_unit_order"), 0)
+            end_unit = safe_int(scene.get("end_unit_order"), 0)
+            if start_unit < section_start or end_unit > section_end or end_unit < start_unit:
+                errors.append(
+                    f"{prefix} unit range {start_unit}-{end_unit} is outside "
+                    f"{section_type} range {section_start}-{section_end}"
+                )
+                continue
+            covered_unit_orders.update(range(start_unit, end_unit + 1))
+            timing_candidates.append(scene)
+            source_record_key, url = _source_for_scene(
+                scene,
+                owner_story_id,
+                render_kind,
+                source_index,
+            )
+            script_excerpt = _section_unit_excerpt(section, start_unit, end_unit)
+            payload = _payload_for_scene(
+                draft=scene,
+                render_kind=render_kind,
+                story_id=owner_story_id,
+                source_record_key=source_record_key,
+                url=url,
+                script_excerpt=script_excerpt,
+                source_index=source_index,
+                asset_catalog_index=asset_catalog_index,
+            )
+            payload = _payload_with_recipe(payload, scene)
+            grounding = _semantic_grounding_for_scene(
+                draft=scene,
+                render_kind=render_kind,
+                story_id=owner_story_id,
+                source_record_key=source_record_key,
+                url=url,
+                payload=payload,
+                source_index=source_index,
+            )
+            if grounding["status"] != "grounded":
+                errors.append(f"{prefix} grounding failed: {grounding['errors']}")
+
+        coverage_contract = _story_coverage_contract(
+            section,
+            max_scene_seconds=safe_float(config["scene_policy"].get("max_scene_seconds"), 14.0),
+            hard_max_scene_seconds=_hard_max_scene_seconds(config["scene_policy"]),
+            hard_cap_tolerance_seconds=safe_float(
+                config["scene_policy"].get("hard_cap_tolerance_seconds"), 0.0
+            ),
+            unit_assignment_mode=clean_text(
+                config["scene_policy"].get("unit_assignment_mode", "one_scene_per_script_unit")
+            ),
+        )
+        expected_orders = set(coverage_contract["required_unit_orders"])
+        missing_orders = sorted(expected_orders - covered_unit_orders)
+        if missing_orders:
+            errors.append(f"{section_type} does not cover script units {missing_orders}")
+        expected_slots = Counter(
+            (
+                safe_int(slot.get("start_unit_order"), 0),
+                safe_int(slot.get("end_unit_order"), 0),
+            )
+            for slot in coverage_contract.get("required_scene_slots", [])
+        )
+        actual_slots = Counter(
+            (
+                safe_int(scene.get("start_unit_order"), 0),
+                safe_int(scene.get("end_unit_order"), 0),
+            )
+            for scene in timing_candidates
+        )
+        if expected_slots != actual_slots:
+            errors.append(
+                f"{section_type} scene slot coverage mismatch; "
+                f"missing={list((expected_slots - actual_slots).elements())}, "
+                f"unexpected={list((actual_slots - expected_slots).elements())}"
+            )
+        errors.extend(
+            f"{section_type} {error}"
+            for error in _story_scene_timing_errors(
+                timing_candidates,
+                section=section,
+                max_scene_seconds=safe_float(
+                    config["scene_policy"].get("max_scene_seconds"), 14.0
+                ),
+                hard_max_scene_seconds=_hard_max_scene_seconds(config["scene_policy"]),
+                hard_cap_tolerance_seconds=safe_float(
+                    config["scene_policy"].get("hard_cap_tolerance_seconds"), 0.0
+                ),
+                duplicate_subscene_policy=clean_text(
+                    config["scene_policy"].get("duplicate_subscene_policy", "continue")
+                ),
+            )
+        )
+    return dedupe(errors)
 
 
 def _normalize_overlong_story_scene_slots(
@@ -1964,6 +2680,7 @@ def _build_visual_scene_plan(
     story_sections: list[dict[str, Any]],
     source_index: dict[str, Any],
     episode_direction: dict[str, Any],
+    bookend_drafts: dict[str, dict[str, Any]],
     story_drafts: dict[str, dict[str, Any]],
     config: dict[str, Any],
     llm_calls: list[dict[str, Any]],
@@ -1978,6 +2695,7 @@ def _build_visual_scene_plan(
         script_units=script_units,
         stories=stories,
         source_index=source_index,
+        bookend_drafts=bookend_drafts,
         story_drafts=story_drafts,
         asset_catalog_index=_asset_catalog_index(asset_catalog),
         config=config,
@@ -1989,9 +2707,9 @@ def _build_visual_scene_plan(
         "package_type": PACKAGE_TYPE,
         "selected_format": SUPPORTED_FORMAT,
         "planning_strategy": (
-            "episode_director_plus_per_story_plus_bounded_editor"
+            "episode_director_plus_bookends_plus_per_story_plus_bounded_editor"
             if (visual_editor_report or {}).get("enabled")
-            else "episode_director_plus_per_story"
+            else "episode_director_plus_bookends_plus_per_story"
         ),
         "llm_routes": _llm_route_summary(config),
         "run_id": run_id,
@@ -2051,9 +2769,11 @@ def _build_scene_timeline(
     source_index: dict[str, Any],
     story_drafts: dict[str, dict[str, Any]],
     config: dict[str, Any],
+    bookend_drafts: dict[str, dict[str, Any]] | None = None,
     asset_catalog_index: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     asset_catalog_index = asset_catalog_index or {}
+    bookend_drafts = bookend_drafts or {}
     stories_by_id = {clean_text(story.get("story_id", "")): story for story in stories}
     policy = config["scene_policy"]
     counts: Counter[str] = Counter()
@@ -2081,6 +2801,17 @@ def _build_scene_timeline(
                 counts=counts,
                 config=config,
             )
+        else:
+            candidates = _normalize_bookend_candidate_scenes(
+                section=section,
+                source_index=source_index,
+                bookend_draft=bookend_drafts.get(
+                    clean_text(section.get("section_type")), {}
+                ),
+                asset_catalog_index=asset_catalog_index,
+                counts=counts,
+                config=config,
+            )
         stitched.extend(
             _stitch_section(
                 section=section,
@@ -2090,6 +2821,11 @@ def _build_scene_timeline(
                 source_index=source_index,
                 counts=counts,
                 policy=policy,
+                allow_unplanned_range_fallback=(
+                    section.get("section_type") == "story"
+                    and bool(config.get("allow_deterministic_story_fallbacks"))
+                    and bool(story_draft.get("fallback_used"))
+                ),
             )
         )
     return _finalize_scene_order(stitched, policy)
@@ -2151,6 +2887,7 @@ def _normalize_story_candidate_scenes(
             source_index=source_index,
             asset_catalog_index=asset_catalog_index,
         )
+        payload = _payload_with_recipe(payload, draft)
         grounding = _semantic_grounding_for_scene(
             draft=draft,
             render_kind=render_kind,
@@ -2174,7 +2911,7 @@ def _normalize_story_candidate_scenes(
                 "payload": payload,
                 "source_record_keys": grounding["evidence_record_keys"],
                 "evidence_truth_ids": grounding["evidence_truth_ids"],
-                "source_urls": [url] if url else [],
+                "source_urls": _scene_source_urls(url, payload),
                 "semantic_grounding": grounding,
                 "reason": clean_text(draft.get("reason", "")),
             }
@@ -2217,6 +2954,7 @@ def _normalize_story_candidate_scenes(
         title_kind = "logo_reveal_scene"
     story_number = safe_int((story.get("video_segment") or {}).get("segment_order"), 1)
     title_payload = {
+        "recipe_id": "chapter_opener",
         "story_number": str(story_number),
         "eyebrow": f"STORY {story_number}",
         "headline": display_title,
@@ -2298,6 +3036,106 @@ def _normalize_story_candidate_scenes(
     return [title_candidate, *remaining]
 
 
+def _normalize_bookend_candidate_scenes(
+    *,
+    section: dict[str, Any],
+    source_index: dict[str, Any],
+    bookend_draft: dict[str, Any],
+    asset_catalog_index: dict[str, Any],
+    counts: Counter[str],
+    config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    policy = config["scene_policy"]
+    section_type = clean_text(section.get("section_type"))
+    section_start = safe_int(section.get("start_unit_order"), 1)
+    section_end = safe_int(section.get("end_unit_order"), section_start)
+    candidates: list[dict[str, Any]] = []
+    for raw_draft in sorted(
+        [scene for scene in bookend_draft.get("scene_timeline", []) if isinstance(scene, dict)],
+        key=lambda scene: safe_int(scene.get("order"), 999999),
+    ):
+        draft, owner_story_id = _prepare_bookend_scene_draft(
+            raw_draft,
+            section=section,
+            source_index=source_index,
+            asset_catalog_index=asset_catalog_index,
+            config=config,
+        )
+        start_unit = min(
+            section_end,
+            max(section_start, safe_int(draft.get("start_unit_order"), section_start)),
+        )
+        end_unit = min(
+            section_end,
+            max(start_unit, safe_int(draft.get("end_unit_order"), start_unit)),
+        )
+        render_kind = _normalize_render_kind(
+            draft,
+            policy,
+            counts,
+            owner_story_id,
+            source_index,
+        )
+        catalog_asset, catalog_errors = _catalog_asset_for_scene(
+            draft,
+            story_id=owner_story_id,
+            render_kind=render_kind,
+            catalog_index=asset_catalog_index,
+        )
+        if catalog_errors:
+            raise ValueError("; ".join(catalog_errors))
+        if catalog_asset:
+            draft = _scene_with_catalog_asset(draft, catalog_asset)
+        source_record_key, url = _source_for_scene(
+            draft,
+            owner_story_id,
+            render_kind,
+            source_index,
+        )
+        script_excerpt = _section_unit_excerpt(section, start_unit, end_unit)
+        payload = _payload_for_scene(
+            draft=draft,
+            render_kind=render_kind,
+            story_id=owner_story_id,
+            source_record_key=source_record_key,
+            url=url,
+            script_excerpt=script_excerpt,
+            source_index=source_index,
+            asset_catalog_index=asset_catalog_index,
+        )
+        payload = _payload_with_recipe(payload, draft)
+        grounding = _semantic_grounding_for_scene(
+            draft=draft,
+            render_kind=render_kind,
+            story_id=owner_story_id,
+            source_record_key=source_record_key,
+            url=url,
+            payload=payload,
+            source_index=source_index,
+        )
+        candidates.append(
+            {
+                "planner_order": safe_int(draft.get("order"), len(candidates) + 1),
+                "story_id": "",
+                "story_title": "",
+                "section_type": section_type,
+                "start_unit_order": start_unit,
+                "end_unit_order": end_unit,
+                "render_kind": render_kind,
+                "script_excerpt": script_excerpt,
+                "visual_intent": clean_text(draft.get("visual_intent"))
+                or _default_visual_intent(render_kind),
+                "payload": payload,
+                "source_record_keys": grounding["evidence_record_keys"],
+                "evidence_truth_ids": grounding["evidence_truth_ids"],
+                "source_urls": _scene_source_urls(url, payload),
+                "semantic_grounding": grounding,
+                "reason": clean_text(draft.get("reason")),
+            }
+        )
+    return candidates
+
+
 def _expand_provider_scene_draft(draft: dict[str, Any]) -> dict[str, Any]:
     payload_raw = clean_text(draft.get("payload_json", ""))
     if not payload_raw:
@@ -2322,6 +3160,7 @@ def _stitch_section(
     source_index: dict[str, Any],
     counts: Counter[str],
     policy: dict[str, Any],
+    allow_unplanned_range_fallback: bool = False,
 ) -> list[dict[str, Any]]:
     start_unit = safe_int(section.get("start_unit_order"), 1)
     end_unit = safe_int(section.get("end_unit_order"), start_unit)
@@ -2353,6 +3192,10 @@ def _stitch_section(
                 f"Visual candidate unit range {candidate_start}-{candidate_end} overlaps a previously stitched range"
             )
         if candidate_start > cursor:
+            if not allow_unplanned_range_fallback:
+                raise ValueError(
+                    f"Visual plan leaves script units {cursor}-{candidate_start - 1} uncovered"
+                )
             scenes.extend(
                 _deterministic_scenes_for_range(
                     section=section,
@@ -2404,6 +3247,8 @@ def _stitch_section(
         if cursor > end_unit:
             break
     if cursor <= end_unit:
+        if not allow_unplanned_range_fallback:
+            raise ValueError(f"Visual plan leaves script units {cursor}-{end_unit} uncovered")
         scenes.extend(
             _deterministic_scenes_for_range(
                 section=section,
@@ -3559,10 +4404,24 @@ def _payload_for_scene(
             "search_queries": search_queries[:3],
             "must_show": normalize_text_list(draft.get("must_show"))[:5],
             "must_avoid": normalize_text_list(draft.get("must_avoid"))[:5],
-            "shot_style": short_text(clean_text(draft.get("shot_style", "")) or "editorial_wide", 48),
-            "overlay_headline": short_text(clean_text(draft.get("media_overlay_headline", "")), 54),
-            "motion_style": clean_text(draft.get("media_motion_style", "")) or ("editorial_crop" if render_kind == "broll_video_scene" else "slow_push"),
-            "show_overlay": bool(draft.get("show_media_overlay", False)),
+            "annotations": normalize_text_list(
+                draft.get("annotations") or draft.get("callouts")
+            )[:3],
+            "shot_style": short_text(clean_text(draft.get("shot_style")) or "wide", 48),
+            "overlay_headline": short_text(
+                clean_text(
+                    draft.get("overlay_headline")
+                    or draft.get("media_overlay_headline")
+                ),
+                54,
+            ),
+            "motion_style": clean_text(
+                draft.get("motion_style") or draft.get("media_motion_style")
+            )
+            or ("editorial_crop" if render_kind == "broll_video_scene" else "slow_push"),
+            "show_overlay": bool(
+                draft.get("show_overlay", draft.get("show_media_overlay", False))
+            ),
         }
     if render_kind == "source_article_scene":
         record = source_index["records_by_key"].get(source_record_key, {}) if source_record_key else {}
@@ -3862,6 +4721,16 @@ def _payload_for_scene(
     }
 
 
+def _payload_with_recipe(
+    payload: dict[str, Any],
+    draft: dict[str, Any],
+) -> dict[str, Any]:
+    recipe_id = clean_text(draft.get("recipe_id"))
+    if not recipe_id:
+        return payload
+    return {**payload, "recipe_id": recipe_id}
+
+
 def _build_asset_manifest(scene_timeline: list[dict[str, Any]]) -> dict[str, Any]:
     requests: list[dict[str, Any]] = []
     for scene in scene_timeline:
@@ -3869,6 +4738,7 @@ def _build_asset_manifest(scene_timeline: list[dict[str, Any]]) -> dict[str, Any
         asset_type = {
             "source_article_scene": "source_screenshot",
             "quote_or_claim_highlight_scene": "source_screenshot",
+            "browser_walkthrough_scene": "source_screenshot",
             "context_image_scene": "context_image",
             "broll_video_scene": "broll_video",
             "logo_reveal_scene": "logo_asset",
@@ -3888,7 +4758,6 @@ def _build_asset_manifest(scene_timeline: list[dict[str, Any]]) -> dict[str, Any
             "ecosystem_map_scene": "none",
             "architecture_flow_scene": "none",
             "process_zoom_scene": "none",
-            "browser_walkthrough_scene": "none",
             "decision_tree_scene": "none",
             "capability_matrix_scene": "none",
             "timeline_zoom_scene": "none",
@@ -4181,12 +5050,32 @@ def _visual_capabilities_for_prompt(
         if clean_text(kind)
     }
     capabilities = config.get("visual_capabilities", {})
+    recipe_policy = config.get("recipe_policy", {})
+    recipes_enabled = bool(recipe_policy.get("enabled", True))
+    allowed_recipe_ids = list(recipe_policy.get("allowed_recipe_ids") or RECIPE_REGISTRY)
+    required_backends = list(
+        recipe_policy.get("required_backend_support") or ["remotion", "hyperframes"]
+    )
     prompt_capabilities: dict[str, Any] = {}
     for key, value in capabilities.items():
         if key not in allowed or not isinstance(value, dict):
             continue
         capability = dict(value)
         structural_contract = prompt_payload_contract(key)
+        recipes = (
+            recipe_specs_for_prompt(
+                key,
+                allowed_recipe_ids=allowed_recipe_ids,
+                required_backends=required_backends,
+            )
+            if recipes_enabled
+            else []
+        )
+        if recipes:
+            capability["available_recipes"] = recipes
+            optional = dict(structural_contract.get("optional") or {})
+            optional["recipe_id"] = "one exact available_recipes[].recipe_id value"
+            structural_contract["optional"] = optional
         if key in catalog_required and structural_contract:
             required = dict(structural_contract.get("required") or {})
             optional = dict(structural_contract.get("optional") or {})
@@ -4225,6 +5114,30 @@ def _visual_capabilities_for_prompt(
         }
         prompt_capabilities[key] = capability
     return prompt_capabilities
+
+
+def _scene_recipe_policy_errors(
+    scene: dict[str, Any],
+    *,
+    config: dict[str, Any],
+) -> list[str]:
+    payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
+    recipe_id = clean_text(scene.get("recipe_id") or payload.get("recipe_id"))
+    if not recipe_id:
+        return []
+    policy = config.get("recipe_policy", {})
+    if not bool(policy.get("enabled", True)):
+        return [f"recipe {recipe_id!r} is disabled by config.recipe_policy"]
+    allowed = set(policy.get("allowed_recipe_ids") or RECIPE_REGISTRY)
+    if recipe_id not in allowed:
+        return [f"recipe {recipe_id!r} is not enabled by config.recipe_policy"]
+    recipe = RECIPE_REGISTRY.get(recipe_id, {})
+    required = set(policy.get("required_backend_support") or [])
+    supported = set(recipe.get("supported_backends") or [])
+    missing = sorted(required - supported)
+    if missing:
+        return [f"recipe {recipe_id!r} does not support required backends {missing}"]
+    return []
 
 
 def _canonical_screenshot_target(record: dict[str, Any], requested_text: str) -> str:
@@ -5460,6 +6373,51 @@ def _effective_hard_max_scene_seconds(policy: dict[str, Any]) -> float:
     )
 
 
+def _script_units_for_bookend_prompt(
+    script_units: list[dict[str, Any]],
+    *,
+    source_index: dict[str, Any],
+) -> list[dict[str, Any]]:
+    truth_items_by_id = source_index.get("truth_items_by_id", {})
+    output: list[dict[str, Any]] = []
+    for unit in script_units:
+        eligible_truth_items = []
+        for truth_id in unit.get("support_truth_ids", []):
+            item = truth_items_by_id.get(clean_text(truth_id), {})
+            if not isinstance(item, dict) or not clean_text(item.get("source_text")):
+                continue
+            eligible_truth_items.append(
+                {
+                    "truth_id": clean_text(item.get("truth_id")),
+                    "story_id": clean_text(item.get("story_id")),
+                    "record_key": clean_text(item.get("record_key")),
+                    "truth_type": clean_text(item.get("truth_type")),
+                    "value_text": clean_text(item.get("value_text")),
+                    "source_text": short_text(clean_text(item.get("source_text")), 320),
+                }
+            )
+        output.append(
+            {
+                "unit_id": unit.get("unit_id"),
+                "order": unit.get("order"),
+                "start_seconds": unit.get("start_seconds"),
+                "end_seconds": unit.get("end_seconds"),
+                "duration_seconds": unit.get("duration_seconds"),
+                "text": clean_text(unit.get("text")),
+                "beat_id": unit.get("beat_id", ""),
+                "beat_type": unit.get("beat_type", ""),
+                "beat_function": unit.get("beat_function", ""),
+                "creative_device": unit.get("creative_device", "none"),
+                "visual_goal": unit.get("visual_goal", ""),
+                "source_record_keys": unit.get("source_record_keys", []),
+                "support_truth_ids": unit.get("support_truth_ids", []),
+                "eligible_truth_items": eligible_truth_items,
+                "visual_brief": unit.get("visual_brief", {}),
+            }
+        )
+    return output
+
+
 def _script_units_for_story_prompt(
     script_units: list[dict[str, Any]],
     *,
@@ -5911,11 +6869,26 @@ def _documents_from_draft(draft: dict[str, Any], script_excerpt: str) -> list[di
                 "title": short_text(title, 42),
                 "source": short_text(clean_text(item.get("source", "")), 22),
                 "document_type": short_text(clean_text(item.get("document_type", "")), 18),
+                "date": short_text(clean_text(item.get("date", "")), 20),
                 "detail": short_text(clean_text(item.get("detail", "")), 46),
                 "status": short_text(clean_text(item.get("status", "")), 18),
+                "asset_id": clean_text(item.get("asset_id", "")),
+                "source_record_key": clean_text(item.get("source_record_key", "")),
+                "url": clean_text(item.get("url", "")),
+                "target_text": short_text(clean_text(item.get("target_text", "")), 260),
             }
         )
     return [document for document in documents if document["title"]]
+
+
+def _scene_source_urls(primary_url: str, payload: dict[str, Any]) -> list[str]:
+    urls = [clean_text(primary_url)] if clean_text(primary_url) else []
+    for document in payload.get("documents", []):
+        if isinstance(document, dict):
+            url = clean_text(document.get("url"))
+            if url.startswith(("http://", "https://")):
+                urls.append(url)
+    return dedupe(urls)
 
 
 

@@ -114,7 +114,7 @@ def test_hyperframes_rejects_unsupported_scene_before_render(tmp_path: Path) -> 
             {
                 "scene_id": "scene_legacy",
                 "scene_order": 1,
-                "render_kind": "architecture_flow_scene",
+                "render_kind": "trend_line_scene",
                 "duration_seconds": 5,
                 "payload": {"headline": "Legacy specialist visual"},
             }

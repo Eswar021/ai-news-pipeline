@@ -85,6 +85,14 @@ def test_script_role_routes_override_only_selected_roles() -> None:
                     },
                     "structured_output": {"method": "json_schema", "strict": True},
                     "llm_retry": None,
+                    "content_filter_fallback": {
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "temperature": 0.4,
+                        "provider_options": {"request_timeout_seconds": 300},
+                        "structured_output": {"method": "json_schema", "strict": True},
+                        "llm_retry": None,
+                    },
                 }
             },
         }
@@ -95,6 +103,15 @@ def test_script_role_routes_override_only_selected_roles() -> None:
     assert routes["story_writer"]["provider"] == "moonshot"
     assert routes["story_writer"]["model"] == "kimi-k3"
     assert routes["story_writer"]["llm_retry"] == {"enabled": True, "max_attempts": 2}
+    assert routes["story_writer"]["content_filter_fallback"] == {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "temperature": 0.4,
+        "base_url": None,
+        "provider_options": {"request_timeout_seconds": 300},
+        "structured_output": {"method": "json_schema", "strict": True},
+        "llm_retry": {"enabled": True, "max_attempts": 2},
+    }
 
 
 def test_mixed_provider_comparison_prices_each_actual_route() -> None:

@@ -179,6 +179,8 @@ def _prepare_record(
         normalized_content,
         fallback=record.get("description", "") or record.get("summary", "") or normalized_title,
     )
+    non_text_payload_detected = bool(content_cleaning.get("non_text_payload_detected"))
+    prepared_raw_content = "" if non_text_payload_detected else raw_source_content
     published_at_iso = _normalize_published_at(record.get("published_at"))
 
     hard_reject_reason = None
@@ -186,7 +188,14 @@ def _prepare_record(
     canonical_record_id = record_id
     preparation_warnings: list[str] = []
     incoming_quality_flags = record.get("quality_flags") or {}
-    quality_flags = dict(incoming_quality_flags) if isinstance(incoming_quality_flags, dict) else {}
+    quality_flags = (
+        dict(incoming_quality_flags) if isinstance(incoming_quality_flags, dict) else {}
+    )
+    if non_text_payload_detected:
+        preparation_warnings.append("non_text_source_payload")
+        quality_flags["non_text_source_payload"] = content_cleaning.get(
+            "non_text_payload_kind", "unknown"
+        )
 
     if not published_at_iso:
         preparation_warnings.append("missing_published_at")
@@ -229,7 +238,7 @@ def _prepare_record(
     prepared = _build_prepared_record(
         record=record,
         normalized_title=normalized_title,
-        raw_content=raw_source_content,
+        raw_content=prepared_raw_content,
         normalized_content=normalized_content,
         published_at_iso=published_at_iso,
         canonical_url=canonical_url,

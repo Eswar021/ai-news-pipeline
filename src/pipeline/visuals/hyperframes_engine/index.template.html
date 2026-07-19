@@ -7,7 +7,7 @@
     <style>
       * { box-sizing: border-box; }
       html, body { margin: 0; width: __WIDTH__px; height: __HEIGHT__px; overflow: hidden; }
-      body { background: #f4efe6; color: #171611; font-family: Inter, sans-serif; }
+      body { background: #f4efe6; color: #171611; font-family: "Avenir Next", Helvetica, sans-serif; }
       #stage { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--paper); }
       #stage::before {
         content: "";
@@ -53,7 +53,60 @@
       .transition-copy .headline { max-width: 82%; }
       .transition-media .transition-copy { color: #fffaf2; width: 64%; }
       .transition-media .headline { text-shadow: 0 8px 38px rgba(0,0,0,.56); }
-      .grain { position: absolute; inset: 0; z-index: 20; pointer-events: none; opacity: .11; mix-blend-mode: multiply; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.24'/%3E%3C/svg%3E"); }
+      .annotation-scrim { position: absolute; right: 0; top: 0; bottom: 0; width: 46%; z-index: 7; background: linear-gradient(90deg, transparent, rgba(15,13,10,.72) 28%, rgba(15,13,10,.94)); }
+      .annotation-rail { position: absolute; right: 5.2%; top: 13%; bottom: 13%; width: 32%; z-index: 8; display: flex; flex-direction: column; justify-content: center; gap: 28px; }
+      .annotation { padding: 12px 0 12px 22px; border-left: 5px solid var(--accent); color: #fffaf2; font-size: clamp(20px, 1.42vw, 28px); line-height: 1.12; font-weight: 760; text-wrap: balance; text-shadow: 0 4px 20px rgba(0,0,0,.58); }
+      .metric-stage { position: absolute; inset: 0; padding: 7% 6.5%; }
+      .metric-stage .headline { max-width: 78%; font-size: clamp(52px, 4.7vw, 92px); }
+      .metric-grid { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 10%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4%; align-items: stretch; }
+      .metric { display: flex; flex-direction: column; justify-content: center; border-top: 3px solid color-mix(in srgb, var(--accent) 76%, transparent); }
+      .metric-value { margin-top: 18px; font-family: "EB Garamond", Georgia, serif; font-size: clamp(82px, 8vw, 154px); line-height: .78; letter-spacing: -.065em; font-weight: 720; }
+      .metric-label { margin-top: 25px; color: var(--muted); font-size: clamp(22px, 1.7vw, 34px); font-weight: 760; }
+      .delta-grid { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 11%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 5%; }
+      .delta { display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: auto 1fr auto; align-items: center; column-gap: 6%; border-top: 3px solid var(--accent); padding-top: 20px; }
+      .delta-label { grid-column: 1 / -1; color: var(--muted); font-size: clamp(20px, 1.45vw, 29px); font-weight: 820; text-transform: uppercase; letter-spacing: .1em; }
+      .delta-side { font-family: "EB Garamond", Georgia, serif; font-size: clamp(55px, 5vw, 98px); line-height: .84; font-weight: 700; }
+      .delta-arrow { color: var(--accent); font-size: clamp(44px, 4vw, 78px); }
+      .delta-result { grid-column: 1 / -1; color: var(--accent); font-size: clamp(34px, 2.9vw, 56px); font-weight: 900; }
+      .map-stage, .trace-stage, .docs-stage, .matrix-stage, .transform-stage { position: absolute; inset: 0; padding: 7% 6.5%; }
+      .map-stage .headline, .trace-stage .headline, .matrix-stage .headline, .transform-stage .headline { max-width: 75%; font-size: clamp(50px, 4.5vw, 88px); }
+      .docs-stage .headline { max-width: 36%; font-size: clamp(48px, 4.1vw, 80px); }
+      .orbit { position: absolute; left: 12%; right: 12%; top: 35%; bottom: 9%; }
+      .orbit-core { position: absolute; left: 50%; top: 50%; width: 25%; aspect-ratio: 1; transform: translate(-50%,-50%); border: 3px solid var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-family: "EB Garamond", Georgia, serif; font-size: clamp(31px, 2.6vw, 50px); line-height: .92; font-weight: 700; background: color-mix(in srgb, var(--paper) 88%, transparent); }
+      .orbit-ring { position: absolute; left: 10%; right: 10%; top: 4%; bottom: 4%; border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 50%; }
+      .orbit-node { position: absolute; width: 19%; min-height: 84px; display: flex; align-items: center; justify-content: center; padding: 14px 18px; border-bottom: 3px solid var(--accent); background: color-mix(in srgb, var(--paper) 90%, transparent); font-size: clamp(21px, 1.55vw, 31px); line-height: 1; text-align: center; font-weight: 800; }
+      .trace { position: absolute; left: 7%; right: 7%; top: 44%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: center; gap: 2%; }
+      .trace-step { min-height: 190px; padding: 28px 22px; border-top: 5px solid color-mix(in srgb, var(--accent) 35%, transparent); display: flex; flex-direction: column; justify-content: center; }
+      .trace-step.active { border-color: var(--accent); }
+      .trace-label { font-family: "EB Garamond", Georgia, serif; font-size: clamp(31px, 2.45vw, 48px); line-height: .94; font-weight: 700; }
+      .trace-detail { margin-top: 15px; color: var(--muted); font-size: clamp(18px, 1.2vw, 24px); line-height: 1.08; font-weight: 650; }
+      .trace-arrow { color: var(--accent); font-size: clamp(36px, 3vw, 60px); text-align: center; }
+      .focus-note { position: absolute; left: 7%; bottom: 7%; max-width: 70%; padding-left: 24px; border-left: 6px solid var(--accent); color: var(--muted); font-size: clamp(23px, 1.75vw, 35px); line-height: 1.08; font-weight: 720; }
+      .walkthrough-markers { position: absolute; right: 5%; top: 24%; z-index: 9; width: 31%; display: flex; flex-direction: column; gap: 18px; }
+      .walkthrough-step { padding: 16px 20px; background: rgba(255,253,250,.94); border-left: 6px solid var(--accent); box-shadow: 0 16px 42px rgba(30,24,17,.18); font-size: clamp(19px, 1.35vw, 27px); line-height: 1.05; font-weight: 770; }
+      .docs { position: absolute; right: 4.5%; top: 20%; width: 55%; height: 73%; }
+      .document { position: absolute; width: 75%; min-height: 40%; padding: 28px 32px; background: #fffdfa; border: 1px solid rgba(23,22,17,.25); box-shadow: 0 25px 65px rgba(35,29,21,.18); }
+      .document-type { color: var(--accent); font-size: clamp(16px, 1vw, 21px); font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+      .document-title { margin-top: 16px; font-family: "EB Garamond", Georgia, serif; font-size: clamp(29px, 2.2vw, 43px); line-height: .93; font-weight: 700; }
+      .document-source { margin-top: 15px; color: var(--muted); font-size: clamp(17px, 1.1vw, 23px); font-weight: 700; }
+      .source-montage { position: absolute; left: 40%; right: 4.2%; top: 17%; bottom: 7%; }
+      .proof-page { position: absolute; width: 78%; height: 76%; overflow: hidden; border: 1px solid rgba(23,22,17,.22); border-radius: 10px; background: #fffdfa; box-shadow: 0 30px 80px rgba(35,29,21,.22); transform-origin: center center; }
+      .proof-page.active { z-index: 6; border: 3px solid var(--accent); }
+      .proof-bar { height: 44px; padding: 0 18px; display: flex; align-items: center; gap: 10px; color: var(--muted); background: #e9e1d5; border-bottom: 1px solid rgba(23,22,17,.16); font-size: clamp(14px, .95vw, 19px); font-weight: 760; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .proof-image { width: 100%; height: calc(100% - 44px); object-fit: cover; object-position: center 24%; }
+      .proof-label { position: absolute; left: 20px; right: 20px; bottom: 18px; padding: 10px 14px; color: #fffaf2; background: rgba(23,22,17,.84); border-left: 5px solid var(--accent); font-size: clamp(16px, 1.1vw, 22px); line-height: 1.05; font-weight: 780; }
+      .matrix { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 10%; display: grid; align-content: center; }
+      .matrix-row { display: grid; grid-template-columns: 1.35fr repeat(var(--cols), 1fr); border-bottom: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); }
+      .matrix-cell { padding: 16px 18px; min-height: 60px; display: flex; align-items: center; font-size: clamp(18px, 1.25vw, 25px); line-height: 1; font-weight: 720; }
+      .matrix-head { color: var(--accent); font-weight: 900; text-transform: uppercase; letter-spacing: .07em; }
+      .matrix-row.focus { background: color-mix(in srgb, var(--accent) 11%, transparent); border-left: 5px solid var(--accent); }
+      .transform-panels { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 10%; display: grid; grid-template-columns: 1fr auto 1fr; gap: 4%; align-items: center; }
+      .transform-panel { border-top: 4px solid color-mix(in srgb, var(--accent) 45%, transparent); padding-top: 22px; }
+      .transform-panel.after { border-color: var(--accent); }
+      .transform-label { font-family: "EB Garamond", Georgia, serif; font-size: clamp(36px, 3vw, 58px); font-weight: 700; }
+      .transform-item { margin-top: 15px; color: var(--muted); font-size: clamp(21px, 1.5vw, 30px); font-weight: 690; }
+      .transform-arrow { color: var(--accent); font-size: clamp(54px, 5vw, 96px); }
+      .grain { position: absolute; inset: 0; z-index: 20; pointer-events: none; opacity: .22; background-image: radial-gradient(rgba(23,22,17,.16) .7px, transparent .7px); background-size: 5px 5px; }
     </style>
   </head>
   <body>
@@ -68,6 +121,7 @@
       const stage = document.querySelector("#stage");
       const text = (value, fallback = "") => typeof value === "string" && value.trim() ? value.trim() : fallback;
       const list = (value) => Array.isArray(value) ? value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()) : [];
+      const objects = (value) => Array.isArray(value) ? value.filter((item) => item && typeof item === "object") : [];
       const node = (tag, className, value = "") => {
         const element = document.createElement(tag);
         if (className) element.className = className;
@@ -79,11 +133,14 @@
       const headline = text(payload.headline) || text(payload.overlay_headline) || text(payload.companion_text) || text(scene.script_excerpt, "Untitled story");
       const support = text(payload.supporting_text) || text(payload.companion_text);
       const sourceLabel = text(payload.source_label) || text(asset.capture && asset.capture.domain);
+      const recipeId = text(payload.recipe_id);
 
       stage.style.setProperty("--paper", text(style.background_color, "#f4efe6"));
       stage.style.setProperty("--ink", text(style.text_color, "#171611"));
       stage.style.setProperty("--accent", text(style.accent_color, "#bd4e2f"));
       stage.style.setProperty("--muted", text(style.muted_color, "#6f6a61"));
+      stage.style.setProperty("--sans", text(style.sans_font, '"Avenir Next", Helvetica, sans-serif'));
+      stage.dataset.recipeId = recipeId;
 
       const addGrain = () => stage.appendChild(node("div", "grain"));
       const addRule = () => stage.appendChild(node("div", "accent-rule hf-rule"));
@@ -129,6 +186,13 @@
           copy.style.top = "56%";
           append(copy, node("h1", "headline small hf-enter", headline));
           stage.appendChild(copy);
+        }
+        const annotations = list(payload.annotations || payload.callouts).slice(0, 3);
+        if (annotations.length) {
+          stage.appendChild(node("div", "annotation-scrim hf-annotation-scrim"));
+          const rail = node("div", "annotation-rail");
+          annotations.forEach((item) => rail.appendChild(node("div", "annotation hf-annotation", item)));
+          stage.appendChild(rail);
         }
         addCredit(sourceLabel || text(asset.media && asset.media.attribution));
       };
@@ -197,6 +261,170 @@
         stage.appendChild(copy);
       };
 
+      const renderEvidence = () => {
+        renderSource();
+        const proof = text(payload.claim_text) || text(payload.supporting_text) || text(payload.target_text);
+        const highlight = stage.querySelector(".highlight");
+        if (highlight && proof) {
+          highlight.textContent = proof.slice(0, 190);
+          highlight.classList.add("hf-evidence");
+        }
+      };
+
+      const renderMetricCounter = () => {
+        const wrap = node("section", "metric-stage");
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE NUMBER")), node("h1", "headline hf-enter", headline));
+        const grid = node("div", "metric-grid");
+        objects(payload.metrics).slice(0, 3).forEach((metric) => {
+          const item = node("div", "metric hf-metric");
+          const value = `${text(metric.value)}${text(metric.unit)}`;
+          append(item, node("div", "metric-value hf-number", value), node("div", "metric-label", text(metric.label)), text(metric.context) ? node("div", "support", text(metric.context)) : null);
+          grid.appendChild(item);
+        });
+        wrap.appendChild(grid);
+        stage.appendChild(wrap);
+      };
+
+      const renderMetricContrast = () => {
+        const wrap = node("section", "metric-stage");
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE DELTA")), node("h1", "headline hf-enter", headline));
+        const grid = node("div", "delta-grid");
+        objects(payload.benchmarks).slice(0, 3).forEach((metric) => {
+          const item = node("div", "delta hf-metric");
+          append(item, node("div", "delta-label", text(metric.label)), node("div", "delta-side hf-before", text(metric.before)), node("div", "delta-arrow hf-arrow", "→"), node("div", "delta-side hf-after", text(metric.after)), node("div", "delta-result hf-number", text(metric.delta)));
+          grid.appendChild(item);
+        });
+        wrap.appendChild(grid);
+        stage.appendChild(wrap);
+      };
+
+      const renderEcosystem = () => {
+        const wrap = node("section", "map-stage");
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE ECOSYSTEM")), node("h1", "headline hf-enter", headline));
+        const orbit = node("div", "orbit");
+        orbit.appendChild(node("div", "orbit-ring hf-orbit"));
+        const nodes = objects(payload.nodes).slice(0, 7);
+        const focus = text(payload.focus_entity);
+        const primary = nodes.find((item) => text(item.label).toLowerCase() === focus.toLowerCase()) || nodes[0] || {};
+        orbit.appendChild(node("div", "orbit-core hf-focus", text(primary.label, focus)));
+        const secondary = nodes.filter((item) => item !== primary).slice(0, 6);
+        secondary.forEach((item, index) => {
+          const angle = (Math.PI * 2 * index) / Math.max(1, secondary.length) - Math.PI / 2;
+          const x = 50 + Math.cos(angle) * 40;
+          const y = 50 + Math.sin(angle) * 40;
+          const child = node("div", "orbit-node hf-orbit-node", text(item.label));
+          child.style.left = `${x}%`; child.style.top = `${y}%`; child.style.transform = "translate(-50%,-50%)";
+          orbit.appendChild(child);
+        });
+        wrap.appendChild(orbit);
+        stage.appendChild(wrap);
+      };
+
+      const renderTrace = (zoom = false) => {
+        const wrap = node("section", "trace-stage");
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, zoom ? "ZOOM IN" : "HOW IT MOVES")), node("h1", "headline hf-enter", headline));
+        const trace = node("div", "trace");
+        const steps = objects(payload.steps).slice(0, 6);
+        const focus = text(zoom ? payload.focus_step_label : payload.active_step_label);
+        steps.forEach((step, index) => {
+          if (index) trace.appendChild(node("div", "trace-arrow hf-arrow", "→"));
+          const item = node("div", `trace-step hf-trace-step${text(step.label).toLowerCase() === focus.toLowerCase() ? " active hf-focus" : ""}`);
+          append(item, node("div", "trace-label", text(step.label)), text(step.detail) ? node("div", "trace-detail", text(step.detail)) : null);
+          trace.appendChild(item);
+        });
+        wrap.appendChild(trace);
+        if (zoom && text(payload.zoom_note)) wrap.appendChild(node("div", "focus-note hf-enter", text(payload.zoom_note)));
+        stage.appendChild(wrap);
+      };
+
+      const renderWalkthrough = () => {
+        renderSource();
+        const markers = node("div", "walkthrough-markers");
+        objects(payload.walkthrough_steps).slice(0, 4).forEach((step, index) => {
+          const label = text(step.label, `Step ${index + 1}`);
+          const detail = text(step.detail) || text(step.target_text);
+          markers.appendChild(node("div", "walkthrough-step hf-walkthrough-step", detail ? `${label} — ${detail}` : label));
+        });
+        stage.appendChild(markers);
+      };
+
+      const renderDocuments = () => {
+        const wrap = node("section", "docs-stage");
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE RECEIPTS")), node("h1", "headline hf-enter", headline));
+        const resolvedDocuments = objects(asset.assets).slice(0, 3);
+        if (resolvedDocuments.length) {
+          const montage = node("div", "source-montage");
+          const focus = text(payload.focus_document_label).toLowerCase();
+          resolvedDocuments.forEach((resolved, index) => {
+            const documentPayload = objects(payload.documents).find((doc) => text(doc.asset_id) === text(resolved.asset_id)) || objects(payload.documents)[index] || {};
+            const active = !focus || text(documentPayload.title).toLowerCase() === focus;
+            const page = node("article", `proof-page hf-proof${active ? " active hf-focus" : ""}`);
+            page.style.left = `${index * 9}%`;
+            page.style.top = `${index * 9}%`;
+            page.style.transform = `rotate(${(index - 1) * 2.4}deg)`;
+            const bar = node("div", "proof-bar", text(resolved.domain) || text(documentPayload.source) || "SOURCE");
+            page.appendChild(bar);
+            const image = node("img", "proof-image hf-proof-image");
+            image.src = text(resolved.asset_render_url) || text(resolved.asset_data_uri);
+            image.alt = text(documentPayload.title, "Source document");
+            page.appendChild(image);
+            page.appendChild(node("div", "proof-label", text(documentPayload.title) || text(documentPayload.source)));
+            montage.appendChild(page);
+          });
+          wrap.appendChild(montage);
+          if (text(payload.stack_summary)) wrap.appendChild(node("div", "focus-note hf-enter", text(payload.stack_summary)));
+          stage.appendChild(wrap);
+          return;
+        }
+        const docs = node("div", "docs");
+        const focus = text(payload.focus_document_label);
+        objects(payload.documents).slice(0, 5).forEach((doc, index) => {
+          const sheet = node("article", `document hf-document${text(doc.title).toLowerCase() === focus.toLowerCase() ? " hf-focus" : ""}`);
+          const active = text(doc.title).toLowerCase() === focus.toLowerCase();
+          sheet.style.left = `${active ? 9 : index * 6}%`; sheet.style.top = `${active ? 18 : index * 9}%`; sheet.style.transform = `rotate(${active ? 0 : (index - 2) * 2.2}deg)`; sheet.style.zIndex = active ? "8" : String(index + 1);
+          append(sheet, node("div", "document-type", text(doc.document_type, "SOURCE")), node("div", "document-title", text(doc.title)), node("div", "document-source", [text(doc.source), text(doc.date)].filter(Boolean).join(" · ")));
+          docs.appendChild(sheet);
+        });
+        wrap.appendChild(docs);
+        if (text(payload.stack_summary)) wrap.appendChild(node("div", "focus-note hf-enter", text(payload.stack_summary)));
+        stage.appendChild(wrap);
+      };
+
+      const renderMatrix = () => {
+        const wrap = node("section", "matrix-stage");
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "COMPARE")), node("h1", "headline hf-enter", headline));
+        const columns = list(payload.columns).slice(0, 4);
+        const matrix = node("div", "matrix"); matrix.style.setProperty("--cols", String(columns.length));
+        const header = node("div", "matrix-row hf-matrix-row");
+        header.appendChild(node("div", "matrix-cell matrix-head", "Capability"));
+        columns.forEach((column) => header.appendChild(node("div", "matrix-cell matrix-head", column)));
+        matrix.appendChild(header);
+        const focus = text(payload.focus_row_label);
+        objects(payload.rows).slice(0, 5).forEach((row) => {
+          const rowNode = node("div", `matrix-row hf-matrix-row${text(row.label).toLowerCase() === focus.toLowerCase() ? " focus" : ""}`);
+          rowNode.appendChild(node("div", "matrix-cell", text(row.label)));
+          list(row.values).slice(0, columns.length).forEach((value) => rowNode.appendChild(node("div", "matrix-cell", value)));
+          matrix.appendChild(rowNode);
+        });
+        wrap.appendChild(matrix); stage.appendChild(wrap);
+      };
+
+      const renderTransform = () => {
+        const wrap = node("section", "transform-stage");
+        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE SHIFT")), node("h1", "headline hf-enter", headline));
+        const panels = node("div", "transform-panels");
+        [payload.before || {}, payload.after || {}].forEach((panel, index) => {
+          if (index) panels.appendChild(node("div", "transform-arrow hf-arrow", "→"));
+          const item = node("div", `transform-panel hf-transform${index ? " after hf-focus" : ""}`);
+          item.appendChild(node("div", "transform-label", text(panel.label, index ? "After" : "Before")));
+          list(panel.items).slice(0, 5).forEach((value) => item.appendChild(node("div", "transform-item", value)));
+          panels.appendChild(item);
+        });
+        wrap.appendChild(panels);
+        if (text(payload.transformation_label)) wrap.appendChild(node("div", "focus-note hf-enter", text(payload.transformation_label)));
+        stage.appendChild(wrap);
+      };
+
       const renderers = {
         source_article_scene: renderSource,
         context_image_scene: () => renderContextMedia(false),
@@ -205,6 +433,16 @@
         editorial_text_scene: renderEditorial,
         simple_explainer_scene: renderExplainer,
         story_transition_scene: renderTransition,
+        quote_or_claim_highlight_scene: renderEvidence,
+        data_counter_scene: renderMetricCounter,
+        benchmark_delta_scene: renderMetricContrast,
+        ecosystem_map_scene: renderEcosystem,
+        architecture_flow_scene: () => renderTrace(false),
+        process_zoom_scene: () => renderTrace(true),
+        browser_walkthrough_scene: renderWalkthrough,
+        capability_matrix_scene: renderMatrix,
+        document_stack_scene: renderDocuments,
+        interface_transform_scene: renderTransform,
       };
       if (!renderers[scene.render_kind]) throw new Error(`Unsupported HyperFrames render_kind: ${scene.render_kind}`);
       renderers[scene.render_kind]();
@@ -212,12 +450,36 @@
 
       window.__timelines = window.__timelines || {};
       const timeline = gsap.timeline({ paused: true });
-      timeline.fromTo(".hf-rule", { scaleX: 0 }, { scaleX: 1, duration: .55, ease: "power3.out" }, .1);
-      timeline.fromTo(".hf-enter", { y: 48, opacity: 0 }, { y: 0, opacity: 1, duration: .72, stagger: .12, ease: "power3.out" }, .18);
-      timeline.fromTo(".hf-item", { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: .56, stagger: .18, ease: "power3.out" }, .75);
-      timeline.fromTo(".hf-connector", { scaleX: 0 }, { scaleX: 1, duration: .38, stagger: .18, ease: "power2.out" }, .9);
-      timeline.fromTo(".hf-media-wrap", { opacity: .15 }, { opacity: 1, duration: .85, ease: "power2.out" }, 0);
-      timeline.fromTo(".hf-media", { scale: 1.065 }, { scale: 1.0, duration: Math.max(2, Number(spec.duration_seconds || 6)), ease: "none" }, 0);
+      const sceneDuration = Math.max(2, Number(spec.duration_seconds || 6));
+      const midBeat = Math.max(1.15, sceneDuration * .34);
+      const animate = (selector, from, to, at) => {
+        const targets = stage.querySelectorAll(selector);
+        if (targets.length) timeline.fromTo(targets, from, to, at);
+      };
+      animate(".hf-rule", { scaleX: 0 }, { scaleX: 1, duration: .55, ease: "power3.out" }, .1);
+      animate(".hf-enter", { y: 48, opacity: 0 }, { y: 0, opacity: 1, duration: .72, stagger: .12, ease: "power3.out" }, .18);
+      animate(".hf-item", { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: .56, stagger: .18, ease: "power3.out" }, .75);
+      animate(".hf-connector", { scaleX: 0 }, { scaleX: 1, duration: .38, stagger: .18, ease: "power2.out" }, .9);
+      animate(".hf-media-wrap", { opacity: .15 }, { opacity: 1, duration: .85, ease: "power2.out" }, 0);
+      animate(".hf-media", { scale: 1.065 }, { scale: 1.0, duration: sceneDuration, ease: "none" }, 0);
+      animate(".hf-annotation", { x: 52, opacity: 0 }, { x: 0, opacity: 1, duration: .52, stagger: .34, ease: "power3.out" }, midBeat);
+      animate(".hf-annotation-scrim", { opacity: 0 }, { opacity: 1, duration: .55, ease: "power2.out" }, midBeat - .18);
+      animate(".hf-proof", { x: 74, y: 48, opacity: 0, rotate: -5 }, { x: 0, y: 0, opacity: 1, rotate: 0, duration: .72, stagger: .22, ease: "power3.out" }, .55);
+      animate(".hf-proof-image", { scale: 1.05 }, { scale: 1, duration: sceneDuration, ease: "none" }, 0);
+      animate(".hf-metric", { y: 54, opacity: 0 }, { y: 0, opacity: 1, duration: .66, stagger: .18, ease: "power3.out" }, .72);
+      animate(".hf-number", { scale: .72, opacity: 0 }, { scale: 1, opacity: 1, duration: .68, stagger: .2, ease: "back.out(1.45)" }, midBeat);
+      animate(".hf-before", { opacity: .25 }, { opacity: 1, duration: .5, ease: "power2.out" }, .9);
+      animate(".hf-after", { x: 42, opacity: 0 }, { x: 0, opacity: 1, duration: .62, ease: "power3.out" }, midBeat);
+      animate(".hf-arrow", { scaleX: .2, opacity: 0 }, { scaleX: 1, opacity: 1, duration: .44, stagger: .12, ease: "power2.out" }, midBeat - .2);
+      animate(".hf-orbit", { scale: .65, opacity: 0, rotate: -10 }, { scale: 1, opacity: 1, rotate: 0, duration: .82, ease: "power3.out" }, .65);
+      animate(".hf-orbit-node", { scale: .6, opacity: 0 }, { scale: 1, opacity: 1, duration: .48, stagger: .16, ease: "back.out(1.35)" }, 1.05);
+      animate(".hf-trace-step", { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: .5, stagger: .18, ease: "power3.out" }, .82);
+      animate(".hf-walkthrough-step", { x: 48, opacity: 0 }, { x: 0, opacity: 1, duration: .48, stagger: .32, ease: "power3.out" }, midBeat);
+      animate(".hf-document", { y: 80, rotate: -6, opacity: 0 }, { y: 0, rotate: 0, opacity: 1, duration: .62, stagger: .18, ease: "power3.out" }, .8);
+      animate(".hf-matrix-row", { x: 36, opacity: 0 }, { x: 0, opacity: 1, duration: .42, stagger: .14, ease: "power2.out" }, .78);
+      animate(".hf-transform", { y: 42, opacity: 0 }, { y: 0, opacity: 1, duration: .62, stagger: .32, ease: "power3.out" }, .86);
+      animate(".hf-focus", { filter: "brightness(.88)" }, { filter: "brightness(1.08)", duration: .42, yoyo: true, repeat: 1, ease: "sine.inOut" }, midBeat);
+      animate(".hf-evidence", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: .75, ease: "power3.out" }, midBeat);
       window.__timelines.main = timeline;
     </script>
   </body>

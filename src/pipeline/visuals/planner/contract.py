@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ..recipes import RECIPE_REGISTRY, recipe_ids
+
 from .config import (
     DEFAULT_MAX_BULLET_BUILD_SCENES,
     DEFAULT_MAX_CONSECUTIVE_SAME_KIND,
@@ -51,6 +53,7 @@ VisualPlannerStatus = Literal["ok", "failed"]
 LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot"]
 VisualLLMRole = Literal[
     "episode_director",
+    "bookend_visual_planner",
     "story_visual_planner",
     "story_visual_editor",
 ]
@@ -167,8 +170,8 @@ class VisualEditorConfig(BaseModel):
     @field_validator("max_passes")
     @classmethod
     def max_passes_must_be_bounded(cls, value: int) -> int:
-        if value < 0 or value > 1:
-            raise ValueError("visual_editor.max_passes must be between 0 and 1")
+        if value < 0 or value > 2:
+            raise ValueError("visual_editor.max_passes must be between 0 and 2")
         return value
 
     @field_validator("max_story_calls")
@@ -178,6 +181,35 @@ class VisualEditorConfig(BaseModel):
             raise ValueError("visual_editor.max_story_calls must be between 1 and 20")
         return value
 
+
+class VisualRecipePolicyConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    allowed_recipe_ids: list[str] = Field(default_factory=recipe_ids)
+    required_backend_support: list[Literal["remotion", "hyperframes"]] = Field(
+        default_factory=lambda: ["remotion", "hyperframes"]
+    )
+
+    @field_validator("allowed_recipe_ids")
+    @classmethod
+    def recipe_ids_must_be_known(cls, value: list[str]) -> list[str]:
+        unknown = sorted(set(value) - set(RECIPE_REGISTRY))
+        if unknown:
+            raise ValueError(f"recipe_policy.allowed_recipe_ids contains unknown recipes: {unknown}")
+        if len(value) != len(set(value)):
+            raise ValueError("recipe_policy.allowed_recipe_ids must not contain duplicates")
+        return value
+
+    @field_validator("required_backend_support")
+    @classmethod
+    def backends_must_be_unique(
+        cls,
+        value: list[Literal["remotion", "hyperframes"]],
+    ) -> list[Literal["remotion", "hyperframes"]]:
+        if len(value) != len(set(value)):
+            raise ValueError("recipe_policy.required_backend_support must not contain duplicates")
+        return value
 
 class ProviderOptions(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -203,6 +235,7 @@ class RoleLLMConfig(BaseModel):
     base_url: str | None = None
     provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
     structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
+    max_attempts: int | None = None
 
     @field_validator("model")
     @classmethod
@@ -216,6 +249,13 @@ class RoleLLMConfig(BaseModel):
     def temperature_must_be_valid(cls, value: float) -> float:
         if value < 0 or value > 2:
             raise ValueError("llm_roles temperature must be between 0 and 2")
+        return value
+
+    @field_validator("max_attempts")
+    @classmethod
+    def max_attempts_must_be_bounded(cls, value: int | None) -> int | None:
+        if value is not None and (value < 1 or value > 4):
+            raise ValueError("llm_roles max_attempts must be between 1 and 4")
         return value
 
 
@@ -397,6 +437,7 @@ class VisualPlannerConfig(BaseModel):
     style: VisualStyleConfig = Field(default_factory=VisualStyleConfig)
     visual_mix_policy: VisualMixPolicyConfig = Field(default_factory=VisualMixPolicyConfig)
     visual_editor: VisualEditorConfig = Field(default_factory=VisualEditorConfig)
+    recipe_policy: VisualRecipePolicyConfig = Field(default_factory=VisualRecipePolicyConfig)
     asset_availability_policy: AssetAvailabilityPolicyConfig = Field(
         default_factory=AssetAvailabilityPolicyConfig
     )

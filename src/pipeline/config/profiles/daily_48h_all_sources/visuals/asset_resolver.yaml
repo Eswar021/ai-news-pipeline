@@ -14,10 +14,13 @@ source_screenshots:
   capture_mode: target_text_focus
   save_full_page_debug: false
   save_raw_capture_debug: true
-  target_miss_policy: failed
+  target_miss_policy: partial
   focus_zoom: 1.3
   highlight_target: true
   reuse_identical_captures: true
+  reuse_page_capture_across_targets: true
+  persistent_cache_dir: '{CACHE_ROOT}/visuals/source_screenshots'
+  persistent_cache_ttl_hours: 168
 logos:
   local_logo_dir: ''
   simple_icons_enabled: true

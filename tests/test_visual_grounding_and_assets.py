@@ -35,6 +35,7 @@ from src.pipeline.visuals.media_discovery.app import (
 from src.pipeline.visuals.media_discovery.contract import VisualMediaConfig
 from src.pipeline.visuals.planner.app import (
     _build_scene_timeline,
+    _bookend_draft_errors,
     _canonical_screenshot_target,
     _close_timeline_gaps,
     _deterministic_scenes_for_range,
@@ -43,6 +44,7 @@ from src.pipeline.visuals.planner.app import (
     _fallback_candidate_for_slice,
     _metrics_from_draft,
     _normalize_catalog_scene_reference,
+    _normalize_montage_scene_references,
     _normalize_story_candidate_scenes,
     _normalize_overlong_story_scene_slots,
     _prepare_story_scene_draft,
@@ -61,10 +63,12 @@ from src.pipeline.visuals.planner.app import (
     _visual_capabilities_for_prompt,
 )
 from src.pipeline.visuals.asset_resolver.app import (
+    _resolve_source_montage,
     _resolve_source_screenshot,
     _scene_with_capture_target,
     _source_capture_cache_key,
 )
+from src.pipeline.visuals.recipes import recipe_specs_for_prompt
 from src.pipeline.visuals.asset_catalog.app import (
     _MetadataParser,
     _apply_source_page_fetch_status,
@@ -265,6 +269,24 @@ def test_asset_catalog_parser_retains_largest_article_srcset_candidate() -> None
     assert _largest_srcset_url("/one.jpg 1x, /two.jpg 2x") == "/two.jpg"
 
 
+def test_asset_catalog_parser_keeps_image_and_page_context_separate() -> None:
+    parser = _MetadataParser()
+    parser.feed(
+        "<html><body><h2>Factory safety</h2><p>Robots inspect hazardous zones.</p>"
+        "<figure><img src='/robot.jpg' alt='Robot arm beside a welding cell'>"
+        "<figcaption>The inspection robot at the pilot factory.</figcaption></figure>"
+        "<h2>Employee wellness</h2><img src='/salad.jpg'></body></html>"
+    )
+
+    robot, salad = parser.image_candidates
+    assert robot["figure_caption"] == "The inspection robot at the pilot factory."
+    assert robot["page_section_heading"] == "Factory safety"
+    assert "Robots inspect hazardous zones" in robot["nearby_text"]
+    assert salad["figure_caption"] == ""
+    assert salad["page_section_heading"] == "Employee wellness"
+    assert "Factory safety" not in salad["page_section_heading"]
+
+
 def test_asset_catalog_marks_failed_source_page_fetch_unavailable() -> None:
     assets = [
         {
@@ -426,6 +448,131 @@ def test_source_resolver_reuses_identical_successful_capture(monkeypatch, tmp_pa
     assert second["capture"]["cache_source_scene_id"] == "scene_020"
     assert Path(first["asset_path"]).read_bytes() == b"identical-png-bytes"
     assert Path(second["asset_path"]).read_bytes() == b"identical-png-bytes"
+
+
+def test_source_proof_montage_binds_only_story_owned_catalog_pages() -> None:
+    catalog = {
+        "assets_by_id": {
+            "page_a": {
+                "asset_id": "page_a",
+                "asset_type": "source_page",
+                "status": "available",
+                "story_id": "story_a",
+                "source_record_key": "record_a",
+                "source_url": "https://example.com/a",
+                "title": "Primary release",
+                "source_name": "Example",
+                "screenshot_target_candidates": ["Exact release detail"],
+            },
+            "page_b": {
+                "asset_id": "page_b",
+                "asset_type": "source_page",
+                "status": "available",
+                "story_id": "story_a",
+                "source_record_key": "record_b",
+                "source_url": "https://example.com/b",
+                "title": "Independent report",
+                "source_name": "Reporter",
+                "screenshot_target_candidates": ["Independent confirmation"],
+            },
+        }
+    }
+    scene = {
+        "render_kind": "document_stack_scene",
+        "recipe_id": "source_proof_montage",
+        "documents": [{"asset_id": "page_a"}, {"asset_id": "page_b"}],
+        "evidence_record_keys": [],
+        "payload_json": "{}",
+    }
+
+    normalized, errors = _normalize_montage_scene_references(
+        scene,
+        story_id="story_a",
+        catalog_index=catalog,
+    )
+
+    assert errors == []
+    assert normalized["evidence_record_keys"] == ["record_a", "record_b"]
+    assert normalized["documents"][0]["url"] == "https://example.com/a"
+    assert normalized["documents"][1]["target_text"] == "Independent confirmation"
+
+
+def test_source_proof_montage_payload_requires_two_canonical_sources() -> None:
+    errors = validate_scene_payload(
+        "document_stack_scene",
+        {
+            "recipe_id": "source_proof_montage",
+            "headline": "Two sources, one signal",
+            "documents": [
+                {
+                    "title": "Release",
+                    "source": "Example",
+                    "asset_id": "page_a",
+                    "source_record_key": "record_a",
+                    "url": "https://example.com/a",
+                }
+            ],
+            "focus_document_label": "Release",
+        },
+    )
+
+    assert "source_proof_montage requires 2-3 source documents" in errors
+
+
+def test_source_proof_montage_recipe_is_advertised_for_both_renderers() -> None:
+    recipes = recipe_specs_for_prompt(
+        "document_stack_scene",
+        allowed_recipe_ids=["source_proof_montage"],
+        required_backends=["remotion", "hyperframes"],
+    )
+
+    assert [recipe["recipe_id"] for recipe in recipes] == ["source_proof_montage"]
+
+
+def test_source_proof_montage_resolves_each_declared_source(monkeypatch, tmp_path: Path) -> None:
+    def fake_resolve_source_screenshot(**kwargs):
+        scene = kwargs["scene"]
+        index = scene["scene_id"].rsplit("_", 1)[-1]
+        path = tmp_path / f"capture_{index}.png"
+        path.write_bytes(b"png")
+        return {
+            "status": "resolved",
+            "asset_path": str(path),
+            "capture": {"domain": f"source-{index}.example"},
+            "error": "",
+        }
+
+    monkeypatch.setattr(
+        "src.pipeline.visuals.asset_resolver.app._resolve_source_screenshot",
+        fake_resolve_source_screenshot,
+    )
+    scene = {
+        "scene_id": "scene_010",
+        "scene_order": 10,
+        "story_id": "story_a",
+        "render_kind": "document_stack_scene",
+        "payload": {
+            "recipe_id": "source_proof_montage",
+            "documents": [
+                {"asset_id": "page_a", "source_record_key": "record_a", "url": "https://example.com/a", "title": "A", "source": "Example"},
+                {"asset_id": "page_b", "source_record_key": "record_b", "url": "https://example.com/b", "title": "B", "source": "Reporter"},
+            ],
+        },
+    }
+
+    resolved = _resolve_source_montage(
+        context=object(),
+        scene=scene,
+        request=SimpleNamespace(),
+        screenshots_dir=tmp_path,
+        raw_capture_dir=tmp_path / "raw",
+        full_page_dir=tmp_path / "full",
+        capture_cache={},
+    )
+
+    assert resolved["status"] == "resolved"
+    assert resolved["asset_type"] == "source_montage"
+    assert [item["asset_id"] for item in resolved["assets"]] == ["page_a", "page_b"]
 
 
 def test_story_capabilities_exclude_source_scenes_without_available_source_page() -> None:
@@ -1505,6 +1652,108 @@ def test_continue_policy_expands_one_honest_overlong_visual_into_timed_slices() 
         hard_cap_tolerance_seconds=0.25,
         duplicate_subscene_policy="continue",
     ) == []
+
+
+def test_bookend_validation_accepts_section_order_and_expands_long_units() -> None:
+    intro = {
+        "section_type": "intro",
+        "start_unit_order": 1,
+        "end_unit_order": 1,
+        "script_units": [
+            {
+                "order": 1,
+                "start_seconds": 0.0,
+                "end_seconds": 20.0,
+                "duration_seconds": 20.0,
+            }
+        ],
+    }
+    closing = {
+        "section_type": "closing",
+        "start_unit_order": 9,
+        "end_unit_order": 9,
+        "script_units": [
+            {
+                "order": 9,
+                "start_seconds": 100.0,
+                "end_seconds": 118.0,
+                "duration_seconds": 18.0,
+            }
+        ],
+    }
+    draft = {
+        "sections": [
+            {
+                "section_type": "intro",
+                "scene_timeline": [
+                    {
+                        "order": 1,
+                        "start_unit_order": 1,
+                        "end_unit_order": 1,
+                        "render_kind": "editorial_text_scene",
+                        "visual_intent": "Open with the authored episode premise.",
+                        "payload_json": json.dumps(
+                            {
+                                "headline": "The week's AI shift",
+                                "accent_words": ["AI"],
+                                "composition": "editorial_center",
+                                "motion_style": "editorial_reveal",
+                            }
+                        ),
+                    }
+                ],
+            },
+            {
+                "section_type": "closing",
+                "scene_timeline": [
+                    {
+                        "order": 1,
+                        "start_unit_order": 9,
+                        "end_unit_order": 9,
+                        "render_kind": "editorial_text_scene",
+                        "visual_intent": "Land the authored closing takeaway.",
+                        "payload_json": json.dumps(
+                            {
+                                "headline": "Watch what ships next",
+                                "accent_words": ["next"],
+                                "composition": "editorial_center",
+                                "motion_style": "editorial_reveal",
+                            }
+                        ),
+                    }
+                ],
+            },
+        ]
+    }
+    config = {
+        "scene_policy": {
+            "allowed_render_kinds": ["editorial_text_scene"],
+            "unit_assignment_mode": "one_scene_per_script_unit",
+            "max_scene_seconds": 14.0,
+            "hard_max_scene_seconds": 16.0,
+            "hard_cap_tolerance_seconds": 0.0,
+            "duplicate_subscene_policy": "continue",
+        },
+        "recipe_policy": {"enabled": False},
+        "asset_availability_policy": {"catalog_asset_required_render_kinds": []},
+    }
+
+    errors = _bookend_draft_errors(
+        draft,
+        sections=[closing, intro],
+        source_index={
+            "records_by_key": {},
+            "record_keys_by_story": {},
+            "story_identity_by_id": {},
+            "truth_items_by_story": {},
+            "truth_items_by_id": {},
+        },
+        asset_catalog_index={"assets_by_id": {}, "assets_by_story": {}},
+        config=config,
+    )
+
+    assert errors == []
+    assert [len(section["scene_timeline"]) for section in draft["sections"]] == [2, 2]
 
 
 def test_small_scene_target_overrun_is_allowed_below_hard_cap() -> None:

@@ -66,7 +66,7 @@ def test_default_workbench_profile_composes_into_public_configs() -> None:
     AssetResolverConfig.model_validate(
         _with_output_dir(visuals["asset_resolver"], "asset_resolver")
     )
-    assert visuals["asset_resolver"]["source_screenshots"]["target_miss_policy"] == "failed"
+    assert visuals["asset_resolver"]["source_screenshots"]["target_miss_policy"] == "partial"
     assert visuals["asset_resolver"]["logos"]["favicon_fallback_enabled"] is False
     VisualRenderConfig.model_validate(_with_output_dir(visuals["render"], "render"))
     VideoAssemblyConfig.model_validate(
@@ -74,6 +74,13 @@ def test_default_workbench_profile_composes_into_public_configs() -> None:
     )
     VisualReviewConfig.model_validate(_with_output_dir(visuals["review"], "review"))
     VoiceoverConfig.model_validate(_with_output_dir(profile["voiceover"], "voiceover"))
+    preview_voiceover = deepcopy(profile["voiceover"])
+    preview_voiceover.update(profile["voiceover_preview"])
+    validated_preview = VoiceoverConfig.model_validate(
+        _with_output_dir(preview_voiceover, "voiceover_preview")
+    )
+    assert validated_preview.provider == "kokoro_local"
+    assert validated_preview.voice == "af_heart"
 
 
 def test_module_config_has_independent_source_identity() -> None:
@@ -81,9 +88,12 @@ def test_module_config_has_independent_source_identity() -> None:
     profile_name = repository.default_profile
     script = repository.module(profile_name, "content", "script_generation")
     voiceover = repository.module(profile_name, "voiceover", "voiceover")
+    voiceover_preview = repository.module(profile_name, "voiceover", "voiceover_preview")
 
     assert script.sha256 != voiceover.sha256
     assert script.source_paths[-1].endswith("content/script_generation.yaml")
     assert voiceover.source_paths[-1].endswith("voiceover/voiceover.yaml")
+    assert voiceover_preview.source_paths[-1].endswith("voiceover/voiceover_preview.yaml")
     assert repository.profile(profile_name).value["script_generation"] == script.value
     assert repository.profile(profile_name).value["voiceover"] == voiceover.value
+    assert repository.profile(profile_name).value["voiceover_preview"] == voiceover_preview.value

@@ -26,9 +26,11 @@ def build_voiceover_package(
     audio_sha256: str,
     mastering: dict[str, Any] | None = None,
     captions: dict[str, Any] | None = None,
+    request_ledger: dict[str, Any] | None = None,
 ) -> dict:
     mastering = _portable_mastering_paths(dict(mastering or {}))
     captions = _portable_caption_paths(dict(captions or {}))
+    request_ledger = dict(request_ledger or {})
     identity_package = {
         "provider": provider,
         "voice": voice,
@@ -80,6 +82,7 @@ def build_voiceover_package(
             "section_aware": alignment_strategy == "script_beats",
             "beat_aware": alignment_strategy == "script_beats",
         },
+        "tts_requests": request_ledger,
         "audio_units": [_portable_audio_unit_paths(unit) for unit in audio_units],
         "chunks": [_portable_chunk_paths(chunk) for chunk in chunks],
         "handoff": {
@@ -110,6 +113,8 @@ def build_summary(package: dict) -> dict:
         "mastering_status": (package.get("audio", {}).get("mastering") or {}).get("status", ""),
         "caption_file_count": len((package.get("captions") or {}).get("files", [])),
         "caption_cue_count": int((package.get("captions") or {}).get("cue_count", 0) or 0),
+        "tts_request_count": int((package.get("tts_requests") or {}).get("request_count", 0) or 0),
+        "delivery_direction_coverage": (package.get("tts_requests") or {}).get("direction_coverage", {}),
     }
 
 

@@ -167,22 +167,26 @@ def run(input_json: dict) -> dict:
         )
 
     prompt_bundle = load_prompt_bundle(METADATA_PROMPT_MODULE, config["prompt_version"])
-    llm = make_llm(
-        provider=config["provider"],
-        model=config["model"],
-        temperature=float(config["temperature"]),
-        base_url=config.get("base_url"),
-        max_retries=0,
-        provider_options=config.get("provider_options"),
-    )
-    draft = _generate_metadata_draft(
-        script_package=script_package,
-        video_packet=video_packet,
-        config=config,
-        prompt_bundle=prompt_bundle,
-        llm=llm,
-        llm_calls=llm_calls,
-    )
+    try:
+        draft = _generate_metadata_draft(
+            script_package=script_package,
+            video_packet=video_packet,
+            config=config,
+            prompt_bundle=prompt_bundle,
+            llm_runtime=_build_llm_runtime(config),
+            llm_calls=llm_calls,
+        )
+    except Exception as exc:
+        return _failed_response(
+            run_id=run_id,
+            generated_at=generated_at,
+            config=config,
+            selected_format=SUPPORTED_FORMAT,
+            chapters=chapters,
+            source_urls=source_urls,
+            reason=f"{type(exc).__name__}: {exc}",
+            llm_calls=llm_calls,
+        )
     chapters = _apply_generated_chapter_titles(
         chapters=chapters,
         sections=sections,
@@ -238,17 +242,9 @@ def _generate_metadata_draft(
     video_packet: dict[str, Any],
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
-    llm,
+    llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    structured_config = dict(config.get("structured_output") or {})
-    structured_llm = llm.with_structured_output(
-        MetadataDraftOutput,
-        include_raw=True,
-        method=str(structured_config.get("method") or "json_schema"),
-        strict=bool(structured_config.get("strict", True)),
-    )
-    chain = TASK_PROMPT | structured_llm
     payload = {
         "task": "Generate YouTube metadata for the completed roundup script.",
         "channel": config["channel"],
@@ -273,14 +269,114 @@ def _generate_metadata_draft(
             "tags": "Useful YouTube tags only.",
         },
     }
-    return _invoke_chain(
+    return _invoke_runtime_chain(
         module_name=METADATA_PROMPT_MODULE,
         output_model=MetadataDraftOutput,
-        chain=chain,
+        llm_runtime=llm_runtime,
         prompt_bundle=prompt_bundle,
         task_payload=json.dumps(payload, ensure_ascii=False, indent=2),
-        config=config,
         metadata={"selected_format": SUPPORTED_FORMAT, "story_count": len(video_packet.get("stories", []))},
+        llm_calls=llm_calls,
+    )
+
+
+def _build_llm_runtime(config: dict[str, Any]) -> dict[str, Any]:
+    runtime = {
+        "config": config,
+        "llm": make_llm(
+            provider=config["provider"],
+            model=config["model"],
+            temperature=float(config["temperature"]),
+            base_url=config.get("base_url"),
+            max_retries=0,
+            provider_options=config.get("provider_options"),
+        ),
+    }
+    fallback_config = config.get("content_filter_fallback")
+    if fallback_config:
+        fallback_config = dict(fallback_config)
+        fallback_config["llm_retry"] = dict(
+            fallback_config.get("llm_retry") or config.get("llm_retry") or {}
+        )
+        runtime["content_filter_fallback"] = {
+            "config": fallback_config,
+            "llm": make_llm(
+                provider=fallback_config["provider"],
+                model=fallback_config["model"],
+                temperature=float(fallback_config["temperature"]),
+                base_url=fallback_config.get("base_url"),
+                max_retries=0,
+                provider_options=fallback_config.get("provider_options"),
+            ),
+        }
+    return runtime
+
+
+def _structured_chain(*, llm, output_model, config: dict[str, Any]):
+    structured_config = dict(config.get("structured_output") or {})
+    structured_llm = llm.with_structured_output(
+        output_model,
+        include_raw=True,
+        method=str(structured_config.get("method") or "json_schema"),
+        strict=bool(structured_config.get("strict", True)),
+    )
+    return TASK_PROMPT | structured_llm
+
+
+def _invoke_runtime_chain(
+    *,
+    module_name: str,
+    output_model,
+    llm_runtime: dict[str, Any],
+    prompt_bundle: dict[str, str],
+    task_payload: str,
+    metadata: dict[str, Any],
+    llm_calls: list[dict[str, Any]],
+) -> dict[str, Any]:
+    primary_config = llm_runtime["config"]
+    fallback_runtime = llm_runtime.get("content_filter_fallback")
+    try:
+        return _invoke_chain(
+            module_name=module_name,
+            output_model=output_model,
+            chain=_structured_chain(
+                llm=llm_runtime["llm"],
+                output_model=output_model,
+                config=primary_config,
+            ),
+            prompt_bundle=prompt_bundle,
+            task_payload=task_payload,
+            config=primary_config,
+            metadata={
+                **metadata,
+                "route_attempt": "primary",
+                "content_filter_fallback_configured": fallback_runtime is not None,
+            },
+            llm_calls=llm_calls,
+        )
+    except Exception as exc:
+        if fallback_runtime is None or not _is_content_filter_error(exc):
+            raise
+
+    fallback_config = fallback_runtime["config"]
+    return _invoke_chain(
+        module_name=module_name,
+        output_model=output_model,
+        chain=_structured_chain(
+            llm=fallback_runtime["llm"],
+            output_model=output_model,
+            config=fallback_config,
+        ),
+        prompt_bundle=prompt_bundle,
+        task_payload=task_payload,
+        config=fallback_config,
+        metadata={
+            **metadata,
+            "route_attempt": "content_filter_fallback",
+            "fallback_trigger": "content_filter",
+            "fallback_from_provider": primary_config.get("provider", ""),
+            "fallback_from_model": primary_config.get("model", ""),
+        },
         llm_calls=llm_calls,
     )
 
@@ -758,7 +854,30 @@ def _build_summary(metadata: dict[str, Any], llm_calls: list[dict[str, Any]], fa
         "tag_count": len(metadata.get("tags", [])),
         "source_url_count": len(metadata.get("source_urls", [])),
         "llm_call_count": len(llm_calls),
+        "provider_failover": _provider_failover_summary(llm_calls),
         "failure_reason": failure_reason,
+    }
+
+
+def _provider_failover_summary(llm_calls: list[dict[str, Any]]) -> dict[str, Any]:
+    events = []
+    for call in llm_calls:
+        metadata = call.get("metadata") or {}
+        if metadata.get("route_attempt") != "content_filter_fallback":
+            continue
+        events.append(
+            {
+                "module_name": call.get("module_name", ""),
+                "trigger": metadata.get("fallback_trigger", "content_filter"),
+                "from_provider": metadata.get("fallback_from_provider", ""),
+                "from_model": metadata.get("fallback_from_model", ""),
+                "to_provider": call.get("provider", ""),
+                "to_model": call.get("model", ""),
+            }
+        )
+    return {
+        "content_filter_fallback_call_count": len(events),
+        "events": events,
     }
 
 
@@ -886,6 +1005,13 @@ def _is_retryable_llm_error(exc: Exception, *, status_code: int | None) -> bool:
         "RateLimitError",
         "ServiceUnavailableError",
     }
+
+
+def _is_content_filter_error(exc: Exception) -> bool:
+    status_code = _exception_status_code(exc)
+    text = str(exc).casefold().replace("_", " ")
+    markers = ("content filter", "high risk", "highrisk")
+    return status_code in {400, 403} and any(marker in text for marker in markers)
 
 
 def _is_structured_output_error(exc: Exception) -> bool:

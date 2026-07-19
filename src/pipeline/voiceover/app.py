@@ -31,6 +31,7 @@ from .providers.kokoro_local import concatenate_wav_files, synthesize_chunk_to_w
 from .providers.openai_tts import synthesize_chunks_to_wav as synthesize_openai_chunks_to_wav
 from .script_units import build_audio_units, resolve_script_input
 from .text_chunks import estimated_seconds_from_words, split_narration_into_chunks, word_count
+from .tts_logging import extract_request_ledger
 
 
 def run(input_json: dict) -> dict:
@@ -53,6 +54,7 @@ def run(input_json: dict) -> dict:
     summary_path = output_dir / "summary.json"
     full_audio_path = audio_dir / "full_voiceover.wav"
     raw_audio_path = audio_dir / "raw_voiceover.wav"
+    request_ledger_path = output_dir / "tts_requests.jsonl"
 
     if package_path.exists() and not request.config.force:
         raise FileExistsError(f"Voiceover already exists at {package_path}. Set config.force=true to replace it.")
@@ -199,6 +201,16 @@ def run(input_json: dict) -> dict:
     else:
         raise NotImplementedError(f"Voiceover provider '{request.config.provider}' is not implemented yet.")
 
+    provider_settings = _provider_settings(request)
+    synthesized_chunks, request_ledger, direction_coverage = extract_request_ledger(
+        synthesized_chunks,
+        provider=request.config.provider,
+        model=str(provider_settings.get("model") or request.config.provider),
+        voice=voice_name,
+        enabled=request.config.request_logging.enabled,
+        include_transcript=request.config.request_logging.include_transcript,
+        include_effective_instructions=request.config.request_logging.include_effective_instructions,
+    )
     audio_units = build_audio_units(
         synthesized_chunks=synthesized_chunks,
         output_dir=audio_unit_dir,
@@ -225,7 +237,7 @@ def run(input_json: dict) -> dict:
         run_id=request.run.run_id,
         provider=request.config.provider,
         voice=voice_name,
-        style=_style_manifest(style_profile, voice_name, speed_value, chunking, _provider_settings(request)),
+        style=_style_manifest(style_profile, voice_name, speed_value, chunking, provider_settings),
         sample_rate_hz=actual_sample_rate_hz,
         full_audio_path=full_audio_path,
         duration_seconds=duration_seconds,
@@ -239,9 +251,20 @@ def run(input_json: dict) -> dict:
         audio_sha256=file_sha256(full_audio_path),
         mastering=mastering,
         captions=captions,
+        request_ledger={
+            "enabled": request.config.request_logging.enabled,
+            "path": _portable_path(request_ledger_path) if request.config.request_logging.enabled else "",
+            "request_count": len(request_ledger),
+            "direction_coverage": direction_coverage,
+        },
     )
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    if request.config.request_logging.enabled:
+        request_ledger_path.write_text(
+            "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in request_ledger),
+            encoding="utf-8",
+        )
     package_path.write_text(json.dumps(package, indent=2, ensure_ascii=False), encoding="utf-8")
     summary = build_summary(package)
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -597,3 +620,10 @@ def _estimated_script_seconds(request: VoiceoverRequest, script_words: int) -> f
         if estimated:
             return round(float(estimated), 1)
     return estimated_seconds_from_words(script_words)
+
+
+def _portable_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(Path.cwd().resolve()))
+    except ValueError:
+        return str(path.resolve())

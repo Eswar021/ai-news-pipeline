@@ -1,0 +1,5 @@
+provider: kokoro_local
+voice: af_heart
+speed: 1.0
+force: true
+keep_chunks: true

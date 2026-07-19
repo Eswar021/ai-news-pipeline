@@ -1,0 +1,12 @@
+Create complete renderable plans for the supplied intro and closing sections.
+
+Requirements:
+- Return exactly one section plan for every supplied bookend section.
+- Copy each section_type exactly.
+- Cover every required_scene_slot exactly once, including repeated slots for an overlong unit.
+- Use absolute script-unit orders from the payload.
+- Use visual_brief.on_screen_text instead of slicing words from narration.
+- Make visual_brief.must_show visible through the chosen supported treatment.
+- Use only exact verified asset IDs when selecting media.
+- Use evidence fields only from the active aligned unit.
+- Keep text treatments concise, complete, and designed for a 16:9 YouTube frame.

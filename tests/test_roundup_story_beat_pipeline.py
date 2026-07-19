@@ -22,6 +22,7 @@ from src.pipeline.content.script_generation.formats.roundup.models import (
     StoryReviewOutput,
     StorySegmentOutput,
     StorySourceBriefOutput,
+    story_source_brief_output_model,
 )
 from src.pipeline.content.script_generation.formats.roundup.source_truth import (
     build_story_truth_index,
@@ -105,6 +106,59 @@ def test_script_llm_models_are_openai_strict_schema_compatible() -> None:
     for model in models:
         schema = convert_to_openai_tool(model, strict=True)["function"]["parameters"]
         assert _strict_schema_failures(schema) == [], model.__name__
+
+
+def test_source_research_schema_binds_story_and_record_identifiers() -> None:
+    model = story_source_brief_output_model(
+        required_story_id="story_kimi",
+        allowed_record_keys=["record_e053ca81a1e2", "record_second"],
+    )
+    schema = convert_to_openai_tool(model, strict=True)["function"]["parameters"]
+
+    assert _strict_schema_failures(schema) == []
+    assert schema["properties"]["story_id"]["const"] == "story_kimi"
+
+    valid_payload = {
+        "story_id": "story_kimi",
+        "source_synopsis": "Two assigned records describe the same event.",
+        "central_event": "The event occurred.",
+        "source_relationship_summary": "The records provide complementary coverage.",
+        "distinctive_details": [
+            {
+                "record_key": "record_e053ca81a1e2",
+                "detail_type": "event",
+                "source_note": "The assigned source reports the event.",
+                "value_text": "",
+                "claim_frame": "reported_fact",
+                "editorial_use": "Explain what happened.",
+                "visual_role": "source_proof",
+                "visual_opportunity": "Show the source page.",
+            }
+        ],
+        "meaning_boundaries": [
+            {
+                "record_keys": ["record_second"],
+                "subject": "Release status",
+                "established_state": "The source describes a planned release.",
+                "must_not_be_upgraded_to": "Already released",
+                "attribution": "The assigned source",
+            }
+        ],
+        "tensions_and_caveats": [],
+        "creator_opportunities": [],
+        "visual_opportunities": [],
+    }
+    assert model.model_validate(valid_payload).story_id == "story_kimi"
+
+    invalid_detail = json.loads(json.dumps(valid_payload))
+    invalid_detail["distinctive_details"][0]["record_key"] = "record_e053ca81a2"
+    with pytest.raises(ValueError):
+        model.model_validate(invalid_detail)
+
+    invalid_boundary = json.loads(json.dumps(valid_payload))
+    invalid_boundary["meaning_boundaries"][0]["record_keys"] = ["record_unknown"]
+    with pytest.raises(ValueError):
+        model.model_validate(invalid_boundary)
 
 
 def test_truth_compaction_preserves_semantic_source_notes_and_values() -> None:
@@ -502,6 +556,102 @@ def test_llm_call_retries_a_transient_rate_limit(monkeypatch) -> None:
     assert calls[0]["metadata"]["retry_errors"][0]["status_code"] == 429
 
 
+def test_content_filter_rejection_uses_explicit_provider_fallback() -> None:
+    class ProviderContentFilterError(Exception):
+        status_code = 400
+
+    class RejectingLLM:
+        def with_structured_output(self, _model, **_kwargs):
+            def invoke(_prompt):
+                raise ProviderContentFilterError(
+                    "The request was rejected because it was considered highrisk: content_filter"
+                )
+
+            return RunnableLambda(invoke)
+
+    class WorkingLLM:
+        def with_structured_output(self, model, **_kwargs):
+            def invoke(_prompt):
+                payload = {
+                    "episode_shape": "curated_roundup",
+                    "episode_connection_reason": "The stories are intentionally independent.",
+                    "episode_thesis": "A concise episode direction.",
+                    "viewer_promise": "A useful viewer promise.",
+                    "hook_strategy": "Open on the strongest consequence.",
+                    "pacing_strategy": "Keep each story distinct.",
+                    "ordered_story_ids": ["story_one"],
+                    "story_briefs": [
+                        {
+                            "story_id": "story_one",
+                            "story_engine": "practical_consequence",
+                            "story_promise": "Explain the development.",
+                            "hook_idea": "Open on the practical effect.",
+                            "tension": "The result changes an existing workflow.",
+                            "reveal_or_payoff": "The consequence is concrete.",
+                            "viewer_stakes": "The viewer can understand what changes.",
+                            "specific_detail_anchor": "One supplied source detail.",
+                            "source_meaning_boundary": "Preserve the supplied source state.",
+                            "source_meaning_boundaries": [],
+                            "must_communicate_truth_ids": [],
+                            "optional_truth_ids": [],
+                            "narrator_take": "The practical effect matters most.",
+                            "explanation_goal": "Make the consequence easy to follow.",
+                            "analogy_opportunities": [],
+                            "humor_opportunities": [],
+                            "humor_restraint_reason": None,
+                            "transition_relationship": "Begin clearly.",
+                            "visual_payoffs": [],
+                            "avoid": [],
+                        }
+                    ],
+                }
+                return {"raw": None, "parsed": model.model_validate(payload), "parsing_error": None}
+
+            return RunnableLambda(invoke)
+
+    calls: list[dict] = []
+    output = script_writer._invoke_runtime_chain(
+        module_name="roundup_director",
+        output_model=EpisodeDirectorOutput,
+        llm_runtime={
+            "llm": RejectingLLM(),
+            "config": {
+                "provider": "moonshot",
+                "model": "kimi-k3",
+                "structured_output": {"method": "json_schema", "strict": True},
+                "llm_retry": {"enabled": True, "max_attempts": 1},
+            },
+            "content_filter_fallback": {
+                "llm": WorkingLLM(),
+                "config": {
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "structured_output": {"method": "json_schema", "strict": True},
+                    "llm_retry": {"enabled": True, "max_attempts": 1},
+                },
+            },
+        },
+        prompt_bundle={"system": "System", "user_preamble": "User"},
+        task_payload="{}",
+        metadata={"story_id": "story_one"},
+        llm_calls=calls,
+    )
+
+    assert output.ordered_story_ids == ["story_one"]
+    assert [call["provider"] for call in calls] == ["moonshot", "openai"]
+    assert calls[0]["metadata"]["route_attempt"] == "primary"
+    assert calls[0]["metadata"]["parse_error"]
+    assert calls[1]["metadata"] == {
+        "story_id": "story_one",
+        "route_attempt": "content_filter_fallback",
+        "fallback_trigger": "content_filter",
+        "fallback_from_provider": "moonshot",
+        "fallback_from_model": "kimi-k3",
+        "attempt_count": 1,
+        "retry_count": 0,
+    }
+
+
 def test_video_packaging_does_not_reapply_semantic_duplicate_rules() -> None:
     stories = _json("video_packaging_result.json")["data"]["video_packet"]["stories"]
     duplicate = json.loads(json.dumps(stories[0]))
@@ -672,7 +822,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
 
             def invoke(prompt):
                 prompt_text = prompt.to_string() if hasattr(prompt, "to_string") else str(prompt)
-                if model is StorySourceBriefOutput:
+                if issubclass(model, StorySourceBriefOutput):
                     task_payload = json.loads(prompt_text.split("Task payload:\n", 1)[1])
                     context = task_payload["complete_story_context"]
                     story_id = task_payload["required_story_id"]
@@ -1120,6 +1270,9 @@ def test_voiceover_app_writes_section_audio_units(monkeypatch, tmp_path: Path) -
     assert len(package["audio_units"]) == 5
     assert (output_dir / "audio" / "full_voiceover.wav").exists()
     assert len(list((output_dir / "audio" / "units").glob("*.wav"))) == 5
+    assert (output_dir / "tts_requests.jsonl").exists()
+    assert result["summary"]["tts_request_count"] == len(package["chunks"])
+    assert result["summary"]["delivery_direction_coverage"]["direction_applied_chunk_count"] == 0
 
 
 def test_visual_planner_prefers_aligned_beats_and_exact_sections() -> None:

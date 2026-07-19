@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -104,7 +105,26 @@ def clean_article_content(
         "html_markup_removed": False,
         "html_tag_count": html_tag_count,
     }
-    if not original or not result["enabled"]:
+    if not original:
+        return original, result
+
+    non_text_kind = detect_non_text_payload(raw_value)
+    if non_text_kind:
+        result.update(
+            {
+                "applied_rule": "non_text_payload_removed",
+                "modified": True,
+                "cleaned_chars": 0,
+                "removed_chars": len(original),
+                "non_text_payload_detected": True,
+                "non_text_payload_kind": non_text_kind,
+                "decoded_payload_sha256": hashlib.sha256(
+                    raw_value.encode("utf-8", errors="replace")
+                ).hexdigest(),
+            }
+        )
+        return "", result
+    if not result["enabled"]:
         return original, result
 
     cleaned = original
@@ -158,6 +178,22 @@ def clean_article_content(
         }
     )
     return cleaned, result
+
+
+def detect_non_text_payload(value: str) -> str:
+    """Identify objective transport-format payloads that are not readable source text."""
+
+    raw = str(value or "")
+    if not raw:
+        return ""
+    if raw.lstrip().startswith("%PDF-"):
+        return "pdf_binary"
+    if "\x00" in raw:
+        return "binary_with_null_bytes"
+    replacement_count = raw.count("\ufffd")
+    if replacement_count >= 32 and replacement_count / max(1, len(raw)) >= 0.005:
+        return "binary_decode_replacements"
+    return ""
 
 
 def _hostname_matches(hostname: str, suffixes: list[str]) -> bool:

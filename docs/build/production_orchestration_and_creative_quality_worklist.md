@@ -1,6 +1,6 @@
 # Production Orchestration and Creative Quality Worklist
 
-Status: Active implementation tracker. Q-01 through Q-21 are implemented and
+Status: Active implementation tracker. Q-01 through Q-24 are implemented and
 now require a fresh production episode plus human quality review.
 
 Last updated: 2026-07-19
@@ -172,11 +172,11 @@ does not replace canonical app results or provenance validation.
   available; it never fabricates initials.
 - Source screenshots use a config-driven focus zoom and target highlight, and
   the article scene reserves more screen area for the captured page.
-- The default planner vocabulary is now deliberately compact and asset-first:
-  source page, source image, logo, editorial text, simple explainer, and one
-  deterministic story transition. The old specialist renderers remain
-  available only through explicit profiles rather than overwhelming every LLM
-  planning call.
+- The default planner vocabulary is asset-first and limited to scene families
+  with working Remotion and HyperFrames contracts. It includes source/context
+  media, identity, clean typography, small explainers, source-proof montages,
+  source-supported metrics and contrasts, and focused process/interface motion.
+  Old card kinds remain excluded.
 - The `editorial_minimal` Remotion style replaces dark dashboard panels with a
   warm editorial canvas, expressive serif headlines, large readable labels,
   restrained connectors, and card-free story transitions.
@@ -513,14 +513,13 @@ The frozen production input from
 plans, 56 renderable scenes, 39 of 39 aligned units covered, no fallback, no
 parse or payload-validation failures, and no editor failure. It produced 15
 source-proof scenes and held text-like duration to about 25.5 percent. Planner
-LLM roles are provider/model configurable. A controlled Kimi K3 comparison was
-stopped after roughly ten minutes without completing, so GPT-4o-mini remains
-the daily visual-planning default and K3 remains an opt-in quality experiment.
+LLM roles are provider/model configurable. The earlier full-run Kimi attempt
+was too broad to diagnose and was superseded by the bounded comparison in Q-24.
 
 ### Q-20: Explicit HyperFrames render backend (`P2`, implemented as opt-in 2026-07-19)
 
 Visual rendering now has an explicit `remotion|hyperframes` backend boundary.
-The optional HyperFrames adapter supports the compact production vocabulary,
+The optional HyperFrames adapter supports the active production vocabulary,
 isolates one generated project per scene, copies only resolved local assets,
 uses bounded scene/frame concurrency, participates in cache identity, and
 never silently falls back to Remotion. Seven real scene-family smokes rendered
@@ -550,6 +549,46 @@ six source scenes used the capture cache, including two repeated OpenAI scenes
 that previously failed after the first request. The inspected frame showed the
 real article and highlighted the requested headline.
 
+### Q-22: Beat-aware TTS request ledger (`P1`, implemented and provider-smoke tested 2026-07-19)
+
+Hosted and local synthesis now emit a provider-neutral `tts_requests.jsonl`
+ledger. Each entry retains section, story, beat, and chunk identity; exact
+spoken-text and direction hashes; provider/model/voice settings; attempt,
+latency, status, and available usage metadata. API keys and binary audio never
+enter the ledger. Voiceover summary telemetry reports directed-beat coverage,
+while the canonical WAV and aligned beat timings remain authoritative.
+
+### Q-23: Bookend planning and dual-renderer visual recipes (`P0`, implemented and rendered 2026-07-19)
+
+Intro and closing visuals now use one bounded structured bookend-planner call.
+It receives the authored beat-level visual briefs and cannot manufacture
+display copy by slicing narration words. The planner advertises named recipes
+only when both required render backends implement the payload contract.
+
+The first recipe set includes editorial hooks, source scans and highlights,
+annotated image/video focus, metric countups and contrasts, relationship/process
+motion, interface walkthroughs, evidence stacks, and source-proof montages. The
+montage binds two or three exact story-owned source-page IDs; the resolver
+captures each page and both HyperFrames and Remotion rendered inspected 16:9
+smokes. A persistent source-capture cache with a config-driven TTL reduces
+repeated publisher requests across runs without hiding capture failures.
+
+### Q-24: Bounded Kimi K3 visual-planner comparison (`P1`, implemented 2026-07-19)
+
+The provider path was tested in layers. K3 returned a raw probe in 2.63 seconds
+and a strict Pydantic/JSON-schema probe in 16.71 seconds. The exact frozen
+77,448-character Agility Robotics story prompt then completed in 303.79 seconds
+with six scenes and zero production validation errors. GPT-4o-mini completed
+the same prompt in 17.95 seconds.
+
+K3's plan was materially stronger on this sample: it avoided duplicated scene
+payloads, used two distinct exact source passages, selected a verified robot
+image, preserved the narration's “once” contrast, and closed on a supported
+two-node explainer. The daily profile remains GPT-4o-mini because K3 is about
+17x slower on this request. K3 remains an explicit role-level quality option;
+its provider config must omit temperature, use an adequate timeout, and set a
+role-specific bounded retry count.
+
 ### Standing Semantic Policy (`KEEP`)
 
 Engagement, humor, hook quality, claim interpretation, tone, visual meaning,
@@ -572,7 +611,7 @@ pass human review.
 
 ## 6. Next Evaluation Gate
 
-Q-01 through Q-21 are implemented. The next gate is a fresh production episode
+Q-01 through Q-24 are implemented. The next gate is a fresh production episode
 from evidence preparation onward, followed by artifact inspection rather than
 summary-only review. External provider search and paid vision verification stay
 disabled during this evaluation so source-context, grouping, script quality,
@@ -609,7 +648,7 @@ Visual review:
 
 ## 7. Other Deferred Work
 
-After the validated Q-01 through Q-20 foundation, keep these operational and
+After the validated Q-01 through Q-24 foundation, keep these operational and
 product tasks visible without mixing them into the current evaluation:
 
 - Keep Wikimedia, Pexels, Pixabay, and paid frame-level vision verification
@@ -617,10 +656,10 @@ product tasks visible without mixing them into the current evaluation:
   accepted. Re-enable them only through an explicit profile and human-reviewed
   cost/quality comparison.
 
-- Keep Kimi K3 available as a role-level visual-planning experiment, but do not
-  promote it until a bounded same-input comparison completes and materially
-  improves beat relevance or asset use over GPT-4o-mini. The first full-context
-  comparison exceeded roughly ten minutes without producing a plan.
+- Keep Kimi K3 available as a role-level visual-planning quality option. Before
+  promoting it to the daily default, repeat the bounded comparison on several
+  story shapes and decide whether its stronger plans justify roughly five
+  minutes per story or require provider-safe story-call concurrency.
 
 - Reassess the HyperFrames backend after its transitive `adm-zip` advisory is
   fixed upstream. Until then, keep Remotion as production default and run
@@ -641,10 +680,6 @@ product tasks visible without mixing them into the current evaluation:
 - Add a thumbnail-production workflow only after title/thumbnail options have a
   human-selected direction; metadata options alone are not a publish-ready
   thumbnail.
-- Decide whether intro/closing deserve an additional bookend visual-planning
-  LLM call. This changes provider cost and call count, so it remains a
-  deliberate product/config decision rather than a hidden implementation
-  assumption.
 - Add a scheduler/service adapter that submits exact stage JSON envelopes.
 - Add cancellation and heartbeat events for long renders.
 - Add optional remote artifact storage without changing app contracts.

@@ -65,12 +65,22 @@ class SourceScreenshotConfig(BaseModel):
     focus_zoom: float = 1.3
     highlight_target: bool = True
     reuse_identical_captures: bool = True
+    reuse_page_capture_across_targets: bool = True
+    persistent_cache_dir: str | None = None
+    persistent_cache_ttl_hours: float = 168.0
 
     @field_validator("focus_zoom")
     @classmethod
     def focus_zoom_must_be_readable(cls, value: float) -> float:
         if value < 1.0 or value > 1.8:
             raise ValueError("source_screenshots.focus_zoom must be between 1.0 and 1.8")
+        return value
+
+    @field_validator("persistent_cache_ttl_hours")
+    @classmethod
+    def cache_ttl_must_be_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("source_screenshots.persistent_cache_ttl_hours must be positive")
         return value
 
 

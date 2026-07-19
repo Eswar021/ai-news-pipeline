@@ -21,6 +21,10 @@ delivery_direction:
   apply_to_providers:
   - openai
   - gemini
+request_logging:
+  enabled: true
+  include_transcript: true
+  include_effective_instructions: true
 mastering:
   enabled: true
   ffmpeg_path: ffmpeg

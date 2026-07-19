@@ -15,6 +15,7 @@ from src.pipeline.content.editorial_triage import app as triage_app
 from src.pipeline.content.editorial_triage.contract import TriageBatchOutput
 from src.pipeline.content.evidence_prep import run as run_evidence_prep
 from src.pipeline.content.news_collection import app as news_app
+from src.pipeline.content.news_collection import utils as news_utils
 from src.pipeline.content.news_collection.collectors import (
     community_signals,
     company_blogs,
@@ -233,6 +234,66 @@ def test_evidence_retains_semantic_quarantines_and_raw_content() -> None:
         if item["title"] == "An older AI launch outside the frozen run window"
     )
     assert outside["exclude_reason"] == "outside_manifest_window"
+
+
+def test_evidence_removes_decoded_pdf_binary_before_editorial_triage() -> None:
+    payload = _evidence_input()
+    payload["input"]["news_collection"]["data"]["records"] = [
+        {
+            "record_id": "pdf_binary_fixture",
+            "source": "hackernews",
+            "source_group": "community_signals",
+            "source_type": "community_signal",
+            "title": "A linked research preprint",
+            "url": "https://example.com/preprint.pdf",
+            "published_at": "2026-07-11T10:00:00Z",
+            "description": "Readable metadata fallback for semantic triage.",
+            "content": "%PDF-1.7 " + ("\ufffd\x00binary-stream " * 30_000),
+        }
+    ]
+
+    result = run_evidence_prep(payload)
+    record = result["data"]["records"][0]
+
+    assert result["status"] == "ok"
+    assert record["content"] == "Readable metadata fallback for semantic triage."
+    assert record["cleaned_content"] == record["content"]
+    assert record["raw_content"] == ""
+    assert record["quality_flags"]["non_text_source_payload"] == "pdf_binary"
+    assert record["preparation_warnings"] == ["non_text_source_payload"]
+    assert record["content_cleaning"]["non_text_payload_detected"] is True
+    assert record["content_cleaning"]["decoded_payload_sha256"]
+
+    batches, telemetry = triage_app._complete_context_batches(
+        result["data"]["records"],
+        batch_size=10,
+        max_record_context_chars=300_000,
+        max_batch_context_chars=450_000,
+    )
+    assert len(batches) == 1
+    assert telemetry["records_truncated"] is False
+    assert max(telemetry["record_context_chars"].values()) < 10_000
+
+
+def test_request_text_extracts_pdf_instead_of_decoding_response_bytes(monkeypatch) -> None:
+    class Response:
+        headers = {"Content-Type": "application/pdf"}
+        content = b"%PDF-1.7 binary fixture"
+        text = "%PDF-1.7 decoded binary noise"
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(news_utils.requests, "get", lambda *_args, **_kwargs: Response())
+    monkeypatch.setattr(
+        news_utils,
+        "extract_pdf_text",
+        lambda payload: "Readable extracted PDF text" if payload.startswith(b"%PDF-") else "",
+    )
+
+    assert news_utils.request_text("https://example.com/preprint.pdf", timeout=5) == (
+        "Readable extracted PDF text"
+    )
 
 
 def test_evidence_keeps_a_flagged_candidate_for_editorial_triage() -> None:

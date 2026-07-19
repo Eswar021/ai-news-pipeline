@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+from io import BytesIO
 import os
 import re
-import hashlib
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
@@ -127,7 +128,37 @@ def extract_published_at_from_html(html: str) -> str:
 def request_text(url: str, timeout: int, params: dict | None = None) -> str:
     response = requests.get(url, params=params, headers=DEFAULT_HEADERS, timeout=timeout)
     response.raise_for_status()
+    if _is_pdf_response(response):
+        return extract_pdf_text(response.content)
     return response.text
+
+
+def extract_pdf_text(pdf_bytes: bytes) -> str:
+    """Extract readable text without ever decoding PDF binary as an article body."""
+
+    try:
+        import pdfplumber
+    except ImportError as exc:
+        raise RuntimeError(
+            "PDF article extraction requires pdfplumber. Install the main project requirements."
+        ) from exc
+
+    page_text: list[str] = []
+    with pdfplumber.open(BytesIO(pdf_bytes)) as document:
+        for page in document.pages:
+            text = page.extract_text() or ""
+            if text.strip():
+                page_text.append(text)
+    extracted = clean_text("\n\n".join(page_text))
+    if not extracted:
+        raise ValueError("PDF article contains no extractable text")
+    return extracted
+
+
+def _is_pdf_response(response) -> bool:
+    content_type = clean_text(response.headers.get("Content-Type", "")).casefold()
+    content = bytes(response.content or b"")
+    return "application/pdf" in content_type or content.lstrip().startswith(b"%PDF-")
 
 
 def parse_datetime(value: str | None) -> datetime | None:
