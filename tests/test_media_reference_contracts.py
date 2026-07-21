@@ -477,6 +477,51 @@ def test_run_context_freezes_profile_and_uses_run_first_layout(tmp_path: Path) -
     assert resumed["profile_config"]["feature"]["enabled"] is True
 
 
+def test_run_context_freezes_environment_and_rejects_cross_environment_resume(tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    config_root = project_root / "src" / "pipeline" / "config"
+    config_root.mkdir(parents=True)
+    (config_root / "dev.yaml").write_text(
+        yaml.safe_dump({"shared": {"orchestration": {"logging": {"profile": "verbose"}}}, "modules": {}}),
+        encoding="utf-8",
+    )
+    config_path = config_root / "workbench.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "default_run_profile": "smoke",
+                "default_environment": "prod",
+                "environments": {"dev": "dev.yaml", "prod": "prod.yaml"},
+                "profiles": {"smoke": {"feature": {"enabled": True}}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (config_root / "prod.yaml").write_text(
+        yaml.safe_dump({"shared": {}, "modules": {}}), encoding="utf-8"
+    )
+    output_root = project_root / "output"
+
+    context = create_run_context(
+        project_root=project_root,
+        run_id="run_dev_fixture",
+        config_path=config_path,
+        output_root=output_root,
+        config_environment="dev",
+    )
+
+    assert context["config_environment"] == "dev"
+    assert context["profile_config"]["orchestration"]["logging"]["profile"] == "verbose"
+    with pytest.raises(ValueError, match="uses config environment 'dev'"):
+        create_run_context(
+            project_root=project_root,
+            run_id="run_dev_fixture",
+            config_path=config_path,
+            output_root=output_root,
+            config_environment="prod",
+        )
+
+
 def test_config_template_renderer_preserves_descriptive_schema_braces() -> None:
     rendered = render_config_templates(
         {

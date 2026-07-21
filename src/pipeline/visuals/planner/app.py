@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from copy import deepcopy
 import json
+import logging
 import math
 import re
 import time
@@ -63,6 +64,9 @@ from .contract import VisualPlannerRequest, VisualPlannerResponse
 from .llm_client import make_llm
 from .llm_logging import build_llm_call_log
 from .prompt_loader import load_prompt_bundle
+
+
+RUNTIME_LOGGER = logging.getLogger("ai_content_creation.runtime.visual_planner")
 
 
 TASK_PROMPT = PromptTemplate.from_template(
@@ -792,19 +796,84 @@ def _catalog_for_story_prompt(
 ) -> dict[str, Any]:
     story_catalog = catalog_index.get("story_catalogs", {}).get(story_id, {})
     assets = catalog_index.get("assets_by_story", {}).get(story_id, [])
+    available_assets = [
+        asset for asset in assets if clean_text(asset.get("status")) == "available"
+    ]
+    asset_briefs = [
+        _asset_brief_for_prompt(brief)
+        for brief in story_catalog.get("asset_briefs", [])
+        if isinstance(brief, dict)
+    ]
+    assets_by_id = {
+        clean_text(asset.get("asset_id")): asset
+        for asset in available_assets
+        if clean_text(asset.get("asset_id"))
+    }
     return {
         "policy": {
             "asset_ids_are_authoritative": True,
             "available_assets_may_be_used_without_external_search": True,
             "unresolved_briefs_are_not_available_assets": True,
+            "candidate_asset_ids_are_structural_options_not_semantic_approvals": True,
+            "planner_must_choose_asset_fit_for_each_active_beat": True,
         },
         "available_assets": [
             _catalog_asset_for_prompt(asset)
-            for asset in assets
-            if clean_text(asset.get("status")) == "available"
+            for asset in available_assets
         ],
-        "asset_briefs": story_catalog.get("asset_briefs", []),
+        "asset_briefs": asset_briefs,
+        "beat_asset_options": _beat_asset_options_for_prompt(asset_briefs, assets_by_id),
     }
+
+
+def _asset_brief_for_prompt(brief: dict[str, Any]) -> dict[str, Any]:
+    item = dict(brief)
+    candidate_ids = item.get("candidate_asset_ids")
+    if not isinstance(candidate_ids, list):
+        # Historical catalogs called structurally compatible IDs "matched".
+        # They remain candidates only; semantic suitability is still decided by the planner.
+        candidate_ids = item.get("matched_asset_ids", [])
+    item.pop("matched_asset_ids", None)
+    item["candidate_asset_ids"] = dedupe(
+        [clean_text(asset_id) for asset_id in candidate_ids if clean_text(asset_id)]
+    )
+    if item["candidate_asset_ids"]:
+        item["resolution_status"] = "candidate_assets_available"
+        item["semantic_selection_status"] = "planner_review_required"
+        item["candidate_basis"] = (
+            clean_text(item.get("candidate_basis"))
+            or "legacy_structural_story_record_and_render_type_compatibility"
+        )
+    return item
+
+
+def _beat_asset_options_for_prompt(
+    briefs: list[dict[str, Any]],
+    assets_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    options: list[dict[str, Any]] = []
+    for brief in briefs:
+        candidate_assets = [
+            _catalog_asset_for_prompt(assets_by_id[asset_id])
+            for asset_id in brief.get("candidate_asset_ids", [])
+            if asset_id in assets_by_id
+        ]
+        if not candidate_assets:
+            continue
+        options.append(
+            {
+                "asset_request_id": brief.get("asset_request_id"),
+                "beat_ids": brief.get("beat_ids", []),
+                "purpose": brief.get("purpose"),
+                "subject": brief.get("subject"),
+                "must_show": brief.get("must_show", []),
+                "must_avoid": brief.get("must_avoid", []),
+                "candidate_basis": brief.get("candidate_basis"),
+                "semantic_selection_status": "planner_review_required",
+                "candidate_assets": candidate_assets,
+            }
+        )
+    return options
 
 
 def _catalog_asset_for_prompt(asset: dict[str, Any]) -> dict[str, Any]:
@@ -832,6 +901,10 @@ def _catalog_asset_for_prompt(asset: dict[str, Any]) -> dict[str, Any]:
         "review_status": asset.get("review_status"),
         "image_role": asset.get("image_role"),
         "video_role": asset.get("video_role"),
+        "link_text": short_text(clean_text(asset.get("link_text")), 220),
+        "video_context": asset.get("video_context", {}),
+        "video_moments": asset.get("video_moments", [])[:24],
+        "narration_suitability": asset.get("narration_suitability", {}),
         "alt_text": short_text(clean_text(asset.get("alt_text")), 240),
         "duration_seconds": asset.get("duration_seconds"),
         "width": asset.get("width"),
@@ -1011,6 +1084,20 @@ def _catalog_asset_for_scene(
     requested_url = clean_text(draft.get("url"))
     if requested_url and canonical_url and requested_url != canonical_url:
         errors.append(f"asset_id {asset_id!r} URL does not match the scene payload")
+    requested_moment_id = clean_text(draft.get("video_moment_id"))
+    if requested_moment_id:
+        if asset_type not in {"source_video", "broll_video"}:
+            errors.append("payload.video_moment_id is valid only for a catalog video asset")
+        else:
+            available_moment_ids = {
+                clean_text(moment.get("video_moment_id"))
+                for moment in asset.get("video_moments", [])
+                if isinstance(moment, dict) and clean_text(moment.get("video_moment_id"))
+            }
+            if requested_moment_id not in available_moment_ids:
+                errors.append(
+                    f"asset_id {asset_id!r} has no video moment {requested_moment_id!r}"
+                )
     return (asset if not errors else None), errors
 
 
@@ -1973,6 +2060,45 @@ def _story_visual_quality_context(
         config.get("visual_mix_policy", {}).get("target_max_text_like_scenes_per_story"),
         2,
     )
+    story_catalog = asset_catalog_index.get("story_catalogs", {}).get(story_id, {})
+    candidate_asset_ids_by_beat: dict[str, set[str]] = {}
+    for raw_brief in story_catalog.get("asset_briefs", []):
+        if not isinstance(raw_brief, dict):
+            continue
+        brief = _asset_brief_for_prompt(raw_brief)
+        candidate_ids = {
+            clean_text(asset_id)
+            for asset_id in brief.get("candidate_asset_ids", [])
+            if clean_text(asset_id)
+        }
+        for beat_id in brief.get("beat_ids", []):
+            if clean_text(beat_id) and candidate_ids:
+                candidate_asset_ids_by_beat.setdefault(clean_text(beat_id), set()).update(
+                    candidate_ids
+                )
+    text_scenes_with_candidate_media = []
+    for scene in text_scenes:
+        payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
+        beat_ids = {
+            clean_text(beat.get("beat_id"))
+            for beat in payload.get("beats", [])
+            if isinstance(beat, dict) and clean_text(beat.get("beat_id"))
+        }
+        candidate_ids = sorted(
+            {
+                asset_id
+                for beat_id in beat_ids
+                for asset_id in candidate_asset_ids_by_beat.get(beat_id, set())
+            }
+        )
+        if candidate_ids:
+            text_scenes_with_candidate_media.append(
+                {
+                    "scene_id": clean_text(scene.get("scene_id")),
+                    "beat_ids": sorted(beat_ids),
+                    "candidate_asset_ids": candidate_ids,
+                }
+            )
     review_reasons: list[str] = []
     if current_errors:
         review_reasons.append("invalid_story_plan")
@@ -1984,6 +2110,15 @@ def _story_visual_quality_context(
         review_reasons.append("repeated_visual_payload")
     if len(text_scenes) > text_target:
         review_reasons.append("text_like_scene_target_exceeded")
+    if (
+        bool(
+            config.get("visual_mix_policy", {}).get(
+                "review_text_scenes_with_candidate_media", False
+            )
+        )
+        and text_scenes_with_candidate_media
+    ):
+        review_reasons.append("text_scene_has_unreviewed_catalog_candidates")
     return {
         "review_recommended": bool(review_reasons),
         "review_reasons": review_reasons,
@@ -1998,6 +2133,7 @@ def _story_visual_quality_context(
         "used_asset_ids": used_asset_ids,
         "available_asset_ids": available_asset_ids,
         "unused_asset_ids": sorted(set(available_asset_ids) - set(used_asset_ids)),
+        "text_scenes_with_candidate_media": text_scenes_with_candidate_media,
     }
 
 
@@ -2709,10 +2845,33 @@ def _invoke_chain(
     }
     rendered_prompt = TASK_PROMPT.format(**prompt_inputs)
     started = time.time()
+    story_id = clean_text(metadata.get("story_id"))
+    attempt = metadata.get("attempt", 1)
+    route = clean_text(metadata.get("route_attempt")) or "primary"
+    RUNTIME_LOGGER.info(
+        "LLM start role=%s provider=%s model=%s route=%s attempt=%s story=%s",
+        module_name,
+        config["provider"],
+        config["model"],
+        route,
+        attempt,
+        story_id or "episode",
+    )
     try:
         result = chain.invoke(prompt_inputs)
     except Exception as exc:
         duration = time.time() - started
+        RUNTIME_LOGGER.warning(
+            "LLM fail role=%s provider=%s model=%s route=%s attempt=%s story=%s duration=%.2fs error=%s",
+            module_name,
+            config["provider"],
+            config["model"],
+            route,
+            attempt,
+            story_id or "episode",
+            duration,
+            f"{type(exc).__name__}: {exc}",
+        )
         llm_calls.append(
             build_llm_call_log(
                 module_name=module_name,
@@ -2765,6 +2924,16 @@ def _invoke_chain(
             metadata=metadata,
             duration_seconds=duration,
         )
+    )
+    RUNTIME_LOGGER.info(
+        "LLM end role=%s provider=%s model=%s route=%s attempt=%s story=%s duration=%.2fs",
+        module_name,
+        config["provider"],
+        config["model"],
+        route,
+        attempt,
+        story_id or "episode",
+        duration,
     )
     return parsed_output
 
@@ -3100,6 +3269,11 @@ def _normalize_story_candidate_scenes(
                 "primary_entity": clean_text(opening_payload.get("primary_entity")),
                 "entities": normalize_text_list(opening_payload.get("entities")),
                 "logo_strategy": clean_text(opening_payload.get("logo_strategy")),
+                **(
+                    {"video_moment_id": clean_text(opening_payload.get("video_moment_id"))}
+                    if clean_text(opening_payload.get("video_moment_id"))
+                    else {}
+                ),
             }
         )
     if title_kind == "transition_stinger_scene":
@@ -4518,7 +4692,7 @@ def _payload_for_scene(
                     short_text(script_excerpt, 120),
                 ]
             )
-        return {
+        payload = {
             "asset_id": asset_id,
             "search_queries": search_queries[:3],
             "must_show": normalize_text_list(draft.get("must_show"))[:5],
@@ -4542,6 +4716,16 @@ def _payload_for_scene(
                 draft.get("show_overlay", draft.get("show_media_overlay", False))
             ),
         }
+        if render_kind == "broll_video_scene":
+            video_moment_id = clean_text(draft.get("video_moment_id"))
+            if video_moment_id:
+                payload["video_moment_id"] = video_moment_id
+            clip_selection_reason = short_text(
+                clean_text(draft.get("clip_selection_reason") or draft.get("reason")), 240
+            )
+            if clip_selection_reason:
+                payload["clip_selection_reason"] = clip_selection_reason
+        return payload
     if render_kind == "source_article_scene":
         record = source_index["records_by_key"].get(source_record_key, {}) if source_record_key else {}
         target_text = _truth_bound_screenshot_target(

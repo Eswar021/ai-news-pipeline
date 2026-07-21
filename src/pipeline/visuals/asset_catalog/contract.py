@@ -154,12 +154,14 @@ class SourceLinkedVideoConfig(BaseModel):
     max_links_per_record: int = 3
     max_duration_seconds: int = 1_800
     max_height: int = 1_080
+    max_chapter_moments: int = 24
 
     @field_validator(
         "download_timeout_seconds",
         "max_links_per_record",
         "max_duration_seconds",
         "max_height",
+        "max_chapter_moments",
     )
     @classmethod
     def positive_values_required(cls, value: int) -> int:

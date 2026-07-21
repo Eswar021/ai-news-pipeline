@@ -137,6 +137,7 @@ class VisualMixPolicyConfig(BaseModel):
     prefer_catalog_assets_for_concrete_subjects: bool = True
     prefer_explanatory_motion_for_mechanisms: bool = True
     kinetic_text_is_supporting_only: bool = True
+    review_text_scenes_with_candidate_media: bool = False
 
     @field_validator(
         "target_max_text_like_scene_ratio",

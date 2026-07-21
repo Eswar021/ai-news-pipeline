@@ -20,8 +20,10 @@ capability.
 
 Work asset-first:
 
-1. For each beat, first ask whether a verified source page, source image,
-   source video, or identity asset can show the subject directly.
+1. For each beat, inspect verified_asset_catalog.beat_asset_options first, then
+   ask whether one candidate source page, source image, source video, or
+   identity asset can show the subject directly. Candidate means structurally
+   eligible and story-owned; it is not a semantic approval.
 2. Use the exact catalog asset_id when an available asset fits. The listed IDs
    are an enum, not examples. Never invent an asset ID, URL, source record key,
    logo, quote, product image, or video.
@@ -39,6 +41,13 @@ context. When descriptor_quality is nearby_context_only or unlabeled, do not
 assume the image depicts the article topic. Use it only when the available
 image-specific fields genuinely support the active narration; otherwise choose
 a source page, identity, explainer, or typography treatment.
+
+For source videos, use link_text, video_context, provider title/description,
+and video_moments to decide whether the footage fits the active narration. If
+the chosen video exposes a directly relevant video_moment_id, copy that exact
+ID into payload_json and explain the choice briefly in clip_selection_reason.
+Do not assume the start of a trusted video is its most relevant moment, and do
+not invent a moment ID when the catalog exposes none.
 
 When real_anchor_contract.required is true, at least one returned scene must
 copy one listed assignment's exact asset_id into payload_json and use that

@@ -56,6 +56,8 @@ from src.pipeline.visuals.planner.app import (
     _story_for_prompt,
     _story_allowed_render_kinds,
     _story_visual_quality_context,
+    _catalog_for_story_prompt,
+    _catalog_asset_for_scene,
     _story_scene_timing_errors,
     _truth_bound_screenshot_target,
     _stitch_section,
@@ -73,6 +75,7 @@ from src.pipeline.visuals.asset_catalog.app import (
     _MetadataParser,
     _apply_source_page_fetch_status,
     _download_source_linked_video_candidate,
+    _bind_brief_to_assets,
     _difference_hash,
     _hash_distance,
     _largest_srcset_url,
@@ -697,6 +700,117 @@ def test_asset_catalog_parser_discovers_only_allowed_source_linked_video_provide
     assert candidates[0]["url"] == "https://www.youtube.com/embed/demo"
 
 
+def test_asset_catalog_parser_keeps_source_link_context_for_video_candidates() -> None:
+    parser = _MetadataParser()
+    parser.feed(
+        '<html><body><h2>Warehouse robot demo</h2>'
+        '<p>Watch the machine pick and place a real package.</p>'
+        '<a href="https://www.youtube.com/watch?v=robot">See the robot in action</a>'
+        '</body></html>'
+    )
+
+    candidate = parser.linked_video_candidates[0]
+    assert candidate["link_text"] == "See the robot in action"
+    assert candidate["page_section_heading"] == "Warehouse robot demo"
+    assert "pick and place" in candidate["nearby_text"]
+
+
+def test_asset_briefs_expose_structural_candidates_without_claiming_a_semantic_match() -> None:
+    bound = _bind_brief_to_assets(
+        {
+            "asset_request_id": "request_demo",
+            "beat_ids": ["beat_demo"],
+            "requested_asset_types": ["source_image"],
+            "preferred_record_keys": ["record_demo"],
+        },
+        [
+            {
+                "asset_id": "asset_image_demo",
+                "asset_type": "source_image",
+                "source_record_key": "record_demo",
+            }
+        ],
+    )
+
+    assert bound["candidate_asset_ids"] == ["asset_image_demo"]
+    assert bound["resolution_status"] == "candidate_assets_available"
+    assert bound["semantic_selection_status"] == "planner_review_required"
+    assert "matched_asset_ids" not in bound
+
+
+def test_story_prompt_joins_beat_candidates_to_rich_asset_descriptors() -> None:
+    prompt_catalog = _catalog_for_story_prompt(
+        {
+            "story_catalogs": {
+                "story_demo": {
+                    "asset_briefs": [
+                        {
+                            "asset_request_id": "request_demo",
+                            "beat_ids": ["beat_demo"],
+                            "purpose": "Show the robot moving a package.",
+                            "candidate_asset_ids": ["asset_video_demo"],
+                        }
+                    ]
+                }
+            },
+            "assets_by_story": {
+                "story_demo": [
+                    {
+                        "asset_id": "asset_video_demo",
+                        "story_id": "story_demo",
+                        "asset_type": "source_video",
+                        "status": "available",
+                        "title": "Robot demo",
+                        "video_context": {"link_text": "Watch package handling"},
+                        "video_moments": [
+                            {
+                                "video_moment_id": "moment_pick",
+                                "title": "Robot picks a package",
+                                "start_seconds": 12.0,
+                                "end_seconds": 20.0,
+                            }
+                        ],
+                    }
+                ]
+            },
+        },
+        "story_demo",
+    )
+
+    option = prompt_catalog["beat_asset_options"][0]
+    assert option["semantic_selection_status"] == "planner_review_required"
+    assert option["candidate_assets"][0]["video_moments"][0]["video_moment_id"] == "moment_pick"
+
+
+def test_planner_accepts_only_video_moments_owned_by_the_selected_asset() -> None:
+    asset = {
+        "asset_id": "asset_video_demo",
+        "story_id": "story_demo",
+        "asset_type": "source_video",
+        "status": "available",
+        "video_moments": [{"video_moment_id": "moment_pick", "title": "Package pick"}],
+    }
+    catalog = {"assets_by_id": {"asset_video_demo": asset}}
+
+    selected, errors = _catalog_asset_for_scene(
+        {"asset_id": "asset_video_demo", "video_moment_id": "moment_pick"},
+        story_id="story_demo",
+        render_kind="broll_video_scene",
+        catalog_index=catalog,
+    )
+    assert selected == asset
+    assert errors == []
+
+    selected, errors = _catalog_asset_for_scene(
+        {"asset_id": "asset_video_demo", "video_moment_id": "moment_invented"},
+        story_id="story_demo",
+        render_kind="broll_video_scene",
+        catalog_index=catalog,
+    )
+    assert selected is None
+    assert "has no video moment" in errors[0]
+
+
 def test_source_linked_video_resolver_is_bounded_and_marks_suitability_unreviewed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -717,6 +831,10 @@ def test_source_linked_video_resolver_is_bounded_and_marks_suitability_unreviewe
                         "description": "A product walkthrough linked by the article.",
                         "duration": 90,
                         "uploader": "Example",
+                        "chapters": [
+                            {"title": "Overview", "start_time": 0, "end_time": 18},
+                            {"title": "Product walkthrough", "start_time": 18, "end_time": 70},
+                        ],
                     }
                 ),
                 stderr="",
@@ -740,6 +858,9 @@ def test_source_linked_video_resolver_is_bounded_and_marks_suitability_unreviewe
             "url": "https://www.youtube.com/watch?v=demo",
             "provider": "youtube",
             "video_role": "source_page_video_link",
+            "link_text": "Watch the product walkthrough",
+            "page_section_heading": "How it works",
+            "nearby_text": "The linked demo shows the workflow step by step.",
         },
         candidate_order=1,
         output_dir=tmp_path,
@@ -754,6 +875,7 @@ def test_source_linked_video_resolver_is_bounded_and_marks_suitability_unreviewe
             "download_timeout_seconds": 10,
             "max_duration_seconds": 120,
             "max_height": 1080,
+            "max_chapter_moments": 12,
         },
     )
 
@@ -761,6 +883,9 @@ def test_source_linked_video_resolver_is_bounded_and_marks_suitability_unreviewe
     assert asset["provider"] == "youtube"
     assert asset["provenance_trust"]["status"] == "trusted"
     assert asset["narration_suitability"]["status"] == "unreviewed"
+    assert asset["link_text"] == "Watch the product walkthrough"
+    assert asset["video_moments"][1]["title"] == "Product walkthrough"
+    assert asset["video_moments"][1]["start_seconds"] == 18.0
     assert Path(asset["local_path"]).exists()
 
 
@@ -917,6 +1042,48 @@ def test_visual_editor_is_not_triggered_only_because_catalog_assets_are_unused()
     assert quality["unused_asset_ids"] == ["asset_unused"]
     assert quality["review_recommended"] is False
     assert quality["review_reasons"] == []
+
+
+def test_visual_editor_reviews_text_when_the_same_beat_has_catalog_candidates() -> None:
+    quality = _story_visual_quality_context(
+        story_id="story_apple",
+        scenes=[
+            {
+                "scene_id": "scene_002",
+                "render_kind": "editorial_text_scene",
+                "payload": {"beats": [{"beat_id": "beat_product"}]},
+            }
+        ],
+        asset_catalog_index={
+            "assets_by_story": {
+                "story_apple": [{"asset_id": "asset_product", "status": "available"}]
+            },
+            "story_catalogs": {
+                "story_apple": {
+                    "asset_briefs": [
+                        {
+                            "beat_ids": ["beat_product"],
+                            "candidate_asset_ids": ["asset_product"],
+                        }
+                    ]
+                }
+            },
+        },
+        config={
+            "scene_policy": {"max_consecutive_same_kind": 2},
+            "visual_mix_policy": {
+                "target_max_text_like_scenes_per_story": 2,
+                "review_text_scenes_with_candidate_media": True,
+            },
+        },
+        current_errors=[],
+    )
+
+    assert quality["review_recommended"] is True
+    assert quality["review_reasons"] == ["text_scene_has_unreviewed_catalog_candidates"]
+    assert quality["text_scenes_with_candidate_media"][0]["candidate_asset_ids"] == [
+        "asset_product"
+    ]
 
 
 def test_story_visual_prompt_receives_every_complete_selected_record() -> None:
@@ -1150,7 +1317,7 @@ def test_story_owned_catalog_video_is_prepared_without_external_search(tmp_path:
             "-f",
             "lavfi",
             "-i",
-            "color=c=0x243447:s=1280x720:d=1.2",
+            "color=c=0x243447:s=1280x720:d=4.0",
             "-c:v",
             "libx264",
             "-pix_fmt",
@@ -1176,7 +1343,11 @@ def test_story_owned_catalog_video_is_prepared_without_external_search(tmp_path:
         "story_id": "story_apple",
         "render_kind": "broll_video_scene",
         "duration_seconds": 2.0,
-        "payload": {"asset_id": "asset_source_video_apple"},
+        "payload": {
+            "asset_id": "asset_source_video_apple",
+            "video_moment_id": "moment_product",
+            "clip_selection_reason": "The chapter shows the product action named in narration.",
+        },
     }
 
     selection = _catalog_media_selection(
@@ -1194,6 +1365,14 @@ def test_story_owned_catalog_video_is_prepared_without_external_search(tmp_path:
                 "title": "Apple product demo",
                 "width": 1280,
                 "height": 720,
+                "video_moments": [
+                    {
+                        "video_moment_id": "moment_product",
+                        "title": "Product action",
+                        "start_seconds": 1.0,
+                        "end_seconds": 3.5,
+                    }
+                ],
             }
         },
         images_dir=tmp_path / "images",
@@ -1205,6 +1384,10 @@ def test_story_owned_catalog_video_is_prepared_without_external_search(tmp_path:
     assert selection["provider"] == "asset_catalog"
     assert selection["media_type"] == "video"
     assert selection["clip_duration_seconds"] == pytest.approx(2.75)
+    assert selection["clip_start_seconds"] == pytest.approx(1.0)
+    assert selection["video_moment_id"] == "moment_product"
+    assert selection["video_moment_title"] == "Product action"
+    assert selection["selection_basis"] == "planner_selected_exact_story_catalog_video_moment"
     assert Path(selection["asset_path"]).exists()
 
 
@@ -2539,6 +2722,8 @@ def test_logo_aliases_require_exact_identity_and_report_text_fallback_truthfully
 
     assert exact["logo_source"] == "simple_icons"
     assert exact["quality_class"] == "simple_icon"
+    assert Path(exact["logo_path"]).is_file()
+    assert "<svg" in Path(exact["logo_path"]).read_text(encoding="utf-8")
     assert ambiguous["status"] == "fallback"
     assert ambiguous["quality_class"] == "text_identity_fallback"
     assert simple_icon_export_for("Amazon") is None
@@ -2547,6 +2732,9 @@ def test_logo_aliases_require_exact_identity_and_report_text_fallback_truthfully
     fallback_svg = Path(ambiguous["fallback_svg_path"]).read_text(encoding="utf-8")
     assert "Pineapple Research Collective" in fallback_svg
     assert "Pineapple Research Collective"[:18] + "</text>" not in fallback_svg
+    assert "#171611" in fallback_svg
+    assert "#b64b2d" in fallback_svg
+    assert "rect" not in fallback_svg
 
 
 def test_manual_visual_brief_preserves_authored_text() -> None:
@@ -2704,6 +2892,131 @@ def test_visual_review_renders_a_real_contact_sheet(tmp_path: Path) -> None:
     assert result["status"] == "ok"
     assert contact_sheet.exists()
     assert contact_sheet.stat().st_size > 0
+
+
+def test_visual_review_builds_story_by_story_scene_report(tmp_path: Path) -> None:
+    ffmpeg = shutil.which("ffmpeg")
+    ffprobe = shutil.which("ffprobe")
+    if not ffmpeg or not ffprobe:
+        pytest.skip("ffmpeg/ffprobe are required for the visual review smoke")
+    video_path = tmp_path / "fixture_story_report.mp4"
+    subprocess.run(
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=640x360:rate=24:duration=1.2",
+            "-pix_fmt",
+            "yuv420p",
+            str(video_path),
+        ],
+        check=True,
+    )
+    result = run_visual_review(
+        {
+            "run": {"run_id": "visual_story_review_fixture"},
+            "config": {
+                "output_dir": str(tmp_path / "story_review"),
+                "ffmpeg_path": ffmpeg,
+                "ffprobe_path": ffprobe,
+                "sample_count": 4,
+                "columns": 2,
+                "thumbnail_width": 320,
+                "story_report": {
+                    "enabled": True,
+                    "worker_count": 2,
+                    "thumbnail_width": 360,
+                    "jpeg_quality": 85,
+                },
+            },
+            "input": {
+                "video_assembly": {
+                    "status": "ok",
+                    "data": {
+                        "run_id": "visual_story_review_fixture",
+                        "final_video_package": {
+                            "final_video_path": str(video_path),
+                            "final_video_sha256": file_sha256(video_path),
+                        },
+                    },
+                },
+                "visual_scene_planning": {
+                    "status": "ok",
+                    "data": {
+                        "run_id": "visual_story_review_fixture",
+                        "visual_scene_plan": {
+                            "scene_timeline": [
+                                {
+                                    "scene_id": "scene_001",
+                                    "section_type": "story",
+                                    "story_id": "story_robot",
+                                    "story_title": "Robots enter the warehouse",
+                                    "start_seconds": 0.0,
+                                    "end_seconds": 0.6,
+                                    "duration_seconds": 0.6,
+                                    "render_kind": "broll_video_scene",
+                                    "script_excerpt": "The robot picks a package from the line.",
+                                    "visual_intent": "Show the real package-picking action.",
+                                    "reason": "The selected chapter directly depicts the action.",
+                                    "payload": {
+                                        "recipe_id": "annotated_video_focus",
+                                        "asset_id": "asset_robot_video",
+                                        "video_moment_id": "moment_pick",
+                                    },
+                                },
+                                {
+                                    "scene_id": "scene_002",
+                                    "section_type": "story",
+                                    "story_id": "story_robot",
+                                    "story_title": "Robots enter the warehouse",
+                                    "start_seconds": 0.6,
+                                    "end_seconds": 1.2,
+                                    "duration_seconds": 0.6,
+                                    "render_kind": "source_article_scene",
+                                    "script_excerpt": "The pilot is still limited in scope.",
+                                    "visual_intent": "Show the source qualification.",
+                                    "reason": "The article text carries the caveat.",
+                                    "payload": {"recipe_id": "source_proof_scan"},
+                                },
+                            ],
+                            "asset_catalog": {
+                                "assets": [
+                                    {
+                                        "asset_id": "asset_robot_video",
+                                        "asset_type": "source_video",
+                                        "title": "Warehouse robot demo",
+                                        "source_url": "https://example.com/robot",
+                                        "video_moments": [
+                                            {
+                                                "video_moment_id": "moment_pick",
+                                                "title": "Package pick",
+                                            }
+                                        ],
+                                    }
+                                ]
+                            },
+                        },
+                    },
+                },
+            },
+        }
+    )
+
+    report_path = Path(result["summary"]["story_review_report_path"])
+    manifest_path = Path(result["summary"]["story_review_manifest_path"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert report_path.exists()
+    assert result["summary"]["story_review_scene_count"] == 2
+    assert manifest["groups"][0]["story_title"] == "Robots enter the warehouse"
+    assert manifest["groups"][0]["scenes"][0]["video_moment_title"] == "Package pick"
+    html = report_path.read_text(encoding="utf-8")
+    assert "The robot picks a package from the line." in html
+    assert "Warehouse robot demo" in html
 
 
 def test_visual_review_rejects_a_mismatched_final_video_hash(tmp_path: Path) -> None:

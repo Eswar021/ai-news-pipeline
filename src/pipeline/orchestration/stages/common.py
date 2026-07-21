@@ -34,9 +34,16 @@ class StageConfigResolver:
     def profile_name(self) -> str:
         return str(self.run_context["run_profile"])
 
+    @property
+    def environment_name(self) -> str:
+        return str(self.run_context.get("config_environment") or "prod")
+
     def shared(self) -> ConfigDocument:
         if self.mode == "live":
-            return ConfigRepository(self.config_path).shared(self.profile_name)
+            return ConfigRepository(
+                self.config_path,
+                environment=self.environment_name,
+            ).shared(self.profile_name)
         profile = self._frozen_profile()
         return _frozen_document(
             {
@@ -49,7 +56,10 @@ class StageConfigResolver:
 
     def module(self, stage: str, module: str) -> ConfigDocument:
         if self.mode == "live":
-            return ConfigRepository(self.config_path).module(self.profile_name, stage, module)
+            return ConfigRepository(
+                self.config_path,
+                environment=self.environment_name,
+            ).module(self.profile_name, stage, module)
         profile = self._frozen_profile()
         if stage == "visuals":
             visuals = profile.get("visuals")
@@ -76,6 +86,7 @@ def write_module_config_snapshot(
     profile_name: str,
     document: ConfigDocument,
     effective_config: dict[str, Any],
+    environment_name: str = "prod",
 ) -> Path:
     path = output_dir / "config_snapshot.json"
     write_json(
@@ -85,6 +96,7 @@ def write_module_config_snapshot(
             "stage": stage,
             "module": module,
             "config_mode": mode,
+            "config_environment": environment_name,
             "run_profile": profile_name,
             "authoring_config_sha256": document.sha256,
             "source_paths": list(document.source_paths),
@@ -131,6 +143,19 @@ def reusable_config_matches(
     return matches
 
 
+def require_matching_config_environment(
+    run_context: dict[str, Any],
+    requested_environment: str | None,
+) -> str:
+    stored = str(run_context.get("config_environment") or "prod").strip().lower()
+    if requested_environment and requested_environment != stored:
+        raise ValueError(
+            f"Run {run_context.get('run_id')!r} uses config environment {stored!r}, "
+            f"not requested environment {requested_environment!r}"
+        )
+    return stored
+
+
 def _frozen_document(value: dict[str, Any], *, run_context: dict[str, Any]) -> ConfigDocument:
     return ConfigDocument(
         value=deepcopy(value),
@@ -151,6 +176,17 @@ class RunnerRun(BaseModel):
 
     run_id: str | None = None
     run_profile: str | None = None
+    config_environment: str | None = None
+
+    @field_validator("config_environment")
+    @classmethod
+    def environment_must_be_known(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in {"dev", "prod"}:
+            raise ValueError("config_environment must be dev or prod")
+        return normalized
 
 
 class RunnerPaths(BaseModel):

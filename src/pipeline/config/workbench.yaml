@@ -1,5 +1,9 @@
 config_schema_version: pipeline_modular_config_v1
 default_run_profile: daily_48h_all_sources
+default_environment: prod
+environments:
+  dev: environments/dev.yaml
+  prod: environments/prod.yaml
 profiles:
   daily_48h_all_sources:
     profile_file: profiles/daily_48h_all_sources/profile.yaml

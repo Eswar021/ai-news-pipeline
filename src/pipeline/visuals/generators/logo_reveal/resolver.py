@@ -31,6 +31,21 @@ SIMPLE_ICON_ALIASES = {
     "xai": "siX",
 }
 
+SIMPLE_ICON_SLUGS = {
+    "siAnthropic": "anthropic",
+    "siApple": "apple",
+    "siClaude": "claude",
+    "siGithub": "github",
+    "siGoogle": "google",
+    "siGooglegemini": "googlegemini",
+    "siHuggingface": "huggingface",
+    "siMeta": "meta",
+    "siNvidia": "nvidia",
+    "siOpenai": "openai",
+    "siTesla": "tesla",
+    "siX": "x",
+}
+
 
 def resolve_logo_asset(
     *,
@@ -69,12 +84,17 @@ def resolve_logo_asset(
 
     simple_icon_export = simple_icon_export_for(primary_entity) if simple_icons_enabled else None
     if simple_icon_export:
+        logo_path = _materialize_simple_icon(
+            simple_icon_export,
+            primary_entity=primary_entity,
+            output_dir=output_dir,
+        )
         return {
             "status": "resolved",
             "logo_source": "simple_icons",
             "quality_class": "simple_icon",
             "primary_entity": primary_entity,
-            "logo_path": "",
+            "logo_path": str(logo_path) if logo_path else "",
             "simple_icon_export": simple_icon_export,
             "fallback_svg_path": "",
         }
@@ -144,6 +164,31 @@ def _available_simple_icon_exports() -> frozenset[str]:
     return frozenset(re.findall(r"\b(si[A-Za-z0-9]+):\{", source))
 
 
+def _materialize_simple_icon(
+    export_name: str,
+    *,
+    primary_entity: str,
+    output_dir: Path,
+) -> Path | None:
+    slug = SIMPLE_ICON_SLUGS.get(export_name)
+    if not slug:
+        return None
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "remotion_engine"
+        / "node_modules"
+        / "simple-icons"
+        / "icons"
+        / f"{slug}.svg"
+    )
+    if not source.is_file():
+        return None
+    output_dir.mkdir(parents=True, exist_ok=True)
+    target = output_dir / f"{slugify(primary_entity)}_simple_icon.svg"
+    target.write_bytes(source.read_bytes())
+    return target
+
+
 def _download_domain_favicon(
     page_url: str,
     *,
@@ -189,18 +234,13 @@ def _local_logo_path(primary_entity: str, local_logo_dir: Path | None) -> Path |
 def _write_text_logo_svg(primary_entity: str, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     normalized_name = clean_text(primary_entity)
-    initials = "".join(part[0] for part in normalized_name.split() if part)[:3].upper()
-    if not initials:
-        initials = next((character.upper() for character in normalized_name if character.isalnum()), "?")
     safe_name = escape(normalized_name)
-    name_fit = ' textLength="400" lengthAdjust="spacingAndGlyphs"' if len(normalized_name) > 18 else ""
+    name_fit = ' textLength="1040" lengthAdjust="spacingAndGlyphs"' if len(normalized_name) > 18 else ""
     path = output_dir / f"{slugify(primary_entity)}_text_logo.svg"
     path.write_text(
-        f"""<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="118" fill="#07101a"/>
-  <circle cx="256" cy="256" r="196" fill="#101d2d" stroke="#63d7ff" stroke-width="10"/>
-  <text x="256" y="246" fill="#f7fbff" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="128" font-weight="900">{initials}</text>
-  <text x="256" y="326" fill="#9fb2c7" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700"{name_fit}>{safe_name}</text>
+        f"""<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420">
+  <text x="600" y="250" fill="#171611" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="150" font-weight="700"{name_fit}>{safe_name}</text>
+  <line x1="210" y1="318" x2="990" y2="318" stroke="#b64b2d" stroke-width="8"/>
 </svg>
 """,
         encoding="utf-8",

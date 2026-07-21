@@ -25,6 +25,7 @@ from .common import (
     now_iso,
     project_paths,
     rendered_config,
+    require_matching_config_environment,
     require_ready,
     reusable_config_matches,
     write_module_config_snapshot,
@@ -52,6 +53,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
     options = VoiceoverOptions.model_validate(request.config)
     project_root, output_root, config_path = project_paths(request.paths)
     run_context = current_or_named_context(output_root, request.run.run_id)
+    require_matching_config_environment(run_context, request.run.config_environment)
     logger = configure_stage_logging(run_context, STAGE, effective_logging_config(run_context))
     state = RunStateStore(run_context)
     state.start_stage(STAGE, MODULES)
@@ -195,6 +197,7 @@ def _run_stage(
             profile_name=str(run_context["run_profile"]),
             document=voice_document,
             effective_config=voice_config,
+            environment_name=config_resolver.environment_name,
         )
         state.record_module(
             STAGE,
@@ -238,6 +241,7 @@ def _run_stage(
             profile_name=str(run_context["run_profile"]),
             document=metadata_document,
             effective_config=metadata_input["config"],
+            environment_name=config_resolver.environment_name,
         )
         write_json(metadata_dir / "metadata_finalizer_input.json", metadata_input)
         write_json(metadata_result_path, metadata_result)

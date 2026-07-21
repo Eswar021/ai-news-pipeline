@@ -20,6 +20,7 @@ from .common import (
     effective_logging_config,
     now_iso,
     project_paths,
+    require_matching_config_environment,
     require_non_empty_script,
     require_ready,
     reusable_result,
@@ -69,6 +70,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
                 f"Current run uses profile {run_context.get('run_profile')!r}, "
                 f"not requested profile {request.run.run_profile!r}"
             )
+        require_matching_config_environment(run_context, request.run.config_environment)
     else:
         run_context = create_run_context(
             project_root=project_root,
@@ -78,6 +80,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
             orchestrator="src.pipeline.orchestration.runner:content",
             config_path=config_path,
             output_root=output_root,
+            config_environment=request.run.config_environment,
         )
 
     logger = configure_stage_logging(
@@ -105,6 +108,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
             "data": {
                 "run_id": run_context["run_id"],
                 "run_profile": run_context["run_profile"],
+                "config_environment": str(run_context.get("config_environment") or "prod"),
                 "run_dir": run_context["run_dir"],
                 "stage": STAGE,
                 "completed_modules": result["completed_modules"],
@@ -136,6 +140,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
             "data": {
                 "run_id": run_context["run_id"],
                 "run_profile": run_context["run_profile"],
+                "config_environment": str(run_context.get("config_environment") or "prod"),
                 "run_dir": run_context["run_dir"],
                 "stage": STAGE,
             },
@@ -248,6 +253,7 @@ def _run_modules(
             profile_name=run_profile,
             document=authoring_document,
             effective_config=module_input["config"],
+            environment_name=config_resolver.environment_name,
         )
         module_result = logger.run_module(module, function, module_input)
         _write_outputs(module, output_dir, module_input, module_result, options)

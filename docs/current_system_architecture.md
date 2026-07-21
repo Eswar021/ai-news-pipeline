@@ -26,6 +26,7 @@ src/pipeline/
 |-- voiceover/
 |-- visuals/
 `-- config/
+    |-- environments/{dev|prod}.yaml
     |-- workbench.yaml
     `-- profiles/{profile}/{content|voiceover|visuals}/
 ```
@@ -98,13 +99,13 @@ flowchart LR
     end
 
     subgraph visuals[3. Visuals stage]
-        assetCatalog[Build trusted story asset catalog<br/>and preflight source-page capture]
+        assetCatalog[Build trusted story asset catalog<br/>with beat candidates and video moments]
         visualPlan[visual_planner<br/>generate or load canonical visual plan]
         discover[Resolve catalog media<br/>or deliberate external research]
         resolve[Capture screenshots and resolve assets]
-        render[visual_render<br/>render independent scene clips<br/>recipe-first HyperFrames by default]
+        render[visual_render<br/>render independent scene clips<br/>clean Remotion baseline; optional HyperFrames]
         assemble[video_assembly<br/>assemble clips with authoritative WAV]
-        review[visual_review<br/>create review package and contact sheet]
+        review[visual_review<br/>contact sheet plus story-by-story scene report]
         publish[publish_handoff<br/>final mode only]
         assetCatalog --> visualPlan --> discover --> resolve --> render --> assemble --> review
         review --> publish
@@ -399,11 +400,14 @@ flowchart TD
 
 The production planner menu is intentionally bounded and recipe-backed: source
 proof, story-owned image/video, verified identity, editorial hooks, simple
-explainers, deterministic story transitions, grounded metrics, process and
-interface motion, and evidence stacks. Each advertised kind carries an exact
-render recipe. The larger historical Remotion component library remains
-available to explicit specialist profiles and visual-lab tests, but it is not
-the daily design authority.
+explainers, deterministic story transitions, interface motion, and evidence
+stacks. Each advertised kind carries an exact render recipe. Decorative chart
+and dashboard families remain implemented for historical fixtures and focused
+labs, but are not advertised to the daily planner. The daily profile currently
+uses the inspected `editorial_minimal` Remotion renderer as its stable baseline.
+HyperFrames remains an explicit backend for recipe parity and renderer
+experiments until its chapter, identity, media, and typography output passes the
+same human visual review.
 
 ### Runtime Boundaries
 
@@ -411,7 +415,7 @@ the daily design authority.
 | ------------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------- |
 | Content apps, LLM planning, orchestration, metadata    | Main project Python             | Canonical Pydantic/LangChain application environment                    |
 | Hosted and local TTS synthesis                         | `.venv-voiceover` Python 3.12 | Keeps one stable synthesis boundary for API and local speech providers  |
-| Scene rendering                                        | Node, Chromium, HyperFrames by default; Remotion compatibility path | Renders each validated recipe specification into an MP4 clip without changing its semantic plan |
+| Scene rendering                                        | Node and Chromium; Remotion baseline plus explicit HyperFrames path | Renders each validated recipe specification into an MP4 clip without changing its semantic plan |
 | Audio/video probing, mastering, clipping, and assembly | `ffmpeg` and `ffprobe`      | Provides deterministic media transformation and verification            |
 | External model calls and enabled news sources          | Configured APIs                 | Credentials are loaded from`.env` and never copied into run artifacts |
 
@@ -656,13 +660,12 @@ timeouts, rate limits, schema failures, and scene-contract failures do not
 rotate providers.
 
 Visual rendering has one stable JSON contract and two explicit engines. The
-daily profile now uses HyperFrames for the active production scene families,
-including source-proof montages, annotated media, identity reveals, metric
-contrasts, evidence stacks, and process/interface motion. Every production
-scene must name a recipe that supports HyperFrames; unsupported or recipe-less
-scenes fail before render and never cross-fallback. Remotion supports the
-complete historical scene catalog and remains available for compatibility,
-specialist profiles, and visual-lab work. Both paths preserve
+daily profile uses Remotion for the active production scene families, including
+source-proof montages, annotated media, identity reveals, evidence stacks, and
+process/interface motion. Every production scene must name a valid recipe;
+unsupported or recipe-less scenes fail before render and never cross-fallback.
+HyperFrames remains explicitly selectable for recipe-parity experiments. Both
+paths preserve
 scene timing, parent fingerprints, content-addressed cache identity, video-only
 clip validation, assembly, and review. HyperFrames projects receive the shared
 `frame.md` design contract and use only pipeline-owned composition code and
@@ -729,9 +732,11 @@ story-owned source-page IDs, captures each page independently, and gives either
 renderer the same local asset bundle and provenance.
 
 After rendering and audio assembly, the review stage samples the final video
-into a contact sheet. Human inspection remains required because timing,
-legibility, relevance, and creative quality cannot be approved from metadata
-alone.
+into a contact sheet and extracts one frame per planned scene into a
+story-grouped HTML report. The report places narration, visual intent, recipe,
+asset/source identity, selected video moment, and planner rationale beside the
+rendered frame. Human inspection remains required because timing, legibility,
+relevance, and creative quality cannot be approved from metadata alone.
 
 Both render paths preserve a fixed 16:9 composition across 720p fixture
 renders, 1080p, 2K, and 4K. The `editorial_minimal` design contract uses warm
@@ -792,7 +797,8 @@ output_v2/ is historical only. Model caches live under
 
 ## Configuration
 
-`src/pipeline/config/workbench.yaml` is the profile and experiment manifest.
+`src/pipeline/config/workbench.yaml` is the small routing manifest for profiles,
+environment overlays, and experiments; it is active and must not be removed.
 Production module configuration lives under
 `src/pipeline/config/profiles/{profile}/{stage}/{module}.yaml`. Creating a run
 stores an immutable initial composed profile and hash in `run_context.json`.
@@ -807,6 +813,18 @@ collection mechanics live only in its content-stage module YAML.
 Behavioral values such as providers, models, prompt versions, source policies,
 selection limits, voices, visual capabilities, render settings, and bounded
 revision loops remain config-driven.
+
+`src/pipeline/config/environments/prod.yaml` preserves the production profile.
+`src/pipeline/config/environments/dev.yaml` overlays only settings that make
+iteration faster, currently verbose logs, fast visual-planner routes, and the
+preview Remotion renderer. The overlay is selected with `--environment`; the
+chosen value is stored in `run_context.json` and every module config snapshot.
+Profiles and modules are not duplicated into parallel dev/prod directory trees,
+so editorial policy and contracts cannot silently drift between environments.
+The environment is part of run identity: resume commands must use the run's
+stored environment. Renderer-only replay of an existing production run should
+therefore omit `--environment` (or pass `prod`) and use explicit preview/focus
+flags rather than trying to relabel the run as development.
 
 The active visual profile also owns asset-catalog policy, external-media review
 policy, preview/final render profiles, worker bounds, and the persistent scene
@@ -840,6 +858,14 @@ every downstream module in the same stage, preventing stale downstream media
 from surviving an intentional upstream change. The state file is an operator
 aid; canonical result files and fingerprints remain the source of truth.
 
+For renderer development, `--from-module visual_render --stop-after
+visual_render` replays the saved canonical visual plan and resolved assets. It
+does not recollect news, invoke planning LLMs, synthesize speech, assemble a full
+episode, or create a publish handoff. Optional repeated `--scene-id` or
+`--story-id` flags isolate the render under a backend-specific focused output
+directory, so a test cannot delete the complete preview or another backend's
+comparison clip.
+
 ## Synchronization Contract
 
 Voiceover synthesizes the intro, each complete story, and closing as identified
@@ -865,19 +891,23 @@ Final assembly verifies:
 
 Repeatable stage commands:
 
-    python3 -m src.pipeline.orchestration.runner content --profile daily_48h_all_sources
-    python3 -m src.pipeline.orchestration.runner voiceover --run-id current --script-source app --synthesis-mode preview
-    python3 -m src.pipeline.orchestration.runner visuals --run-id current --plan-source generate --render-mode preview
+    python3 -m src.pipeline.orchestration.runner content --profile daily_48h_all_sources --environment prod
+    python3 -m src.pipeline.orchestration.runner voiceover --run-id current --script-source app --synthesis-mode preview --environment prod
+    python3 -m src.pipeline.orchestration.runner visuals --run-id current --plan-source generate --render-mode preview --environment prod
+
+Fast renderer-only replay against saved production artifacts:
+
+    python3 -m src.pipeline.orchestration.runner visuals --run-id current --plan-source generate --render-mode preview --from-module visual_render --stop-after visual_render --scene-id scene_003
 
 After creative iteration, synthesize the final hosted voice and rerun visual
 timing against that exact voiceover variant:
 
-    python3 -m src.pipeline.orchestration.runner voiceover --run-id current --script-source app --synthesis-mode final
+    python3 -m src.pipeline.orchestration.runner voiceover --run-id current --script-source app --synthesis-mode final --environment prod
 
 After preview review, render delivery media without rerunning upstream visual
 work:
 
-    python3 -m src.pipeline.orchestration.runner visuals --run-id current --plan-source generate --render-mode final --from-module visual_render
+    python3 -m src.pipeline.orchestration.runner visuals --run-id current --plan-source generate --render-mode final --from-module visual_render --environment prod
 
 Exact JSON stage envelopes may be supplied with `--input-json` for service or
 scheduler integration.

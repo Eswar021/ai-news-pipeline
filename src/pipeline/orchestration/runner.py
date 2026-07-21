@@ -3,13 +3,21 @@
 Run from the project root with the main project Python, not `.venv-voiceover`::
 
     python3 -m src.pipeline.orchestration.runner content \
-      --profile daily_48h_all_sources
+      --profile daily_48h_all_sources --environment prod
     python3 -m src.pipeline.orchestration.runner voiceover \
       --run-id current --script-source app --synthesis-mode final
     python3 -m src.pipeline.orchestration.runner voiceover \
       --run-id current --script-source app --synthesis-mode preview
     python3 -m src.pipeline.orchestration.runner visuals \
       --run-id current --plan-source generate --render-mode preview
+
+Fast visual code iteration reuses the saved plan and assets, renders only the
+named scenes, and stops before assembly::
+
+    python3 -m src.pipeline.orchestration.runner visuals \
+      --run-id current --plan-source generate \
+      --render-mode preview --from-module visual_render \
+      --stop-after visual_render --scene-id scene_003
 
 Use ``--render-backend hyperframes`` for the optional HyperFrames renderer;
 omit it to use the profile's configured backend.
@@ -99,6 +107,7 @@ def _build_parser() -> argparse.ArgumentParser:
     visuals.add_argument("--scene-id", action="append", default=[], dest="selected_scene_ids")
     visuals.add_argument("--story-id", action="append", default=[], dest="selected_story_ids")
     visuals.add_argument("--from-module")
+    visuals.add_argument("--stop-after")
     visuals.add_argument("--no-resume", action="store_true")
     visuals.add_argument("--skip-publish-handoff", action="store_true")
     return parser
@@ -114,6 +123,11 @@ def _add_common_arguments(parser: argparse.ArgumentParser, *, default_run_id: st
     parser.add_argument("--output-root", default="output")
     parser.add_argument("--pipeline-config", default="src/pipeline/config/workbench.yaml")
     parser.add_argument(
+        "--environment",
+        choices=("dev", "prod"),
+        help="Config overlay to use. Defaults to PIPELINE_ENVIRONMENT/ENVIRONMENT, then prod.",
+    )
+    parser.add_argument(
         "--config-mode",
         choices=("live", "frozen"),
         default="live",
@@ -126,7 +140,10 @@ def _add_common_arguments(parser: argparse.ArgumentParser, *, default_run_id: st
 
 def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
     request: dict[str, Any] = {
-        "run": {"run_id": args.run_id},
+        "run": {
+            "run_id": args.run_id,
+            "config_environment": args.environment,
+        },
         "paths": {
             "project_root": args.project_root,
             "output_root": args.output_root,
@@ -170,6 +187,7 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
             "selected_story_ids": args.selected_story_ids,
             "resume_completed": not args.no_resume,
             "from_module": args.from_module,
+            "stop_after": args.stop_after,
             "create_publish_handoff": not args.skip_publish_handoff,
         }
     return request
@@ -206,6 +224,13 @@ def _load_project_environment(request: dict[str, Any]) -> None:
     paths = request.get("paths") if isinstance(request.get("paths"), dict) else {}
     project_root = Path(str(paths.get("project_root") or ".")).expanduser().resolve()
     load_dotenv(dotenv_path=project_root / ".env", override=False)
+    run = request.setdefault("run", {})
+    if not isinstance(run, dict):
+        raise TypeError("runner request run must be a mapping")
+    if not str(run.get("config_environment") or "").strip():
+        configured = os.getenv("PIPELINE_ENVIRONMENT") or os.getenv("ENVIRONMENT")
+        if configured:
+            run["config_environment"] = configured.strip().lower()
 
 
 def _console_result(result: dict[str, Any]) -> dict[str, Any]:

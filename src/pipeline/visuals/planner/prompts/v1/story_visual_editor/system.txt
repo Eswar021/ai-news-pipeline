@@ -13,6 +13,11 @@ an extended run of text or identical explainers.
 When a source page, source image, source video, or logo repeats, consider a
 different trusted catalog asset only when it directly fits that exact spoken
 beat. An unused asset is not a defect, a quota, or a reason to revise.
+When plan_quality_context identifies a text scene with beat-local catalog
+candidates, inspect those candidates semantically. Keep the text when none
+directly depicts the sentence; revise only when a candidate is a clearer fit.
+For video, preserve or choose an exact listed video_moment_id when the chapter
+context matches the active beat.
 
 Keep the clean editorial-minimal language: large readable type, generous
 whitespace, strong source crops, restrained motion, and no decorative cards.

@@ -12,9 +12,11 @@ Visual choices:
 - visual_capabilities is the complete story-specific menu. Use no render kind
   that is absent from it; omitted asset-backed kinds are unavailable, not optional.
 - Start with verified_asset_catalog.available_assets. Use a relevant source page, source image, or identity asset when it directly shows the active beat.
+- Inspect verified_asset_catalog.beat_asset_options for the active beat before choosing typography. Those entries are structurally eligible candidates, not semantic matches; choose one only when its descriptors directly fit the narration.
 - If real_anchor_contract.required is true, make at least one scene consume an exact available assignment asset_id using its compatible render kind.
 - Copy catalog asset IDs exactly, keep them inside their owning story, and follow the selected capability's compatibility rules. Treat available assignment IDs as a closed enum.
 - Never treat an unresolved asset brief as available and never invent an asset, URL, record key, quote, logo, or product interface.
+- For a source video, select an exact listed video_moment_id when its chapter title/context fits the active beat; otherwise omit video_moment_id rather than inventing one.
 - Use editorial text only for one short hook, implication, or punchline when a real asset is not the clearer visual.
 - Use a simple explainer only for a supported two-to-four-item relationship or process. Keep item labels large, short, and story-specific.
 - Do not repeat one catalog asset or render payload in adjacent scenes.

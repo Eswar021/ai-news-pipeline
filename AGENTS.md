@@ -33,7 +33,10 @@ src/pipeline/
 ├── orchestration/
 ├── voiceover/
 ├── visuals/
-└── config/workbench.yaml
+└── config/
+    ├── workbench.yaml
+    ├── environments/{dev|prod}.yaml
+    └── profiles/{profile}/{content|voiceover|visuals}/
 ```
 
 Production automation uses one thin CLI router with three explicit stage
@@ -93,6 +96,8 @@ Behavior must be config-driven.
 
 - `src/pipeline/config/workbench.yaml` is the profile manifest; module authoring
   config lives below `src/pipeline/config/profiles/{profile}/{stage}/`
+- `src/pipeline/config/environments/{dev|prod}.yaml` contains sparse overlays;
+  do not duplicate complete profile trees per environment
 - a production run stores an immutable initial composed profile in
   `run_context.json` for identity and reproducibility
 - stage runners load each module's current YAML immediately before execution by

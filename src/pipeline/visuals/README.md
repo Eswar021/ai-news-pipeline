@@ -23,8 +23,9 @@ The stages are intentionally separate:
   scene records.
 - `render` turns each resolved scene into an MP4 clip.
 - `assembly` concatenates clips and attaches the voiceover.
-- `review` samples the assembled video into a contact sheet for human visual
-  inspection and publish review.
+- `review` samples the assembled video into a contact sheet and a
+  scene-by-scene, story-grouped report for human visual inspection and publish
+  review.
 
 Every production stage carries artifact provenance. The visual plan is bound
 to one script, voiceover, and asset-catalog fingerprint; media discovery, asset
@@ -102,6 +103,8 @@ Purpose:
   dimensions, and content hash
 - retain bounded direct source-owned video files when the selected publisher
   exposes a supported MP4/WebM/MOV asset, then verify its stream with ffprobe
+- preserve source-link text, nearby page context, provider metadata, and
+  bounded provider chapter moments for selected-source YouTube/Vimeo/X videos
 - register resolvable local/Simple Icons identities without pretending a
   favicon or text treatment is an official logo
 - treat exact logo identities requested by canonical script visual briefs as
@@ -115,6 +118,13 @@ does not call an LLM or vision model. A selected source page is a real visual
 anchor even when the publisher exposes no usable hero image or direct video.
 Unresolved photo or B-roll briefs remain visible; this stage never substitutes
 an unrelated asset to make the run appear complete.
+
+Beat briefs expose structurally eligible `candidate_asset_ids`, not semantic
+matches. Story ownership, source-record ownership, and renderer compatibility
+are safe code checks; whether a candidate actually depicts the active sentence
+is a planner/editor decision. The planner receives joined `beat_asset_options`
+with each candidate's image-specific description, surrounding page context,
+and available source-video moments.
 
 HTTP metadata fetch status and browser capture readiness are recorded
 separately. Browser preflight is authoritative for screenshot availability: a
@@ -199,12 +209,19 @@ narration, and does not invent missing media or payload semantics.
 The pass is limited to one and to the configured story-call budget. If the
 editor fails, the explicit production policy keeps an already valid original;
 an invalid original still fails planning rather than becoming generic text.
+When a text scene covers a beat with catalog candidates, the production profile
+asks this semantic editor to inspect those candidates. It may keep the text
+when none fits; code never swaps the scene merely because an asset exists.
 
 Selected-source YouTube, X, and Vimeo links/embeds may be resolved through the
 bounded app-local `yt-dlp` adapter when enabled. Provider allowlists, link
 counts, duration, resolution, byte size, and timeouts are config-driven. These
 assets are provenance-trusted, but that trust is recorded separately from
 narration-beat suitability.
+When provider chapter metadata exists, the story planner can select one exact
+`video_moment_id`. Media discovery then clips from that start rather than
+blindly using 0:00. A missing or invented moment ID fails as an identity error;
+the relevance of a valid listed moment remains the planner's judgment.
 
 Story-title transitions reuse the story planner's semantically selected opening
 image, video, or logo when one exists. The renderer overlays the canonical
@@ -291,6 +308,7 @@ from src.pipeline.visuals.media_discovery import run
 Purpose:
 
 - copy exact catalog-backed source images requested by the planner
+- prepare an exact planner-selected catalog video moment when one is present
 - optionally search only for unresolved scenes that explicitly request
   contextual images or b-roll
 - use lexical/provider signals only to build a bounded candidate pool
@@ -480,24 +498,22 @@ max_render_attempts   bounded attempts per scene; retries run serially
 reuse_cached_scenes   restore unchanged clips from the persistent cache
 ```
 
-The daily production profile uses HyperFrames for the active recipe-backed
+The daily production profile uses the inspected `editorial_minimal` Remotion
+renderer as the stable delivery baseline for the active recipe-backed
 vocabulary:
 source proof, contextual image/video, logo identity, editorial typography,
-simple explainers, story transitions, claim highlights, metrics and contrasts,
-process/interface motion, and evidence stacks.
-Named recipes such as `source_proof_montage`, `annotated_image_focus`,
-`metric_contrast`, and `process_trace` share the same payload and provenance
-contract across HyperFrames and Remotion. HyperFrames uses pinned local
-dependencies, a copied `frame.md` design contract, strict composition checks,
-isolated per-scene projects, and the same cache envelope. Selecting a scene
-without a valid named recipe fails before rendering and never falls back to
-Remotion. When scene-level concurrency is active, each HyperFrames render uses
-one internal frame worker to avoid nested process multiplication.
+simple explainers, story transitions, claim highlights, interface motion, and
+evidence stacks.
+Named recipes share the same payload and provenance contract across Remotion
+and HyperFrames. HyperFrames is an explicit comparison backend, not an implicit
+fallback or the current delivery default. It uses pinned local dependencies, a
+copied `frame.md` design contract, strict composition checks, isolated per-scene
+projects, and the same cache envelope. Selecting a scene without a valid named
+recipe fails before rendering and never crosses to another engine.
 
-Remotion remains a supported compatibility and visual-lab backend for the
-historical component catalog. Ten or fifteen workers are not automatically
-faster on either backend: Chromium, ffmpeg, memory bandwidth, and encoders
-become the bottleneck, so the profile keeps scene and frame concurrency bounded.
+Ten or fifteen workers are not automatically faster on either backend:
+Chromium, ffmpeg, memory bandwidth, and encoders become the bottleneck, so the
+profile keeps scene and frame concurrency bounded.
 The pinned `hyperframes@0.7.64` dependency still carries an unresolved
 high-severity transitive `adm-zip` denial-of-service advisory. Production must
 therefore continue to render only pipeline-owned compositions and trusted local
@@ -508,7 +524,9 @@ content, and selected engine source. A prompt, asset, scene, or renderer change
 therefore invalidates only affected clips. Preview mode uses 720p,
 bitrate-based hardware-friendly encoding, and a fast path; final mode retains
 CRF-based quality and renders the complete scene manifest at delivery quality.
-Focused previews intentionally set `ready_for_video_assembly=false`.
+Focused previews intentionally set `ready_for_video_assembly=false`. They are
+written below `render_preview/focused/{backend-selection-hash}` and do not
+replace the complete episode preview or another renderer's comparison.
 
 The production notebook keeps preview and final artifacts separate:
 
@@ -569,6 +587,10 @@ Purpose:
 - verify the selected final-video artifact and its provenance
 - sample configured frames across the complete episode
 - write a contact sheet and review package
+- extract one midpoint frame per planned scene and write
+  `story_review_manifest.json` plus `story_review_report.html`, grouped by
+  intro, story, and closing with narration, recipe, asset, source, and planner
+  rationale beside each frame
 - make human visual review an explicit publish prerequisite
 
 The contact sheet is a navigation aid, not an automatic creative approval.
@@ -771,7 +793,24 @@ If section 7 fails with unsupported render kinds, the planner and resolver are
 out of sync. Add the scene type to the resolver classification and render
 contracts instead of removing the scene from the plan.
 
-For fast iteration, keep `VISUAL_RENDER_MODE = "preview"` and optionally set
+For fast CLI iteration against a completed run, replay only renderer code and
+saved assets:
+
+```bash
+python3 -m src.pipeline.orchestration.runner visuals \
+  --run-id current \
+  --plan-source generate \
+  --render-mode preview \
+  --from-module visual_render \
+  --stop-after visual_render \
+  --scene-id scene_003
+```
+
+Repeat `--scene-id` or use `--story-id` for a bounded selection. This path makes
+no LLM or TTS call and does not assemble or publish. Omit the selections only
+when a complete cached preview is needed.
+
+For fast notebook iteration, keep `VISUAL_RENDER_MODE = "preview"` and optionally set
 `VISUAL_SCENE_IDS` or `VISUAL_STORY_IDS` near the top of the notebook. Clear
 both selections and switch to `final` before assembly. A second unchanged
 preview should report cache hits rather than re-rendering every clip.

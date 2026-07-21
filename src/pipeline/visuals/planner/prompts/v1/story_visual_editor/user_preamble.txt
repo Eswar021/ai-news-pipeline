@@ -17,6 +17,8 @@ If revising:
 - avoid more than two consecutive scenes of the same kind when a genuinely
   better supported treatment exists
 - never force an available image into a beat it does not depict
+- treat beat_asset_options as candidates awaiting your judgment, not as pre-approved matches
+- choose only listed source-video moments and explain their beat fit in clip_selection_reason
 - populate every required field in the complete nested revised_plan contract
 
 Do not return markdown and do not rewrite narration.

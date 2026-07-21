@@ -17,6 +17,38 @@ class ReviewRun(BaseModel):
         return value
 
 
+class StoryReportConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    worker_count: int = 4
+    thumbnail_width: int = 640
+    jpeg_quality: int = 88
+
+    @field_validator("worker_count")
+    @classmethod
+    def worker_count_must_be_bounded(cls, value: int) -> int:
+        if value < 1 or value > 8:
+            raise ValueError("config.story_report.worker_count must be between 1 and 8")
+        return value
+
+    @field_validator("thumbnail_width")
+    @classmethod
+    def thumbnail_width_must_be_bounded(cls, value: int) -> int:
+        if value < 320 or value > 1_280:
+            raise ValueError(
+                "config.story_report.thumbnail_width must be between 320 and 1280"
+            )
+        return value
+
+    @field_validator("jpeg_quality")
+    @classmethod
+    def jpeg_quality_must_be_bounded(cls, value: int) -> int:
+        if value < 60 or value > 100:
+            raise ValueError("config.story_report.jpeg_quality must be between 60 and 100")
+        return value
+
+
 class VisualReviewConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -29,6 +61,7 @@ class VisualReviewConfig(BaseModel):
     thumbnail_width: int = 420
     jpeg_quality: int = 90
     keep_frames: bool = False
+    story_report: StoryReportConfig = Field(default_factory=StoryReportConfig)
 
     @field_validator("output_dir", "ffmpeg_path", "ffprobe_path")
     @classmethod
@@ -53,14 +86,14 @@ class VisualReviewConfig(BaseModel):
 
     @field_validator("thumbnail_width")
     @classmethod
-    def thumbnail_width_must_be_bounded(cls, value: int) -> int:
+    def review_thumbnail_width_must_be_bounded(cls, value: int) -> int:
         if value < 240 or value > 960:
             raise ValueError("config.thumbnail_width must be between 240 and 960")
         return value
 
     @field_validator("jpeg_quality")
     @classmethod
-    def jpeg_quality_must_be_bounded(cls, value: int) -> int:
+    def review_jpeg_quality_must_be_bounded(cls, value: int) -> int:
         if value < 60 or value > 100:
             raise ValueError("config.jpeg_quality must be between 60 and 100")
         return value
@@ -82,8 +115,25 @@ class VideoAssemblyEnvelope(BaseModel):
     handoff: dict[str, Any] = Field(default_factory=dict)
 
 
+class VisualScenePlanningData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    run_id: str
+    visual_scene_plan: dict[str, Any]
+
+
+class VisualScenePlanningEnvelope(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str
+    data: VisualScenePlanningData
+    summary: dict[str, Any] = Field(default_factory=dict)
+    handoff: dict[str, Any] = Field(default_factory=dict)
+
+
 class VisualReviewInput(BaseModel):
     video_assembly: VideoAssemblyEnvelope
+    visual_scene_planning: VisualScenePlanningEnvelope | None = None
 
 
 class VisualReviewRequest(BaseModel):
@@ -106,4 +156,10 @@ class VisualReviewRequest(BaseModel):
         ).strip()
         if not video_path:
             raise ValueError("video assembly final_video_path is missing")
+        planning = self.input.visual_scene_planning
+        if planning is not None:
+            if planning.status != "ok":
+                raise ValueError("input.visual_scene_planning.status must be ok")
+            if planning.data.run_id != self.run.run_id:
+                raise ValueError("visual scene planning run_id does not match request run_id")
         return self

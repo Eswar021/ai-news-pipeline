@@ -455,16 +455,20 @@ def _catalog_media_selection(
         if suffix not in {".mp4", ".webm", ".mov", ".m4v"}:
             raise ValueError(f"Catalog asset {asset_id!r} uses unsupported video format {suffix!r}")
         output_path = videos_dir / f"{slugify(scene_id)}_{slugify(asset_id)}.mp4"
-        clip_duration = _prepare_catalog_video_clip(
+        prepared_clip = _prepare_catalog_video_clip(
             source_path=source_path,
             output_path=output_path,
             scene=scene,
+            asset=asset,
             request=request,
         )
+        clip_duration = float(prepared_clip["clip_duration_seconds"])
         media_type = "video"
         content_type = "video/mp4"
         request_key = (
             f"asset_catalog:{asset_id}:"
+            f"{clean_text(prepared_clip.get('video_moment_id')) or 'start'}:"
+            f"{round(float(prepared_clip.get('clip_start_seconds', 0.0)), 3)}:"
             f"{round(max(1.0, safe_float(scene.get('duration_seconds'), 6.0)), 2)}"
         )
     else:
@@ -493,10 +497,27 @@ def _catalog_media_selection(
         "height": asset.get("height"),
         "downloaded_bytes": output_path.stat().st_size,
         "download_content_type": content_type,
-        "clip_start_seconds": 0.0 if media_type == "video" else None,
+        "clip_start_seconds": (
+            round(float(prepared_clip.get("clip_start_seconds", 0.0)), 3)
+            if media_type == "video"
+            else None
+        ),
         "clip_duration_seconds": round(clip_duration, 3) if media_type == "video" else None,
+        "video_moment_id": (
+            clean_text(prepared_clip.get("video_moment_id")) if media_type == "video" else ""
+        ),
+        "video_moment_title": (
+            clean_text(prepared_clip.get("video_moment_title")) if media_type == "video" else ""
+        ),
+        "clip_selection_reason": (
+            clean_text(payload.get("clip_selection_reason")) if media_type == "video" else ""
+        ),
         "media_request_key": request_key,
-        "selection_basis": "planner_selected_exact_story_catalog_asset_id",
+        "selection_basis": (
+            "planner_selected_exact_story_catalog_video_moment"
+            if media_type == "video" and clean_text(prepared_clip.get("video_moment_id"))
+            else "planner_selected_exact_story_catalog_asset_id"
+        ),
         "provenance_verification": {
             "status": "trusted_source_asset",
             "passed": True,
@@ -511,11 +532,15 @@ def _catalog_media_selection(
                 "no separate vision suitability review was requested."
             ),
         },
-        "narration_suitability": asset.get("narration_suitability")
-        or {
+        "narration_suitability": {
             "status": "planner_selected",
-            "basis": "exact_asset_id_selected_for_active_script_beat",
+            "basis": (
+                "exact_catalog_video_moment_selected_for_active_script_beat"
+                if media_type == "video" and clean_text(prepared_clip.get("video_moment_id"))
+                else "exact_asset_id_selected_for_active_script_beat"
+            ),
             "independent_vision_review": False,
+            "catalog_status_before_planning": asset.get("narration_suitability", {}),
         },
         "review_status": clean_text(asset.get("review_status")),
         "selected_at": iso_now(),
@@ -527,10 +552,28 @@ def _prepare_catalog_video_clip(
     source_path: Path,
     output_path: Path,
     scene: dict[str, Any],
+    asset: dict[str, Any],
     request: VisualMediaRequest,
-) -> float:
+) -> dict[str, Any]:
     scene_duration = max(1.0, safe_float(scene.get("duration_seconds"), 6.0))
     clip_duration = scene_duration + request.config.video_clip_padding_seconds
+    payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
+    requested_moment_id = clean_text(payload.get("video_moment_id"))
+    selected_moment = next(
+        (
+            moment
+            for moment in asset.get("video_moments", [])
+            if isinstance(moment, dict)
+            and clean_text(moment.get("video_moment_id")) == requested_moment_id
+        ),
+        None,
+    )
+    if requested_moment_id and selected_moment is None:
+        raise ValueError(
+            f"Catalog video {clean_text(asset.get('asset_id'))!r} has no moment "
+            f"{requested_moment_id!r}"
+        )
+    clip_start = max(0.0, safe_float((selected_moment or {}).get("start_seconds"), 0.0))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
         request.config.ffmpeg_path,
@@ -540,6 +583,8 @@ def _prepare_catalog_video_clip(
         "-y",
         "-stream_loop",
         "-1",
+        "-ss",
+        f"{clip_start:.3f}",
         "-i",
         str(source_path),
         "-t",
@@ -583,7 +628,12 @@ def _prepare_catalog_video_clip(
     if output_path.stat().st_size > request.config.max_download_bytes:
         output_path.unlink(missing_ok=True)
         raise ValueError("Prepared catalog video exceeds config.max_download_bytes")
-    return clip_duration
+    return {
+        "clip_start_seconds": round(clip_start, 3),
+        "clip_duration_seconds": round(clip_duration, 3),
+        "video_moment_id": clean_text((selected_moment or {}).get("video_moment_id")),
+        "video_moment_title": clean_text((selected_moment or {}).get("title")),
+    }
 
 
 def _content_type_for_image(path: Path) -> str:

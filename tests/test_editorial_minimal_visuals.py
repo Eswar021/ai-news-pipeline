@@ -48,14 +48,16 @@ def test_production_profile_exposes_renderable_editorial_vocabulary() -> None:
         "simple_explainer_scene",
         "story_transition_scene",
         "quote_or_claim_highlight_scene",
-        "data_counter_scene",
-        "benchmark_delta_scene",
-        "architecture_flow_scene",
-        "process_zoom_scene",
         "browser_walkthrough_scene",
         "document_stack_scene",
         "interface_transform_scene",
     ]
+    assert not {
+        "data_counter_scene",
+        "benchmark_delta_scene",
+        "architecture_flow_scene",
+        "process_zoom_scene",
+    } & set(config["scene_policy"]["allowed_render_kinds"])
 
 
 def test_production_visual_planner_uses_kimi_for_story_creative_roles() -> None:
@@ -246,10 +248,6 @@ def test_story_planner_prompt_hides_system_managed_transition() -> None:
         "editorial_text_scene",
         "simple_explainer_scene",
         "quote_or_claim_highlight_scene",
-        "data_counter_scene",
-        "benchmark_delta_scene",
-        "architecture_flow_scene",
-        "process_zoom_scene",
         "browser_walkthrough_scene",
         "document_stack_scene",
         "interface_transform_scene",

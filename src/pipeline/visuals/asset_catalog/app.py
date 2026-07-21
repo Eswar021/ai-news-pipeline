@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 import io
 import json
+import logging
 import math
 from pathlib import Path
 import shutil
@@ -29,6 +30,9 @@ from ..generators.source_screenshot.web_capture import capture_source_viewport
 from .config import CATALOG_VERSION, NEXT_MODULE, PACKAGE_TYPE
 from .contract import AssetCatalogRequest, AssetCatalogResponse
 from .identity import catalog_identity_payload
+
+
+RUNTIME_LOGGER = logging.getLogger("ai_content_creation.runtime.visual_asset_catalog")
 
 
 def _optional_int(value: Any) -> int | None:
@@ -72,6 +76,8 @@ class _MetadataParser(HTMLParser):
         self._recent_text_blocks: list[str] = []
         self._figure_depth = 0
         self._figure_image_indexes: list[int] = []
+        self._active_video_link_index: int | None = None
+        self._active_video_link_text_parts: list[str] = []
 
     def _nearby_text(self) -> str:
         active_text = clean_text(" ".join(self._active_text_parts))
@@ -171,6 +177,8 @@ class _MetadataParser(HTMLParser):
                         "url": src,
                         "mime_type": clean_text(values.get("type")),
                         "video_role": "embedded_video",
+                        "page_section_heading": self._current_heading,
+                        "nearby_text": self._nearby_text(),
                     }
                 )
         elif tag == "source":
@@ -183,6 +191,8 @@ class _MetadataParser(HTMLParser):
                         "url": src,
                         "mime_type": mime_type,
                         "video_role": "embedded_video_source",
+                        "page_section_heading": self._current_heading,
+                        "nearby_text": self._nearby_text(),
                     }
                 )
         elif tag in {"a", "iframe"}:
@@ -191,19 +201,28 @@ class _MetadataParser(HTMLParser):
             )
             provider = _source_video_provider(candidate_url)
             if provider:
-                self.linked_video_candidates.append(
-                    {
-                        "url": candidate_url,
-                        "provider": provider,
-                        "video_role": (
-                            "source_page_video_link"
-                            if tag == "a"
-                            else "source_page_video_embed"
-                        ),
-                    }
-                )
+                candidate = {
+                    "url": candidate_url,
+                    "provider": provider,
+                    "video_role": (
+                        "source_page_video_link"
+                        if tag == "a"
+                        else "source_page_video_embed"
+                    ),
+                    "link_text": "",
+                    "page_section_heading": self._current_heading,
+                    "nearby_text": self._nearby_text(),
+                }
+                self.linked_video_candidates.append(candidate)
+                if tag == "a":
+                    self._active_video_link_index = len(self.linked_video_candidates) - 1
+                    self._active_video_link_text_parts = []
 
     def handle_data(self, data: str) -> None:
+        if self._active_video_link_index is not None:
+            value = clean_text(data)
+            if value:
+                self._active_video_link_text_parts.append(value)
         if self._active_text_tag is not None:
             value = clean_text(data)
             if value:
@@ -211,6 +230,12 @@ class _MetadataParser(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
+        if tag == "a" and self._active_video_link_index is not None:
+            link_text = clean_text(" ".join(self._active_video_link_text_parts))
+            if 0 <= self._active_video_link_index < len(self.linked_video_candidates):
+                self.linked_video_candidates[self._active_video_link_index]["link_text"] = link_text
+            self._active_video_link_index = None
+            self._active_video_link_text_parts = []
         if tag in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "figcaption"}:
             self._finish_text_capture(tag)
         if tag == "figure" and self._figure_depth:
@@ -295,6 +320,11 @@ def run(input_json: dict) -> dict:
                 )
             )
 
+    RUNTIME_LOGGER.info(
+        "CATALOG source scan start stories=%d records=%d",
+        len(stories),
+        len(records_to_fetch),
+    )
     page_results = _collect_source_media(
         records_to_fetch,
         image_output_dir=source_images_dir,
@@ -305,6 +335,11 @@ def run(input_json: dict) -> dict:
             "collect_source_videos": request.config.collect_source_videos,
             "source_linked_video": request.config.source_linked_video.model_dump(mode="json"),
         },
+    )
+    RUNTIME_LOGGER.info(
+        "CATALOG source scan end fetched=%d candidate_assets=%d",
+        len(page_results),
+        len(assets),
     )
     source_candidate_telemetry: list[dict[str, Any]] = []
     for result in page_results:
@@ -328,6 +363,11 @@ def run(input_json: dict) -> dict:
         config=request.config.source_page_preflight.model_dump(mode="json"),
     )
     warnings.extend(preflight_warnings)
+    RUNTIME_LOGGER.info(
+        "CATALOG preflight end assets=%d warnings=%d",
+        len(assets),
+        len(warnings),
+    )
 
     candidate_filtering = _aggregate_candidate_telemetry(source_candidate_telemetry)
     candidate_summary = {
@@ -476,6 +516,13 @@ def run(input_json: dict) -> dict:
             "requires_manual_external_media_review": unresolved_request_count > 0,
             "next_module": NEXT_MODULE,
         },
+    )
+    RUNTIME_LOGGER.info(
+        "CATALOG complete status=%s stories=%d assets=%d available=%d",
+        status,
+        len(story_catalogs),
+        len(assets),
+        sum(clean_text(asset.get("status")) == "available" for asset in assets),
     )
     return response.model_dump(mode="json")
 
@@ -1382,6 +1429,11 @@ def _download_source_linked_video_candidate(
         output_path.unlink(missing_ok=True)
         raise
 
+    video_moments = _video_moments_from_provider_metadata(
+        metadata,
+        max_moments=int(linked_config.get("max_chapter_moments", 24)),
+        duration_seconds=probed_duration,
+    )
     return {
         "asset_id": asset_id,
         "story_id": story_id,
@@ -1402,6 +1454,17 @@ def _download_source_linked_video_candidate(
         "provider": provider,
         "provider_id": clean_text(metadata.get("id")),
         "uploader": clean_text(metadata.get("uploader") or metadata.get("channel")),
+        "link_text": clean_text(candidate.get("link_text")),
+        "page_section_heading": clean_text(candidate.get("page_section_heading")),
+        "nearby_text": clean_text(candidate.get("nearby_text")),
+        "video_context": {
+            "link_text": clean_text(candidate.get("link_text")),
+            "page_section_heading": clean_text(candidate.get("page_section_heading")),
+            "nearby_text": clean_text(candidate.get("nearby_text")),
+            "provider_title": clean_text(metadata.get("title")),
+            "provider_description": clean_text(metadata.get("description"))[:1_200],
+        },
+        "video_moments": video_moments,
         "width": width,
         "height": height,
         "aspect_ratio": round(width / height, 4),
@@ -1416,6 +1479,70 @@ def _download_source_linked_video_candidate(
             "basis": "planner_must_match_asset_to_active_script_beat",
         },
     }
+
+
+def _video_moments_from_provider_metadata(
+    metadata: dict[str, Any],
+    *,
+    max_moments: int,
+    duration_seconds: float,
+) -> list[dict[str, Any]]:
+    chapters = metadata.get("chapters")
+    if not isinstance(chapters, list) or max_moments < 1:
+        return []
+    normalized: list[dict[str, Any]] = []
+    for index, chapter in enumerate(chapters):
+        if not isinstance(chapter, dict):
+            continue
+        try:
+            start = max(0.0, float(chapter.get("start_time") or 0.0))
+        except (TypeError, ValueError):
+            continue
+        if duration_seconds > 0 and start >= duration_seconds:
+            continue
+        raw_end = chapter.get("end_time")
+        try:
+            end = float(raw_end) if raw_end is not None else 0.0
+        except (TypeError, ValueError):
+            end = 0.0
+        if end <= start:
+            next_start = 0.0
+            for next_chapter in chapters[index + 1 :]:
+                if not isinstance(next_chapter, dict):
+                    continue
+                try:
+                    next_start = float(next_chapter.get("start_time") or 0.0)
+                except (TypeError, ValueError):
+                    continue
+                if next_start > start:
+                    break
+            end = next_start if next_start > start else duration_seconds
+        if duration_seconds > 0:
+            end = min(end or duration_seconds, duration_seconds)
+        if end <= start:
+            continue
+        title = clean_text(chapter.get("title")) or f"Chapter {len(normalized) + 1}"
+        normalized.append(
+            {
+                "video_moment_id": _stable_id(
+                    "video_moment",
+                    {
+                        "provider_id": clean_text(metadata.get("id")),
+                        "title": title,
+                        "start_seconds": round(start, 3),
+                    },
+                ),
+                "title": title,
+                "description": clean_text(chapter.get("description")),
+                "start_seconds": round(start, 3),
+                "end_seconds": round(end, 3),
+                "duration_seconds": round(end - start, 3),
+                "source": "provider_chapter",
+            }
+        )
+        if len(normalized) >= max_moments:
+            break
+    return normalized
 
 
 def _download_source_image_candidate(
@@ -1625,6 +1752,15 @@ def _download_source_video_candidate(
         "title": page_title,
         "description": page_description,
         "video_role": clean_text(candidate.get("video_role")) or "source_page_video",
+        "page_section_heading": clean_text(candidate.get("page_section_heading")),
+        "nearby_text": clean_text(candidate.get("nearby_text")),
+        "video_context": {
+            "page_section_heading": clean_text(candidate.get("page_section_heading")),
+            "nearby_text": clean_text(candidate.get("nearby_text")),
+            "page_title": page_title,
+            "page_description": page_description,
+        },
+        "video_moments": [],
         "candidate_order": candidate_order,
         "source_name": clean_text(record.get("source_name") or record.get("source")),
         "width": width,
@@ -1848,7 +1984,7 @@ def _bind_brief_to_assets(brief: dict[str, Any], assets: list[dict[str, Any]]) -
     item = dict(brief)
     requested_types = set(brief.get("requested_asset_types", []))
     record_keys = set(brief.get("preferred_record_keys", []))
-    matched = []
+    candidates = []
     for asset in assets:
         asset_type = clean_text(asset.get("asset_type"))
         source_key = clean_text(asset.get("source_record_key"))
@@ -1859,14 +1995,18 @@ def _bind_brief_to_assets(brief: dict[str, Any], assets: list[dict[str, Any]]) -
             continue
         if record_keys and source_key and source_key not in record_keys:
             continue
-        matched.append(clean_text(asset.get("asset_id")))
-    item["matched_asset_ids"] = dedupe(matched)
-    if matched:
-        item["resolution_status"] = "available"
+        candidates.append(clean_text(asset.get("asset_id")))
+    item["candidate_asset_ids"] = dedupe(candidates)
+    item["candidate_basis"] = "story_ownership_record_ownership_and_render_type_only"
+    if candidates:
+        item["resolution_status"] = "candidate_assets_available"
+        item["semantic_selection_status"] = "planner_review_required"
     elif requested_types <= {"code_graphic", "kinetic_text", "transition"}:
         item["resolution_status"] = "no_external_asset_required"
+        item["semantic_selection_status"] = "not_applicable"
     else:
         item["resolution_status"] = "unresolved"
+        item["semantic_selection_status"] = "no_candidate_available"
     return item
 
 

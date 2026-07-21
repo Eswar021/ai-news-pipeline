@@ -97,3 +97,22 @@ def test_module_config_has_independent_source_identity() -> None:
     assert repository.profile(profile_name).value["script_generation"] == script.value
     assert repository.profile(profile_name).value["voiceover"] == voiceover.value
     assert repository.profile(profile_name).value["voiceover_preview"] == voiceover_preview.value
+
+
+def test_environment_overlays_change_only_declared_module_behavior() -> None:
+    production = ConfigRepository(WORKBENCH_PATH, environment="prod")
+    development = ConfigRepository(WORKBENCH_PATH, environment="dev")
+    profile_name = production.default_profile
+
+    production_planner = production.module(profile_name, "visuals", "planner")
+    development_planner = development.module(profile_name, "visuals", "planner")
+    production_render = production.module(profile_name, "visuals", "render")
+    development_render = development.module(profile_name, "visuals", "render")
+
+    assert production_planner.value["llm_roles"]["story_visual_planner"]["provider"] == "moonshot"
+    assert development_planner.value["llm_roles"]["story_visual_planner"]["provider"] == "openai"
+    assert production_render.value["backend"] == "remotion"
+    assert development_render.value["backend"] == "remotion"
+    assert production_planner.sha256 != development_planner.sha256
+    assert production_planner.source_paths[-1].endswith("visuals/planner.yaml")
+    assert "environments/dev.yaml" in development_planner.source_paths

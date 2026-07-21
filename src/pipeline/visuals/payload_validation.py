@@ -108,6 +108,8 @@ PROMPT_PAYLOAD_CONTRACTS: dict[str, dict[str, Any]] = {
         },
         "optional": {
             "asset_id": "exact available source_video asset ID",
+            "video_moment_id": "exact video_moments[].video_moment_id from the selected source_video asset",
+            "clip_selection_reason": "short explanation of why this exact video moment fits the active narration beat",
             "annotations": "list of 1-3 short callouts supported by the active narration",
             "search_queries": "list[str] used only when deliberate external discovery is enabled",
             "must_show": "list[str] used only when deliberate external discovery is enabled",
@@ -305,6 +307,8 @@ def validate_scene_payload(render_kind: str, payload: dict[str, Any]) -> list[st
         else:
             _require_text_list(payload, "search_queries", errors)
             _require_text_list(payload, "must_show", errors)
+        if render_kind == "broll_video_scene" and "video_moment_id" in payload:
+            _require_text(payload, "video_moment_id", errors)
     elif render_kind == "logo_reveal_scene":
         _require_text(payload, "primary_entity", errors)
         _require_text(payload, "companion_text", errors)

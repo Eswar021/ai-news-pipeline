@@ -1,6 +1,6 @@
 # Production Orchestration and Creative Quality Worklist
 
-Status: Active implementation tracker. Q-01 through Q-26 are implemented and
+Status: Active implementation tracker. Q-01 through Q-27 are implemented and
 now require a fresh production episode plus human quality review.
 
 Last updated: 2026-07-20
@@ -627,9 +627,9 @@ K3/Comic Chat/TechCrunch regression recreates the observed failure: indirect
 and named Kimi coverage resolves to one event while the unrelated Microsoft
 Comic Chat record remains separate.
 
-### Q-26: Recipe-first HyperFrames production design (`P0`, implemented and rendered 2026-07-20)
+### Q-26: Recipe-first HyperFrames production design (`P0`, implemented and rendered 2026-07-20; production default superseded by Q-28)
 
-The daily visual profile now uses HyperFrames with the shared
+At this milestone, the daily visual profile used HyperFrames with the shared
 `editorial_minimal` design contract. Every planner-advertised render kind must
 have an allowed named recipe supporting the configured production backends, and
 every production scene must return its exact `payload.recipe_id`. Missing,
@@ -649,9 +649,9 @@ were removed during frame QA.
 Eleven representative recipe projects pass HyperFrames runtime, layout, motion,
 and WCAG contrast checks and render as valid 1280x720 MP4 clips. The inspected
 contact sheet is stored at
-`output/labs/hyperframes_recipe_qa/contact_sheet.png`. Remotion remains a
-compatibility and visual-lab backend for historical scene families, not the
-daily design authority. The upstream ZIP advisory remains an operational
+`output/labs/hyperframes_recipe_qa/contact_sheet.png`. Q-28 later restored the
+inspected Remotion path as the delivery baseline while keeping this backend for
+explicit parity work. The upstream ZIP advisory remains an operational
 constraint: use only pipeline-owned composition code and trusted local assets.
 
 The frozen July 19 production episode also completed the full live path with
@@ -663,6 +663,52 @@ duration. The contact sheet confirms one coherent visual system. Its remaining
 creative limitation is asset mix: 10 editorial-text scenes versus only two
 context images and one source-owned video, which belongs to future asset/planner
 quality work rather than renderer architecture.
+
+### Q-27: Beat-local trusted media selection and story review (`P0`, implemented and regression-tested 2026-07-20)
+
+Asset briefs no longer label every same-record/type-compatible asset as a
+semantic match. They expose structurally eligible candidates with an explicit
+`planner_review_required` status. The story prompt joins those candidates to
+image-specific descriptors, nearby page context, and source-video metadata so
+the LLM can make the contextual decision for the active narration beat. The
+bounded visual editor is also invited when a text scene covers a beat with
+available candidates; it may keep the text when none actually depicts the
+sentence. There is no asset-usage quota or code-based semantic replacement.
+
+Selected-source video extraction now preserves source-link context and bounded
+provider chapters as stable `video_moment_id` values. A planner-selected moment
+is verified as belonging to the exact story-owned video, propagated through
+scene payload and media identity, and clipped from its real start instead of
+always from 0:00. Paid vision review and external provider search remain off in
+the active profile.
+
+Visual review now produces a story-by-story HTML report and JSON manifest in
+addition to the episode contact sheet. Every scene receives a real midpoint
+frame beside its narration excerpt, visual intent, recipe, catalog asset,
+source URL, selected video moment, and planner rationale. This makes wrong
+media choices and text-heavy stretches inspectable at the same story/beat
+boundary used by planning.
+
+### Q-28: Reliable development replay and visual delivery baseline (`P0`, implemented 2026-07-20)
+
+The profile manifest now composes explicit `dev` and `prod` overlays without
+duplicating every module YAML. The selected environment is frozen into run
+context and module config snapshots. `workbench.yaml` remains the active routing
+manifest rather than a runtime behavior dump.
+
+Visual stages support `--stop-after`. A focused renderer replay can start at
+`visual_render`, use the saved canonical plan and resolved assets, render only
+selected scene/story IDs, and stop before assembly. Focused outputs are isolated
+by backend and selection, so a comparison cannot erase a complete preview or a
+different engine's clips. Long-running planner, catalog, resolver, and renderer
+operations emit progress through the orchestration-owned log handlers.
+
+The inspected warm `editorial_minimal` Remotion output is the current stable
+delivery baseline. HyperFrames remains available explicitly for parity work,
+but is not the production default until its chapter, identity, media, and
+typography treatments pass the same frame-level review. The daily planner no
+longer advertises the dark/PPT-like chart and dashboard recipes. Missing brand
+logos resolve to an honest full-name wordmark rather than fabricated initials.
 
 ### Standing Semantic Policy (`KEEP`)
 
@@ -686,7 +732,7 @@ pass human review.
 
 ## 6. Next Evaluation Gate
 
-Q-01 through Q-26 are implemented. The next gate is a fresh production episode
+Q-01 through Q-28 are implemented. The next gate is a fresh production episode
 from evidence preparation onward, followed by artifact inspection rather than
 summary-only review. External provider search and paid vision verification stay
 disabled during this evaluation so source-context, grouping, script quality,
@@ -713,7 +759,7 @@ Visual review:
 - Repeated catalog assets and repeated render kinds are visible in the contact
   sheet and corrected before final render.
 - Every planned production scene carries a valid named recipe and the complete
-  episode stays within the shared `editorial_minimal` HyperFrames design system.
+  episode stays within the shared `editorial_minimal` design system.
 - Audio/video synchronization remains exact at story boundaries and episode
   end.
 - Mastered voiceover measures near the configured loudness target without
@@ -722,10 +768,13 @@ Visual review:
 - Direct or provider-linked source video is used only when a selected source
   actually exposes a compatible trusted clip and the planner selects it for the
   active narration beat.
+- The story review report shows that each selected image/video and exact video
+  moment supports the adjacent narration, rather than merely belonging to the
+  same source record.
 
 ## 7. Other Deferred Work
 
-After the validated Q-01 through Q-26 foundation, keep these operational and
+After the validated Q-01 through Q-28 foundation, keep these operational and
 product tasks visible without mixing them into the current evaluation:
 
 - Keep Wikimedia, Pexels, Pixabay, and paid frame-level vision verification
@@ -749,8 +798,8 @@ product tasks visible without mixing them into the current evaluation:
   replacement quality, exact-script adherence, latency, and episode cost need
   a human-listened A/B rather than an automatic model-name swap.
 
-- Improve asset briefs and catalog coverage for software interfaces, product
-  screenshots, people, and official imagery.
+- Continue catalog coverage for software interfaces, product screenshots,
+  people, and official imagery that source HTML alone does not expose.
 - Add a deliberate official product/interface adapter for sources that expose
   assets through JavaScript or authenticated media APIs.
 - Improve source-page camera moves and crop targets where screenshots remain
@@ -769,7 +818,8 @@ New full content run:
 
 ```bash
 python -m src.pipeline.orchestration.runner content \
-  --profile daily_48h_all_sources
+  --profile daily_48h_all_sources \
+  --environment prod
 ```
 
 Resume a run from script generation after prompt/code changes:
@@ -785,7 +835,8 @@ Generate matching voiceover and finalized metadata:
 ```bash
 python -m src.pipeline.orchestration.runner voiceover \
   --run-id current \
-  --script-source app
+  --script-source app \
+  --environment prod
 ```
 
 Build a fast visual preview:
@@ -794,12 +845,12 @@ Build a fast visual preview:
 python -m src.pipeline.orchestration.runner visuals \
   --run-id current \
   --plan-source generate \
-  --render-mode preview
+  --render-mode preview \
+  --environment prod
 ```
 
-Rerender with the daily HyperFrames backend after a valid plan and resolved
-assets already exist (`--render-backend` is optional because the profile now
-selects it):
+Compare one scene with the optional HyperFrames backend after a valid plan and
+resolved assets already exist:
 
 ```bash
 python -m src.pipeline.orchestration.runner visuals \
@@ -807,7 +858,21 @@ python -m src.pipeline.orchestration.runner visuals \
   --plan-source generate \
   --render-mode preview \
   --render-backend hyperframes \
-  --from-module visual_render
+  --from-module visual_render \
+  --stop-after visual_render \
+  --scene-id scene_003
+```
+
+Fast default-renderer replay after a visual code change:
+
+```bash
+python -m src.pipeline.orchestration.runner visuals \
+  --run-id current \
+  --plan-source generate \
+  --render-mode preview \
+  --from-module visual_render \
+  --stop-after visual_render \
+  --scene-id scene_003
 ```
 
 After manual preview approval, render final delivery media:
@@ -817,5 +882,6 @@ python -m src.pipeline.orchestration.runner visuals \
   --run-id current \
   --plan-source generate \
   --render-mode final \
-  --from-module visual_render
+  --from-module visual_render \
+  --environment prod
 ```

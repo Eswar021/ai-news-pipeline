@@ -21,3 +21,17 @@ Files:
 
 Generated WAV, MP4, manifests, and summaries belong under
 `output/tests/media_roundup_reference/` and are not committed.
+
+The fixture is test-adapter data, not a production-code mode. Production apps
+never branch on fixture IDs. Contract and media regressions can therefore run
+without collection, LLM, hosted TTS, or external-media calls:
+
+```bash
+python3 -m pytest -q \
+  tests/test_media_reference_contracts.py \
+  tests/test_roundup_story_beat_pipeline.py
+```
+
+For visual styling against a real completed episode, prefer runner artifact
+replay (`--from-module visual_render --stop-after visual_render`) so the exact
+saved plan and resolved assets are exercised without repeating upstream work.

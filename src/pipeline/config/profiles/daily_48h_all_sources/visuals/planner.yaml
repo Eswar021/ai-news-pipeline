@@ -105,6 +105,7 @@ visual_mix_policy:
   prefer_catalog_assets_for_concrete_subjects: true
   prefer_explanatory_motion_for_mechanisms: true
   kinetic_text_is_supporting_only: true
+  review_text_scenes_with_candidate_media: true
 recipe_policy:
   enabled: true
   require_recipe_id: true
@@ -120,16 +121,10 @@ recipe_policy:
   - annotated_video_focus
   - identity_reveal
   - mechanism_steps
-  - metric_countup
-  - metric_contrast
-  - entity_orbit
-  - process_trace
-  - process_detail_zoom
   - interface_walkthrough
   - evidence_stack
   - source_proof_montage
   - interface_before_after
-  - capability_compare
 visual_editor:
   enabled: true
   max_passes: 2
@@ -197,10 +192,6 @@ scene_policy:
   - simple_explainer_scene
   - story_transition_scene
   - quote_or_claim_highlight_scene
-  - data_counter_scene
-  - benchmark_delta_scene
-  - architecture_flow_scene
-  - process_zoom_scene
   - browser_walkthrough_scene
   - document_stack_scene
   - interface_transform_scene
@@ -322,6 +313,8 @@ visual_capabilities:
     - show_overlay
     payload_field_contract:
       asset_id: exact verified source_video asset id from this story catalog
+      video_moment_id: optional exact video_moments[].video_moment_id from that source_video asset
+      clip_selection_reason: short explanation of why the selected video moment fits the active narration beat
     avoid_when:
     - no verified source_video asset exists in this story catalog
     - footage would imply an event not represented by the selected source

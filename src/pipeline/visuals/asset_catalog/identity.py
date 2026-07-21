@@ -17,6 +17,16 @@ def catalog_identity_payload(catalog: dict[str, Any]) -> dict[str, Any]:
                 "source_url": asset.get("source_url"),
                 "asset_url": asset.get("asset_url"),
                 "content_sha256": asset.get("content_sha256", ""),
+                "title": asset.get("title"),
+                "description": asset.get("description"),
+                "visual_description": asset.get("visual_description", ""),
+                "contextual_description": asset.get("contextual_description", ""),
+                "descriptor_quality": asset.get("descriptor_quality", ""),
+                "page_section_heading": asset.get("page_section_heading", ""),
+                "nearby_text": asset.get("nearby_text", ""),
+                "link_text": asset.get("link_text", ""),
+                "video_context": asset.get("video_context", {}),
+                "video_moments": asset.get("video_moments", []),
             }
             for asset in catalog.get("assets", [])
             if isinstance(asset, dict)

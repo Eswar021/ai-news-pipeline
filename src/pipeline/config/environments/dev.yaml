@@ -1,0 +1,34 @@
+config_environment_schema_version: pipeline_environment_overlay_v1
+shared:
+  orchestration:
+    logging:
+      profile: verbose
+modules:
+  visuals:
+    planner:
+      llm_roles:
+        story_visual_planner:
+          provider: openai
+          model: gpt-4o-mini
+          temperature: 0.3
+          max_attempts: 2
+          provider_options:
+            request_timeout_seconds: 300
+          structured_output:
+            method: json_schema
+            strict: true
+          content_filter_fallback: null
+        story_visual_editor:
+          provider: openai
+          model: gpt-4o-mini
+          temperature: 0.3
+          max_attempts: 2
+          provider_options:
+            request_timeout_seconds: 300
+          structured_output:
+            method: json_schema
+            strict: true
+          content_filter_fallback: null
+    render:
+      backend: remotion
+      active_mode: preview

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 from pathlib import Path
 from typing import Any, Literal
 
@@ -31,6 +32,7 @@ from .common import (
     now_iso,
     project_paths,
     rendered_config,
+    require_matching_config_environment,
     require_ready,
     reusable_config_matches,
     write_module_config_snapshot,
@@ -74,6 +76,7 @@ class VisualsOptions(BaseModel):
     selected_story_ids: list[str] = Field(default_factory=list)
     resume_completed: bool = True
     from_module: str | None = None
+    stop_after: str | None = None
     create_publish_handoff: bool = True
 
     @field_validator("plan_source")
@@ -90,7 +93,7 @@ class VisualsOptions(BaseModel):
             raise ValueError("render_mode must be preview or final")
         return value
 
-    @field_validator("from_module")
+    @field_validator("from_module", "stop_after")
     @classmethod
     def from_module_must_be_known(cls, value: str | None) -> str | None:
         if value is not None and value not in MODULES:
@@ -103,6 +106,7 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
     options = VisualsOptions.model_validate(request.config)
     project_root, output_root, config_path = project_paths(request.paths)
     run_context = current_or_named_context(output_root, request.run.run_id)
+    require_matching_config_environment(run_context, request.run.config_environment)
     logger = configure_stage_logging(run_context, STAGE, effective_logging_config(run_context))
     state = RunStateStore(run_context)
     state.start_stage(STAGE, MODULES)
@@ -128,7 +132,12 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
         reason = f"{type(exc).__name__}: {exc}"
         response = {
             "status": "failed",
-            "data": {"run_id": run_context["run_id"], "run_dir": run_context["run_dir"], "stage": STAGE},
+            "data": {
+                "run_id": run_context["run_id"],
+                "config_environment": str(run_context.get("config_environment") or "prod"),
+                "run_dir": run_context["run_dir"],
+                "stage": STAGE,
+            },
             "summary": {"failure_reason": reason},
             "handoff": {"ready_for_manual_review": False},
         }
@@ -194,13 +203,21 @@ def _run_stage(
             "voiceover_fingerprint": voiceover_provenance["voiceover_fingerprint"],
             "visual_plan_source": options.plan_source,
             "render_mode": options.render_mode,
+            "render_backend": options.render_backend,
+            "selected_scene_ids": list(options.selected_scene_ids),
+            "selected_story_ids": list(options.selected_story_ids),
+            "stop_after": options.stop_after,
         },
     )
     from_index = MODULES.index(options.from_module) if options.from_module else None
+    stop_index = MODULES.index(options.stop_after) if options.stop_after else len(MODULES) - 1
+    if from_index is not None and from_index > stop_index:
+        raise ValueError("from_module must not come after stop_after")
     if options.resume_completed:
         changed_indexes = [
             index
             for index, module in enumerate(MODULES)
+            if index <= stop_index
             if from_index is None or index >= from_index
             if _module_result_path(run_dir, options, module).exists()
             and not reusable_config_matches(
@@ -250,6 +267,7 @@ def _run_stage(
             profile_name=str(run_context["run_profile"]),
             document=config_documents["asset_catalog"],
             effective_config=config,
+            environment_name=config_resolver.environment_name,
         )
         write_json(inputs_dir / f"{run_id}_visual_asset_catalog_input.json", asset_input)
         asset_catalog_result = logger.run_module("asset_catalog", run_asset_catalog, asset_input)
@@ -262,6 +280,8 @@ def _run_stage(
         asset_catalog_dir / "visual_asset_catalog.json",
         asset_catalog_result["data"]["visual_asset_catalog"],
     )
+    if options.stop_after == "asset_catalog":
+        return _stopped_response(run_context, options, "asset_catalog", asset_catalog_result_path, asset_catalog_result)
 
     planning_dir = visuals_dir / "planning" / options.plan_source
     planning_result_path = planning_dir / "visual_scene_planning_result.json"
@@ -308,6 +328,7 @@ def _run_stage(
             profile_name=str(run_context["run_profile"]),
             document=config_documents["visual_planner"],
             effective_config=planner_config,
+            environment_name=config_resolver.environment_name,
         )
         write_json(planning_dir / "visual_scene_planning_input.json", planner_input)
         write_json(planning_result_path, planning_result)
@@ -323,6 +344,8 @@ def _run_stage(
         voiceover_fingerprint=voiceover_provenance["voiceover_fingerprint"],
     )
     write_json(planning_dir / "visual_scene_plan.json", visual_plan)
+    if options.stop_after == "visual_planner":
+        return _stopped_response(run_context, options, "visual_planner", planning_result_path, planning_result)
 
     media_dir = visuals_dir / "media_discovery"
     media_result_path = media_dir / "visual_media_discovery_result.json"
@@ -350,11 +373,14 @@ def _run_stage(
             profile_name=str(run_context["run_profile"]),
             document=config_documents["media_discovery"],
             effective_config=config,
+            environment_name=config_resolver.environment_name,
         )
         media_result = logger.run_module("media_discovery", run_media_discovery, media_input)
         write_jsonl(media_dir / "llm_calls.jsonl", media_result.get("llm_calls", []))
         _record(state, "media_discovery", media_result_path, media_result)
     require_ready(media_result, "media_discovery", handoff_key="ready_for_visual_asset_resolution")
+    if options.stop_after == "media_discovery":
+        return _stopped_response(run_context, options, "media_discovery", media_result_path, media_result)
 
     resolver_dir = visuals_dir / "asset_resolution"
     resolver_result_path = resolver_dir / "visual_asset_resolution_result.json"
@@ -388,6 +414,7 @@ def _run_stage(
             profile_name=str(run_context["run_profile"]),
             document=config_documents["asset_resolver"],
             effective_config=config,
+            environment_name=config_resolver.environment_name,
         )
         resolver_result = logger.run_module("asset_resolver", run_asset_resolver, resolver_input)
         _record(state, "asset_resolver", resolver_result_path, resolver_result)
@@ -397,8 +424,10 @@ def _run_stage(
         allowed_statuses=("ok", "partial"),
         handoff_key="ready_for_visual_render",
     )
+    if options.stop_after == "asset_resolver":
+        return _stopped_response(run_context, options, "asset_resolver", resolver_result_path, resolver_result)
 
-    render_dir = visuals_dir / ("render" if options.render_mode == "final" else "render_preview")
+    render_dir = _module_output_dir(run_dir, options, "visual_render")
     render_result_path = render_dir / "visual_render_result.json"
     render_result = _reuse_before("visual_render", render_result_path, options, from_index, logger, state)
     if render_result is None:
@@ -438,6 +467,7 @@ def _run_stage(
             profile_name=str(run_context["run_profile"]),
             document=config_documents["visual_render"],
             effective_config=base,
+            environment_name=config_resolver.environment_name,
         )
         render_result = logger.run_module("visual_render", run_visual_render, render_input)
         _record(state, "visual_render", render_result_path, render_result)
@@ -445,6 +475,8 @@ def _run_stage(
     render_summary = render_result.get("summary", {})
     if int(render_summary.get("failed_scene_count", 0)):
         raise RuntimeError(f"visual_render failed scenes: {render_summary}")
+    if options.stop_after == "visual_render":
+        return _stopped_response(run_context, options, "visual_render", render_result_path, render_result)
     if not render_summary.get("render_scope_complete", True):
         raise RuntimeError("Focused scene/story render is not eligible for assembly")
 
@@ -474,10 +506,13 @@ def _run_stage(
             profile_name=str(run_context["run_profile"]),
             document=config_documents["video_assembly"],
             effective_config=config,
+            environment_name=config_resolver.environment_name,
         )
         assembly_result = logger.run_module("video_assembly", run_video_assembly, assembly_input)
         _record(state, "video_assembly", assembly_result_path, assembly_result)
     require_ready(assembly_result, "video_assembly", handoff_key="ready_for_manual_review")
+    if options.stop_after == "video_assembly":
+        return _stopped_response(run_context, options, "video_assembly", assembly_result_path, assembly_result)
 
     review_dir = visuals_dir / ("review" if options.render_mode == "final" else "review_preview")
     review_result_path = review_dir / "visual_review_result.json"
@@ -493,7 +528,10 @@ def _run_stage(
         review_input = {
             "run": {"run_id": run_id, "generated_at": now_iso()},
             "config": config,
-            "input": {"video_assembly": assembly_result},
+            "input": {
+                "video_assembly": assembly_result,
+                "visual_scene_planning": planning_result,
+            },
         }
         write_json(inputs_dir / f"{run_id}_visual_review_{options.render_mode}_input.json", review_input)
         write_json(review_dir / "visual_review_input.json", review_input)
@@ -505,10 +543,13 @@ def _run_stage(
             profile_name=str(run_context["run_profile"]),
             document=config_documents["visual_review"],
             effective_config=config,
+            environment_name=config_resolver.environment_name,
         )
         review_result = logger.run_module("visual_review", run_visual_review, review_input)
         _record(state, "visual_review", review_result_path, review_result)
     require_ready(review_result, "visual_review", handoff_key="ready_for_human_visual_review")
+    if options.stop_after == "visual_review":
+        return _stopped_response(run_context, options, "visual_review", review_result_path, review_result)
 
     publish_path = ""
     if options.render_mode == "final" and options.create_publish_handoff:
@@ -536,6 +577,7 @@ def _run_stage(
             profile_name=str(run_context["run_profile"]),
             document=config_documents["publish_handoff"],
             effective_config=publish_input["config"],
+            environment_name=config_resolver.environment_name,
         )
         write_json(publish_dir / "publish_handoff_input.json", publish_input)
         write_json(publish_dir / "publish_handoff_result.json", publish_result)
@@ -550,6 +592,7 @@ def _run_stage(
         "status": "ok",
         "data": {
             "run_id": run_id,
+            "config_environment": config_resolver.environment_name,
             "run_dir": str(run_dir),
             "stage": STAGE,
             "visual_plan_path": str(planning_result_path),
@@ -557,6 +600,9 @@ def _run_stage(
             "video_assembly_result_path": str(assembly_result_path),
             "final_video_path": assembly_summary.get("final_video_path", ""),
             "contact_sheet_path": (review_result.get("summary") or {}).get("contact_sheet_path", ""),
+            "story_review_report_path": (review_result.get("summary") or {}).get(
+                "story_review_report_path", ""
+            ),
             "publish_handoff_path": publish_path,
         },
         "summary": {
@@ -566,8 +612,40 @@ def _run_stage(
             "rendered_scene_count": render_summary.get("rendered_scene_count", 0),
             "cached_scene_count": render_summary.get("cached_scene_count", 0),
             "final_duration_seconds": assembly_summary.get("final_duration_seconds", 0),
+            "stopped_after": "publish_handoff" if publish_path else "visual_review",
         },
         "handoff": {"ready_for_manual_review": True, "publish_handoff_created": bool(publish_path)},
+    }
+
+
+def _stopped_response(
+    run_context: dict[str, Any],
+    options: VisualsOptions,
+    module: str,
+    result_path: Path,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "data": {
+            "run_id": str(run_context["run_id"]),
+            "config_environment": str(run_context.get("config_environment") or "prod"),
+            "run_dir": str(run_context["run_dir"]),
+            "stage": STAGE,
+            "stopped_after": module,
+            "result_path": str(result_path),
+        },
+        "summary": {
+            "plan_source": options.plan_source,
+            "render_mode": options.render_mode,
+            "stopped_after": module,
+            "module_status": str(result.get("status") or "unknown"),
+            "module_summary": deepcopy(result.get("summary") or {}),
+        },
+        "handoff": {
+            "ready_for_next_visual_module": True,
+            "ready_for_manual_review": module in {"video_assembly", "visual_review"},
+        },
     }
 
 
@@ -620,7 +698,9 @@ def _module_output_dir(run_dir: Path, options: VisualsOptions, module: str) -> P
     if module == "asset_resolver":
         return visuals_dir / "asset_resolution"
     if module == "visual_render":
-        return visuals_dir / ("render" if options.render_mode == "final" else "render_preview")
+        base = visuals_dir / ("render" if options.render_mode == "final" else "render_preview")
+        scope = _focused_render_scope(options)
+        return base / "focused" / scope if scope else base
     if module == "video_assembly":
         return visuals_dir / ("assembly" if options.render_mode == "final" else "assembly_preview")
     if module == "visual_review":
@@ -646,3 +726,22 @@ def _module_result_path(run_dir: Path, options: VisualsOptions, module: str) -> 
 
 def _module_config_snapshot_path(run_dir: Path, options: VisualsOptions, module: str) -> Path:
     return _module_output_dir(run_dir, options, module) / "config_snapshot.json"
+
+
+def _focused_render_scope(options: VisualsOptions) -> str:
+    if not options.selected_scene_ids and not options.selected_story_ids:
+        return ""
+    identity = "|".join(
+        [
+            f"backend:{options.render_backend or 'profile'}",
+            f"mode:{options.render_mode}",
+            *(f"scene:{value}" for value in sorted(set(options.selected_scene_ids))),
+            *(f"story:{value}" for value in sorted(set(options.selected_story_ids))),
+        ]
+    )
+    readable = "".join(
+        character if character.isalnum() or character in "-_" else "_"
+        for character in identity
+    )[:72].strip("_")
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:10]
+    return f"{readable or 'selection'}_{digest}"

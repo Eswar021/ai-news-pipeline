@@ -22,6 +22,7 @@ def create_run_context(
     orchestrator: str = "",
     config_path: Path | None = None,
     output_root: Path | None = None,
+    config_environment: str | None = None,
 ) -> dict[str, Any]:
     root = project_root.resolve()
     output = (output_root or root / "output").resolve()
@@ -35,11 +36,17 @@ def create_run_context(
                     f"Existing run {requested_run_id!r} uses profile {context.get('run_profile')!r}, "
                     f"not requested profile {run_profile!r}"
                 )
+            existing_environment = str(context.get("config_environment") or "prod")
+            if config_environment and existing_environment != config_environment:
+                raise ValueError(
+                    f"Existing run {requested_run_id!r} uses config environment "
+                    f"{existing_environment!r}, not requested environment {config_environment!r}"
+                )
             _write_json(output / "current_run.json", context)
             return context
 
     config_file = (config_path or root / "src" / "pipeline" / "config" / "workbench.yaml").resolve()
-    repository = ConfigRepository(config_file)
+    repository = ConfigRepository(config_file, environment=config_environment)
     selected_profile = run_profile or repository.default_profile
     profile_document = repository.profile(selected_profile)
 
@@ -54,6 +61,7 @@ def create_run_context(
         "run_id": resolved_run_id,
         "created_at": created_at.isoformat(),
         "run_profile": selected_profile,
+        "config_environment": repository.environment,
         "trigger": trigger,
         "orchestrator": orchestrator,
         "pipeline_config_path": str(config_file.relative_to(root)),

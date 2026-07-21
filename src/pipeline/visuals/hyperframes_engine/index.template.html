@@ -44,10 +44,10 @@
       .source-title { position: absolute; left: 5%; top: 5%; right: 5%; z-index: 4; display: flex; justify-content: space-between; gap: 40px; align-items: flex-start; }
       .source-title .headline { max-width: 82%; font-size: clamp(43px, 3.5vw, 68px); }
       .highlight { position: absolute; left: 7%; right: 7%; bottom: 8%; z-index: 6; padding: 18px 28px; color: var(--ink); background: rgba(255,253,250,.95); border-left: 8px solid var(--accent); box-shadow: 0 14px 42px rgba(42,35,25,.18); font-size: clamp(21px, 1.7vw, 33px); line-height: 1.12; font-weight: 700; text-align: center; }
-      .identity { position: absolute; right: 7%; top: 24%; width: 32%; height: 52%; display: flex; align-items: center; justify-content: center; padding: 5%; border-top: 5px solid var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--ink) 24%, transparent); text-align: center; }
-      .identity::before { content: ""; position: absolute; left: -10%; top: 19%; width: 32%; aspect-ratio: 1; border: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); transform: rotate(45deg); }
+      .identity { position: absolute; right: 6%; top: 24%; width: 35%; height: 52%; display: flex; align-items: center; justify-content: center; padding: 4%; text-align: center; }
       .identity-name { position: relative; width: 100%; font-family: var(--serif); font-size: clamp(48px, 4.6vw, 90px); line-height: .9; letter-spacing: -.05em; font-weight: 700; }
-      .identity img { position: relative; width: 72%; height: 72%; object-fit: contain; }
+      .identity-name::after { content: ""; display: block; width: 58%; height: 6px; margin: 28px auto 0; background: var(--accent); }
+      .identity img { position: relative; width: 88%; height: 76%; object-fit: contain; filter: drop-shadow(0 18px 34px rgba(45,34,22,.12)); }
       .explainer { position: absolute; inset: 0; padding: 8% 7%; }
       .explainer .headline { width: 76%; font-size: clamp(52px, 4.4vw, 86px); }
       .explainer > .headline, .metric-stage > .headline, .map-stage > .headline, .trace-stage > .headline, .docs-stage > .headline, .matrix-stage > .headline, .transform-stage > .headline { margin-top: 26px; }
@@ -59,8 +59,11 @@
       .story-number { color: var(--accent); font-size: clamp(22px, 1.6vw, 31px); font-weight: 850; letter-spacing: .18em; text-transform: uppercase; }
       .transition-copy { position: absolute; left: 6.5%; right: 6.5%; top: 17%; bottom: 13%; z-index: 5; display: flex; flex-direction: column; justify-content: center; }
       .transition-copy .headline { max-width: 82%; }
+      .transition-subtitle { margin-top: 28px; max-width: 68%; color: var(--muted); font-size: clamp(24px, 1.8vw, 36px); line-height: 1.14; font-weight: 620; text-wrap: balance; }
+      .transition-ghost-number { position: absolute; right: 5%; top: 8%; z-index: 1; color: color-mix(in srgb, var(--accent) 10%, transparent); font-family: var(--serif); font-size: clamp(180px, 22vw, 420px); line-height: .8; font-weight: 700; }
       .transition-media .transition-copy { color: #fffaf2; width: 64%; }
       .transition-media .headline { text-shadow: 0 8px 38px rgba(0,0,0,.56); }
+      .transition-media .transition-subtitle { color: rgba(255,250,242,.82); text-shadow: 0 4px 24px rgba(0,0,0,.62); }
       .context-media .full-copy { z-index: 6; }
       .annotated-media .full-copy { left: 5%; width: 43%; }
       .annotation-scrim { position: absolute; right: 0; top: 0; bottom: 0; width: 46%; z-index: 7; background: linear-gradient(90deg, transparent, rgba(15,13,10,.72) 28%, rgba(15,13,10,.94)); }
@@ -159,6 +162,10 @@
         return element;
       };
       const append = (parent, ...children) => children.filter(Boolean).forEach((child) => parent.appendChild(child));
+      const eyebrowNode = () => {
+        const value = text(payload.eyebrow);
+        return value ? node("div", "eyebrow hf-enter", value) : null;
+      };
       const assetUrl = text(asset.asset_render_url) || text(asset.asset_data_uri);
       const headline = text(payload.headline) || text(payload.overlay_headline) || text(payload.companion_text) || text(scene.script_excerpt, "Untitled story");
       const support = text(payload.supporting_text) || text(payload.companion_text);
@@ -190,7 +197,7 @@
       const renderEditorial = () => {
         addRule();
         const copy = node("section", "full-copy");
-        const eyebrow = node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE POINT"));
+        const eyebrow = eyebrowNode();
         const title = headlineNode(headline);
         const body = support ? node("div", "support hf-enter", support) : null;
         append(copy, eyebrow, title, body);
@@ -265,7 +272,7 @@
         const copy = node("section", "split-copy");
         append(
           copy,
-          node("div", "eyebrow hf-enter", text(payload.eyebrow, "IDENTITY")),
+          eyebrowNode(),
           headlineNode(support || headline),
         );
         stage.appendChild(copy);
@@ -277,7 +284,7 @@
 
       const renderExplainer = () => {
         const wrap = node("section", "explainer");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "HOW IT WORKS")), headlineNode(headline));
+        append(wrap, eyebrowNode(), headlineNode(headline));
         const flow = node("div", "flow");
         const items = Array.isArray(payload.items) ? payload.items.slice(0, 4) : [];
         items.forEach((item, index) => {
@@ -302,9 +309,12 @@
           stage.appendChild(node("div", "shade"));
         } else addRule();
         const copy = node("section", "transition-copy");
-        const ordinal = text(payload.story_number) || (scene.scene_order ? `Story ${scene.scene_order}` : "Next story");
-        append(copy, node("div", "story-number hf-enter", ordinal), headlineNode(headline));
+        const storyNumber = text(payload.story_number);
+        const ordinal = storyNumber ? `Story ${storyNumber}` : "Next story";
+        const subtitle = text(payload.subtitle);
+        append(copy, node("div", "story-number hf-enter", ordinal), headlineNode(headline), subtitle ? node("div", "transition-subtitle hf-enter", subtitle) : null);
         stage.appendChild(copy);
+        if (storyNumber && !assetUrl) stage.appendChild(node("div", "transition-ghost-number hf-ghost", storyNumber));
       };
 
       const renderEvidence = () => {
@@ -319,7 +329,7 @@
 
       const renderMetricCounter = () => {
         const wrap = node("section", "metric-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE NUMBER")), headlineNode(headline));
+        append(wrap, eyebrowNode(), headlineNode(headline));
         const grid = node("div", "metric-grid");
         objects(payload.metrics).slice(0, 3).forEach((metric) => {
           const item = node("div", "metric hf-metric");
@@ -333,7 +343,7 @@
 
       const renderMetricContrast = () => {
         const wrap = node("section", "metric-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE DELTA")), headlineNode(headline));
+        append(wrap, eyebrowNode(), headlineNode(headline));
         const grid = node("div", "delta-grid");
         objects(payload.benchmarks).slice(0, 3).forEach((metric) => {
           const item = node("div", "delta hf-metric");
@@ -346,7 +356,7 @@
 
       const renderEcosystem = () => {
         const wrap = node("section", "map-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE ECOSYSTEM")), headlineNode(headline));
+        append(wrap, eyebrowNode(), headlineNode(headline));
         const orbit = node("div", "orbit");
         orbit.appendChild(node("div", "orbit-ring hf-orbit"));
         const nodes = objects(payload.nodes).slice(0, 7);
@@ -368,7 +378,7 @@
 
       const renderTrace = (zoom = false) => {
         const wrap = node("section", "trace-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, zoom ? "ZOOM IN" : "HOW IT MOVES")), headlineNode(headline));
+        append(wrap, eyebrowNode(), headlineNode(headline));
         const trace = node("div", "trace");
         const steps = objects(payload.steps).slice(0, 6);
         const focus = text(zoom ? payload.focus_step_label : payload.active_step_label);
@@ -396,7 +406,7 @@
 
       const renderDocuments = () => {
         const wrap = node("section", "docs-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE RECEIPTS")), headlineNode(headline));
+        append(wrap, eyebrowNode(), headlineNode(headline));
         const resolvedDocuments = objects(asset.assets).slice(0, 3);
         if (resolvedDocuments.length) {
           const montage = node("div", "source-montage");
@@ -440,7 +450,7 @@
 
       const renderMatrix = () => {
         const wrap = node("section", "matrix-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "COMPARE")), headlineNode(headline));
+        append(wrap, eyebrowNode(), headlineNode(headline));
         const columns = list(payload.columns).slice(0, 4);
         const matrix = node("div", "matrix"); matrix.style.setProperty("--cols", String(columns.length));
         const header = node("div", "matrix-row hf-matrix-row");
@@ -459,7 +469,7 @@
 
       const renderTransform = () => {
         const wrap = node("section", "transform-stage");
-        append(wrap, node("div", "eyebrow hf-enter", text(payload.eyebrow, "THE SHIFT")), headlineNode(headline));
+        append(wrap, eyebrowNode(), headlineNode(headline));
         const panels = node("div", "transform-panels");
         [payload.before || {}, payload.after || {}].forEach((panel, index) => {
           if (index) panels.appendChild(node("div", "transform-arrow hf-arrow", "→"));

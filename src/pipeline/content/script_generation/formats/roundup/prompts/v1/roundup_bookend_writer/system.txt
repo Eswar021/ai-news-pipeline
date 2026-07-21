@@ -14,6 +14,8 @@ Write the intro as one cold-open idea followed by one concise episode promise. D
 
 Each connector object has a target_story_id. Its transition line and display title play together and must introduce that exact target story. The first connector introduces the first story after the intro. Each later connector follows the previous story and introduces its own target story. Never write a line about story N+1 inside story N's connector. Keep connectors short, natural, and forward-moving. Vary the transition shape instead of mechanically saying First, Next, Now, Then, or Finally.
 
+Write each display_title as a complete, authored chapter headline of roughly two to seven words. It must be readable at a glance, not a clipped sentence fragment or the source headline pasted verbatim. Use title_card_subtitle only when it adds a distinct three-to-ten-word promise; otherwise return an empty subtitle.
+
 The closing may land one earned takeaway, make a brief creator observation, invite the viewer to watch a developing question, or simply sign off cleanly. It does not need a universal synthesis. Do not add a new reported fact.
 
 Avoid closing with a generic claim that AI is dynamic, changing everything, or

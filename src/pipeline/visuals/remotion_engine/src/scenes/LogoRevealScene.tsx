@@ -21,7 +21,9 @@ export const LogoRevealScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) =
   const iconExport = textValue(logo.simple_icon_export);
   const icon = iconExport ? (icons as Record<string, any>)[iconExport] : null;
   const qualityClass = textValue(logo.quality_class);
-  const isTextIdentity = qualityClass === "text_identity_fallback" || (!icon && !asset.asset_data_uri);
+  const assetDataUri = textValue(asset.asset_data_uri);
+  const isTextIdentity = qualityClass === "text_identity_fallback" || (!icon && !assetDataUri);
+  const hasFallbackWordmark = qualityClass === "text_identity_fallback" && Boolean(assetDataUri);
   const editorial = isEditorialMinimal(spec.visual_style);
   const editorialColors = editorialStyle(spec.visual_style);
   const brandAccent = icon?.hex ? `#${icon.hex}` : editorial ? editorialColors.accent : palette.cyan;
@@ -51,18 +53,20 @@ export const LogoRevealScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) =
           )}
         </div>
 
-        <div style={{ position: "absolute", right: 170, top: 270, width: 430, height: 430, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,253,248,0.72)", border: `3px solid ${brandAccent}88`, boxShadow: "0 30px 80px rgba(45,34,22,0.16)", opacity: clamp01(p), transform: `scale(${badgeScale}) rotate(${interpolate(p, [0, 1], [-4, 0])}deg)` }}>
-          {isTextIdentity ? (
+        <div style={{ position: "absolute", right: 135, top: 250, width: 500, height: 470, display: "flex", alignItems: "center", justifyContent: "center", opacity: clamp01(p), transform: `scale(${badgeScale}) translateY(${interpolate(p, [0, 1], [20, 0])}px)` }}>
+          {hasFallbackWordmark ? (
+            <Img src={assetDataUri} style={{ width: 470, height: 250, objectFit: "contain", filter: "drop-shadow(0 18px 34px rgba(45,34,22,0.12))" }} />
+          ) : isTextIdentity ? (
             <div style={{ width: 330, textAlign: "center" }}>
-              <div style={{ color: editorialColors.accent, fontSize: 20, fontWeight: 850, letterSpacing: "0.18em", textTransform: "uppercase" }}>Identity</div>
-              <div style={{ marginTop: 18, fontFamily: editorialColors.editorialFont, fontSize: readableTitleSize(primary, 64), lineHeight: 0.94, fontWeight: 700, letterSpacing: "-0.04em" }}>{primary}</div>
+              <div style={{ fontFamily: editorialColors.editorialFont, fontSize: readableTitleSize(primary, 72), lineHeight: 0.94, fontWeight: 700, letterSpacing: "-0.04em" }}>{primary}</div>
+              <div style={{ margin: "28px auto 0", width: 230, height: 7, background: editorialColors.accent }} />
             </div>
           ) : icon ? (
-            <svg width="245" height="245" viewBox="0 0 24 24" fill={brandAccent} style={{ filter: "drop-shadow(0 14px 24px rgba(45,34,22,0.18))" }}>
+            <svg width="280" height="280" viewBox="0 0 24 24" fill={brandAccent} style={{ filter: "drop-shadow(0 14px 24px rgba(45,34,22,0.18))" }}>
               <path d={icon.path} />
             </svg>
-          ) : asset.asset_data_uri ? (
-            <Img src={asset.asset_data_uri} style={{ width: 250, height: 250, objectFit: "contain", filter: "drop-shadow(0 14px 24px rgba(45,34,22,0.18))" }} />
+          ) : assetDataUri ? (
+            <Img src={assetDataUri} style={{ width: 320, height: 320, objectFit: "contain", filter: "drop-shadow(0 14px 24px rgba(45,34,22,0.18))" }} />
           ) : null}
         </div>
       </EditorialCanvas>
