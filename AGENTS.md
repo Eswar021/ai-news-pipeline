@@ -18,32 +18,36 @@ The active shape is:
 
 ```text
 src/pipeline/
+├── ingestion/
+│   └── news_collection/
 ├── content/
-│   ├── news_collection/
 │   ├── evidence_prep/
 │   ├── editorial_triage/
 │   ├── story_mapping/
 │   ├── editorial_selection/
 │   ├── video_packaging/
 │   ├── script_generation/
-│   ├── metadata_creator/
-│   └── metadata_finalizer/
+│   └── metadata_creator/
 ├── contracts/
 ├── handoffs/
 ├── orchestration/
+├── publishing/
+│   ├── metadata_finalizer/
+│   └── publish_handoff/
 ├── voiceover/
 ├── visuals/
 └── config/
     ├── workbench.yaml
-    ├── environments/{dev|prod}.yaml
-    └── profiles/{profile}/{content|voiceover|visuals}/
+    ├── environments/{dev|staging|prod}.yaml
+    └── profiles/{profile}/{ingestion|content|voiceover|visuals|publishing}/
 ```
 
-Production automation uses one thin CLI router with three explicit stage
+Production automation uses one thin CLI router with four explicit stage
 modules:
 
 ```text
 src/pipeline/orchestration/runner.py
+src/pipeline/orchestration/stages/ingestion.py
 src/pipeline/orchestration/stages/content.py
 src/pipeline/orchestration/stages/voiceover.py
 src/pipeline/orchestration/stages/visuals.py
@@ -82,6 +86,8 @@ Application rules:
 - return one JSON/dict envelope with `status`, `data`, `summary`, and `handoff`
 - add `llm_calls` when an app uses an LLM
 - keep app-specific config, prompts, contracts, and helpers inside the app
+- do not import orchestration logging/telemetry helpers or accept log-file paths;
+  return diagnostics and call records for the orchestrator to persist
 - keep file I/O, CLI parsing, and output paths in adapters, stage routers, or notebooks
 - do not import one app's private implementation from another app
 - carry forward source context needed by the next app instead of reading older outputs
@@ -96,8 +102,10 @@ Behavior must be config-driven.
 
 - `src/pipeline/config/workbench.yaml` is the profile manifest; module authoring
   config lives below `src/pipeline/config/profiles/{profile}/{stage}/`
-- `src/pipeline/config/environments/{dev|prod}.yaml` contains sparse overlays;
+- `src/pipeline/config/environments/{dev|staging|prod}.yaml` contains sparse overlays;
   do not duplicate complete profile trees per environment
+- deterministic fixture scenarios are test inputs, not deployment environments;
+  keep them under `tests/fixtures/` and write their artifacts under `output/tests/`
 - a production run stores an immutable initial composed profile in
   `run_context.json` for identity and reproducibility
 - stage runners load each module's current YAML immediately before execution by

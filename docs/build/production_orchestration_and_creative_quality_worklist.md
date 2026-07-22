@@ -1,9 +1,9 @@
 # Production Orchestration and Creative Quality Worklist
 
-Status: Active implementation tracker. Q-01 through Q-27 are implemented and
+Status: Active implementation tracker. Q-01 through Q-33 are implemented and
 now require a fresh production episode plus human quality review.
 
-Last updated: 2026-07-20
+Last updated: 2026-07-23
 
 Target runtime: `src/pipeline/`
 
@@ -27,8 +27,9 @@ Documentation ownership:
 ```text
 operator / scheduler / service
   -> orchestration.runner
-     -> content stage
+     -> ingestion stage
         -> news_collection
+     -> content stage
         -> evidence_prep
         -> editorial_triage
         -> story_mapping
@@ -42,6 +43,7 @@ operator / scheduler / service
         -> metadata_finalizer
      -> visuals stage
         -> fingerprint-select script + voiceover
+        -> visual_research
         -> asset_catalog
         -> visual_planner
         -> media_discovery
@@ -62,6 +64,7 @@ Implemented entrypoints:
 
 ```text
 src/pipeline/orchestration/runner.py
+src/pipeline/orchestration/stages/ingestion.py
 src/pipeline/orchestration/stages/content.py
 src/pipeline/orchestration/stages/voiceover.py
 src/pipeline/orchestration/stages/visuals.py
@@ -69,7 +72,7 @@ src/pipeline/orchestration/stages/visuals.py
 
 Operational behavior:
 
-- A new content run freezes the selected authoring profile into
+- A new ingestion run freezes the selected authoring profile into
   `run_context.json`.
 - `--run-id current` resumes the currently selected run.
 - Completed upstream modules are reused by default.
@@ -87,33 +90,37 @@ Implemented outputs:
 ```text
 output/runs/{run_id}/orchestration/
   run_state.json
+  ingestion_stage_result.json
   content_stage_result.json
   voiceover_stage_result.json
   visuals_stage_result.json
   logs/
+    ingestion.log
     content.log
     voiceover.log
     visuals.log
-    events.jsonl
 ```
 
-The stage wrapper emits one start and end/failure event around every app call.
+The stage wrapper writes one start and end/failure line around every app call.
 This keeps logging integration out of app internals. Long-running CLI media
 subprocess output is streamed into the owning stage log. Logging level,
-rotation, console output, and summary/verbose event detail are config-driven
-under `profile.orchestration.logging`.
+rotation, console output, and summary/verbose detail are config-driven under
+`profile.orchestration.logging`.
 
-Every stage response now returns `log_path`, `events_path`, and
-`run_state_path`, so the CLI output points directly to the durable diagnostics.
+Every stage response returns `log_path` and `run_state_path`, so the CLI output
+points directly to the durable diagnostics.
 Dependency log levels are also config-driven; routine HTTP client status lines
-are suppressed without hiding pipeline warnings or provider failures. The
-visual renderer forwards scene start, cache, batch progress, retry, and
-completion events through the same stage logger while remaining independently
-callable.
+are suppressed without hiding orchestration warnings or provider failures.
 
 `run_state.json` records stage/module status, result paths, summaries, and
 whether a result was reused. It improves inspection and restart behavior but
 does not replace canonical app results or provenance validation.
+
+LLM helpers only build detailed records returned in `result["llm_calls"]`; the
+orchestrator persists them to each module's `llm_calls.jsonl` after return.
+Voiceover keeps its provider request ledger beside the generated audio. No app
+imports orchestration telemetry or receives a log path. This intentionally
+trades micro-level live progress for a clean dict-in/dict-out app boundary.
 
 ## 4. Creative Hardening Implemented
 
@@ -438,13 +445,14 @@ validation is intentionally strict because malformed numeric fields, unknown
 assets, overlapping time ranges, or missing streams are executable media
 errors rather than editorial opinions.
 
-### Q-16: Role-specific K3 creative routing (`P0`, implemented and frozen-packet tested 2026-07-18)
+### Q-16: Role-specific K3 creative routing (`P0`, implemented and frozen-packet tested 2026-07-18; superseded by Q-32)
 
 The production profile keeps GPT-4o on source research and episode direction.
 Those calls accurately surfaced complete-record details and meaning boundaries
 in roughly 8-17 seconds per selected story, so moving high-volume extraction to
-K3 would add latency without evidence of a quality gain. Kimi K3 now owns the
-viewer-facing story writer/reviewer and bookend writer/reviewer roles.
+K3 would add latency without evidence of a quality gain. At this milestone,
+Kimi K3 owned the viewer-facing story writer/reviewer and bookend
+writer/reviewer roles.
 
 The frozen five-story packet from
 `run_2026_07_18_171428_daily_48h_all_sources` completed with
@@ -457,7 +465,7 @@ published source code, and a closing about money arriving first inverted the
 lead story's announced-before-close premise. Writer and reviewer prompts now
 name both mechanism errors explicitly; the next fresh run must verify them.
 
-Metadata creation now uses one Kimi K3 call and returns one complete chapter
+At this milestone, metadata creation used one Kimi K3 call and returned one complete chapter
 label for every exact script section ID. Code owns timestamps, ordering, source
 URLs, and section coverage; it no longer clips article headlines into fragments
 such as `AI's` or `sales and`. On the same frozen script, K3 metadata completed
@@ -573,7 +581,7 @@ captures each page and both HyperFrames and Remotion rendered inspected 16:9
 smokes. A persistent source-capture cache with a config-driven TTL reduces
 repeated publisher requests across runs without hiding capture failures.
 
-### Q-24: Bounded Kimi K3 visual-planner comparison (`P1`, implemented 2026-07-19)
+### Q-24: Bounded Kimi K3 visual-planner comparison (`P1`, implemented 2026-07-19; superseded by Q-32)
 
 The provider path was tested in layers. K3 returned a raw probe in 2.63 seconds
 and a strict Pydantic/JSON-schema probe in 16.71 seconds. The exact frozen
@@ -584,9 +592,10 @@ the same prompt in 17.95 seconds.
 K3's plan was materially stronger on this sample: it avoided duplicated scene
 payloads, used two distinct exact source passages, selected a verified robot
 image, preserved the narration's “once” contrast, and closed on a supported
-two-node explainer. The daily profile now uses K3 for the per-story planner and
-story-plan editor because quality takes priority over the roughly 17x latency
-on this request. Episode direction and bookends remain GPT-4o-mini because the
+two-node explainer. At this milestone, the daily profile used K3 for the
+per-story planner and story-plan editor because quality took priority over the
+roughly 17x latency on this request. Episode direction and bookends remained
+GPT-4o-mini because the
 bounded comparison did not establish a K3 advantage for those roles. K3 omits
 temperature, uses a 600-second timeout, and has one provider attempt per
 bounded role call. A fresh five-story run then exposed a provider-policy edge:
@@ -627,7 +636,7 @@ K3/Comic Chat/TechCrunch regression recreates the observed failure: indirect
 and named Kimi coverage resolves to one event while the unrelated Microsoft
 Comic Chat record remains separate.
 
-### Q-26: Recipe-first HyperFrames production design (`P0`, implemented and rendered 2026-07-20; production default superseded by Q-28)
+### Q-26: Recipe-first HyperFrames production design (`P0`, implemented and rendered 2026-07-20; delivery decision superseded by Q-31)
 
 At this milestone, the daily visual profile used HyperFrames with the shared
 `editorial_minimal` design contract. Every planner-advertised render kind must
@@ -638,9 +647,9 @@ can no longer hand a broad scene type to a renderer and receive unrelated
 legacy styling.
 
 The recipe compiler implements editorial hooks and chapters, source proof,
-annotated image/video, identity reveals, short mechanisms, metric countups and
-contrasts, process traces and detail zooms, interface walkthroughs, evidence
-stacks/montages, and interface transformations. All projects receive
+annotated image/video, identity reveals, short mechanisms, interface
+walkthroughs, evidence stacks/montages, and interface transformations. All
+projects receive
 `frame.md`: warm paper, near-black ink, one burnt-orange accent, EB Garamond
 headlines, Oswald labels, large readable zones, restrained motion, and no
 decorative cards. The circular identity treatment and montage label overlays
@@ -649,10 +658,9 @@ were removed during frame QA.
 Eleven representative recipe projects pass HyperFrames runtime, layout, motion,
 and WCAG contrast checks and render as valid 1280x720 MP4 clips. The inspected
 contact sheet is stored at
-`output/labs/hyperframes_recipe_qa/contact_sheet.png`. Q-28 later restored the
-inspected Remotion path as the delivery baseline while keeping this backend for
-explicit parity work. The upstream ZIP advisory remains an operational
-constraint: use only pipeline-owned composition code and trusted local assets.
+`output/labs/hyperframes_recipe_qa/contact_sheet.png`. Q-28 temporarily restored
+the inspected Remotion path as the delivery baseline; Q-31 replaces that
+temporary decision after active-only gallery and sequence-level QA.
 
 The frozen July 19 production episode also completed the full live path with
 Kimi planning: five stories, 37 scenes, 35 aligned audio units covered, zero
@@ -691,7 +699,7 @@ boundary used by planning.
 
 ### Q-28: Reliable development replay and visual delivery baseline (`P0`, implemented 2026-07-20)
 
-The profile manifest now composes explicit `dev` and `prod` overlays without
+The profile manifest now composes explicit `dev`, `staging`, and `prod` overlays without
 duplicating every module YAML. The selected environment is frozen into run
 context and module config snapshots. `workbench.yaml` remains the active routing
 manifest rather than a runtime behavior dump.
@@ -703,12 +711,97 @@ by backend and selection, so a comparison cannot erase a complete preview or a
 different engine's clips. Long-running planner, catalog, resolver, and renderer
 operations emit progress through the orchestration-owned log handlers.
 
-The inspected warm `editorial_minimal` Remotion output is the current stable
-delivery baseline. HyperFrames remains available explicitly for parity work,
-but is not the production default until its chapter, identity, media, and
-typography treatments pass the same frame-level review. The daily planner no
-longer advertises the dark/PPT-like chart and dashboard recipes. Missing brand
-logos resolve to an honest full-name wordmark rather than fabricated initials.
+The inspected warm `editorial_minimal` Remotion output was the stable delivery
+baseline at this milestone. Q-31 completes the active-only HyperFrames review
+and changes the profile default. Missing brand logos resolve to an honest
+full-name wordmark rather than fabricated initials.
+
+### Q-29: Stage ownership, fixture replay, thumbnail concepts, and auditing (`P0`, implemented 2026-07-22)
+
+Network collection now lives under `src/pipeline/ingestion/` and runs through a
+separate `collect` stage. Content begins from a canonical collection artifact.
+Audio-timed metadata and manual publish packaging live under
+`src/pipeline/publishing/`; their existing consumer stages still own I/O and
+sequencing.
+
+Environment config remains a sparse overlay on shared profile/module YAML. Dev
+uses inexpensive LLMs and preview media; staging retains production content
+models with preview media; prod retains quality routes. Different video
+products remain profiles, not environments. A committed fixture scenario can
+seed and bind canonical artifacts under `output/tests` for no-LLM renderer
+replay.
+
+Metadata creation now emits executable 16:9 thumbnail concepts with composition,
+subjects, palette direction, source/story references, a generation prompt, and
+explicit avoid guidance. LLM and TTS calls remain complete app/media audit
+records persisted by orchestration rather than live telemetry side effects.
+
+### Q-30: Asset-first visual research and sequence direction (`P0`, implemented 2026-07-22)
+
+The visual stage now begins with a standalone `visual_research` app. One
+structured call per selected story receives its complete source records and
+canonical script section. It names concrete visual needs, sequence arcs,
+must-show details, source-record candidates, and unsuitable treatments before
+cataloging begins. Research never authors raw URLs, asset IDs, or timestamps;
+cataloging and resolution retain those deterministic ownership duties.
+
+The planner receives this research package alongside the exact trusted catalog.
+Adjacent narration beats are coordinated as 25-45 second sequences containing
+two to four short shots. A sequence is a direction window, not a long scene:
+each shot keeps its authoritative voiceover-aligned slot while sharing one
+visual premise and continuity motif with its neighbors.
+
+### Q-31: Active-only visual foundation and HyperFrames production default (`P0`, implemented and benchmarked 2026-07-22)
+
+The active visual vocabulary is now limited to 11 reviewed scene contracts:
+source proof, context image/video, browser/document motion, identity/chapter
+motion, clean editorial text, small explainers, and interface transformation.
+Legacy dashboards, chart cards, matrices, radars, generic flow cards, and their
+renderer components were removed rather than hidden behind configuration.
+
+All active recipes use one episode palette with explicit background, content,
+annotation, and typography layers. Generated treatments do not paint competing
+full-frame themes; real media remains intentionally opaque. The profile default
+is now HyperFrames, while Remotion remains an explicit comparison backend.
+
+The source-controlled gallery contains three variants for every active scene
+type. All 33 variants rendered successfully through HyperFrames. A focused
+July 20 benchmark rendered the intro, the asset-poor AI-advice story, and the
+media-rich probabilistic-computer story: 25 shots, nine 24-39 second sequences,
+zero render failures, and matching 270.56-second narration cuts. Review assets
+are under `output/labs/visual_family_gallery/active_33/` and
+`output/labs/visual_sequence_benchmark_july20/`.
+
+### Q-32: DeepSeek V4 Pro creative routing (`P0`, implemented and production-tested 2026-07-22)
+
+Production replaces the former Kimi K3 creative routes with DeepSeek V4 Pro.
+Thinking is enabled with `reasoning_effort: max` for the story writer,
+story reviewer, bookend writer, bookend reviewer, metadata creator, story
+visual planner, and bounded visual editor. Source research, episode direction,
+high-volume semantic screening, and visual bookends retain their configured
+OpenAI routes where the prior comparisons did not establish a quality gain.
+
+DeepSeek structured calls use JSON mode with the exact active Pydantic schema
+included in the prompt, omit temperature, use a 600-second timeout, and retain
+bounded attempts. A config-owned OpenAI route remains limited to explicit
+provider content-filter rejection rather than becoming a general silent
+fallback. Development continues to override these roles with GPT-4o-mini.
+
+### Q-33: Bookend and transition asset ownership (`P0`, implemented and production-verified 2026-07-22)
+
+Bookend scenes deliberately have no story ID, but may use a selected episode
+asset. The planner now validates that exception without discarding the asset's
+real story owner. Logo normalization preserves the declared entity and can
+rebind only to one exact matching catalog identity, preventing an unrelated
+logo title from silently replacing the requested entity. Story transitions
+validate optional background assets through their declared background render
+kind instead of incorrectly treating every transition as asset-free.
+
+The July 22 production plan was repaired without another provider call and then
+completed media discovery, asset resolution, all 55 HyperFrames scene renders,
+audio assembly, and visual review. The final duration matched the authoritative
+563.92-second voiceover, and focused frame inspection confirmed the corrected
+OpenAI bookend and Anthropic transition identities.
 
 ### Standing Semantic Policy (`KEEP`)
 
@@ -732,7 +825,7 @@ pass human review.
 
 ## 6. Next Evaluation Gate
 
-Q-01 through Q-28 are implemented. The next gate is a fresh production episode
+Q-01 through Q-33 are implemented. The next gate is a fresh production episode
 from evidence preparation onward, followed by artifact inspection rather than
 summary-only review. External provider search and paid vision verification stay
 disabled during this evaluation so source-context, grouping, script quality,
@@ -774,7 +867,7 @@ Visual review:
 
 ## 7. Other Deferred Work
 
-After the validated Q-01 through Q-28 foundation, keep these operational and
+After the validated Q-01 through Q-33 foundation, keep these operational and
 product tasks visible without mixing them into the current evaluation:
 
 - Keep Wikimedia, Pexels, Pixabay, and paid frame-level vision verification
@@ -782,15 +875,17 @@ product tasks visible without mixing them into the current evaluation:
   accepted. Re-enable them only through an explicit profile and human-reviewed
   cost/quality comparison.
 
-- Inspect Kimi K3 story-planning latency and Moonshot rate behavior over several
-  fresh episodes before adding provider-safe story-call concurrency. The
+- Measure DeepSeek V4 Pro thinking latency, cost, and plan quality over several
+  fresh episodes before adding provider-safe story-call concurrency. The July
+  22 visual planner needed about 45 minutes for 16 sequential calls. Its
   content-filter-only GPT-4o route is operational resilience, not evidence that
-  more parallel K3 calls are safe.
+  more parallel provider calls are safe.
 
-- Monitor the HyperFrames transitive `adm-zip` advisory and upgrade when
-  upstream ships a fixed release. Until then, render only pipeline-owned
-  compositions and trusted local assets; do not accept arbitrary composition
-  archives or untrusted project trees.
+- Monitor the current HyperFrames transitive advisories (`adm-zip`, `sharp`,
+  `onnxruntime-node`, and `@hono/node-server`) and upgrade when upstream ships
+  compatible fixed releases. No automatic fix is currently available. Until
+  then, render only pipeline-owned compositions and trusted local assets; do
+  not accept arbitrary composition archives or untrusted project trees.
 
 - Compare the verified OpenAI `gpt-4o-mini-tts` baseline against a
   non-deprecated hosted speech path before production lock. The model still
@@ -810,15 +905,19 @@ product tasks visible without mixing them into the current evaluation:
 - Add a scheduler/service adapter that submits exact stage JSON envelopes.
 - Add cancellation and heartbeat events for long renders.
 - Add optional remote artifact storage without changing app contracts.
-- Add a small run-inspection UI over `run_state.json` and `events.jsonl`.
+- Add a small run-inspection UI over `run_state.json`, stage logs, and canonical
+  module results.
 
 ## 8. Commands
 
 New full content run:
 
 ```bash
-python -m src.pipeline.orchestration.runner content \
+python -m src.pipeline.orchestration.runner collect \
   --profile daily_48h_all_sources \
+  --environment prod
+python -m src.pipeline.orchestration.runner content \
+  --run-id current \
   --environment prod
 ```
 
@@ -849,15 +948,15 @@ python -m src.pipeline.orchestration.runner visuals \
   --environment prod
 ```
 
-Compare one scene with the optional HyperFrames backend after a valid plan and
-resolved assets already exist:
+Compare one scene with the legacy Remotion backend after a valid plan and
+resolved assets already exist. HyperFrames is the production default:
 
 ```bash
 python -m src.pipeline.orchestration.runner visuals \
   --run-id current \
   --plan-source generate \
   --render-mode preview \
-  --render-backend hyperframes \
+  --render-backend remotion \
   --from-module visual_render \
   --stop-after visual_render \
   --scene-id scene_003

@@ -12,6 +12,7 @@ from src.pipeline.content.editorial_selection.formats.roundup.contract import (
 from src.pipeline.content.story_mapping.clusterer import cluster_records
 from src.pipeline.content.story_mapping.cluster_reconciler import (
     ComponentReconciliationOutput,
+    ConflictResolutionOutput,
     reconcile_components,
 )
 from src.pipeline.content.story_mapping.event_identity import (
@@ -154,6 +155,138 @@ def test_cluster_reconciler_uses_event_capsules_and_returns_partition() -> None:
     assert marker in llm_calls[0]["messages"][0]["content"]
     assert llm_calls[0]["metadata"]["records_truncated"] is False
     assert llm_calls[0]["metadata"]["serialized_context_tokens"] > 0
+
+
+def test_cluster_reconciler_normalizes_duplicate_key_inside_one_group() -> None:
+    parsed = ComponentReconciliationOutput.model_validate(
+        {
+            "component_id": "component_fixture",
+            "groups": [
+                {
+                    "group_ref": "group_1",
+                    "record_keys": ["record_a", "record_a", "record_b"],
+                    "relationship": "same_event_coverage",
+                    "canonical_event": "One release",
+                    "rationale": "Both records cover the same release.",
+                }
+            ],
+        }
+    )
+
+    class FakeLLM:
+        def with_structured_output(self, _output_model, **_kwargs):
+            return RunnableLambda(
+                lambda _prompt: {"parsed": parsed, "raw": None, "parsing_error": None}
+            )
+
+    llm_calls: list[dict] = []
+    groups = reconcile_components(
+        [_reconciliation_component_fixture()],
+        config=_reconciliation_config_fixture(max_attempts=1),
+        llm=FakeLLM(),
+        system_prompt="Reconcile records.",
+        llm_calls=llm_calls,
+    )
+
+    assert groups == {"component_fixture": [["record_a", "record_b"]]}
+    assert llm_calls[0]["metadata"]["same_group_duplicate_record_keys_removed"] == [
+        "record_a"
+    ]
+
+
+def test_cluster_reconciler_reprompts_cross_group_duplicate_with_exact_error() -> None:
+    outputs = [
+        ComponentReconciliationOutput.model_validate(
+            {
+                "component_id": "component_fixture",
+                "groups": [
+                    {
+                        "group_ref": "group_1",
+                        "record_keys": ["record_a", "record_b"],
+                        "relationship": "same_event_coverage",
+                        "canonical_event": "One release",
+                        "rationale": "These records cover one release.",
+                    },
+                    {
+                        "group_ref": "group_2",
+                        "record_keys": ["record_b"],
+                        "relationship": "standalone_record",
+                        "canonical_event": "Duplicate assignment",
+                        "rationale": "This is intentionally invalid fixture output.",
+                    },
+                ],
+            }
+        ),
+        ConflictResolutionOutput.model_validate(
+            {
+                "component_id": "component_fixture",
+                "decisions": [
+                    {
+                        "record_key": "record_b",
+                        "selected_candidate_id": "candidate_1",
+                        "rationale": "Record B belongs with the release coverage.",
+                    }
+                ],
+            }
+        ),
+    ]
+
+    class FakeLLM:
+        def with_structured_output(self, _output_model, **_kwargs):
+            return RunnableLambda(
+                lambda _prompt: {
+                    "parsed": outputs.pop(0),
+                    "raw": None,
+                    "parsing_error": None,
+                }
+            )
+
+    llm_calls: list[dict] = []
+    groups = reconcile_components(
+        [_reconciliation_component_fixture()],
+        config=_reconciliation_config_fixture(max_attempts=2),
+        llm=FakeLLM(),
+        system_prompt="Reconcile records.",
+        conflict_system_prompt="Resolve only the conflicting record assignment.",
+        llm_calls=llm_calls,
+    )
+
+    assert groups == {"component_fixture": [["record_a", "record_b"]]}
+    assert len(llm_calls) == 2
+    assert "conflicting_assignments" in llm_calls[0]["metadata"]["parse_error"]
+    assert llm_calls[1]["module_name"] == "cluster_reconciliation_conflict_resolution"
+    assert '"candidate_id": "candidate_1"' in llm_calls[1]["messages"][0]["content"]
+    assert llm_calls[1]["metadata"]["structural_repair_feedback_included"] is False
+
+
+def _reconciliation_component_fixture() -> dict:
+    return {
+        "component_id": "component_fixture",
+        "context_mode": "event_identity_capsules_from_complete_records",
+        "records": [
+            {
+                "record_key": "record_a",
+                "event_identity": {"canonical_event": "One release"},
+            },
+            {
+                "record_key": "record_b",
+                "event_identity": {"canonical_event": "One release"},
+            },
+        ],
+        "pair_decisions": [],
+    }
+
+
+def _reconciliation_config_fixture(*, max_attempts: int) -> dict:
+    return {
+        "provider": "openai",
+        "model": "fixture",
+        "worker_count": 1,
+        "max_attempts": max_attempts,
+        "max_component_chars": 100_000,
+        "max_component_tokens": 10_000,
+        "tokenizer_encoding": "o200k_base",
+    }
 
 
 def test_pair_adjudication_uses_capsule_then_complete_record_confirmation() -> None:

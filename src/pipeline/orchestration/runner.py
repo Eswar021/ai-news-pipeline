@@ -1,9 +1,11 @@
-"""Thin production router for the three pipeline stages.
+"""Thin production router for the four pipeline stages.
 
 Run from the project root with the main project Python, not `.venv-voiceover`::
 
-    python3 -m src.pipeline.orchestration.runner content \
+    python3 -m src.pipeline.orchestration.runner collect \
       --profile daily_48h_all_sources --environment prod
+    python3 -m src.pipeline.orchestration.runner content \
+      --run-id current
     python3 -m src.pipeline.orchestration.runner voiceover \
       --run-id current --script-source app --synthesis-mode final
     python3 -m src.pipeline.orchestration.runner voiceover \
@@ -72,8 +74,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="stage", required=True)
 
-    content = subparsers.add_parser("content", help="Collect, select, write, and draft metadata.")
-    _add_common_arguments(content, default_run_id=None)
+    collect = subparsers.add_parser("collect", help="Create a run and collect normalized source records.")
+    _add_common_arguments(collect, default_run_id=None)
+    collect.add_argument("--profile", dest="run_profile")
+    collect.add_argument("--no-resume", action="store_true")
+
+    content = subparsers.add_parser("content", help="Prepare, select, write, and draft metadata.")
+    _add_common_arguments(content, default_run_id="current")
     content.add_argument("--profile", dest="run_profile")
     content.add_argument("--from-module")
     content.add_argument("--stop-after")
@@ -124,8 +131,7 @@ def _add_common_arguments(parser: argparse.ArgumentParser, *, default_run_id: st
     parser.add_argument("--pipeline-config", default="src/pipeline/config/workbench.yaml")
     parser.add_argument(
         "--environment",
-        choices=("dev", "prod"),
-        help="Config overlay to use. Defaults to PIPELINE_ENVIRONMENT/ENVIRONMENT, then prod.",
+        help="Config overlay to use. Defaults to PIPELINE_ENVIRONMENT/ENVIRONMENT, then the manifest default.",
     )
     parser.add_argument(
         "--config-mode",
@@ -152,7 +158,13 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "config": {},
         "input": {},
     }
-    if args.stage == "content":
+    if args.stage == "collect":
+        request["run"]["run_profile"] = args.run_profile
+        request["config"] = {
+            "config_mode": args.config_mode,
+            "resume_completed": not args.no_resume,
+        }
+    elif args.stage == "content":
         request["run"]["run_profile"] = args.run_profile
         request["config"] = {
             "config_mode": args.config_mode,
@@ -195,6 +207,10 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
 
 def _stage_function(stage: str) -> StageFunction:
     # Keep CLI help and argument validation fast; stage imports load optional LLM/media dependencies.
+    if stage == "collect":
+        from .stages.ingestion import run
+
+        return run
     if stage == "content":
         from .stages.content import run
 

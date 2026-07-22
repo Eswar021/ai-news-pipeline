@@ -1,98 +1,73 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { MotionBackground } from "./Background";
+import { Img, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { EditorialCanvas } from "./EditorialCanvas";
 import { VisualSceneSpec } from "./types";
-import { clamp01, font, listValue, palette, readableTitleSize, sceneEyebrow, textValue } from "./style";
+import { clamp01, editorialStyle, readableTitleSize, sceneEyebrow, shortDisplayText, textValue } from "./style";
 
-type WalkthroughStep = {
-  label?: string;
-  detail?: string;
-  target_text?: string;
-};
-
-const objectList = <T extends Record<string, unknown>>(value: unknown): T[] =>
-  Array.isArray(value) ? value.filter((item): item is T => Boolean(item) && typeof item === "object") : [];
+type WalkthroughStep = { label?: string; detail?: string; target_text?: string };
 
 const stepsFromPayload = (value: unknown): WalkthroughStep[] => {
-  const objects = objectList<Record<string, unknown>>(value)
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
     .map((item) => ({
-      label: textValue(item.label) || textValue(item.title) || textValue(item.step),
-      detail: textValue(item.detail) || textValue(item.description),
-      target_text: textValue(item.target_text) || textValue(item.targetText),
+      label: textValue(item.label),
+      detail: textValue(item.detail),
+      target_text: textValue(item.target_text),
     }))
-    .filter((item) => item.label || item.detail || item.target_text);
-  if (objects.length) {
-    return objects.slice(0, 5);
-  }
-  const phrases = listValue(value);
-  if (phrases.length) {
-    return phrases.slice(0, 5).map((phrase) => ({ label: phrase }));
-  }
-  return [];
+    .filter((item) => item.label || item.detail || item.target_text)
+    .slice(0, 4);
 };
 
 export const BrowserWalkthroughScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const payload = spec.scene.payload || {};
-  const headline = textValue(payload.headline) || textValue(payload.overlay_headline) || spec.scene.script_excerpt || "";
-  const eyebrow = sceneEyebrow(payload, "BROWSER WALKTHROUGH");
+  const asset = spec.scene.resolved_asset || {};
+  const colors = editorialStyle(spec.visual_style);
+  const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
+  const eyebrow = sceneEyebrow(payload, "GUIDED SOURCE");
   const url = textValue(payload.url);
   const host = url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-  const focusText = textValue(payload.focus_text) || textValue(payload.target_text) || textValue(payload.overlay_headline);
-  const pageTitle = textValue(payload.browser_title) || textValue(payload.page_title) || focusText;
-  const steps = stepsFromPayload(payload.walkthrough_steps).slice(0, 5);
-  const highlightPhrases = listValue(payload.highlight_phrases).slice(0, 3);
-  const progress = clamp01(interpolate(frame, [18, Math.max(60, durationInFrames - 20)], [0, 1], { extrapolateRight: "clamp" }));
-  const scrollY = interpolate(progress, [0, 1], [0, -245]);
-  const scanX = interpolate(frame, [28, Math.max(82, durationInFrames - 16)], [-260, 1060], { extrapolateRight: "clamp" });
+  const steps = stepsFromPayload(payload.walkthrough_steps);
+  const image = asset.asset_data_uri || "";
+  const progress = clamp01(interpolate(frame, [12, Math.max(30, durationInFrames - 12)], [0, 1], { extrapolateRight: "clamp" }));
+  const activeIndex = Math.min(Math.max(steps.length - 1, 0), Math.floor(progress * Math.max(steps.length, 1)));
 
   return (
-    <AbsoluteFill style={{ fontFamily: font.family, color: palette.text }}>
-      <MotionBackground motif={textValue(payload.background_motif) || "newsroom_grid"} />
-      {eyebrow && <div style={{ position: "absolute", left: 92, top: 70, color: palette.cyan, fontSize: 23, fontWeight: 950, letterSpacing: "0.18em", textTransform: "uppercase" }}>{eyebrow}</div>}
-      <div style={{ position: "absolute", left: 96, top: eyebrow ? 120 : 88, width: 760, fontSize: readableTitleSize(headline, 78), lineHeight: 0.9, fontWeight: 950, letterSpacing: "-0.06em" }}>{headline}</div>
+    <EditorialCanvas spec={spec} accentPosition="right">
+      <div style={{ position: "absolute", left: 100, top: 92, width: 600 }}>
+        {eyebrow && <div style={{ color: colors.accent, fontSize: 22, fontWeight: 850, letterSpacing: "0.18em", textTransform: "uppercase" }}>{eyebrow}</div>}
+        <div style={{ marginTop: eyebrow ? 20 : 0, fontFamily: colors.editorialFont, fontSize: readableTitleSize(headline, 76), lineHeight: 0.92, fontWeight: 700, letterSpacing: "-0.05em" }}>{headline}</div>
+      </div>
 
-      <div style={{ position: "absolute", left: 92, bottom: 92, width: 610, display: "flex", flexDirection: "column", gap: 16 }}>
-        {steps.slice(0, 3).map((step, index) => {
-          const reveal = clamp01(interpolate(frame, [18 + index * 13, 34 + index * 13], [0, 1], { extrapolateRight: "clamp" }));
+      <div style={{ position: "absolute", left: 104, bottom: 100, width: 540, display: "flex", flexDirection: "column", gap: 20 }}>
+        {steps.map((step, index) => {
+          const active = index === activeIndex;
+          const reveal = clamp01(interpolate(frame, [12 + index * 10, 28 + index * 10], [0, 1], { extrapolateRight: "clamp" }));
           return (
-            <div key={`${step.label}-${index}`} style={{ opacity: reveal, transform: `translateX(${interpolate(reveal, [0, 1], [-28, 0])}px)`, padding: "18px 22px", borderRadius: 26, background: index === 1 ? `${palette.cyan}20` : "rgba(255,255,255,0.075)", border: `1px solid ${index === 1 ? palette.cyan : "rgba(255,255,255,0.13)"}` }}>
-              <div style={{ color: index === 1 ? palette.cyan : palette.amber, fontSize: 22, fontWeight: 950, letterSpacing: "0.11em", textTransform: "uppercase" }}>{step.label || `Step ${index + 1}`}</div>
-              {(step.detail || step.target_text) && <div style={{ marginTop: 8, color: "#e5eef8", fontSize: 30, lineHeight: 1.02, fontWeight: 830, letterSpacing: "-0.035em" }}>{step.detail || step.target_text}</div>}
+            <div key={`${step.label}-${index}`} style={{ display: "grid", gridTemplateColumns: "42px 1fr", gap: 18, opacity: reveal, transform: `translateX(${interpolate(reveal, [0, 1], [-24, 0])}px)` }}>
+              <div style={{ color: active ? colors.accent : colors.muted, fontSize: 24, fontWeight: 850 }}>{String(index + 1).padStart(2, "0")}</div>
+              <div style={{ paddingBottom: 16, borderBottom: `1px solid ${active ? colors.accent : colors.text}30` }}>
+                <div style={{ color: active ? colors.text : colors.muted, fontSize: 29, lineHeight: 1, fontWeight: 760 }}>{shortDisplayText(step.label || step.target_text || "", 46)}</div>
+                {step.detail && <div style={{ marginTop: 8, color: colors.muted, fontSize: 21, lineHeight: 1.12 }}>{shortDisplayText(step.detail, 72)}</div>}
+              </div>
             </div>
           );
         })}
       </div>
 
-      <div style={{ position: "absolute", right: 96, top: 118, width: 1030, height: 780, borderRadius: 44, overflow: "hidden", background: "rgba(9,16,26,0.94)", border: "1px solid rgba(255,255,255,0.18)", boxShadow: "0 46px 150px rgba(0,0,0,0.55)" }}>
-        <div style={{ height: 76, background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 14, padding: "0 24px", borderBottom: "1px solid rgba(255,255,255,0.12)" }}>
-          {[palette.red, palette.amber, palette.green].map((color) => <div key={color} style={{ width: 18, height: 18, borderRadius: 99, background: color }} />)}
-          <div style={{ marginLeft: 16, flex: 1, height: 38, borderRadius: 999, background: "rgba(255,255,255,0.11)", display: "flex", alignItems: "center", padding: "0 20px", color: palette.muted, fontSize: 20, fontWeight: 760 }}>{host}</div>
-        </div>
-        <div style={{ position: "absolute", left: 0, right: 0, top: 76, bottom: 0, overflow: "hidden" }}>
-          <div style={{ transform: `translateY(${scrollY}px)`, transition: "transform 120ms linear", padding: "44px 54px 160px" }}>
-            <div style={{ width: 620, height: 36, borderRadius: 999, background: `${palette.cyan}60`, marginBottom: 24 }} />
-            <div style={{ fontSize: readableTitleSize(pageTitle, 48), lineHeight: 0.96, fontWeight: 950, letterSpacing: "-0.055em", maxWidth: 780 }}>{pageTitle}</div>
-            <div style={{ marginTop: 32, display: "grid", gridTemplateColumns: "1fr 280px", gap: 34 }}>
-              <div>
-                {steps.map((step, index) => (
-                  <div key={`page-${index}`} style={{ marginTop: index === 0 ? 0 : 28, padding: 26, borderRadius: 28, background: index === 1 ? "rgba(99,215,255,0.13)" : "rgba(255,255,255,0.07)", border: `1px solid ${index === 1 ? `${palette.cyan}88` : "rgba(255,255,255,0.11)"}` }}>
-                    <div style={{ color: index === 1 ? palette.cyan : palette.text, fontSize: 31, fontWeight: 910, letterSpacing: "-0.035em" }}>{step.label || `Section ${index + 1}`}</div>
-                    <div style={{ marginTop: 12, color: "#d7e4f1", fontSize: 25, lineHeight: 1.16, fontWeight: 690 }}>{step.target_text || step.detail || focusText}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                {highlightPhrases.map((item, index) => (
-                  <div key={`${item}-${index}`} style={{ height: 88, borderRadius: 24, background: "rgba(255,255,255,0.075)", border: "1px solid rgba(255,255,255,0.10)", padding: 20, color: index === 1 ? palette.amber : palette.muted, fontSize: 22, lineHeight: 1.05, fontWeight: 850 }}>{item}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div style={{ position: "absolute", left: scanX, top: 92, width: 180, height: 620, background: "linear-gradient(90deg, transparent, rgba(255,207,112,0.22), transparent)", filter: "blur(4px)" }} />
+      <div style={{ position: "absolute", right: 88, top: 92, width: 1110, height: 860, overflow: "hidden", background: "#fffdfa", border: `1px solid ${colors.text}30`, boxShadow: "0 30px 90px rgba(45,34,22,0.16)" }}>
+        <div style={{ height: 54, display: "flex", alignItems: "center", padding: "0 24px", background: "#e9e1d5", borderBottom: `1px solid ${colors.text}22`, color: colors.muted, fontSize: 19, fontWeight: 700 }}>{host}</div>
+        {image ? (
+          <Img src={image} style={{ width: "100%", height: "calc(100% - 54px)", objectFit: "cover", objectPosition: `center ${22 + progress * 52}%`, transform: `scale(${1.02 + progress * 0.06})` }} />
+        ) : (
+          <div style={{ height: "calc(100% - 54px)", display: "flex", alignItems: "center", justifyContent: "center", color: colors.muted, fontSize: 32 }}>Source capture unavailable</div>
+        )}
+        <div style={{ position: "absolute", right: 26, top: 88 + activeIndex * 120, width: 280, padding: "14px 18px", background: "rgba(255,253,250,0.94)", borderLeft: `7px solid ${colors.accent}`, color: colors.text, fontSize: 23, lineHeight: 1.08, fontWeight: 720 }}>
+          {shortDisplayText(steps[activeIndex]?.target_text || steps[activeIndex]?.label || textValue(payload.focus_text), 74)}
         </div>
       </div>
-    </AbsoluteFill>
+    </EditorialCanvas>
   );
 };

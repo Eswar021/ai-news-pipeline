@@ -6,13 +6,15 @@ import os
 from pathlib import Path
 
 from src.pipeline.orchestration import runner
+from src.pipeline.orchestration.fixture_scenarios import seed_scenario
 from src.pipeline.orchestration.logging import configure_stage_logging
-from src.pipeline.orchestration.stages.content import (
-    ContentOptions,
-    _run_modules,
+from src.pipeline.orchestration.stages.ingestion import (
+    IngestionOptions,
+    _run_collection,
     _validate_news_collection_credentials,
 )
 from src.pipeline.orchestration.stages.visuals import VisualsOptions, _focused_render_scope
+from src.pipeline.orchestration.stages.content import ContentOptions, _write_outputs
 from src.pipeline.orchestration.stages.common import (
     StageConfigResolver,
     combine_config_documents,
@@ -32,7 +34,7 @@ def _run_context(tmp_path: Path) -> dict:
     }
 
 
-def test_stage_logger_writes_readable_and_structured_logs(tmp_path: Path) -> None:
+def test_stage_logger_writes_one_readable_stage_log(tmp_path: Path) -> None:
     context = _run_context(tmp_path)
     stage_logger = configure_stage_logging(
         context,
@@ -58,15 +60,14 @@ def test_stage_logger_writes_readable_and_structured_logs(tmp_path: Path) -> Non
 
     logs_dir = Path(context["run_dir"]) / "orchestration" / "logs"
     readable = (logs_dir / "content.log").read_text(encoding="utf-8")
-    events = [json.loads(line) for line in (logs_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()]
     assert result["status"] == "ok"
     assert "START module=fixture_module" in readable
     assert "END module=fixture_module status=ok" in readable
     assert 'summary={"record_count":3}' in readable
-    assert [event["event"] for event in events][-2:] == ["module.started", "module.completed"]
-    assert events[-1]["details"] == {"record_count": 3}
     assert stage_logger.log_path == logs_dir / "content.log"
     assert logging.getLogger("httpx").level == logging.WARNING
+    assert not (logs_dir / "events.jsonl").exists()
+    assert not (logs_dir.parent / "telemetry").exists()
 
     response = stage_logger.attach_paths(
         {"status": "ok", "data": {}, "summary": {}, "handoff": {}},
@@ -74,15 +75,45 @@ def test_stage_logger_writes_readable_and_structured_logs(tmp_path: Path) -> Non
     )
     assert response["data"] == {
         "log_path": str(logs_dir / "content.log"),
-        "events_path": str(logs_dir / "events.jsonl"),
         "run_state_path": str(logs_dir.parent / "run_state.json"),
     }
 
-    logging.getLogger("ai_content_creation.runtime.visual_render").info(
-        "RENDER progress completed=1/2"
+
+def test_content_stage_writes_llm_audit_from_returned_result(tmp_path: Path) -> None:
+    output_dir = tmp_path / "script_generation"
+    call = {
+        "module_name": "fixture_writer",
+        "provider": "openai",
+        "model": "gpt-test",
+        "messages": [{"role": "user", "content": "prompt"}],
+        "response_text": "response",
+        "parsed_output": {"value": "parsed"},
+        "metadata": {"attempt_count": 1},
+        "duration_seconds": 2.5,
+        "usage": {"total_tokens": 150},
+    }
+    result = {
+        "status": "ok",
+        "data": {"script_package": {"full_script": "A complete script."}},
+        "summary": {},
+        "handoff": {},
+        "llm_calls": [call],
+    }
+
+    _write_outputs(
+        "script_generation",
+        output_dir,
+        {"run": {"run_id": "run_test"}},
+        result,
+        ContentOptions(),
     )
-    readable = (logs_dir / "content.log").read_text(encoding="utf-8")
-    assert "RENDER progress completed=1/2" in readable
+
+    rows = [
+        json.loads(line)
+        for line in (output_dir / "llm_calls.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert rows == [call]
+    assert json.loads((output_dir / "script_generation_result.json").read_text(encoding="utf-8"))["llm_calls"] == [call]
 
 
 def test_run_state_tracks_reused_modules_and_stage_completion(tmp_path: Path) -> None:
@@ -105,7 +136,7 @@ def test_run_state_tracks_reused_modules_and_stage_completion(tmp_path: Path) ->
     assert stored["stages"]["content"]["modules"]["news_collection"]["summary"]["record_count"] == 5
 
 
-def test_content_resume_resynchronizes_sidecars_from_canonical_result(tmp_path: Path) -> None:
+def test_ingestion_resume_resynchronizes_sidecars_from_canonical_result(tmp_path: Path) -> None:
     context = _run_context(tmp_path)
     config_path = Path(__file__).parents[1] / "src/pipeline/config/workbench.yaml"
     context["run_profile"] = "daily_48h_all_sources"
@@ -113,56 +144,48 @@ def test_content_resume_resynchronizes_sidecars_from_canonical_result(tmp_path: 
     output_dir.mkdir(parents=True)
     canonical = {
         "status": "ok",
-        "data": {},
+        "data": {"record_count": 1, "records": [{"record_id": "record_1"}], "candidate_ledger": []},
         "summary": {"record_count": 1},
         "handoff": {},
-        "llm_calls": [{"response_text": "current successful call"}],
     }
     (output_dir / "news_collection_input.json").write_text("{}", encoding="utf-8")
     (output_dir / "news_collection_result.json").write_text(
         json.dumps(canonical),
         encoding="utf-8",
     )
-    (output_dir / "llm_calls.jsonl").write_text(
-        '{"response_text":"stale failed call"}\n',
-        encoding="utf-8",
-    )
+    (output_dir / "raw_records.json").write_text('{"records":[]}', encoding="utf-8")
 
     stage_logger = configure_stage_logging(
         context,
-        "content",
+        "ingestion",
         {"console_enabled": False, "file_enabled": False},
     )
     state = RunStateStore(context)
-    state.start_stage("content", ["news_collection"])
+    state.start_stage("ingestion", ["news_collection"])
     resolver = StageConfigResolver(context, config_path, "live")
     document = combine_config_documents(
         resolver.shared(),
-        resolver.module("content", "news_collection"),
+        resolver.module("ingestion", "news_collection"),
     )
     write_module_config_snapshot(
         output_dir,
-        stage="content",
+        stage="ingestion",
         module="news_collection",
         mode="live",
         profile_name=context["run_profile"],
         document=document,
         effective_config={},
     )
-    _run_modules(
+    _run_collection(
         run_context=context,
         project_root=tmp_path,
         config_path=config_path,
-        options=ContentOptions(stop_after="news_collection"),
+        options=IngestionOptions(),
         logger=stage_logger,
         state=state,
     )
 
-    rows = [
-        json.loads(line)
-        for line in (output_dir / "llm_calls.jsonl").read_text(encoding="utf-8").splitlines()
-    ]
-    assert rows == canonical["llm_calls"]
+    assert json.loads((output_dir / "raw_records.json").read_text(encoding="utf-8")) == canonical["data"]
 
 
 def test_runner_builds_voiceover_envelope_and_accepts_config_overrides(monkeypatch, capsys) -> None:
@@ -202,6 +225,48 @@ def test_runner_builds_voiceover_envelope_and_accepts_config_overrides(monkeypat
         "speed": 1.05,
     }
     assert console["handoff"]["ready_for_visuals"] is True
+
+
+def test_runner_builds_collection_stage_envelope(monkeypatch, capsys) -> None:
+    captured: dict = {}
+
+    def fake_stage(request: dict) -> dict:
+        captured.update(request)
+        return {
+            "status": "ok",
+            "data": {"run_id": "run_test"},
+            "summary": {},
+            "handoff": {"ready_for_content": True},
+        }
+
+    monkeypatch.setattr(runner, "_stage_function", lambda _stage: fake_stage)
+    exit_code = runner.main(
+        ["collect", "--profile", "daily_48h_all_sources", "--environment", "dev"]
+    )
+
+    assert exit_code == 0
+    assert captured["run"] == {
+        "run_id": None,
+        "config_environment": "dev",
+        "run_profile": "daily_48h_all_sources",
+    }
+    assert captured["config"]["resume_completed"] is True
+
+
+def test_fixture_scenario_seeds_canonical_artifacts(tmp_path: Path) -> None:
+    project_root = Path(__file__).resolve().parents[1]
+    result = seed_scenario(
+        project_root=project_root,
+        output_root=tmp_path / "output" / "tests",
+        scenario="media_roundup_reference",
+        fixture_root=Path("tests/fixtures"),
+    )
+
+    run_dir = Path(result["data"]["run_dir"])
+    assert result["status"] == "ok"
+    assert (run_dir / "video_packaging" / "video_packaging_result.json").is_file()
+    assert (run_dir / "script_generation" / "script_generation_result.json").is_file()
+    assert (run_dir / "fixtures" / "media_roundup_reference" / "visual_scene_planning_result_template.json").is_file()
 
 
 def test_runner_builds_explicit_visual_backend_override(monkeypatch, capsys) -> None:

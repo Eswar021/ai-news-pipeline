@@ -1,0 +1,38 @@
+{
+  "render_kind": "interface_transform_scene",
+  "examples": [
+    {
+      "name": "before_after",
+      "payload": {
+        "recipe_id": "interface_before_after",
+        "headline": "The workflow before and after the agent",
+        "before": {"label": "Before", "items": ["Open five tools", "Copy data by hand", "Check every result"]},
+        "after": {"label": "After", "items": ["Describe the goal", "Review proposed actions", "Approve the result"]},
+        "transformation_label": "Manual coordination becomes supervised execution",
+        "motion_style": "panel_morph"
+      }
+    },
+    {
+      "name": "workflow_morph",
+      "payload": {
+        "recipe_id": "workflow_morph",
+        "headline": "Five actions collapse into one reviewed flow",
+        "before": {"label": "Manual", "items": ["Search", "Copy", "Run", "Compare"]},
+        "after": {"label": "Assisted", "items": ["Ask", "Inspect", "Approve"]},
+        "transformation_label": "The human moves from operator to reviewer",
+        "motion_style": "workflow_shift"
+      }
+    },
+    {
+      "name": "focus_shift",
+      "payload": {
+        "recipe_id": "interface_focus_shift",
+        "headline": "The interface shifts attention to verification",
+        "before": {"label": "Old focus", "items": ["Generate quickly", "Hide intermediate steps"]},
+        "after": {"label": "New focus", "items": ["Show each action", "Make review explicit"]},
+        "transformation_label": "Speed gives way to visible control",
+        "motion_style": "workflow_shift"
+      }
+    }
+  ]
+}

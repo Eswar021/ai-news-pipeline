@@ -15,12 +15,17 @@ from src.pipeline.handoffs.chatgpt_exporter.app import _prepare_artifact
 from src.pipeline.visuals.asset_resolver.app import NO_ASSET_RENDER_KINDS
 from src.pipeline.visuals.payload_validation import validate_scene_payload
 from src.pipeline.visuals.planner.app import (
+    _bookend_scene_owner_story_id,
+    _catalog_asset_for_scene,
     _invoke_chain_with_attempts,
+    _normalize_catalog_scene_reference,
     _normalize_provider_scene_fields,
     _provider_failover_summary,
     _resolved_llm_configs,
+    _structured_output_options,
     _story_visual_edit_output_model,
     _story_visual_plan_output_model,
+    _task_payload_for_structured_output,
     _visual_capabilities_for_prompt,
 )
 from src.pipeline.visuals.planner.contract import VisualPlannerConfig
@@ -31,7 +36,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _planner_config() -> dict:
-    repository = ConfigRepository(PROJECT_ROOT / "src/pipeline/config/workbench.yaml")
+    repository = ConfigRepository(
+        PROJECT_ROOT / "src/pipeline/config/workbench.yaml",
+        environment="prod",
+    )
     return deepcopy(repository.module("daily_48h_all_sources", "visuals", "planner").value)
 
 
@@ -60,7 +68,7 @@ def test_production_profile_exposes_renderable_editorial_vocabulary() -> None:
     } & set(config["scene_policy"]["allowed_render_kinds"])
 
 
-def test_production_visual_planner_uses_kimi_for_story_creative_roles() -> None:
+def test_production_visual_planner_uses_deepseek_for_story_creative_roles() -> None:
     config = VisualPlannerConfig.model_validate(_planner_config()).model_dump(mode="json")
     routes = _resolved_llm_configs(config)
 
@@ -68,23 +76,29 @@ def test_production_visual_planner_uses_kimi_for_story_creative_roles() -> None:
     assert routes["episode_director"]["model"] == "gpt-4o-mini"
     assert routes["bookend_visual_planner"]["provider"] == "openai"
     assert routes["bookend_visual_planner"]["model"] == "gpt-4o-mini"
-    assert routes["story_visual_planner"]["provider"] == "moonshot"
-    assert routes["story_visual_planner"]["model"] == "kimi-k3"
-    assert routes["story_visual_planner"]["max_attempts"] == 1
+    assert routes["story_visual_planner"]["provider"] == "deepseek"
+    assert routes["story_visual_planner"]["model"] == "deepseek-v4-pro"
+    assert routes["story_visual_planner"]["max_attempts"] == 2
     assert routes["story_visual_planner"]["provider_options"] == {
-        "thinking": None,
+        "thinking": "enabled",
         "omit_temperature": True,
+        "reasoning_effort": "max",
         "request_timeout_seconds": 600.0,
+    }
+    assert routes["story_visual_planner"]["structured_output"] == {
+        "method": "json_mode",
+        "strict": False,
     }
     assert routes["story_visual_planner"]["content_filter_fallback"]["provider"] == "openai"
     assert routes["story_visual_planner"]["content_filter_fallback"]["model"] == "gpt-4o"
     assert routes["story_visual_planner"]["content_filter_fallback"]["max_attempts"] == 2
-    assert routes["story_visual_editor"]["provider"] == "moonshot"
-    assert routes["story_visual_editor"]["model"] == "kimi-k3"
-    assert routes["story_visual_editor"]["max_attempts"] == 1
+    assert routes["story_visual_editor"]["provider"] == "deepseek"
+    assert routes["story_visual_editor"]["model"] == "deepseek-v4-pro"
+    assert routes["story_visual_editor"]["max_attempts"] == 2
     assert routes["story_visual_editor"]["provider_options"] == {
-        "thinking": None,
+        "thinking": "enabled",
         "omit_temperature": True,
+        "reasoning_effort": "max",
         "request_timeout_seconds": 600.0,
     }
     assert routes["story_visual_editor"]["content_filter_fallback"]["provider"] == "openai"
@@ -233,6 +247,138 @@ def test_kimi_k3_rejects_an_explicit_temperature_before_api_use() -> None:
             temperature=1.0,
             provider_options={"omit_temperature": False},
         )
+
+
+def test_visual_deepseek_client_uses_thinking_max(monkeypatch) -> None:
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    llm = make_llm(
+        provider="deepseek",
+        model="deepseek-v4-pro",
+        temperature=1.0,
+        provider_options={
+            "thinking": "enabled",
+            "omit_temperature": True,
+            "reasoning_effort": "max",
+            "request_timeout_seconds": 600,
+        },
+    )
+
+    assert llm.model_name == "deepseek-v4-pro"
+    assert str(llm.openai_api_base) == "https://api.deepseek.com"
+    assert llm.extra_body == {"thinking": {"type": "enabled"}}
+    assert llm.reasoning_effort == "max"
+    assert llm.request_timeout == 600.0
+
+
+def test_visual_json_mode_embeds_dynamic_schema_without_passing_strict() -> None:
+    class Draft(BaseModel):
+        value: str
+
+    options = _structured_output_options({"method": "json_mode", "strict": False})
+    payload = _task_payload_for_structured_output(
+        '{"story_id":"story_1"}',
+        output_model=Draft,
+        method=options["method"],
+    )
+
+    assert options == {"include_raw": True, "method": "json_mode"}
+    assert "JSON Schema:" in payload
+    assert '"value"' in payload
+
+
+def test_bookend_logo_binding_prefers_exact_declared_identity() -> None:
+    catalog_index = {
+        "assets_by_id": {
+            "asset_nvidia": {
+                "asset_id": "asset_nvidia",
+                "story_id": "story_factory",
+                "asset_type": "logo",
+                "status": "available",
+                "title": "NVIDIA",
+            },
+            "asset_openai": {
+                "asset_id": "asset_openai",
+                "story_id": "story_security",
+                "asset_type": "logo",
+                "status": "available",
+                "title": "OpenAI",
+            },
+        },
+        "assets_by_story": {
+            "story_factory": [],
+            "story_security": [
+                {
+                    "asset_id": "asset_openai",
+                    "story_id": "story_security",
+                    "asset_type": "logo",
+                    "status": "available",
+                    "title": "OpenAI",
+                }
+            ],
+        },
+    }
+    scene = {
+        "render_kind": "logo_reveal_scene",
+        "asset_id": "asset_nvidia",
+        "primary_entity": "OpenAI",
+        "entities": ["OpenAI", "Google Cloud"],
+    }
+
+    owner = _bookend_scene_owner_story_id(
+        scene,
+        source_index={"records_by_key": {}},
+        asset_catalog_index=catalog_index,
+    )
+    normalized, errors = _normalize_catalog_scene_reference(
+        scene,
+        story_id=owner,
+        catalog_index=catalog_index,
+        allowed_render_kinds={"logo_reveal_scene"},
+    )
+
+    assert owner == "story_security"
+    assert errors == []
+    assert normalized["asset_id"] == "asset_openai"
+    assert normalized["primary_entity"] == "OpenAI"
+    assert normalized["entities"] == ["OpenAI", "Google Cloud"]
+
+
+def test_transition_background_and_episode_bookend_assets_validate() -> None:
+    logo = {
+        "asset_id": "asset_anthropic",
+        "story_id": "story_anthropic",
+        "asset_type": "logo",
+        "status": "available",
+        "title": "Anthropic",
+        "source_record_key": "",
+        "source_url": "",
+    }
+    catalog_index = {
+        "assets_by_id": {"asset_anthropic": logo},
+        "assets_by_story": {"story_anthropic": [logo]},
+    }
+
+    transition_asset, transition_errors = _catalog_asset_for_scene(
+        {
+            "asset_id": "asset_anthropic",
+            "background_render_kind": "logo_reveal_scene",
+        },
+        story_id="story_anthropic",
+        render_kind="story_transition_scene",
+        catalog_index=catalog_index,
+    )
+    bookend_asset, bookend_errors = _catalog_asset_for_scene(
+        {"asset_id": "asset_anthropic"},
+        story_id="",
+        render_kind="logo_reveal_scene",
+        catalog_index=catalog_index,
+        allow_episode_asset=True,
+    )
+
+    assert transition_asset == logo
+    assert transition_errors == []
+    assert bookend_asset == logo
+    assert bookend_errors == []
 
 
 def test_story_planner_prompt_hides_system_managed_transition() -> None:

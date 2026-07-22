@@ -19,6 +19,7 @@ from src.pipeline.visuals.asset_catalog.identity import catalog_identity_payload
 from src.pipeline.visuals.payload_validation import (
     validate_scene_payload,
 )
+from src.pipeline.visuals.recipes import ACTIVE_RENDER_KINDS
 
 from .contract import ChatGPTVisualPlanParserRequest
 
@@ -37,56 +38,12 @@ OLD_CARD_RENDER_KINDS = {
     "quote_card",
     "data_card",
 }
-DEFAULT_RENDER_KINDS = {
-    "source_article_scene",
-    "context_image_scene",
-    "broll_video_scene",
-    "logo_reveal_scene",
-    "editorial_text_scene",
-    "simple_explainer_scene",
-    "story_transition_scene",
-    "kinetic_type_scene",
-    "bullet_build_scene",
-    "quote_or_claim_highlight_scene",
-    "entity_compare_scene",
-    "recap_sequence_scene",
-    "data_counter_scene",
-    "trend_line_scene",
-    "bar_chart_scene",
-    "bar_race_scene",
-    "ranked_list_scene",
-    "benchmark_delta_scene",
-    "ecosystem_map_scene",
-    "architecture_flow_scene",
-    "process_zoom_scene",
-    "browser_walkthrough_scene",
-    "decision_tree_scene",
-    "capability_matrix_scene",
-    "timeline_zoom_scene",
-    "document_stack_scene",
-    "signal_radar_scene",
-    "interface_transform_scene",
-    "transition_stinger_scene",
-}
+DEFAULT_RENDER_KINDS = set(ACTIVE_RENDER_KINDS)
 SOURCE_BACKED_RENDER_KINDS = {"source_article_scene", "quote_or_claim_highlight_scene", "browser_walkthrough_scene"}
 EVIDENCE_BOUND_RENDER_KINDS = {
     "simple_explainer_scene",
-    "data_counter_scene",
-    "trend_line_scene",
-    "bar_chart_scene",
-    "bar_race_scene",
-    "ranked_list_scene",
-    "benchmark_delta_scene",
-    "ecosystem_map_scene",
-    "architecture_flow_scene",
-    "process_zoom_scene",
-    "decision_tree_scene",
-    "capability_matrix_scene",
-    "timeline_zoom_scene",
     "document_stack_scene",
-    "signal_radar_scene",
     "interface_transform_scene",
-    "entity_compare_scene",
 }
 LOGO_RENDER_KINDS = {"logo_reveal_scene"}
 MEDIA_RENDER_KINDS = {"context_image_scene", "broll_video_scene"}
@@ -679,13 +636,10 @@ def _insert_story_title_interstitials(
     errors: list[str],
     warnings: list[str],
 ) -> list[dict[str, Any]]:
-    if "story_transition_scene" in allowed_render_kinds:
-        title_render_kind = "story_transition_scene"
-    elif "transition_stinger_scene" in allowed_render_kinds:
-        title_render_kind = "transition_stinger_scene"
-    else:
+    if "story_transition_scene" not in allowed_render_kinds:
         errors.append("story_transition_scene must be allowed for deterministic roundup story titles")
         return scenes
+    title_render_kind = "story_transition_scene"
     chunks = _voiceover_chunks(voiceover)
     first_beat_by_story: dict[str, dict[str, Any]] = {}
     for chunk in chunks:
@@ -883,7 +837,7 @@ def _validate_story_title_interstitials(
 def _is_story_title_interstitial(scene: dict[str, Any]) -> bool:
     payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
     return (
-        clean_text(scene.get("render_kind", "")) in {"story_transition_scene", "transition_stinger_scene"}
+        clean_text(scene.get("render_kind", "")) == "story_transition_scene"
         and clean_text(payload.get("voice_behavior", "")) == "continue"
     )
 
@@ -1475,7 +1429,6 @@ def _build_summary(
         "story_transition_scene_count": kinds.count("story_transition_scene"),
         "context_image_scene_count": kinds.count("context_image_scene"),
         "broll_video_scene_count": kinds.count("broll_video_scene"),
-        "transition_stinger_scene_count": kinds.count("transition_stinger_scene"),
         "asset_request_count": visual_scene_plan.get("asset_manifest", {}).get("asset_request_count", 0),
         "coverage": visual_scene_plan.get("coverage", {}),
         "error_count": len(errors),

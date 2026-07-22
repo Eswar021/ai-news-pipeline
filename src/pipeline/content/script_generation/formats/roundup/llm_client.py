@@ -73,8 +73,31 @@ def make_llm(
             kwargs["extra_body"] = {"thinking": {"type": thinking}}
         return ChatOpenAI(**kwargs)
 
+    if provider == "deepseek":
+        thinking = options.pop("thinking", "disabled")
+        omit_temperature = bool(options.pop("omit_temperature", thinking == "enabled"))
+        reasoning_effort = options.pop("reasoning_effort", None)
+        if options:
+            unknown = ", ".join(sorted(options))
+            raise ValueError(f"Unknown DeepSeek provider option(s): {unknown}")
+
+        kwargs = {
+            "model": model,
+            "api_key": _resolve_env(["DEEPSEEK_API_KEY"]),
+            "base_url": base_url or os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+            "max_retries": max_retries,
+            "timeout": request_timeout_seconds,
+            "extra_body": {"thinking": {"type": thinking}},
+        }
+        if not omit_temperature:
+            kwargs["temperature"] = temperature
+        if reasoning_effort:
+            kwargs["reasoning_effort"] = reasoning_effort
+        return ChatOpenAI(**kwargs)
+
     raise ValueError(
-        f"Unknown LLM provider: {provider}. Use 'openai', 'lmstudio', 'gemini', or 'moonshot'."
+        "Unknown LLM provider: "
+        f"{provider}. Use 'openai', 'lmstudio', 'gemini', 'moonshot', or 'deepseek'."
     )
 
 

@@ -111,6 +111,10 @@ def run(input_json: dict) -> dict:
                 "cluster_reconciliation",
                 reconciliation_cfg["prompt_version"],
             )
+            conflict_resolution_prompt = load_system_prompt(
+                "cluster_conflict_resolution",
+                reconciliation_cfg["prompt_version"],
+            )
             reconciliation_llm = make_llm(
                 provider=reconciliation_cfg["provider"],
                 model=reconciliation_cfg["model"],
@@ -124,6 +128,7 @@ def run(input_json: dict) -> dict:
                     config=reconciliation_cfg,
                     llm=reconciliation_llm,
                     system_prompt=reconciliation_prompt,
+                    conflict_system_prompt=conflict_resolution_prompt,
                     llm_calls=llm_calls,
                 )
 

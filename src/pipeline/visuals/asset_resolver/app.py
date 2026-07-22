@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import hashlib
-import logging
 import shutil
 from pathlib import Path
 from time import time
@@ -25,9 +24,6 @@ from ..generators.source_screenshot import capture_source_viewport
 from .config import NEXT_MODULE, PACKAGE_TYPE
 from .contract import AssetResolverRequest, AssetResolverResponse
 
-
-RUNTIME_LOGGER = logging.getLogger("ai_content_creation.runtime.visual_asset_resolver")
-
 SOURCE_SCREENSHOT_RENDER_KINDS = {
     "source_article_scene",
     "quote_or_claim_highlight_scene",
@@ -39,26 +35,8 @@ NO_ASSET_RENDER_KINDS = {
     "editorial_text_scene",
     "simple_explainer_scene",
     "story_transition_scene",
-    "kinetic_type_scene",
-    "bullet_build_scene",
-    "entity_compare_scene",
-    "recap_sequence_scene",
-    "data_counter_scene",
-    "trend_line_scene",
-    "bar_chart_scene",
-    "bar_race_scene",
-    "ranked_list_scene",
-    "benchmark_delta_scene",
-    "ecosystem_map_scene",
-    "architecture_flow_scene",
-    "process_zoom_scene",
-    "decision_tree_scene",
-    "capability_matrix_scene",
-    "timeline_zoom_scene",
     "document_stack_scene",
-    "signal_radar_scene",
     "interface_transform_scene",
-    "transition_stinger_scene",
 }
 
 
@@ -132,13 +110,6 @@ def run(input_json: dict) -> dict:
         scene for scene in scenes if clean_text(scene.get("scene_id")) not in source_scene_ids
     ]
     source_capture_cache: dict[tuple[str, str, str, float, bool], dict[str, Any]] = {}
-    RUNTIME_LOGGER.info(
-        "ASSET resolve start scenes=%d source=%d montage=%d other=%d",
-        len(scenes),
-        len(source_scenes),
-        len(montage_scenes),
-        len(other_scenes),
-    )
 
     if (source_scenes or montage_scenes) and request.config.source_screenshots.enabled:
         with sync_playwright() as playwright:
@@ -162,7 +133,6 @@ def run(input_json: dict) -> dict:
                             capture_cache=source_capture_cache,
                         )
                     )
-                    _log_asset_progress(resolved_assets, scenes, scene)
                 for scene in montage_scenes:
                     resolved_assets.append(
                         _resolve_source_montage(
@@ -175,7 +145,6 @@ def run(input_json: dict) -> dict:
                             capture_cache=source_capture_cache,
                         )
                     )
-                    _log_asset_progress(resolved_assets, scenes, scene)
             finally:
                 context.close()
                 browser.close()
@@ -202,7 +171,6 @@ def run(input_json: dict) -> dict:
             resolved_assets.append(_resolve_no_asset(scene))
         else:
             resolved_assets.append(_unsupported_scene(scene))
-        _log_asset_progress(resolved_assets, scenes, scene)
 
     resolved_assets = sorted(resolved_assets, key=lambda item: item.get("scene_order", 999999))
     failure_reason = _failure_reason(resolved_assets)
@@ -236,30 +204,10 @@ def run(input_json: dict) -> dict:
         },
     )
     result = response.model_dump(mode="json")
-    RUNTIME_LOGGER.info(
-        "ASSET resolve end status=%s resolved=%d failed=%d",
-        status,
-        summary.get("resolved_asset_count", 0),
-        summary.get("failed_asset_count", 0),
-    )
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     result_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
     return result
-
-
-def _log_asset_progress(
-    resolved_assets: list[dict[str, Any]],
-    scenes: list[dict[str, Any]],
-    scene: dict[str, Any],
-) -> None:
-    RUNTIME_LOGGER.info(
-        "ASSET progress resolved=%d/%d scene=%s",
-        len(resolved_assets),
-        len(scenes),
-        clean_text(scene.get("scene_id")),
-    )
-
 
 def _resolve_source_screenshot(
     *,

@@ -1,6 +1,6 @@
 force: true
 output_dir: ''
-backend: remotion
+backend: hyperframes
 remotion_engine_dir: ''
 hyperframes_engine_dir: ''
 hyperframes_quality: standard

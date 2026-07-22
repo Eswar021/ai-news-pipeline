@@ -8,7 +8,7 @@ import yaml
 
 from src.pipeline.config import ConfigRepository
 
-from src.pipeline.content.metadata_finalizer import run as finalize_metadata
+from src.pipeline.publishing.metadata_finalizer import run as finalize_metadata
 from src.pipeline.content.script_generation.formats.roundup.contract import ScriptGenerationResponse
 from src.pipeline.content.video_packaging.contract import VideoPackagingResponse
 from src.pipeline.contracts import (
@@ -23,7 +23,7 @@ from src.pipeline.contracts import (
 )
 from src.pipeline.handoffs.chatgpt_exporter import run as export_chatgpt_handoff
 from src.pipeline.handoffs.chatgpt_script_parser import run as parse_chatgpt_script
-from src.pipeline.handoffs.publish_handoff import run as build_publish_handoff
+from src.pipeline.publishing.publish_handoff import run as build_publish_handoff
 from src.pipeline.orchestration import (
     create_run_context,
     load_run_context,
@@ -112,6 +112,48 @@ def test_voiceover_selection_resolves_repository_relative_audio_from_notebook_cw
     assert selected_package["provenance"]["audio_sha256"] == file_sha256(audio_path)
 
 
+def test_voiceover_selection_supports_isolated_test_output_with_absolute_audio(
+    tmp_path: Path,
+) -> None:
+    run_id = "fixture_isolated_output"
+    run_dir = tmp_path / "isolated" / "runs" / run_id
+    variant_dir = run_dir / "voiceover" / "kokoro_fixture"
+    audio_path = variant_dir / "audio" / "full_voiceover.wav"
+    audio_path.parent.mkdir(parents=True)
+    audio_path.write_bytes(b"isolated fixture voiceover")
+    script_fingerprint = f"sha256:{'2' * 64}"
+    package = {
+        "run_id": run_id,
+        "status": "ready",
+        "provider": "fixture",
+        "voice": "fixture",
+        "style": {},
+        "audio": {
+            "sample_rate_hz": 24000,
+            "duration_seconds": 1.0,
+            "full_audio_path": str(audio_path),
+        },
+        "audio_units": [],
+    }
+    _bind_voiceover_provenance(
+        package,
+        script_fingerprint,
+        audio_sha256=file_sha256(audio_path),
+    )
+    (variant_dir / "voiceover_package.json").write_text(
+        json.dumps(package),
+        encoding="utf-8",
+    )
+
+    selected_path, _ = resolve_voiceover_package(
+        run_dir=run_dir,
+        run_id=run_id,
+        script_fingerprint=script_fingerprint,
+    )
+
+    assert selected_path == variant_dir / "voiceover_package.json"
+
+
 def test_reference_envelopes_match_production_contracts() -> None:
     VideoPackagingResponse.model_validate(_json("video_packaging_result.json"))
     ScriptGenerationResponse.model_validate(_json("script_generation_result.json"))
@@ -129,6 +171,7 @@ def test_visual_planner_passes_provenance_to_plan_builder_not_episode_director(
     captured: dict = {}
     catalog_config = {
         **profile["visuals"]["asset_catalog"],
+        "require_visual_research": False,
         "output_dir": str(tmp_path / "catalog"),
         "page_metadata": {**profile["visuals"]["asset_catalog"]["page_metadata"], "enabled": False},
         "source_page_preflight": {
@@ -180,6 +223,7 @@ def test_visual_planner_passes_provenance_to_plan_builder_not_episode_director(
 
     planner_config = {
         **profile["visuals"]["planner"],
+        "require_visual_research": False,
         "visual_editor": {
             **profile["visuals"]["planner"].get("visual_editor", {}),
             "enabled": False,

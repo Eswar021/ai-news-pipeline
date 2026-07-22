@@ -15,7 +15,7 @@ from src.pipeline.content.metadata_creator.app import (
     _clean_title_options,
     _source_meaning_boundaries_for_prompt,
 )
-from src.pipeline.content.metadata_finalizer.app import _chapter_title as finalized_chapter_title
+from src.pipeline.publishing.metadata_finalizer.app import _chapter_title as finalized_chapter_title
 from src.pipeline.content.script_generation.formats.roundup.source_truth import (
     build_story_truth_index,
     compact_truth_index,
@@ -237,6 +237,23 @@ def test_metadata_title_draft_exposes_scope_relationship_and_state_reasoning() -
                 }
             ],
             "thumbnail_text_options": ["FIVE AI SHIFTS"],
+            "thumbnail_concepts": [
+                {
+                    "concept_name": "Promised Versus Shipped",
+                    "visual_hook": "A clear split between a live hosted model and weights still marked later.",
+                    "primary_subject": "Kimi K3 identity",
+                    "secondary_subjects": ["AWS"],
+                    "composition": "A strong central split with the hosted product on one side and a sealed weights package on the other.",
+                    "background_direction": "Minimal warm editorial background.",
+                    "text_overlay": "PROMISED, NOT SHIPPED",
+                    "color_direction": "Near-black, cream, and signal red.",
+                    "emotional_tone": "Intrigued and skeptical.",
+                    "represented_story_ids": ["story_kimi", "story_aws"],
+                    "source_record_keys": ["record_kimi"],
+                    "generation_prompt": "Create a clean 16:9 editorial thumbnail contrasting a live hosted AI product with a sealed model-weights package marked later.",
+                    "avoid": ["generic robots", "tiny labels"],
+                }
+            ],
             "blocked_title_angles": ["Kimi K3 versus AWS"],
             "chapter_titles": [
                 {"section_id": "section_00_intro", "title": "The week's strange AI split"},

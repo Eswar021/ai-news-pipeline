@@ -15,6 +15,8 @@ from src.pipeline.content.metadata_creator.app import (
     TASK_PROMPT,
     _invoke_runtime_chain,
     _provider_failover_summary,
+    _structured_output_options,
+    _task_payload_for_structured_output,
 )
 from src.pipeline.content.metadata_creator.contract import LLMProvider, MetadataConfig
 from src.pipeline.content.metadata_creator.llm_client import make_llm
@@ -25,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _profile() -> dict:
-    repository = ConfigRepository(ROOT / "src/pipeline/config/workbench.yaml")
+    repository = ConfigRepository(ROOT / "src/pipeline/config/workbench.yaml", environment="prod")
     return deepcopy(repository.profile(repository.default_profile).value)
 
 
@@ -45,6 +47,10 @@ def test_moonshot_is_a_valid_metadata_provider() -> None:
     assert TypeAdapter(LLMProvider).validate_python("moonshot") == "moonshot"
 
 
+def test_deepseek_is_a_valid_metadata_provider() -> None:
+    assert TypeAdapter(LLMProvider).validate_python("deepseek") == "deepseek"
+
+
 def test_metadata_moonshot_client_uses_configured_api(monkeypatch) -> None:
     monkeypatch.setenv("MOONSHOT_API_KEY", "test-key")
     llm = make_llm(
@@ -62,7 +68,41 @@ def test_metadata_moonshot_client_uses_configured_api(monkeypatch) -> None:
     assert llm.request_timeout == 360.0
 
 
-def test_production_routes_k3_only_to_viewer_facing_creative_roles() -> None:
+def test_metadata_deepseek_client_uses_thinking_max(monkeypatch) -> None:
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    llm = make_llm(
+        provider="deepseek",
+        model="deepseek-v4-pro",
+        temperature=1.0,
+        provider_options={
+            "thinking": "enabled",
+            "omit_temperature": True,
+            "reasoning_effort": "max",
+            "request_timeout_seconds": 600,
+        },
+    )
+
+    assert llm.model_name == "deepseek-v4-pro"
+    assert str(llm.openai_api_base) == "https://api.deepseek.com"
+    assert llm.extra_body == {"thinking": {"type": "enabled"}}
+    assert llm.reasoning_effort == "max"
+    assert llm.request_timeout == 600.0
+
+
+def test_metadata_json_mode_embeds_schema_without_passing_strict() -> None:
+    options = _structured_output_options({"method": "json_mode", "strict": False})
+    payload = _task_payload_for_structured_output(
+        '{"selected_format":"roundup"}',
+        output_model=MetadataDraftOutput,
+        method=options["method"],
+    )
+
+    assert options == {"include_raw": True, "method": "json_mode"}
+    assert "JSON Schema:" in payload
+    assert '"title_options"' in payload
+
+
+def test_production_routes_deepseek_to_viewer_facing_creative_roles() -> None:
     profile = _profile()
     routes = _resolved_llm_configs(profile["script_generation"])
     metadata = MetadataConfig.model_validate(
@@ -71,13 +111,21 @@ def test_production_routes_k3_only_to_viewer_facing_creative_roles() -> None:
 
     assert routes["source_researcher"]["provider"] == "openai"
     assert routes["director"]["provider"] == "openai"
-    assert routes["story_writer"]["model"] == "kimi-k3"
-    assert routes["story_reviewer"]["model"] == "kimi-k3"
-    assert routes["bookend_writer"]["model"] == "kimi-k3"
-    assert routes["bookend_reviewer"]["model"] == "kimi-k3"
+    assert routes["story_writer"]["provider"] == "deepseek"
+    assert routes["story_writer"]["model"] == "deepseek-v4-pro"
+    assert routes["story_reviewer"]["model"] == "deepseek-v4-pro"
+    assert routes["bookend_writer"]["model"] == "deepseek-v4-pro"
+    assert routes["bookend_reviewer"]["model"] == "deepseek-v4-pro"
+    assert routes["story_writer"]["provider_options"]["reasoning_effort"] == "max"
+    assert routes["story_writer"]["structured_output"] == {
+        "method": "json_mode",
+        "strict": False,
+    }
     assert profile["script_generation"]["worker_count"] == 2
-    assert metadata.provider == "moonshot"
-    assert metadata.model == "kimi-k3"
+    assert metadata.provider == "deepseek"
+    assert metadata.model == "deepseek-v4-pro"
+    assert metadata.provider_options.reasoning_effort == "max"
+    assert metadata.structured_output.method == "json_mode"
     assert metadata.content_filter_fallback is not None
     assert metadata.content_filter_fallback.provider == "openai"
     assert metadata.content_filter_fallback.model == "gpt-4o"
@@ -113,6 +161,23 @@ def test_metadata_content_filter_rejection_uses_configured_fallback() -> None:
                         }
                     ],
                     "thumbnail_text_options": ["FIVE AI SHIFTS"],
+                    "thumbnail_concepts": [
+                        {
+                            "concept_name": "Five Signals",
+                            "visual_hook": "Five concrete AI changes converge around one central question.",
+                            "primary_subject": "A clean five-part editorial composition",
+                            "secondary_subjects": [],
+                            "composition": "One dominant center subject with five restrained evidence fragments.",
+                            "background_direction": "Warm editorial paper texture.",
+                            "text_overlay": "FIVE AI SHIFTS",
+                            "color_direction": "Warm cream, near-black, and burnt orange.",
+                            "emotional_tone": "Curious and consequential.",
+                            "represented_story_ids": ["story_one"],
+                            "source_record_keys": [],
+                            "generation_prompt": "Create a clean 16:9 editorial YouTube thumbnail with one dominant center subject and five restrained evidence fragments.",
+                            "avoid": ["generic robots", "tiny text"],
+                        }
+                    ],
                     "blocked_title_angles": [],
                     "chapter_titles": [
                         {"section_id": "section_00_intro", "title": "What Changed"}

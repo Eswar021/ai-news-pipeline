@@ -14,15 +14,15 @@ from src.pipeline.content.editorial_selection.formats.roundup.contract import (
 from src.pipeline.content.editorial_triage import app as triage_app
 from src.pipeline.content.editorial_triage.contract import TriageBatchOutput
 from src.pipeline.content.evidence_prep import run as run_evidence_prep
-from src.pipeline.content.news_collection import app as news_app
-from src.pipeline.content.news_collection import utils as news_utils
-from src.pipeline.content.news_collection.collectors import (
+from src.pipeline.ingestion.news_collection import app as news_app
+from src.pipeline.ingestion.news_collection import utils as news_utils
+from src.pipeline.ingestion.news_collection.collectors import (
     community_signals,
     company_blogs,
     tech_news,
     youtube_transcripts,
 )
-from src.pipeline.content.news_collection.utils import build_candidate_decision, build_record
+from src.pipeline.ingestion.news_collection.utils import build_candidate_decision, build_record
 from src.pipeline.content.story_mapping.clusterer import _pair_record, cluster_records
 from src.pipeline.content.story_mapping import pair_adjudicator as pair_adjudicator_module
 from src.pipeline.content.story_mapping.pair_adjudicator import (

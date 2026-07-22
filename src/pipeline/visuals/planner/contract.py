@@ -7,35 +7,17 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from ..recipes import RECIPE_REGISTRY, recipe_ids
 
 from .config import (
-    DEFAULT_MAX_BULLET_BUILD_SCENES,
     DEFAULT_MAX_CONSECUTIVE_SAME_KIND,
-    DEFAULT_MAX_ARCHITECTURE_FLOW_SCENES,
-    DEFAULT_MAX_BAR_CHART_SCENES,
-    DEFAULT_MAX_BAR_RACE_SCENES,
-    DEFAULT_MAX_BENCHMARK_DELTA_SCENES,
     DEFAULT_MAX_BROWSER_WALKTHROUGH_SCENES,
     DEFAULT_MAX_BROLL_VIDEO_SCENES,
-    DEFAULT_MAX_CAPABILITY_MATRIX_SCENES,
     DEFAULT_MAX_CONTEXT_IMAGE_SCENES,
-    DEFAULT_MAX_DATA_COUNTER_SCENES,
-    DEFAULT_MAX_DECISION_TREE_SCENES,
     DEFAULT_MAX_DOCUMENT_STACK_SCENES,
     DEFAULT_MAX_EDITORIAL_TEXT_SCENES,
-    DEFAULT_MAX_ECOSYSTEM_MAP_SCENES,
-    DEFAULT_MAX_ENTITY_COMPARE_SCENES,
     DEFAULT_MAX_INTERFACE_TRANSFORM_SCENES,
-    DEFAULT_MAX_KINETIC_TYPE_SCENES,
     DEFAULT_MAX_LOGO_REVEAL_SCENES,
     DEFAULT_MAX_QUOTE_OR_CLAIM_SCENES,
-    DEFAULT_MAX_RECAP_SEQUENCE_SCENES,
-    DEFAULT_MAX_PROCESS_ZOOM_SCENES,
-    DEFAULT_MAX_RANKED_LIST_SCENES,
-    DEFAULT_MAX_SIGNAL_RADAR_SCENES,
     DEFAULT_MAX_SIMPLE_EXPLAINER_SCENES,
     DEFAULT_MAX_STORY_TRANSITION_SCENES,
-    DEFAULT_MAX_TIMELINE_ZOOM_SCENES,
-    DEFAULT_MAX_TREND_LINE_SCENES,
-    DEFAULT_MAX_TRANSITION_STINGER_SCENES,
     DEFAULT_MAX_STORY_CONTEXT_CHARS,
     DEFAULT_MAX_SCENES,
     DEFAULT_HARD_MAX_SCENE_SECONDS,
@@ -50,7 +32,7 @@ from .config import (
 
 
 VisualPlannerStatus = Literal["ok", "failed"]
-LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot"]
+LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot", "deepseek"]
 VisualLLMRole = Literal[
     "episode_director",
     "bookend_visual_planner",
@@ -65,28 +47,10 @@ RenderKind = Literal[
     "editorial_text_scene",
     "simple_explainer_scene",
     "story_transition_scene",
-    "kinetic_type_scene",
-    "bullet_build_scene",
     "quote_or_claim_highlight_scene",
-    "entity_compare_scene",
-    "recap_sequence_scene",
-    "data_counter_scene",
-    "trend_line_scene",
-    "bar_chart_scene",
-    "bar_race_scene",
-    "ranked_list_scene",
-    "benchmark_delta_scene",
-    "ecosystem_map_scene",
-    "architecture_flow_scene",
-    "process_zoom_scene",
     "browser_walkthrough_scene",
-    "decision_tree_scene",
-    "capability_matrix_scene",
-    "timeline_zoom_scene",
     "document_stack_scene",
-    "signal_radar_scene",
     "interface_transform_scene",
-    "transition_stinger_scene",
 ]
 
 
@@ -218,6 +182,7 @@ class ProviderOptions(BaseModel):
 
     thinking: Literal["enabled", "disabled"] | None = None
     omit_temperature: bool = False
+    reasoning_effort: Literal["high", "max"] | None = None
     request_timeout_seconds: float = Field(default=300.0, ge=10.0, le=1800.0)
 
 
@@ -347,28 +312,10 @@ class ScenePolicyConfig(BaseModel):
     max_editorial_text_scenes: int = DEFAULT_MAX_EDITORIAL_TEXT_SCENES
     max_simple_explainer_scenes: int = DEFAULT_MAX_SIMPLE_EXPLAINER_SCENES
     max_story_transition_scenes: int = DEFAULT_MAX_STORY_TRANSITION_SCENES
-    max_kinetic_type_scenes: int = DEFAULT_MAX_KINETIC_TYPE_SCENES
-    max_bullet_build_scenes: int = DEFAULT_MAX_BULLET_BUILD_SCENES
     max_quote_or_claim_highlight_scenes: int = DEFAULT_MAX_QUOTE_OR_CLAIM_SCENES
-    max_entity_compare_scenes: int = DEFAULT_MAX_ENTITY_COMPARE_SCENES
-    max_recap_sequence_scenes: int = DEFAULT_MAX_RECAP_SEQUENCE_SCENES
-    max_data_counter_scenes: int = DEFAULT_MAX_DATA_COUNTER_SCENES
-    max_trend_line_scenes: int = DEFAULT_MAX_TREND_LINE_SCENES
-    max_bar_chart_scenes: int = DEFAULT_MAX_BAR_CHART_SCENES
-    max_bar_race_scenes: int = DEFAULT_MAX_BAR_RACE_SCENES
-    max_ranked_list_scenes: int = DEFAULT_MAX_RANKED_LIST_SCENES
-    max_benchmark_delta_scenes: int = DEFAULT_MAX_BENCHMARK_DELTA_SCENES
-    max_ecosystem_map_scenes: int = DEFAULT_MAX_ECOSYSTEM_MAP_SCENES
-    max_architecture_flow_scenes: int = DEFAULT_MAX_ARCHITECTURE_FLOW_SCENES
-    max_process_zoom_scenes: int = DEFAULT_MAX_PROCESS_ZOOM_SCENES
     max_browser_walkthrough_scenes: int = DEFAULT_MAX_BROWSER_WALKTHROUGH_SCENES
-    max_decision_tree_scenes: int = DEFAULT_MAX_DECISION_TREE_SCENES
-    max_capability_matrix_scenes: int = DEFAULT_MAX_CAPABILITY_MATRIX_SCENES
-    max_timeline_zoom_scenes: int = DEFAULT_MAX_TIMELINE_ZOOM_SCENES
     max_document_stack_scenes: int = DEFAULT_MAX_DOCUMENT_STACK_SCENES
-    max_signal_radar_scenes: int = DEFAULT_MAX_SIGNAL_RADAR_SCENES
     max_interface_transform_scenes: int = DEFAULT_MAX_INTERFACE_TRANSFORM_SCENES
-    max_transition_stinger_scenes: int = DEFAULT_MAX_TRANSITION_STINGER_SCENES
     max_consecutive_same_kind: int = DEFAULT_MAX_CONSECUTIVE_SAME_KIND
     allowed_render_kinds: list[RenderKind] = Field(default_factory=lambda: list(RENDER_KINDS))
 
@@ -408,6 +355,34 @@ class ScenePolicyConfig(BaseModel):
             raise ValueError("scene_policy.max_consecutive_same_kind must be at least 1")
         if not self.allowed_render_kinds:
             raise ValueError("scene_policy.allowed_render_kinds must not be empty")
+        return self
+
+
+class SequencePolicyConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    min_sequence_seconds: float = 25.0
+    target_sequence_seconds: float = 35.0
+    max_sequence_seconds: float = 45.0
+    min_shots_per_sequence: int = 2
+    max_shots_per_sequence: int = 4
+    neighboring_unit_context: int = 1
+
+    @model_validator(mode="after")
+    def validate_sequence_policy(self) -> "SequencePolicyConfig":
+        if not 0 < self.min_sequence_seconds <= self.target_sequence_seconds <= self.max_sequence_seconds:
+            raise ValueError(
+                "sequence_policy seconds must satisfy 0 < min <= target <= max"
+            )
+        if not 1 <= self.min_shots_per_sequence <= self.max_shots_per_sequence <= 8:
+            raise ValueError(
+                "sequence_policy shots must satisfy 1 <= min <= max <= 8"
+            )
+        if self.neighboring_unit_context < 0 or self.neighboring_unit_context > 2:
+            raise ValueError(
+                "sequence_policy.neighboring_unit_context must be between 0 and 2"
+            )
         return self
 
 
@@ -468,6 +443,7 @@ class VisualPlannerConfig(BaseModel):
     diagnostic_words_per_minute: int = 150
     allow_deterministic_story_fallbacks: bool = False
     require_asset_catalog: bool = True
+    require_visual_research: bool = False
     require_real_anchor_per_story: bool = True
     real_anchor_failure_mode: Literal["warn", "fail"] = "warn"
     style: VisualStyleConfig = Field(default_factory=VisualStyleConfig)
@@ -478,6 +454,7 @@ class VisualPlannerConfig(BaseModel):
         default_factory=AssetAvailabilityPolicyConfig
     )
     scene_policy: ScenePolicyConfig = Field(default_factory=ScenePolicyConfig)
+    sequence_policy: SequencePolicyConfig = Field(default_factory=SequencePolicyConfig)
     source_policy: SourcePolicyConfig = Field(default_factory=SourcePolicyConfig)
     visual_capabilities: dict[str, VisualCapabilityConfig] = Field(default_factory=default_visual_capabilities)
 
@@ -593,6 +570,22 @@ class VisualAssetCatalogEnvelope(BaseModel):
     handoff: dict[str, Any] = Field(default_factory=dict)
 
 
+class VisualResearchData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    run_id: str
+    visual_research_package: dict[str, Any]
+
+
+class VisualResearchEnvelope(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str
+    data: VisualResearchData
+    summary: dict[str, Any] = Field(default_factory=dict)
+    handoff: dict[str, Any] = Field(default_factory=dict)
+
+
 class VisualPlannerInput(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -602,6 +595,7 @@ class VisualPlannerInput(BaseModel):
     script_source: str | None = None
     voiceover: dict[str, Any] | None = None
     asset_catalog: VisualAssetCatalogEnvelope | None = None
+    visual_research: VisualResearchEnvelope | None = None
 
     @model_validator(mode="after")
     def require_one_script_source(self) -> "VisualPlannerInput":
@@ -623,6 +617,10 @@ class VisualPlannerRequest(BaseModel):
             raise ValueError("input.asset_catalog is required by config.require_asset_catalog")
         if self.input.asset_catalog is not None and self.input.asset_catalog.status != "ok":
             raise ValueError("input.asset_catalog.status must be ok")
+        if self.config.require_visual_research and self.input.visual_research is None:
+            raise ValueError("input.visual_research is required by config.require_visual_research")
+        if self.input.visual_research is not None and self.input.visual_research.status != "ok":
+            raise ValueError("input.visual_research.status must be ok")
         return self
 
 
@@ -640,9 +638,17 @@ class VisualPlannerSummary(BaseModel):
     voiceover_duration_seconds: float
     story_count: int
     scene_count: int
-    source_article_scene_count: int
-    logo_reveal_scene_count: int
-    kinetic_type_scene_count: int
+    source_article_scene_count: int = 0
+    context_image_scene_count: int = 0
+    broll_video_scene_count: int = 0
+    logo_reveal_scene_count: int = 0
+    editorial_text_scene_count: int = 0
+    simple_explainer_scene_count: int = 0
+    story_transition_scene_count: int = 0
+    quote_or_claim_highlight_scene_count: int = 0
+    browser_walkthrough_scene_count: int = 0
+    document_stack_scene_count: int = 0
+    interface_transform_scene_count: int = 0
     llm_call_count: int
     failure_reason: str = ""
 

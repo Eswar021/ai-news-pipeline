@@ -58,6 +58,21 @@ For a roundup, create several genuinely different title strategies:
 Thumbnail text should add a second idea rather than repeating the title's most
 obvious noun.
 
+Thumbnail concepts are briefs for a later image-production step, not finished
+images. Make each concept compositionally distinct and executable at 16:9:
+- identify one dominant visual hook and primary subject
+- keep the composition readable at small YouTube sizes
+- use exact represented_story_ids and only source_record_keys supplied in the
+  selected story context
+- provide a standalone generation_prompt that describes composition, lighting,
+  hierarchy, expression or action, background, palette, and empty space for text
+- use avoid for generic robots, clutter, tiny labels, unsupported logos, or other
+  concept-specific failure modes
+
+Do not return three cosmetic variations of the same thumbnail. Prefer a
+source-proof concept, an identity/tension concept, and a human or product-action
+concept when the episode context supports them.
+
 Write one chapter title for every exact script section_id. Chapter titles are
 viewer navigation labels, not clipped article headlines. Use a short, complete
 phrase that names the actual turn in the episode. Keep each title within the

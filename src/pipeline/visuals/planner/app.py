@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import Counter
 from copy import deepcopy
 import json
-import logging
 import math
 import re
 import time
@@ -48,7 +47,8 @@ from ..payload_validation import (
     prompt_payload_contract,
     validate_scene_payload,
 )
-from ..recipes import RECIPE_REGISTRY, recipe_specs_for_prompt
+from ..recipes import ACTIVE_RENDER_KINDS, RECIPE_REGISTRY, recipe_specs_for_prompt
+from ..research.contract import visual_research_identity_payload
 from .config import (
     BOOKEND_VISUAL_PLANNER_PROMPT_MODULE,
     EPISODE_DIRECTOR_PROMPT_MODULE,
@@ -66,9 +66,6 @@ from .llm_logging import build_llm_call_log
 from .prompt_loader import load_prompt_bundle
 
 
-RUNTIME_LOGGER = logging.getLogger("ai_content_creation.runtime.visual_planner")
-
-
 TASK_PROMPT = PromptTemplate.from_template(
     "{system_prompt}\n\n"
     "{user_preamble}\n\n"
@@ -84,49 +81,18 @@ RenderKind = Literal[
     "editorial_text_scene",
     "simple_explainer_scene",
     "story_transition_scene",
-    "kinetic_type_scene",
-    "bullet_build_scene",
     "quote_or_claim_highlight_scene",
-    "entity_compare_scene",
-    "recap_sequence_scene",
-    "data_counter_scene",
-    "trend_line_scene",
-    "bar_chart_scene",
-    "bar_race_scene",
-    "ranked_list_scene",
-    "benchmark_delta_scene",
-    "ecosystem_map_scene",
-    "architecture_flow_scene",
-    "process_zoom_scene",
     "browser_walkthrough_scene",
-    "decision_tree_scene",
-    "capability_matrix_scene",
-    "timeline_zoom_scene",
     "document_stack_scene",
-    "signal_radar_scene",
     "interface_transform_scene",
-    "transition_stinger_scene",
 ]
 CropStrategy = Literal["article_viewport", "headline_then_body", "target_text_focus"]
 SourceMotionStyle = Literal["slow_push", "highlight_scan", "browser_zoom"]
 LogoMotionStyle = Literal["pop_reveal", "slide_stack", "spotlight"]
-KineticAnimationStyle = Literal["typewriter", "word_snap", "highlight_sweep"]
-BulletBuildStyle = Literal["numbered_build", "stack_reveal", "pulse_checklist"]
-EntityCompareStyle = Literal["versus", "matrix", "orbit_stack"]
-RecapMotionStyle = Literal["story_rhythm", "rapid_stack", "final_takeaway"]
-TrendDirection = Literal["rising", "falling", "volatile", "pressure_building", "flat_then_jump"]
-FlowDirection = Literal["left_to_right", "top_to_bottom", "radial", "loop"]
-BackgroundMotif = Literal["newsroom_grid", "device_glow", "abstract_ai"]
-TransitionMotionStyle = Literal["signal_wipe", "radar_ping", "glitch_snap", "orbit_sweep"]
 
 CLOSING_RE = re.compile(r"\b(today'?s roundup|so today|the ai race is no longer|thanks for watching|that is the bigger shift)\b", re.IGNORECASE)
-TEXT_LIKE_RENDER_KINDS = {
-    "editorial_text_scene",
-    "kinetic_type_scene",
-    "bullet_build_scene",
-    "recap_sequence_scene",
-}
-MERGEABLE_TEXT_RENDER_KINDS = {"kinetic_type_scene", "bullet_build_scene", "recap_sequence_scene"}
+TEXT_LIKE_RENDER_KINDS = {"editorial_text_scene"}
+MERGEABLE_TEXT_RENDER_KINDS = {"editorial_text_scene"}
 SOURCE_BACKED_RENDER_KINDS = {"source_article_scene", "quote_or_claim_highlight_scene"}
 SOURCE_BOUND_RENDER_KINDS = SOURCE_BACKED_RENDER_KINDS | {"browser_walkthrough_scene"}
 CATALOG_ASSET_TYPES_BY_RENDER_KIND = {
@@ -148,43 +114,15 @@ CATALOG_RENDER_KIND_BY_ASSET_TYPE = {
 }
 EVIDENCE_BOUND_RENDER_KINDS = {
     "simple_explainer_scene",
-    "data_counter_scene",
-    "trend_line_scene",
-    "bar_chart_scene",
-    "bar_race_scene",
-    "ranked_list_scene",
-    "benchmark_delta_scene",
-    "ecosystem_map_scene",
-    "architecture_flow_scene",
-    "process_zoom_scene",
-    "decision_tree_scene",
-    "capability_matrix_scene",
-    "timeline_zoom_scene",
     "document_stack_scene",
-    "signal_radar_scene",
     "interface_transform_scene",
-    "entity_compare_scene",
 }
 GRAPHIC_RENDER_KINDS = {
     "context_image_scene",
     "broll_video_scene",
-    "data_counter_scene",
-    "trend_line_scene",
-    "bar_chart_scene",
-    "bar_race_scene",
-    "ranked_list_scene",
-    "benchmark_delta_scene",
-    "ecosystem_map_scene",
-    "architecture_flow_scene",
-    "process_zoom_scene",
     "browser_walkthrough_scene",
-    "decision_tree_scene",
-    "capability_matrix_scene",
-    "timeline_zoom_scene",
     "document_stack_scene",
-    "signal_radar_scene",
     "interface_transform_scene",
-    "entity_compare_scene",
     "logo_reveal_scene",
     "simple_explainer_scene",
 }
@@ -512,9 +450,40 @@ def _structured_llm(llm, output_model, llm_config: dict[str, Any]):
     structured = dict(llm_config.get("structured_output") or {})
     return llm.with_structured_output(
         output_model,
-        include_raw=True,
-        method=clean_text(structured.get("method")) or "json_schema",
-        strict=bool(structured.get("strict", True)),
+        **_structured_output_options(structured),
+    )
+
+
+def _structured_output_options(structured_config: dict[str, Any]) -> dict[str, Any]:
+    method = clean_text(structured_config.get("method")) or "json_schema"
+    options: dict[str, Any] = {
+        "include_raw": True,
+        "method": method,
+    }
+    if method != "json_mode":
+        options["strict"] = bool(structured_config.get("strict", True))
+    return options
+
+
+def _task_payload_for_structured_output(
+    task_payload: str,
+    *,
+    output_model,
+    method: str,
+) -> str:
+    if method != "json_mode":
+        return task_payload
+    schema = json.dumps(
+        output_model.model_json_schema(),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return (
+        f"{task_payload}\n\n"
+        "Return only one JSON object matching the following JSON Schema exactly. "
+        "Use only enum values defined by the schema, use null only where allowed, "
+        "and do not wrap the object in Markdown.\n"
+        f"JSON Schema:\n{schema}"
     )
 
 
@@ -604,6 +573,12 @@ def run(input_json: dict) -> dict:
         script_provenance=script_provenance,
     )
     asset_catalog_index = _asset_catalog_index(asset_catalog)
+    visual_research, visual_research_provenance = _validated_visual_research(
+        request,
+        run_id=run_id,
+        script_provenance=script_provenance,
+    )
+    visual_research_index = _visual_research_index(visual_research)
     story_sections = _build_story_sections(
         request=request,
         script_text=script_text,
@@ -628,6 +603,7 @@ def run(input_json: dict) -> dict:
         voiceover_package=voiceover_package,
         stories=stories,
         story_sections=story_sections,
+        visual_research=visual_research,
         config=config,
         prompt_bundle=episode_prompt_bundle,
         llm_runtime=llm_runtimes[EPISODE_DIRECTOR_PROMPT_MODULE],
@@ -638,6 +614,7 @@ def run(input_json: dict) -> dict:
         stories=stories,
         source_index=source_index,
         asset_catalog_index=asset_catalog_index,
+        visual_research_index=visual_research_index,
         episode_direction=episode_direction,
         config=config,
         prompt_bundle=bookend_prompt_bundle,
@@ -650,6 +627,7 @@ def run(input_json: dict) -> dict:
         source_index=source_index,
         script_asset_hints=script_asset_hints,
         asset_catalog_index=asset_catalog_index,
+        visual_research_index=visual_research_index,
         episode_direction=episode_direction,
         config=config,
         prompt_bundle=story_prompt_bundle,
@@ -677,6 +655,8 @@ def run(input_json: dict) -> dict:
         voiceover_provenance=voiceover_provenance,
         asset_catalog=asset_catalog,
         asset_catalog_provenance=asset_catalog_provenance,
+        visual_research=visual_research,
+        visual_research_provenance=visual_research_provenance,
     )
     story_drafts, visual_editor_report = _edit_story_visual_plans(
         story_drafts=story_drafts,
@@ -686,6 +666,7 @@ def run(input_json: dict) -> dict:
         source_index=source_index,
         script_asset_hints=script_asset_hints,
         asset_catalog_index=asset_catalog_index,
+        visual_research_index=visual_research_index,
         episode_direction=episode_direction,
         config=config,
         prompt_bundle=story_editor_prompt_bundle,
@@ -713,6 +694,8 @@ def run(input_json: dict) -> dict:
         voiceover_provenance=voiceover_provenance,
         asset_catalog=asset_catalog,
         asset_catalog_provenance=asset_catalog_provenance,
+        visual_research=visual_research,
+        visual_research_provenance=visual_research_provenance,
         visual_editor_report=visual_editor_report,
     )
     checks = _check_scene_plan(visual_scene_plan, config)
@@ -766,6 +749,59 @@ def _validated_asset_catalog(
         label="visual_asset_catalog",
     )
     return catalog, provenance
+
+
+def _validated_visual_research(
+    request: VisualPlannerRequest,
+    *,
+    run_id: str,
+    script_provenance: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    envelope = request.input.visual_research
+    if envelope is None:
+        return {}, None
+    require_matching_run_id(run_id, envelope.data.run_id, "visual_research")
+    package = envelope.data.visual_research_package
+    require_matching_run_id(run_id, package.get("run_id"), "visual_research_package")
+    provenance = validate_artifact_provenance(
+        package.get("provenance"),
+        artifact_type="visual_research",
+        run_id=run_id,
+        payload=visual_research_identity_payload(package),
+        label="visual_research_package",
+    )
+    require_parent_fingerprint(
+        provenance,
+        parent_name="script",
+        expected=script_provenance["script_fingerprint"],
+        label="visual_research_package",
+    )
+    return package, provenance
+
+
+def _visual_research_index(package: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        clean_text(item.get("story_id")): item
+        for item in package.get("story_research", [])
+        if isinstance(item, dict) and clean_text(item.get("story_id"))
+    }
+
+
+def _visual_research_summary(package: dict[str, Any]) -> dict[str, Any]:
+    stories = [item for item in package.get("story_research", []) if isinstance(item, dict)]
+    return {
+        "research_strategy": package.get("research_strategy", ""),
+        "story_count": len(stories),
+        "stories": [
+            {
+                "story_id": item.get("story_id"),
+                "visual_thesis": item.get("visual_thesis"),
+                "sequence_notes": item.get("sequence_notes", []),
+                "unresolved_gaps": item.get("unresolved_gaps", []),
+            }
+            for item in stories
+        ],
+    }
 
 
 def _asset_catalog_index(catalog: dict[str, Any]) -> dict[str, Any]:
@@ -1047,6 +1083,7 @@ def _catalog_asset_for_scene(
     story_id: str,
     render_kind: str,
     catalog_index: dict[str, Any],
+    allow_episode_asset: bool = False,
 ) -> tuple[dict[str, Any] | None, list[str]]:
     asset_id = clean_text(draft.get("asset_id"))
     if not asset_id:
@@ -1057,21 +1094,24 @@ def _catalog_asset_for_scene(
 
     errors: list[str] = []
     asset_story_id = clean_text(asset.get("story_id"))
-    if asset_story_id != story_id:
+    if asset_story_id != story_id and not (allow_episode_asset and not story_id):
         errors.append(
             f"asset_id {asset_id!r} belongs to story {asset_story_id!r}, not {story_id!r}"
         )
     if clean_text(asset.get("status")) != "available":
         errors.append(f"asset_id {asset_id!r} is not available")
 
-    allowed_types = CATALOG_ASSET_TYPES_BY_RENDER_KIND.get(render_kind)
+    effective_render_kind = render_kind
+    if render_kind == "story_transition_scene":
+        effective_render_kind = clean_text(draft.get("background_render_kind"))
+    allowed_types = CATALOG_ASSET_TYPES_BY_RENDER_KIND.get(effective_render_kind)
     asset_type = clean_text(asset.get("asset_type"))
     if allowed_types is None:
         errors.append(f"render_kind {render_kind!r} does not consume catalog assets")
     elif asset_type not in allowed_types:
         errors.append(
             f"asset_id {asset_id!r} has type {asset_type!r}; "
-            f"{render_kind} requires one of {sorted(allowed_types)}"
+            f"{effective_render_kind} requires one of {sorted(allowed_types)}"
         )
 
     canonical_key = clean_text(asset.get("source_record_key"))
@@ -1111,7 +1151,7 @@ def _scene_with_catalog_asset(
     if asset_type == "source_page":
         enriched["source_record_key"] = clean_text(asset.get("source_record_key"))
         enriched["url"] = clean_text(asset.get("source_url") or asset.get("asset_url"))
-    elif asset_type == "logo":
+    elif asset_type == "logo" and not clean_text(enriched.get("primary_entity")):
         enriched["primary_entity"] = clean_text(asset.get("title"))
     return enriched
 
@@ -1202,6 +1242,13 @@ def _bookend_scene_owner_story_id(
     source_index: dict[str, Any],
     asset_catalog_index: dict[str, Any],
 ) -> str:
+    primary_entity = clean_text(scene.get("primary_entity"))
+    identity_asset = _exact_logo_asset_for_entity(
+        primary_entity,
+        catalog_index=asset_catalog_index,
+    )
+    if identity_asset:
+        return clean_text(identity_asset.get("story_id"))
     asset_id = clean_text(scene.get("asset_id"))
     asset = asset_catalog_index.get("assets_by_id", {}).get(asset_id, {})
     if isinstance(asset, dict) and clean_text(asset.get("story_id")):
@@ -1257,6 +1304,15 @@ def _normalize_catalog_scene_reference(
     if not isinstance(asset, dict):
         return normalized, []
     render_kind = clean_text(normalized.get("render_kind"))
+    if render_kind == "logo_reveal_scene":
+        identity_asset = _exact_logo_asset_for_entity(
+            clean_text(normalized.get("primary_entity")),
+            catalog_index=catalog_index,
+            story_id=story_id,
+        )
+        if identity_asset:
+            asset = identity_asset
+            normalized["asset_id"] = clean_text(identity_asset.get("asset_id"))
     compatible = clean_text(asset.get("asset_type")) in CATALOG_ASSET_TYPES_BY_RENDER_KIND.get(
         render_kind, set()
     )
@@ -1269,6 +1325,31 @@ def _normalize_catalog_scene_reference(
         # not a semantic asset or scene-family substitution.
         normalized = _scene_with_catalog_asset(normalized, asset)
     return normalized, []
+
+
+def _exact_logo_asset_for_entity(
+    entity: str,
+    *,
+    catalog_index: dict[str, Any],
+    story_id: str | None = None,
+) -> dict[str, Any] | None:
+    normalized_entity = clean_text(entity).casefold()
+    if not normalized_entity:
+        return None
+    assets = (
+        catalog_index.get("assets_by_story", {}).get(story_id, [])
+        if story_id
+        else catalog_index.get("assets_by_id", {}).values()
+    )
+    matches = [
+        asset
+        for asset in assets
+        if isinstance(asset, dict)
+        and clean_text(asset.get("asset_type")) == "logo"
+        and clean_text(asset.get("status")) == "available"
+        and clean_text(asset.get("title")).casefold() == normalized_entity
+    ]
+    return matches[0] if len(matches) == 1 else None
 
 
 def _normalize_montage_scene_references(
@@ -1372,6 +1453,7 @@ def _generate_episode_direction(
     voiceover_package: dict[str, Any] | None,
     stories: list[dict[str, Any]],
     story_sections: list[dict[str, Any]],
+    visual_research: dict[str, Any],
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
     llm_runtime: dict[str, Any],
@@ -1390,6 +1472,7 @@ def _generate_episode_direction(
         "video_packet_summary": _video_packet_summary(video_packet),
         "story_section_summary": _story_section_summary(story_sections),
         "selected_stories": _story_summaries_for_prompt(stories),
+        "visual_research_summary": _visual_research_summary(visual_research),
         "timed_script": timed_script,
         "banned_visual_language": sorted(OLD_CARD_RENDER_KINDS),
         "required_behavior": {
@@ -1420,6 +1503,7 @@ def _generate_bookend_visual_plan(
     stories: list[dict[str, Any]],
     source_index: dict[str, Any],
     asset_catalog_index: dict[str, Any],
+    visual_research_index: dict[str, dict[str, Any]],
     episode_direction: dict[str, Any],
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
@@ -1480,6 +1564,11 @@ def _generate_bookend_visual_plan(
             allowed_render_kinds=allowed_render_kinds,
         ),
         "selected_stories": _story_summaries_for_prompt(stories),
+        "story_visual_research": [
+            visual_research_index.get(clean_text(story.get("story_id")), {})
+            for story in stories
+            if clean_text(story.get("story_id"))
+        ],
         "verified_asset_catalog": _catalog_for_bookend_prompt(asset_catalog_index),
         "bookend_sections": payload_sections,
         "allowed_render_kinds": allowed_render_kinds,
@@ -1528,6 +1617,7 @@ def _generate_story_visual_plans(
     source_index: dict[str, Any],
     script_asset_hints: dict[str, dict[str, Any]],
     asset_catalog_index: dict[str, Any],
+    visual_research_index: dict[str, dict[str, Any]],
     episode_direction: dict[str, Any],
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
@@ -1584,12 +1674,18 @@ def _generate_story_visual_plans(
             "story": story_context,
             "available_story_assets": script_asset_hints.get(story_id, {}),
             "verified_asset_catalog": story_catalog,
+            "story_visual_research": visual_research_index.get(story_id, {}),
             "real_anchor_contract": _real_anchor_contract_for_prompt(
                 story_catalog,
                 story_config,
                 allowed_render_kinds=story_allowed_render_kinds,
             ),
             "story_section": _section_for_prompt(section),
+            "sequence_policy": config.get("sequence_policy", {}),
+            "story_sequences": _story_sequences_for_section(
+                section,
+                config.get("sequence_policy", {}),
+            ),
             "script_units": _script_units_for_story_prompt(
                 section.get("script_units", []),
                 source_index=source_index,
@@ -1607,6 +1703,8 @@ def _generate_story_visual_plans(
                 "do_not_author_seconds_or_retime_narration": True,
                 "return_one_scene_for_every_required_scene_slot": True,
                 "do_not_combine_adjacent_script_units": True,
+                "plan_adjacent_scene_slots_as_coherent_sequence_arcs": True,
+                "give_each_sequence_an_establish_develop_payoff_progression": True,
                 "return_distinct_treatments_for_overlong_unit_slots": True,
                 "first_story_title_beat_is_inserted_deterministically": True,
                 "do_not_create_title_timeline_entity_recap_or_fallback_cards": True,
@@ -1627,6 +1725,12 @@ def _generate_story_visual_plans(
             "story_id": story_id,
             "story_title": clean_text(story.get("story_title", "")),
             "script_unit_count": len(section.get("script_units", [])),
+            "sequence_count": len(
+                _story_sequences_for_section(
+                    section,
+                    config.get("sequence_policy", {}),
+                )
+            ),
             "source_record_count": len(source_index["record_keys_by_story"].get(story_id, [])),
             "source_context": story_context["context_telemetry"],
             "allowed_render_kinds": story_allowed_render_kinds,
@@ -1715,6 +1819,7 @@ def _edit_story_visual_plans(
     source_index: dict[str, Any],
     script_asset_hints: dict[str, dict[str, Any]],
     asset_catalog_index: dict[str, Any],
+    visual_research_index: dict[str, dict[str, Any]],
     episode_direction: dict[str, Any],
     config: dict[str, Any],
     prompt_bundle: dict[str, str],
@@ -1815,12 +1920,18 @@ def _edit_story_visual_plans(
             "story": story_context,
             "available_story_assets": script_asset_hints.get(story_id, {}),
             "verified_asset_catalog": story_catalog,
+            "story_visual_research": visual_research_index.get(story_id, {}),
             "real_anchor_contract": _real_anchor_contract_for_prompt(
                 story_catalog,
                 story_config,
                 allowed_render_kinds=story_allowed_render_kinds,
             ),
             "story_section": _section_for_prompt(section),
+            "sequence_policy": config.get("sequence_policy", {}),
+            "story_sequences": _story_sequences_for_section(
+                section,
+                config.get("sequence_policy", {}),
+            ),
             "script_units": _script_units_for_story_prompt(
                 section.get("script_units", []),
                 source_index=source_index,
@@ -2838,6 +2949,12 @@ def _invoke_chain(
     metadata: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    structured_config = dict(config.get("structured_output") or {})
+    task_payload = _task_payload_for_structured_output(
+        task_payload,
+        output_model=output_model,
+        method=clean_text(structured_config.get("method")) or "json_schema",
+    )
     prompt_inputs = {
         "system_prompt": prompt_bundle["system"],
         "user_preamble": prompt_bundle["user_preamble"],
@@ -2845,33 +2962,10 @@ def _invoke_chain(
     }
     rendered_prompt = TASK_PROMPT.format(**prompt_inputs)
     started = time.time()
-    story_id = clean_text(metadata.get("story_id"))
-    attempt = metadata.get("attempt", 1)
-    route = clean_text(metadata.get("route_attempt")) or "primary"
-    RUNTIME_LOGGER.info(
-        "LLM start role=%s provider=%s model=%s route=%s attempt=%s story=%s",
-        module_name,
-        config["provider"],
-        config["model"],
-        route,
-        attempt,
-        story_id or "episode",
-    )
     try:
         result = chain.invoke(prompt_inputs)
     except Exception as exc:
         duration = time.time() - started
-        RUNTIME_LOGGER.warning(
-            "LLM fail role=%s provider=%s model=%s route=%s attempt=%s story=%s duration=%.2fs error=%s",
-            module_name,
-            config["provider"],
-            config["model"],
-            route,
-            attempt,
-            story_id or "episode",
-            duration,
-            f"{type(exc).__name__}: {exc}",
-        )
         llm_calls.append(
             build_llm_call_log(
                 module_name=module_name,
@@ -2925,16 +3019,6 @@ def _invoke_chain(
             duration_seconds=duration,
         )
     )
-    RUNTIME_LOGGER.info(
-        "LLM end role=%s provider=%s model=%s route=%s attempt=%s story=%s duration=%.2fs",
-        module_name,
-        config["provider"],
-        config["model"],
-        route,
-        attempt,
-        story_id or "episode",
-        duration,
-    )
     return parsed_output
 
 
@@ -2976,6 +3060,8 @@ def _build_visual_scene_plan(
     voiceover_provenance: dict[str, Any] | None,
     asset_catalog: dict[str, Any],
     asset_catalog_provenance: dict[str, Any] | None,
+    visual_research: dict[str, Any],
+    visual_research_provenance: dict[str, Any] | None,
     visual_editor_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scene_timeline = _build_scene_timeline(
@@ -2995,9 +3081,9 @@ def _build_visual_scene_plan(
         "package_type": PACKAGE_TYPE,
         "selected_format": SUPPORTED_FORMAT,
         "planning_strategy": (
-            "episode_director_plus_bookends_plus_per_story_plus_bounded_editor"
+            "episode_director_plus_bookends_plus_per_story_sequences_plus_bounded_editor"
             if (visual_editor_report or {}).get("enabled")
-            else "episode_director_plus_bookends_plus_per_story"
+            else "episode_director_plus_bookends_plus_per_story_sequences"
         ),
         "llm_routes": _llm_route_summary(config),
         "run_id": run_id,
@@ -3005,6 +3091,7 @@ def _build_visual_scene_plan(
         "episode_style": _episode_style(episode_direction, config),
         "story_plans": _story_plans(stories, story_drafts, scene_timeline),
         "story_sections": _sections_for_output(story_sections),
+        "story_sequences": _story_sequences_for_output(story_sections, config),
         "visual_beat_map": _visual_beat_map(scene_timeline),
         "scene_timeline": scene_timeline,
         "asset_manifest": asset_manifest,
@@ -3024,6 +3111,7 @@ def _build_visual_scene_plan(
             "source_urls": sorted(source_index["source_urls"]),
         },
         "asset_catalog": asset_catalog,
+        "visual_research": visual_research,
         "story_time_ranges": story_ranges,
         "planner_warnings": _planner_warnings(story_drafts),
         "visual_editor": visual_editor_report or {
@@ -3039,6 +3127,8 @@ def _build_visual_scene_plan(
         parents["voiceover"] = voiceover_provenance["voiceover_fingerprint"]
     if asset_catalog_provenance:
         parents["asset_catalog"] = asset_catalog_provenance["artifact_fingerprint"]
+    if visual_research_provenance:
+        parents["visual_research"] = visual_research_provenance["artifact_fingerprint"]
     visual_scene_plan["provenance"] = build_artifact_provenance(
         artifact_type="visual_plan",
         run_id=run_id,
@@ -3236,10 +3326,13 @@ def _normalize_story_candidate_scenes(
     allowed_kinds = set(policy["allowed_render_kinds"])
     if "story_transition_scene" in allowed_kinds:
         title_kind = "story_transition_scene"
-    elif "transition_stinger_scene" in allowed_kinds:
-        title_kind = "transition_stinger_scene"
-    else:
+    elif "logo_reveal_scene" in allowed_kinds:
         title_kind = "logo_reveal_scene"
+    else:
+        raise ValueError(
+            "Story title interstitials require story_transition_scene or logo_reveal_scene "
+            "in config.scene_policy.allowed_render_kinds."
+        )
     story_number = safe_int((story.get("video_segment") or {}).get("segment_order"), 1)
     title_payload = {
         "recipe_id": "chapter_opener",
@@ -3276,16 +3369,6 @@ def _normalize_story_candidate_scenes(
                 ),
             }
         )
-    if title_kind == "transition_stinger_scene":
-        title_payload = {
-            "transition_label": subtitle or display_title,
-            "subtitle": display_title if subtitle else "",
-            "background_motif": "newsroom_grid",
-            "motion_style": "signal_wipe",
-            "eyebrow": f"STORY {story_number}",
-            "voice_behavior": "continue",
-            "configured_title_seconds": safe_float(title_card.get("duration_seconds"), 2.8),
-        }
     if title_kind == "logo_reveal_scene":
         primary_entity = _primary_entity_for_story(story_id, source_index)
         title_payload = {
@@ -3964,10 +4047,8 @@ def _fallback_candidate_for_slice(
     )
     if use_source:
         render_kind = "source_article_scene"
-    elif "editorial_text_scene" in allowed:
-        render_kind = "editorial_text_scene"
     else:
-        render_kind = "kinetic_type_scene"
+        render_kind = "editorial_text_scene"
     if render_kind not in allowed:
         raise ValueError(
             "The planner left narration uncovered, but the safe fallback render kind "
@@ -4162,7 +4243,7 @@ def _should_merge_semantic_neighbors(first: dict[str, Any], second: dict[str, An
 def _is_story_title_interstitial(scene: dict[str, Any]) -> bool:
     payload = scene.get("payload") if isinstance(scene.get("payload"), dict) else {}
     return (
-        clean_text(scene.get("render_kind", "")) in {"story_transition_scene", "transition_stinger_scene"}
+        clean_text(scene.get("render_kind", "")) == "story_transition_scene"
         and clean_text(payload.get("voice_behavior", "")) == "continue"
     )
 
@@ -4209,33 +4290,16 @@ def _merge_adjacent_scenes(first: dict[str, Any], second: dict[str, Any]) -> dic
 
 def _merged_payload_for_scene(preferred: dict[str, Any], first: dict[str, Any], second: dict[str, Any], script_excerpt: str, scene_start_seconds: float) -> dict[str, Any]:
     payload = dict(preferred.get("payload", {})) if isinstance(preferred.get("payload"), dict) else {}
-    render_kind = clean_text(preferred.get("render_kind", ""))
     beats = _merge_scene_beats(first, second, scene_start_seconds)
     if beats:
         payload["beats"] = beats
         payload["beat_count"] = len(beats)
         payload["covered_text"] = short_text(" ".join(beat["text"] for beat in beats if beat.get("text")), 320)
-    if render_kind == "kinetic_type_scene":
-        payload["phrases"] = [_short_phrase(script_excerpt), *dedupe([clean_text(item) for scene in (first, second) for item in (scene.get("payload", {}) if isinstance(scene.get("payload"), dict) else {}).get("phrases", [])])][:3]
-        payload["emphasis_words"] = meaningful_words(script_excerpt)[:5]
-    elif render_kind == "bullet_build_scene":
-        points = [
-            clean_text(item)
-            for scene in (first, second)
-            for item in (scene.get("payload", {}) if isinstance(scene.get("payload"), dict) else {}).get("points", [])
-            if clean_text(item)
-        ]
-        payload["points"] = dedupe(points + _points_from_text(script_excerpt, max_points=4, max_chars=64))[:4]
-        payload["headline"] = short_text(clean_text(payload.get("headline", "")) or _short_phrase(script_excerpt), 64)
-    elif render_kind == "recap_sequence_scene":
-        items = [
-            clean_text(item)
-            for scene in (first, second)
-            for item in (scene.get("payload", {}) if isinstance(scene.get("payload"), dict) else {}).get("recap_items", [])
-            if clean_text(item)
-        ]
-        payload["recap_items"] = dedupe(items + _points_from_text(script_excerpt, max_points=6, max_chars=58))[:6]
-        payload["final_takeaway"] = short_text(clean_text(payload.get("final_takeaway", "")) or _short_phrase(script_excerpt), 64)
+    if clean_text(preferred.get("render_kind", "")) == "editorial_text_scene":
+        payload["headline"] = short_text(
+            clean_text(payload.get("headline", "")) or _short_phrase(script_excerpt),
+            92,
+        )
     return payload
 
 
@@ -4267,31 +4331,13 @@ def _preferred_scene_for_merge(first: dict[str, Any], second: dict[str, Any]) ->
         "quote_or_claim_highlight_scene": 1,
         "broll_video_scene": 2,
         "context_image_scene": 3,
-        "benchmark_delta_scene": 4,
-        "bar_chart_scene": 5,
-        "bar_race_scene": 6,
-        "browser_walkthrough_scene": 7,
-        "decision_tree_scene": 8,
-        "capability_matrix_scene": 9,
-        "timeline_zoom_scene": 10,
-        "document_stack_scene": 11,
-        "signal_radar_scene": 12,
-        "interface_transform_scene": 13,
-        "process_zoom_scene": 14,
-        "architecture_flow_scene": 15,
-        "ecosystem_map_scene": 16,
-        "entity_compare_scene": 17,
-        "data_counter_scene": 18,
-        "trend_line_scene": 19,
-        "logo_reveal_scene": 20,
-        "simple_explainer_scene": 21,
-        "ranked_list_scene": 21,
-        "bullet_build_scene": 22,
-        "editorial_text_scene": 23,
-        "kinetic_type_scene": 23,
-        "recap_sequence_scene": 24,
-        "story_transition_scene": 25,
-        "transition_stinger_scene": 25,
+        "browser_walkthrough_scene": 4,
+        "document_stack_scene": 5,
+        "interface_transform_scene": 6,
+        "logo_reveal_scene": 7,
+        "simple_explainer_scene": 8,
+        "editorial_text_scene": 9,
+        "story_transition_scene": 10,
     }
     first_kind = clean_text(first.get("render_kind", ""))
     second_kind = clean_text(second.get("render_kind", ""))
@@ -4820,102 +4866,6 @@ def _payload_for_scene(
             "motion_style": clean_text(draft.get("motion_style", "")) or "editorial_wipe",
             "voice_behavior": clean_text(draft.get("voice_behavior", "")) or "continue",
         }
-    if render_kind == "entity_compare_scene":
-        primary_entity = clean_text(draft.get("primary_entity", "")) or _primary_entity_for_story(story_id, source_index)
-        entity_items = normalize_text_list(draft.get("entities"))
-        entities = dedupe([primary_entity, *entity_items])[:4]
-        notes = [short_text(item, 52) for item in normalize_text_list(draft.get("entity_notes"))]
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or clean_text(draft.get("companion_text", "")) or _short_phrase(script_excerpt), 72),
-            "entities": entities,
-            "comparison_axis": short_text(clean_text(draft.get("comparison_axis", "")), 52),
-            "entity_notes": notes[: len(entities)],
-            "motion_style": clean_text(draft.get("comparison_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "versus",
-        }
-    if render_kind == "data_counter_scene":
-        metrics = _metrics_from_draft(draft, script_excerpt)
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "metrics": metrics[:3],
-            "emphasis_label": short_text(clean_text(draft.get("emphasis_label", "")), 44),
-            "motion_style": clean_text(draft.get("data_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "count_up",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "newsroom_grid",
-        }
-    if render_kind == "trend_line_scene":
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "trend_direction": clean_text(draft.get("trend_direction", "")),
-            "y_axis_label": short_text(clean_text(draft.get("y_axis_label", "")), 32),
-            "x_axis_label": short_text(clean_text(draft.get("x_axis_label", "")), 32),
-            "annotations": _annotations_from_draft(draft, script_excerpt),
-            "motion_style": clean_text(draft.get("trend_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "draw_line",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "abstract_ai",
-        }
-    if render_kind == "bar_chart_scene":
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "bars": _bars_from_draft(draft, script_excerpt)[:5],
-            "unit": short_text(clean_text(draft.get("unit", "")), 12),
-            "emphasis_label": short_text(clean_text(draft.get("emphasis_label", "")), 44),
-            "motion_style": clean_text(draft.get("chart_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "grow_bars",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "newsroom_grid",
-        }
-    if render_kind == "bar_race_scene":
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "items": _race_items_from_draft(draft, script_excerpt)[:5],
-            "unit": short_text(clean_text(draft.get("unit", "")), 12),
-            "leader_label": short_text(clean_text(draft.get("leader_label", "")), 48),
-            "motion_style": clean_text(draft.get("race_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "rank_shift",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "device_glow",
-        }
-    if render_kind == "ranked_list_scene":
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "items": _ranked_items_from_draft(draft, script_excerpt)[:5],
-            "emphasis_label": short_text(clean_text(draft.get("emphasis_label", "")), 44),
-            "motion_style": clean_text(draft.get("ranked_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "staggered_rank",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "abstract_ai",
-        }
-    if render_kind == "benchmark_delta_scene":
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "benchmarks": _benchmarks_from_draft(draft, script_excerpt)[:3],
-            "winner_label": short_text(clean_text(draft.get("winner_label", "")), 48),
-            "motion_style": clean_text(draft.get("benchmark_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "delta_snap",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "device_glow",
-        }
-    if render_kind == "ecosystem_map_scene":
-        nodes = _nodes_from_draft(draft)
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "nodes": nodes[:6],
-            "edges": _edges_from_draft(draft, nodes),
-            "focus_entity": short_text(clean_text(draft.get("focus_entity", "")) or clean_text(draft.get("primary_entity", "")) or (nodes[0]["label"] if nodes else ""), 36),
-            "motion_style": clean_text(draft.get("map_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "pulse_connections",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "device_glow",
-        }
-    if render_kind == "architecture_flow_scene":
-        steps = _flow_steps_from_draft(draft, script_excerpt)
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "steps": steps[:6],
-            "flow_direction": clean_text(draft.get("flow_direction", "")) or "left_to_right",
-            "active_step_label": short_text(clean_text(draft.get("active_step_label", "")), 44),
-            "motion_style": clean_text(draft.get("flow_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "packet_flow",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "newsroom_grid",
-        }
-    if render_kind == "process_zoom_scene":
-        steps = _flow_steps_from_draft(draft, script_excerpt)
-        focus = clean_text(draft.get("focus_step_label", "")) or clean_text(draft.get("active_step_label", "")) or _focus_step_from_steps(steps)
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "steps": steps[:6],
-            "focus_step_label": short_text(focus, 44),
-            "zoom_note": short_text(clean_text(draft.get("zoom_note", "")) or clean_text(draft.get("metric_context", "")), 86),
-            "motion_style": clean_text(draft.get("zoom_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "focus_zoom",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "newsroom_grid",
-        }
     if render_kind == "browser_walkthrough_scene":
         return {
             "asset_id": asset_id,
@@ -4927,35 +4877,6 @@ def _payload_for_scene(
             "motion_style": clean_text(draft.get("browser_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "guided_scroll",
             "background_motif": clean_text(draft.get("background_motif", "")) or "device_glow",
         }
-    if render_kind == "decision_tree_scene":
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "root_label": short_text(clean_text(draft.get("root_label", "")), 42),
-            "branches": _decision_branches_from_draft(draft, script_excerpt)[:5],
-            "selected_path_label": short_text(clean_text(draft.get("selected_path_label", "")), 48),
-            "motion_style": clean_text(draft.get("decision_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "branch_glow",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "newsroom_grid",
-        }
-    if render_kind == "capability_matrix_scene":
-        columns = _matrix_columns_from_draft(draft)[:5]
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "columns": columns,
-            "rows": _matrix_rows_from_draft(draft, script_excerpt, columns)[:5],
-            "highlight_cell": short_text(clean_text(draft.get("highlight_cell", "")), 40),
-            "motion_style": clean_text(draft.get("matrix_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "cell_scan",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "abstract_ai",
-        }
-    if render_kind == "timeline_zoom_scene":
-        events = _timeline_events_from_draft(draft, script_excerpt)
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "events": events[:5],
-            "focus_event_label": short_text(clean_text(draft.get("focus_event_label", "")), 44),
-            "zoom_note": short_text(clean_text(draft.get("zoom_note", "")), 86),
-            "motion_style": clean_text(draft.get("timeline_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "event_zoom",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "newsroom_grid",
-        }
     if render_kind == "document_stack_scene":
         documents = _documents_from_draft(draft, script_excerpt)
         return {
@@ -4964,14 +4885,6 @@ def _payload_for_scene(
             "focus_document_label": short_text(clean_text(draft.get("focus_document_label", "")), 46),
             "motion_style": clean_text(draft.get("document_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "parallax_stack",
             "background_motif": clean_text(draft.get("background_motif", "")) or "device_glow",
-        }
-    if render_kind == "signal_radar_scene":
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "signals": _signals_from_draft(draft, script_excerpt)[:7],
-            "scan_label": short_text(clean_text(draft.get("scan_label", "")), 44),
-            "motion_style": clean_text(draft.get("radar_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "radar_sweep",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "abstract_ai",
         }
     if render_kind == "interface_transform_scene":
         return {
@@ -4982,46 +4895,7 @@ def _payload_for_scene(
             "motion_style": clean_text(draft.get("transform_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "panel_morph",
             "background_motif": clean_text(draft.get("background_motif", "")) or "device_glow",
         }
-    if render_kind == "transition_stinger_scene":
-        label = clean_text(draft.get("transition_label", "")) or clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt)
-        subtitle = clean_text(draft.get("transition_subtitle", "")) or clean_text(draft.get("companion_text", ""))
-        return {
-            "transition_label": short_text(label, 48),
-            "subtitle": short_text(subtitle, 60),
-            "motion_style": clean_text(draft.get("stinger_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "signal_wipe",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "abstract_ai",
-        }
-    if render_kind == "bullet_build_scene":
-        points = [short_text(item, 68) for item in normalize_text_list(draft.get("points"))]
-        if not points:
-            points = _points_from_text(script_excerpt, max_points=4, max_chars=64)
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "points": points[:4],
-            "emphasis_words": dedupe([*normalize_text_list(draft.get("emphasis_words")), *meaningful_words(script_excerpt)])[:6],
-            "build_style": clean_text(draft.get("build_style", "")) or "numbered_build",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "newsroom_grid",
-        }
-    if render_kind == "recap_sequence_scene":
-        items = [short_text(item, 62) for item in normalize_text_list(draft.get("recap_items"))]
-        if not items:
-            items = _points_from_text(script_excerpt, max_points=5, max_chars=58)
-        return {
-            "headline": short_text(clean_text(draft.get("headline", "")) or _short_phrase(script_excerpt), 64),
-            "recap_items": items[:6],
-            "final_takeaway": short_text(clean_text(draft.get("final_takeaway", "")) or _short_phrase(script_excerpt), 84),
-            "motion_style": clean_text(draft.get("recap_motion_style", "")) or clean_text(draft.get("motion_style", "")) or "story_rhythm",
-            "background_motif": clean_text(draft.get("background_motif", "")) or "abstract_ai",
-        }
-    phrases = normalize_text_list(draft.get("phrases"))
-    if not phrases:
-        phrases = [phrase for phrase in [_short_phrase(script_excerpt)] if phrase]
-    return {
-        "phrases": [short_text(phrase, 54) for phrase in phrases[:3]],
-        "emphasis_words": normalize_text_list(draft.get("emphasis_words"))[:6],
-        "animation_style": clean_text(draft.get("animation_style", "")) or "typewriter",
-        "background_motif": clean_text(draft.get("background_motif", "")) or "newsroom_grid",
-    }
+    raise ValueError(f"Unsupported active render kind: {render_kind}")
 
 
 def _payload_with_recipe(
@@ -5048,26 +4922,8 @@ def _build_asset_manifest(scene_timeline: list[dict[str, Any]]) -> dict[str, Any
             "editorial_text_scene": "none",
             "simple_explainer_scene": "none",
             "story_transition_scene": "none",
-            "entity_compare_scene": "none",
-            "bullet_build_scene": "none",
-            "recap_sequence_scene": "none",
-            "kinetic_type_scene": "none",
-            "data_counter_scene": "none",
-            "trend_line_scene": "none",
-            "bar_chart_scene": "none",
-            "bar_race_scene": "none",
-            "ranked_list_scene": "none",
-            "benchmark_delta_scene": "none",
-            "ecosystem_map_scene": "none",
-            "architecture_flow_scene": "none",
-            "process_zoom_scene": "none",
-            "decision_tree_scene": "none",
-            "capability_matrix_scene": "none",
-            "timeline_zoom_scene": "none",
             "document_stack_scene": "none",
-            "signal_radar_scene": "none",
             "interface_transform_scene": "none",
-            "transition_stinger_scene": "none",
         }[render_kind]
         requests.append(
             {
@@ -5833,6 +5689,10 @@ def _check_scene_plan(visual_scene_plan: dict[str, Any], config: dict[str, Any])
             story_id=clean_text(scene.get("story_id")),
             render_kind=render_kind,
             catalog_index=catalog_index,
+            allow_episode_asset=(
+                clean_text(scene.get("section_type")) in {"intro", "closing"}
+                and not clean_text(scene.get("story_id"))
+            ),
         )
         errors.extend(f"{scene.get('scene_id')} {error}" for error in asset_errors)
         if asset:
@@ -5970,28 +5830,10 @@ def _scene_cap_warnings(scenes: list[dict[str, Any]], policy: dict[str, Any]) ->
         "editorial_text_scene": "max_editorial_text_scenes",
         "simple_explainer_scene": "max_simple_explainer_scenes",
         "story_transition_scene": "max_story_transition_scenes",
-        "kinetic_type_scene": "max_kinetic_type_scenes",
-        "bullet_build_scene": "max_bullet_build_scenes",
         "quote_or_claim_highlight_scene": "max_quote_or_claim_highlight_scenes",
-        "entity_compare_scene": "max_entity_compare_scenes",
-        "recap_sequence_scene": "max_recap_sequence_scenes",
-        "data_counter_scene": "max_data_counter_scenes",
-        "trend_line_scene": "max_trend_line_scenes",
-        "bar_chart_scene": "max_bar_chart_scenes",
-        "bar_race_scene": "max_bar_race_scenes",
-        "ranked_list_scene": "max_ranked_list_scenes",
-        "benchmark_delta_scene": "max_benchmark_delta_scenes",
-        "ecosystem_map_scene": "max_ecosystem_map_scenes",
-        "architecture_flow_scene": "max_architecture_flow_scenes",
-        "process_zoom_scene": "max_process_zoom_scenes",
         "browser_walkthrough_scene": "max_browser_walkthrough_scenes",
-        "decision_tree_scene": "max_decision_tree_scenes",
-        "capability_matrix_scene": "max_capability_matrix_scenes",
-        "timeline_zoom_scene": "max_timeline_zoom_scenes",
         "document_stack_scene": "max_document_stack_scenes",
-        "signal_radar_scene": "max_signal_radar_scenes",
         "interface_transform_scene": "max_interface_transform_scenes",
-        "transition_stinger_scene": "max_transition_stinger_scenes",
     }
     counts = Counter(clean_text(scene.get("render_kind", "")) for scene in scenes)
     warnings: list[str] = []
@@ -6181,28 +6023,10 @@ def _build_summary(visual_scene_plan: dict[str, Any], llm_calls: list[dict[str, 
         "editorial_text_scene_count": kinds.count("editorial_text_scene"),
         "simple_explainer_scene_count": kinds.count("simple_explainer_scene"),
         "story_transition_scene_count": kinds.count("story_transition_scene"),
-        "kinetic_type_scene_count": kinds.count("kinetic_type_scene"),
-        "bullet_build_scene_count": kinds.count("bullet_build_scene"),
         "quote_or_claim_highlight_scene_count": kinds.count("quote_or_claim_highlight_scene"),
-        "entity_compare_scene_count": kinds.count("entity_compare_scene"),
-        "recap_sequence_scene_count": kinds.count("recap_sequence_scene"),
-        "data_counter_scene_count": kinds.count("data_counter_scene"),
-        "trend_line_scene_count": kinds.count("trend_line_scene"),
-        "bar_chart_scene_count": kinds.count("bar_chart_scene"),
-        "bar_race_scene_count": kinds.count("bar_race_scene"),
-        "ranked_list_scene_count": kinds.count("ranked_list_scene"),
-        "benchmark_delta_scene_count": kinds.count("benchmark_delta_scene"),
-        "ecosystem_map_scene_count": kinds.count("ecosystem_map_scene"),
-        "architecture_flow_scene_count": kinds.count("architecture_flow_scene"),
-        "process_zoom_scene_count": kinds.count("process_zoom_scene"),
         "browser_walkthrough_scene_count": kinds.count("browser_walkthrough_scene"),
-        "decision_tree_scene_count": kinds.count("decision_tree_scene"),
-        "capability_matrix_scene_count": kinds.count("capability_matrix_scene"),
-        "timeline_zoom_scene_count": kinds.count("timeline_zoom_scene"),
         "document_stack_scene_count": kinds.count("document_stack_scene"),
-        "signal_radar_scene_count": kinds.count("signal_radar_scene"),
         "interface_transform_scene_count": kinds.count("interface_transform_scene"),
-        "transition_stinger_scene_count": kinds.count("transition_stinger_scene"),
         "text_like_scene_count": len([kind for kind in kinds if kind in TEXT_LIKE_RENDER_KINDS]),
         "text_like_duration_seconds": round(
             sum(
@@ -6840,6 +6664,159 @@ def _script_units_for_story_prompt(
     return output
 
 
+def _story_sequences_for_output(
+    story_sections: list[dict[str, Any]],
+    config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    policy = config.get("sequence_policy", {})
+    return [
+        sequence
+        for section in story_sections
+        if clean_text(section.get("section_type")) == "story"
+        for sequence in _story_sequences_for_section(section, policy)
+    ]
+
+
+def _story_sequences_for_section(
+    section: dict[str, Any],
+    policy: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Group contiguous authored beats into editorial planning windows.
+
+    The grouping never changes timing or coverage. It gives the story director
+    enough neighboring context to choose a progression of short shots instead
+    of making each shot look like an unrelated slide.
+    """
+
+    units = [
+        deepcopy(unit)
+        for unit in section.get("script_units", [])
+        if isinstance(unit, dict) and safe_int(unit.get("order"), 0) > 0
+    ]
+    if not units or not bool(policy.get("enabled", True)):
+        return []
+    units.sort(key=lambda item: safe_int(item.get("order"), 0))
+    minimum_seconds = max(1.0, safe_float(policy.get("min_sequence_seconds"), 25.0))
+    target_seconds = max(minimum_seconds, safe_float(policy.get("target_sequence_seconds"), 35.0))
+    maximum_seconds = max(target_seconds, safe_float(policy.get("max_sequence_seconds"), 45.0))
+    min_shots = max(1, safe_int(policy.get("min_shots_per_sequence"), 2))
+    max_shots = max(min_shots, safe_int(policy.get("max_shots_per_sequence"), 4))
+    neighbor_count = max(0, safe_int(policy.get("neighboring_unit_context"), 1))
+
+    groups: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    current_duration = 0.0
+    for unit in units:
+        unit_duration = _unit_duration_seconds(unit)
+        would_exceed_duration = bool(current) and current_duration + unit_duration > maximum_seconds
+        would_exceed_shots = len(current) >= max_shots
+        target_reached = (
+            len(current) >= min_shots
+            and current_duration >= target_seconds
+        )
+        if current and (would_exceed_duration or would_exceed_shots or target_reached):
+            groups.append(current)
+            current = []
+            current_duration = 0.0
+        current.append(unit)
+        current_duration += unit_duration
+    if current:
+        groups.append(current)
+
+    if len(groups) > 1 and len(groups[-1]) < min_shots:
+        combined = [*groups[-2], *groups[-1]]
+        combined_duration = sum(_unit_duration_seconds(unit) for unit in combined)
+        if len(combined) <= max_shots and combined_duration <= maximum_seconds + 0.01:
+            groups[-2:] = [combined]
+
+    coverage = _story_coverage_contract(
+        section,
+        max_scene_seconds=maximum_seconds,
+        hard_max_scene_seconds=maximum_seconds,
+        unit_assignment_mode="one_scene_per_script_unit",
+    )
+    all_slots = coverage.get("required_scene_slots", [])
+    section_id = clean_text(section.get("section_id")) or "story_section"
+    story_id = clean_text(section.get("story_id"))
+    sequences: list[dict[str, Any]] = []
+    for index, group in enumerate(groups, start=1):
+        start_order = safe_int(group[0].get("order"), 0)
+        end_order = safe_int(group[-1].get("order"), start_order)
+        first_index = units.index(group[0])
+        last_index = units.index(group[-1])
+        before = units[max(0, first_index - neighbor_count) : first_index]
+        after = units[last_index + 1 : last_index + 1 + neighbor_count]
+        sequence_slots = [
+            deepcopy(slot)
+            for slot in all_slots
+            if start_order
+            <= safe_int(slot.get("start_unit_order"), 0)
+            <= end_order
+        ]
+        sequence_duration = sum(_unit_duration_seconds(unit) for unit in group)
+        sequences.append(
+            {
+                "sequence_id": f"{section_id}_sequence_{index:02d}",
+                "sequence_order": index,
+                "story_id": story_id,
+                "section_id": section_id,
+                "start_unit_order": start_order,
+                "end_unit_order": end_order,
+                "start_seconds": round(safe_float(group[0].get("start_seconds"), 0.0), 2),
+                "end_seconds": round(safe_float(group[-1].get("end_seconds"), 0.0), 2),
+                "duration_seconds": round(sequence_duration, 2),
+                "unit_orders": [safe_int(unit.get("order"), 0) for unit in group],
+                "beat_ids": [
+                    clean_text(unit.get("beat_id"))
+                    for unit in group
+                    if clean_text(unit.get("beat_id"))
+                ],
+                "authored_visual_briefs": [
+                    deepcopy(unit.get("visual_brief"))
+                    for unit in group
+                    if isinstance(unit.get("visual_brief"), dict)
+                    and unit.get("visual_brief")
+                ],
+                "visual_goals": [
+                    clean_text(unit.get("visual_goal"))
+                    for unit in group
+                    if clean_text(unit.get("visual_goal"))
+                ],
+                "required_scene_slots": sequence_slots,
+                "target_shot_count": min(
+                    max_shots,
+                    max(min_shots, len(sequence_slots)),
+                ),
+                "editorial_arc": ["establish", "develop", "payoff_or_handoff"],
+                "neighbor_before": _sequence_neighbor_context(before),
+                "neighbor_after": _sequence_neighbor_context(after),
+            }
+        )
+    return sequences
+
+
+def _sequence_neighbor_context(units: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "order": safe_int(unit.get("order"), 0),
+            "beat_id": clean_text(unit.get("beat_id")),
+            "text": short_text(clean_text(unit.get("text")), 260),
+        }
+        for unit in units
+    ]
+
+
+def _unit_duration_seconds(unit: dict[str, Any]) -> float:
+    duration = safe_float(unit.get("duration_seconds"), 0.0)
+    if duration > 0:
+        return duration
+    return max(
+        0.0,
+        safe_float(unit.get("end_seconds"), 0.0)
+        - safe_float(unit.get("start_seconds"), 0.0),
+    )
+
+
 def _sections_for_output(story_sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
     output = []
     for section in story_sections:
@@ -7352,44 +7329,10 @@ def _default_visual_intent(render_kind: str) -> str:
         return "Explain one short relationship or process with a few clear labels and restrained connectors."
     if render_kind == "story_transition_scene":
         return "Introduce the next roundup story with a clean editorial chapter transition."
-    if render_kind == "entity_compare_scene":
-        return "Compare the key entities or platforms in a motion graphic."
-    if render_kind == "bullet_build_scene":
-        return "Reveal the narration points one by one as a readable build."
-    if render_kind == "recap_sequence_scene":
-        return "Turn the closing or transition into a paced recap sequence."
-    if render_kind == "data_counter_scene":
-        return "Turn a key number or scale cue into an animated metric graphic."
-    if render_kind == "trend_line_scene":
-        return "Show momentum, pressure, or direction of change with a stylized trend graphic."
-    if render_kind == "bar_chart_scene":
-        return "Compare concrete values or relative signals with bold animated bars."
-    if render_kind == "bar_race_scene":
-        return "Show competitive momentum or before-to-after rank movement as animated bars."
-    if render_kind == "ranked_list_scene":
-        return "Turn an ordered set of implications or takeaways into a punchy ranked graphic."
-    if render_kind == "benchmark_delta_scene":
-        return "Make a before/after improvement, cost shift, speedup, or benchmark delta visually obvious."
-    if render_kind == "ecosystem_map_scene":
-        return "Map the entities, platforms, and relationships in a compact motion graphic."
-    if render_kind == "architecture_flow_scene":
-        return "Explain a technical workflow or integration as an animated flow diagram."
-    if render_kind == "process_zoom_scene":
-        return "Zoom into the critical step of a workflow while keeping the surrounding process visible."
     if render_kind == "browser_walkthrough_scene":
         return "Guide the viewer through a webpage, product page, or source page with scroll and focus motion."
-    if render_kind == "decision_tree_scene":
-        return "Show branching choices or routing logic as a highlighted decision path."
-    if render_kind == "capability_matrix_scene":
-        return "Compare products, models, or platforms across compact capability dimensions."
-    if render_kind == "timeline_zoom_scene":
-        return "Show a short event sequence and zoom into the moment that changes the story."
     if render_kind == "document_stack_scene":
         return "Show multiple documents or sources as a layered evidence stack."
-    if render_kind == "signal_radar_scene":
-        return "Frame emerging signals or watchlist items as a radar scan."
     if render_kind == "interface_transform_scene":
         return "Show a before-and-after workflow or interface transformation."
-    if render_kind == "transition_stinger_scene":
-        return "Use a short motion bumper to reset pacing between story beats."
-    return "Turn the key narration phrase into kinetic on-screen text."
+    raise ValueError(f"Unsupported active render kind: {render_kind}")

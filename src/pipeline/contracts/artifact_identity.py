@@ -228,6 +228,13 @@ def visual_plan_artifact_payload(plan: dict[str, Any]) -> dict[str, Any]:
     catalog_fingerprint = _clean_text(catalog_provenance.get("artifact_fingerprint"))
     if catalog_fingerprint:
         payload["asset_catalog_fingerprint"] = catalog_fingerprint
+    research = plan.get("visual_research") if isinstance(plan.get("visual_research"), dict) else {}
+    research_provenance = (
+        research.get("provenance") if isinstance(research.get("provenance"), dict) else {}
+    )
+    research_fingerprint = _clean_text(research_provenance.get("artifact_fingerprint"))
+    if research_fingerprint:
+        payload["visual_research_fingerprint"] = research_fingerprint
     return payload
 
 

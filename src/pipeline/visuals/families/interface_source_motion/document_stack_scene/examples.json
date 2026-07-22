@@ -1,0 +1,49 @@
+{
+  "render_kind": "document_stack_scene",
+  "examples": [
+    {
+      "name": "evidence_stack",
+      "payload": {
+        "recipe_id": "evidence_stack",
+        "headline": "The evidence arrives in layers",
+        "documents": [
+          {"title": "Research paper", "source": "University Lab", "date": "July 2026", "document_type": "Paper"},
+          {"title": "Technical release", "source": "Project Team", "date": "July 2026", "document_type": "Release"},
+          {"title": "Independent analysis", "source": "Tech Desk", "date": "July 2026", "document_type": "Report"}
+        ],
+        "focus_document_label": "Research paper",
+        "stack_summary": "Start with the primary evidence.",
+        "motion_style": "evidence_stack"
+      }
+    },
+    {
+      "name": "source_montage",
+      "payload": {
+        "recipe_id": "source_proof_montage",
+        "headline": "Two sources, one finding",
+        "documents": [
+          {"title": "Primary study", "source": "Research Lab", "asset_id": "asset_source_a", "source_record_key": "record_source_a", "url": "https://example.com/source/a"},
+          {"title": "Independent report", "source": "News Desk", "asset_id": "asset_source_b", "source_record_key": "record_source_b", "url": "https://example.com/source/b"}
+        ],
+        "focus_document_label": "Primary study",
+        "stack_summary": "The primary result stays in focus.",
+        "motion_style": "evidence_stack"
+      }
+    },
+    {
+      "name": "focal_document",
+      "payload": {
+        "recipe_id": "focal_document",
+        "headline": "One document changes the story",
+        "documents": [
+          {"title": "Earlier announcement", "source": "Company", "document_type": "Release"},
+          {"title": "New technical appendix", "source": "Company", "document_type": "Appendix"},
+          {"title": "Methods paper", "source": "Research Team", "document_type": "Paper"}
+        ],
+        "focus_document_label": "New technical appendix",
+        "stack_summary": "The appendix supplies the missing mechanism.",
+        "motion_style": "focal_document"
+      }
+    }
+  ]
+}

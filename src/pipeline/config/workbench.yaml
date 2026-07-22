@@ -1,15 +1,17 @@
 config_schema_version: pipeline_modular_config_v1
 default_run_profile: daily_48h_all_sources
-default_environment: prod
+default_environment: dev
 environments:
   dev: environments/dev.yaml
+  staging: environments/staging.yaml
   prod: environments/prod.yaml
 profiles:
   daily_48h_all_sources:
     profile_file: profiles/daily_48h_all_sources/profile.yaml
     stages:
+      ingestion:
+        news_collection: profiles/daily_48h_all_sources/ingestion/news_collection.yaml
       content:
-        news_collection: profiles/daily_48h_all_sources/content/news_collection.yaml
         evidence_prep: profiles/daily_48h_all_sources/content/evidence_prep.yaml
         editorial_triage: profiles/daily_48h_all_sources/content/editorial_triage.yaml
         story_mapping: profiles/daily_48h_all_sources/content/story_mapping.yaml
@@ -17,11 +19,11 @@ profiles:
         video_packaging: profiles/daily_48h_all_sources/content/video_packaging.yaml
         script_generation: profiles/daily_48h_all_sources/content/script_generation.yaml
         metadata_creator: profiles/daily_48h_all_sources/content/metadata_creator.yaml
-        metadata_finalizer: profiles/daily_48h_all_sources/content/metadata_finalizer.yaml
       voiceover:
         voiceover: profiles/daily_48h_all_sources/voiceover/voiceover.yaml
         voiceover_preview: profiles/daily_48h_all_sources/voiceover/voiceover_preview.yaml
       visuals:
+        research: profiles/daily_48h_all_sources/visuals/research.yaml
         asset_catalog: profiles/daily_48h_all_sources/visuals/asset_catalog.yaml
         planner: profiles/daily_48h_all_sources/visuals/planner.yaml
         media_discovery: profiles/daily_48h_all_sources/visuals/media_discovery.yaml
@@ -29,7 +31,9 @@ profiles:
         render: profiles/daily_48h_all_sources/visuals/render.yaml
         assembly: profiles/daily_48h_all_sources/visuals/assembly.yaml
         review: profiles/daily_48h_all_sources/visuals/review.yaml
-        publish_handoff: profiles/daily_48h_all_sources/visuals/publish_handoff.yaml
+      publishing:
+        metadata_finalizer: profiles/daily_48h_all_sources/publishing/metadata_finalizer.yaml
+        publish_handoff: profiles/daily_48h_all_sources/publishing/publish_handoff.yaml
 experiments:
   voiceover_delivery_comparison:
     section_type: intro

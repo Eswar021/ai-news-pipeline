@@ -2,7 +2,7 @@
 
 Status: Canonical runtime reference
 
-Last updated: 2026-07-20
+Last updated: 2026-07-23
 
 ## Runtime
 
@@ -10,29 +10,33 @@ Last updated: 2026-07-20
 
 ```text
 src/pipeline/
+|-- ingestion/
+|   `-- news_collection/
 |-- content/
-|   |-- news_collection/
 |   |-- evidence_prep/
 |   |-- editorial_triage/
 |   |-- story_mapping/
 |   |-- editorial_selection/
 |   |-- video_packaging/
 |   |-- script_generation/
-|   |-- metadata_creator/
-|   `-- metadata_finalizer/
+|   `-- metadata_creator/
 |-- contracts/
 |-- handoffs/
 |-- orchestration/
+|-- publishing/
+|   |-- metadata_finalizer/
+|   `-- publish_handoff/
 |-- voiceover/
 |-- visuals/
 `-- config/
-    |-- environments/{dev|prod}.yaml
+    |-- environments/{dev|staging|prod}.yaml
     |-- workbench.yaml
     `-- profiles/{profile}/{content|voiceover|visuals}/
 ```
 
-Production automation uses one thin CLI router with three stage modules:
+Production automation uses one thin CLI router with four stage modules:
 
+    python3 -m src.pipeline.orchestration.runner collect
     python3 -m src.pipeline.orchestration.runner content
     python3 -m src.pipeline.orchestration.runner voiceover
     python3 -m src.pipeline.orchestration.runner visuals
@@ -48,7 +52,7 @@ stage runner; the voiceover stage invokes that interpreter only for synthesis.
 The CLI adapter loads `<project_root>/.env` without overriding variables already
 exported by the operator. Before network collection, it reports every enabled
 source with unresolved credential aliases and never includes secret values.
-Run the three commands sequentially and stop when a stage returns non-zero.
+Run the four commands sequentially and stop when a stage returns non-zero.
 
 Pure apps validate with Pydantic v2, return status/data/summary/handoff
 envelopes, and do not write output files. Voiceover and visual modules may
@@ -59,7 +63,7 @@ write caller-directed media because WAV, PNG, and MP4 files are their products.
 ```mermaid
 flowchart LR
     operator[Operator, notebook, scheduler, or service]
-    runner[Three-stage orchestration runner]
+    runner[Four-stage orchestration runner]
     config[workbench manifest<br/>plus module YAML]
     context[run_context.json<br/>initial profile and config hash]
 
@@ -68,8 +72,11 @@ flowchart LR
     config --> runner
     runner --> context
 
-    subgraph content[1. Content stage]
+    subgraph ingestion[1. Ingestion stage]
         collect[Collect news]
+    end
+
+    subgraph content[2. Content stage]
         prepare[Prepare evidence]
         triage[Editorial triage]
         map[Map records into stories]
@@ -77,8 +84,6 @@ flowchart LR
         package[Build video packet]
         script[Generate canonical script]
         metadataDraft[Create metadata draft]
-        collect --> prepare
-        collect --> triage
         prepare --> triage
         prepare --> map
         triage --> map
@@ -86,7 +91,7 @@ flowchart LR
         package --> metadataDraft
     end
 
-    subgraph audio[2. Voiceover stage]
+    subgraph audio[3. Voiceover stage]
         scriptSelect[Select app or ChatGPT script<br/>by run and fingerprint]
         synth[Synthesize section-aware audio]
         master[Master final WAV]
@@ -98,22 +103,28 @@ flowchart LR
         captions --> metadataFinal
     end
 
-    subgraph visuals[3. Visuals stage]
+    subgraph visuals[4. Visuals stage]
+        visualResearch[Research concrete visual needs<br/>one complete story at a time]
         assetCatalog[Build trusted story asset catalog<br/>with beat candidates and video moments]
         visualPlan[visual_planner<br/>generate or load canonical visual plan]
         discover[Resolve catalog media<br/>or deliberate external research]
         resolve[Capture screenshots and resolve assets]
-        render[visual_render<br/>render independent scene clips<br/>clean Remotion baseline; optional HyperFrames]
+        render[visual_render<br/>render independent scene clips<br/>HyperFrames production recipes]
         assemble[video_assembly<br/>assemble clips with authoritative WAV]
         review[visual_review<br/>contact sheet plus story-by-story scene report]
         publish[publish_handoff<br/>final mode only]
-        assetCatalog --> visualPlan --> discover --> resolve --> render --> assemble --> review
+        visualResearch --> assetCatalog --> visualPlan --> discover --> resolve --> render --> assemble --> review
         review --> publish
     end
 
+    context --> ingestion
     context --> content
+    collect --> prepare
+    collect --> triage
     script --> scriptSelect
     metadataDraft --> metadataFinal
+    package --> visualResearch
+    scriptSelect --> visualResearch
     package --> assetCatalog
     scriptSelect --> assetCatalog
     scriptSelect --> visualPlan
@@ -124,6 +135,7 @@ flowchart LR
 
 The simplest mental model is:
 
+- The ingestion stage decides **what source material is available**.
 - The content stage decides **what the episode says**.
 - The voiceover stage decides **when every section and beat is heard**.
 - The visuals stage decides **what the viewer sees during those authoritative
@@ -133,7 +145,9 @@ The simplest mental model is:
 
 The stages are deliberately separate:
 
-- `content` can stop after any content module and does not require local media
+- `ingestion` owns network collection and creates the run context.
+- `content` requires a completed ingestion artifact, can stop after any content
+  module, and does not require local media
   dependencies.
 - `voiceover` selects one canonical script, launches the specialized Python
   3.12 synthesis environment, and makes observed audio timing authoritative.
@@ -179,7 +193,7 @@ Script generation receives selected stories with their full records.
 
 ## Detailed Stage Workflows
 
-### Content Stage
+### Ingestion And Content Stages
 
 ```mermaid
 flowchart TD
@@ -209,7 +223,7 @@ flowchart TD
         truth --> director --> writers --> review --> bookends --> bookendReview --> assembly
     end
 
-    metadata[metadata_creator<br/>title, thumbnail text, description, tags,<br/>provisional chapters and source URLs]
+    metadata[metadata_creator<br/>titles, thumbnail text and executable visual concepts,<br/>description, tags, provisional chapters and source URLs]
 
     blogs --> collection
     news --> collection
@@ -229,16 +243,17 @@ flowchart TD
 Script-generation model routing is role-specific and frozen into each run
 context. GPT-4o handles source research and episode direction because those
 calls were accurate and comparatively fast in the frozen-packet evaluation.
-Kimi K3 handles the per-story writer and reviewer plus the bookend writer and
-reviewer, because those calls directly author or replace viewer-facing prose.
-The metadata creator also uses one Kimi K3 call for titles, thumbnail text,
+DeepSeek V4 Pro with thinking enabled and `reasoning_effort: max` handles the
+per-story writer and reviewer plus the bookend writer and reviewer, because
+those calls directly author or replace viewer-facing prose. The metadata
+creator also uses one DeepSeek V4 Pro thinking call for titles, thumbnail text,
 description copy, tags, and complete chapter labels; code still owns chapter
-timestamps and source URLs. These Kimi creative routes retain their primary
-model but use an explicitly configured OpenAI failover only when Moonshot
-rejects a prompt through its provider content filter. Transient, structured,
-and application-contract failures follow their own bounded policies and do not
-trigger this route change. High-volume triage, story mapping, and editorial
-selection remain on their configured fast models.
+timestamps and source URLs. These creative routes use JSON mode with the exact
+Pydantic schema included in the prompt and retain an explicitly configured
+OpenAI failover only for a provider content-filter rejection. Transient,
+structured, and application-contract failures follow bounded retry policies
+and do not trigger a provider change. High-volume triage, story mapping, and
+editorial selection remain on their configured fast models.
 
 | Module                  | Main input                                                        | Main responsibility                                                                                                                           | Canonical output                           |
 | ----------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
@@ -363,6 +378,7 @@ flowchart TD
     script[Selected canonical script]
     voice[Matching voiceover package]
 
+    research[visual_research<br/>concrete story-local asset needs<br/>from complete records and script beats]
     catalog[asset_catalog<br/>source pages, source images,<br/>direct and source-linked videos, identities]
 
     nativePlan[visual_planner<br/>episode direction, bookends,<br/>and per-story LLM planning]
@@ -379,6 +395,9 @@ flowchart TD
     review[visual_review<br/>human review package and contact sheet]
     publish[publish_handoff<br/>final mode only]
 
+    packet --> research
+    script --> research
+    research --> catalog
     packet --> catalog
     script --> catalog
     catalog --> nativePlan
@@ -399,15 +418,13 @@ flowchart TD
 ```
 
 The production planner menu is intentionally bounded and recipe-backed: source
-proof, story-owned image/video, verified identity, editorial hooks, simple
+proof, story-owned image/video, verified identity, editorial hooks, small
 explainers, deterministic story transitions, interface motion, and evidence
-stacks. Each advertised kind carries an exact render recipe. Decorative chart
-and dashboard families remain implemented for historical fixtures and focused
-labs, but are not advertised to the daily planner. The daily profile currently
-uses the inspected `editorial_minimal` Remotion renderer as its stable baseline.
-HyperFrames remains an explicit backend for recipe parity and renderer
-experiments until its chapter, identity, media, and typography output passes the
-same human visual review.
+stacks. Each advertised kind carries an exact render recipe. Legacy dashboard,
+chart-card, matrix, radar, and generic flow-card families have been removed
+from the active contracts and render engines. The daily profile now uses the
+inspected `editorial_signal` HyperFrames recipes as its production renderer;
+Remotion remains an explicit comparison backend during the migration.
 
 ### Runtime Boundaries
 
@@ -415,7 +432,7 @@ same human visual review.
 | ------------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------- |
 | Content apps, LLM planning, orchestration, metadata    | Main project Python             | Canonical Pydantic/LangChain application environment                    |
 | Hosted and local TTS synthesis                         | `.venv-voiceover` Python 3.12 | Keeps one stable synthesis boundary for API and local speech providers  |
-| Scene rendering                                        | Node and Chromium; Remotion baseline plus explicit HyperFrames path | Renders each validated recipe specification into an MP4 clip without changing its semantic plan |
+| Scene rendering                                        | Node and Chromium; HyperFrames production recipes plus explicit Remotion comparison | Renders each validated recipe specification into an MP4 clip without changing its semantic plan |
 | Audio/video probing, mastering, clipping, and assembly | `ffmpeg` and `ffprobe`      | Provides deterministic media transformation and verification            |
 | External model calls and enabled news sources          | Configured APIs                 | Credentials are loaded from`.env` and never copied into run artifacts |
 
@@ -432,7 +449,7 @@ flowchart LR
     app[Public run input_json boundary]
     result[Canonical result and package]
     state[run_state.json]
-    logs[Stage log and events.jsonl]
+    logs[Per-stage rotating log]
     next[Downstream module]
 
     yaml --> context
@@ -587,9 +604,16 @@ Historical design research and audits are retained under `docs/archive/`.
 
 ## Visual Production Contract
 
-Visual production starts with `visuals.asset_catalog`, before the final scene
-plan. It derives asset briefs from canonical script beats, registers selected
-source pages, and records resolvable local or Simple Icons identities. Page
+Visual production starts with `visuals.research`, before cataloging or final
+scene planning. One structured LLM call per selected story receives the
+complete story records and canonical script section. It identifies concrete
+asset needs, sequence arcs, exact beat IDs, useful source records, must-show
+details, and material to avoid. It does not author URLs, asset IDs, or raw
+timestamps.
+
+`visuals.asset_catalog` converts those research needs into story-owned asset
+briefs, registers selected source pages, and records resolvable local or Simple
+Icons identities. Page
 inspection considers structurally valid OpenGraph/hero and in-article image
 candidates, including lazy-loaded and `srcset` images, plus direct MP4, WebM,
 MOV, or M4V media exposed by the selected source page. Candidate order remains
@@ -607,7 +631,8 @@ source page remains a trusted real anchor when no suitable source image or
 direct video is exposed.
 
 The visual planner receives canonical script beats, selected-story records,
-authoritative voiceover timing, and the trusted asset catalog. It makes one
+authoritative voiceover timing, visual research, and the trusted asset catalog.
+It makes one
 episode-direction call, one bounded intro/closing bookend call, and bounded
 story-local planning calls. The bookend planner receives each authored
 `visual_brief`, including on-screen text and preferred/must-show assets; code
@@ -619,14 +644,19 @@ scene, ownership, payload, and slot validators recheck any replacement. An
 editor failure keeps an already valid plan under the production policy and
 never creates a generic code fallback.
 
+The planner coordinates adjacent beats as 25-45 second visual sequences. Each
+sequence contains two to four short voiceover-aligned shots that establish,
+develop, and pay off one idea; it is never one 25-45 second slide. Exact scene
+timing remains deterministic and comes from synthesized audio.
+
 The planner requests at least one available catalog-backed source, image,
 direct video, or identity scene per story. Whether a missing anchor warns or
 fails is an explicit profile policy, not a hidden semantic code gate. The
-default profile uses an `editorial_minimal` art direction and advertises the
-scene families implemented by both active render contracts: source and context
-media, identity, clean typography, small explainers, source-proof montages,
-metrics and contrasts, relationship/process/interface motion, and focused
-evidence stacks. One story transition is inserted deterministically. The
+default profile uses an `editorial_signal` art direction and advertises only
+the 11 reviewed scene contracts: source proof, context image/video, identity,
+clean editorial typography, small explainers, source walkthroughs/stacks, and
+focused interface transformation. One story transition is inserted
+deterministically. The
 planner may not substitute an unrelated stock image for an unresolved request.
 Provider-facing structured
 output carries dynamic scene payloads as validated JSON text; the app decodes
@@ -644,33 +674,36 @@ prompt. Available asset IDs are a closed story-owned set. Provider mistakes are
 returned to the bounded retry; code does not strip IDs, choose replacement
 assets, or convert one semantic scene family into another.
 
+Intro and closing bookends intentionally have no story owner. They may reference
+an asset from the selected episode catalog, but the planner still validates the
+asset's real owner and exact identity. Logo normalization preserves the
+LLM-declared entity and may rebind only to one exact catalog identity match; it
+must not relabel a mismatched logo. A `story_transition_scene` may carry an
+optional story-owned background asset, which is validated against its declared
+background render kind rather than treated as an asset-free scene.
+
 Episode direction, bookend planning, per-story planning, and visual editing
 have independent provider/model routes in the planner module config. The daily
-profile keeps GPT-4o-mini for episode direction and bookends while Kimi K3 owns
-the per-story planner and story-plan editor. On the exact frozen Agility
-Robotics story prompt, Kimi K3 completed six structurally valid scenes in
-303.79 seconds and produced stronger source usage and visual variety than
-GPT-4o-mini, which completed in 17.95 seconds. The quality gain justified
-promoting K3 for story-local creative decisions. Its config omits temperature,
-uses a 600-second timeout, and permits one provider attempt per bounded role
-call. A separate config-owned GPT-4o route handles only explicit Moonshot
-HTTP 400/403 content-filter or high-risk rejections for those story roles.
-Both attempts remain visible in the LLM ledger and provider-failover summary;
-timeouts, rate limits, schema failures, and scene-contract failures do not
-rotate providers.
+profile keeps GPT-4o-mini for episode direction and bookends while DeepSeek V4
+Pro thinking `max` owns the per-story planner and story-plan editor. It omits
+temperature, uses a 600-second timeout, and has two bounded attempts because
+the provider's JSON-mode response may occasionally need one schema repair. The
+exact active Pydantic schema is included in every DeepSeek planning prompt. A
+separate config-owned GPT-4o route handles only an explicit provider
+content-filter rejection for those story roles. Both attempts remain visible
+in the LLM ledger and provider-failover summary; timeouts, rate limits, schema
+failures, and scene-contract failures do not rotate providers.
 
 Visual rendering has one stable JSON contract and two explicit engines. The
-daily profile uses Remotion for the active production scene families, including
-source-proof montages, annotated media, identity reveals, evidence stacks, and
-process/interface motion. Every production scene must name a valid recipe;
-unsupported or recipe-less scenes fail before render and never cross-fallback.
-HyperFrames remains explicitly selectable for recipe-parity experiments. Both
-paths preserve
+daily profile uses HyperFrames for source proof, annotated media, identity
+reveals, evidence stacks, clean text, and interface motion. Every production
+scene must name a valid recipe; unsupported or recipe-less scenes fail before
+render and never cross-fallback. Remotion remains explicitly selectable for
+comparison. Both paths preserve
 scene timing, parent fingerprints, content-addressed cache identity, video-only
 clip validation, assembly, and review. HyperFrames projects receive the shared
 `frame.md` design contract and use only pipeline-owned composition code and
-trusted local assets while its pinned upstream package carries an unresolved
-transitive ZIP denial-of-service advisory.
+trusted local assets.
 
 When one aligned audio unit is longer than the configured scene cap, the story
 planner must return multiple distinct semantic treatments for that same unit.
@@ -680,18 +713,18 @@ Adjacent identical effective payloads fail before rendering. This is an
 objective render-spec check; text-heavy mix and creative quality remain LLM and
 human judgments.
 
-Numeric and explanatory payloads must satisfy renderer shape and use known
-story-owned evidence IDs when they claim grounding. Code does not compare LLM
+Every active payload must satisfy its renderer shape and use known story-owned
+asset, source, beat, and record IDs where applicable. Code does not compare LLM
 wording, punctuation, labels, or displayed values against article strings and
-does not decide whether a chart is editorially wise. Incomplete renderer
-payloads return to the bounded story-planning retry rather than being silently
-rewritten into another scene family.
+does not decide whether a treatment is editorially wise. Incomplete payloads
+return to the bounded story-planning retry rather than being silently rewritten
+into another scene family.
 
-Uncovered timing ranges may use only provenance-safe continuity treatments:
-exact narration-derived editorial text or an exact selected source proof. A
-manual visual response that requires a semantic ownership or substantial
-timeline repair returns `needs_repair`; the parser does not silently rewrite it
-into an apparently approved plan.
+Uncovered intro, closing, or story timing returns to the bounded owning planner
+call. Code does not generate display copy by slicing narration and does not
+invent a semantic filler scene. A manual visual response that requires a
+semantic ownership or substantial timeline repair returns `needs_repair`; the
+parser does not silently rewrite it into an apparently approved plan.
 
 The default production media policy is `trusted_catalog_only`. Catalog-backed
 source images are copied directly and source-owned videos are prepared as short
@@ -757,7 +790,7 @@ The production notebook writes previews under `render_preview`,
 under `render`, `assembly`, and `review`. Preview mode cannot create the publish
 handoff.
 
-Intermediate Remotion scene clips are video-only. Assembly owns the single
+Intermediate scene clips from either renderer are video-only. Assembly owns the single
 authoritative voiceover track. For historical clips that contain a silent AAC
 stream, assembly performs a lossless video-only remux before concatenation so
 per-file AAC padding cannot create cumulative audiovisual drift.
@@ -771,7 +804,23 @@ selected run and upstream fingerprint. Newest-file-wins behavior is forbidden.
 Production artifacts use:
 
     output/
-    |-- current_run.json`-- runs/{run_id}/         |-- run_context.json         |-- inputs/         |-- news_collection/         |-- evidence_prep/         |-- editorial_triage/         |-- story_mapping/         |-- editorial_selection/         |-- video_packaging/         |-- script_generation/         |-- metadata_creator/         |-- metadata_finalizer/         |-- orchestration/         |-- voiceover/         |-- visuals/         `-- handoffs/
+    |-- current_run.json
+    `-- runs/{run_id}/
+        |-- run_context.json
+        |-- inputs/
+        |-- news_collection/
+        |-- evidence_prep/
+        |-- editorial_triage/
+        |-- story_mapping/
+        |-- editorial_selection/
+        |-- video_packaging/
+        |-- script_generation/
+        |-- metadata_creator/
+        |-- metadata_finalizer/
+        |-- orchestration/
+        |-- voiceover/
+        |-- visuals/
+        `-- handoffs/
 
 Important media subtrees:
 
@@ -808,19 +857,22 @@ input envelopes; content and media modules do not read YAML directly.
 Channel identity, audience, allowed topics, and excluded topics live once in
 the selected profile's shared `profile.yaml`. The active orchestrator combines
 that live or frozen shared context with the relevant module envelope. News
-collection mechanics live only in its content-stage module YAML.
+collection mechanics live only in its ingestion-stage module YAML.
 
 Behavioral values such as providers, models, prompt versions, source policies,
 selection limits, voices, visual capabilities, render settings, and bounded
 revision loops remain config-driven.
 
 `src/pipeline/config/environments/prod.yaml` preserves the production profile.
-`src/pipeline/config/environments/dev.yaml` overlays only settings that make
-iteration faster, currently verbose logs, fast visual-planner routes, and the
-preview Remotion renderer. The overlay is selected with `--environment`; the
+`dev.yaml` selects inexpensive LLM routes, bounded collection caps, a local
+preview voice, and preview rendering. `staging.yaml` keeps production content
+models while selecting preview media settings. These overlays are sparse by
+design: complete profile trees are not copied per environment, preventing
+contracts and editorial policy from drifting. The overlay is selected with
+`PIPELINE_ENVIRONMENT`, `ENVIRONMENT`, or `--environment`; the
 chosen value is stored in `run_context.json` and every module config snapshot.
-Profiles and modules are not duplicated into parallel dev/prod directory trees,
-so editorial policy and contracts cannot silently drift between environments.
+Profiles remain the extension point for different video formats and editorial
+products; environments only change deployment/runtime behavior.
 The environment is part of run identity: resume commands must use the run's
 stored environment. Renderer-only replay of an existing production run should
 therefore omit `--environment` (or pass `prod`) and use explicit preview/focus
@@ -837,19 +889,33 @@ Each stage writes its canonical result and durable state under the selected
 run:
 
     output/runs/{run_id}/orchestration/
+    |-- ingestion_stage_result.json
     |-- content_stage_result.json
     |-- voiceover_stage_result.json
     |-- visuals_stage_result.json
-    |-- run_state.json`-- logs/         |-- content.log         |-- voiceover.log         |-- visuals.log         `-- events.jsonl
+    |-- run_state.json
+    `-- logs/
+        |-- ingestion.log
+        |-- content.log
+        |-- voiceover.log
+        `-- visuals.log
 
-The readable stage logs are rotating files. `events.jsonl` provides one shared
-structured event stream for module start, completion, failure, duration, and
-reuse. Apps do not need logger plumbing: the stage router wraps each public app
-call once. Logging behavior is frozen from `profile.orchestration.logging`.
-Stage result envelopes expose the readable log, shared event stream, and state
-paths directly. Configured dependency log levels suppress routine transport
-status noise, while long-running render modules emit scene/batch progress and
-retry events through a lightweight runtime logger.
+The readable stage logs are rotating files. The stage router records stage and
+module start, completion, failure, duration, reuse, and compact returned
+summaries. Apps do not receive logger objects or file paths and do not emit
+runtime events; their public boundary remains dict-in and dict-out. Stage result
+envelopes expose the readable log and `run_state.json` paths directly.
+Configured dependency log levels suppress routine transport status noise.
+
+LLM apps return complete call records in `llm_calls`; the owning stage writes
+those records to the module's `llm_calls.jsonl` only after the app returns. The
+records contain prompts, responses or tool-call output, parsed structures,
+usage, retries, and duration. Voiceover keeps its provider request ledger beside
+the generated audio. These are audit artifacts rather than general stage logs.
+There is intentionally no separate live event or usage-telemetry stream in the
+current simple orchestration design. Cost and latency reports can later be
+derived from the persisted call and request ledgers without coupling apps to
+orchestration.
 
 Ready canonical results before the selected `--from-module` boundary may be
 reused. Critical cross-stage selection validates run ID, script and voiceover
@@ -891,7 +957,8 @@ Final assembly verifies:
 
 Repeatable stage commands:
 
-    python3 -m src.pipeline.orchestration.runner content --profile daily_48h_all_sources --environment prod
+    python3 -m src.pipeline.orchestration.runner collect --profile daily_48h_all_sources --environment prod
+    python3 -m src.pipeline.orchestration.runner content --run-id current --environment prod
     python3 -m src.pipeline.orchestration.runner voiceover --run-id current --script-source app --synthesis-mode preview --environment prod
     python3 -m src.pipeline.orchestration.runner visuals --run-id current --plan-source generate --render-mode preview --environment prod
 
@@ -911,6 +978,13 @@ work:
 
 Exact JSON stage envelopes may be supplied with `--input-json` for service or
 scheduler integration.
+
+Deterministic media replay without collection or LLM calls:
+
+    python3 -m src.pipeline.orchestration.fixture_scenarios seed --scenario media_roundup_reference
+    python3 -m src.pipeline.orchestration.runner voiceover --run-id fixture_media_roundup_reference --output-root output/tests --synthesis-mode preview --skip-metadata-finalization
+    python3 -m src.pipeline.orchestration.fixture_scenarios bind-visual-plan --run-id fixture_media_roundup_reference
+    python3 -m src.pipeline.orchestration.runner visuals --run-id fixture_media_roundup_reference --output-root output/tests --plan-source chatgpt --render-mode preview --from-module visual_planner
 
 Interactive notebooks:
 

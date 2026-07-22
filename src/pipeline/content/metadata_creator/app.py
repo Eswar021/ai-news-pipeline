@@ -69,11 +69,30 @@ class ChapterTitleOutput(BaseModel):
     title: str
 
 
+class ThumbnailConceptOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    concept_name: str
+    visual_hook: str
+    primary_subject: str
+    secondary_subjects: list[str]
+    composition: str
+    background_direction: str
+    text_overlay: str
+    color_direction: str
+    emotional_tone: str
+    represented_story_ids: list[str]
+    source_record_keys: list[str]
+    generation_prompt: str
+    avoid: list[str]
+
+
 class MetadataDraftOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title_options: list[TitleOptionOutput]
     thumbnail_text_options: list[str]
+    thumbnail_concepts: list[ThumbnailConceptOutput]
     blocked_title_angles: list[str] = Field(default_factory=list)
     chapter_titles: list[ChapterTitleOutput]
     description_intro: str
@@ -261,6 +280,13 @@ def _generate_metadata_draft(
                 "the exact represented story IDs, any real relationship basis, and a scope/state self-check."
             ),
             "thumbnail_text_options": "Use metadata_policy.thumbnail_text_option_count when possible.",
+            "thumbnail_concepts": (
+                "Return metadata_policy.thumbnail_concept_count distinct, production-ready visual directions. "
+                "Each concept must describe its visual hook, subjects, composition, background, overlay text, "
+                "color, emotion, represented story IDs, useful source record keys, a standalone image-generation "
+                "prompt, and visual elements to avoid. Do not claim that a source asset exists unless its exact "
+                "record key appears in selected_stories_context."
+            ),
             "chapter_titles": (
                 "Return one concise, complete chapter title for every exact script section_id. Keep each title within "
                 "metadata_policy.chapter_title_max_chars. Do not return timestamps and never cut a phrase mid-thought."
@@ -316,11 +342,38 @@ def _structured_chain(*, llm, output_model, config: dict[str, Any]):
     structured_config = dict(config.get("structured_output") or {})
     structured_llm = llm.with_structured_output(
         output_model,
-        include_raw=True,
-        method=str(structured_config.get("method") or "json_schema"),
-        strict=bool(structured_config.get("strict", True)),
+        **_structured_output_options(structured_config),
     )
     return TASK_PROMPT | structured_llm
+
+
+def _structured_output_options(structured_config: dict[str, Any]) -> dict[str, Any]:
+    method = str(structured_config.get("method") or "json_schema")
+    options: dict[str, Any] = {
+        "include_raw": True,
+        "method": method,
+    }
+    if method != "json_mode":
+        options["strict"] = bool(structured_config.get("strict", True))
+    return options
+
+
+def _task_payload_for_structured_output(
+    task_payload: str,
+    *,
+    output_model,
+    method: str,
+) -> str:
+    if method != "json_mode":
+        return task_payload
+    schema = json.dumps(output_model.model_json_schema(), ensure_ascii=False, separators=(",", ":"))
+    return (
+        f"{task_payload}\n\n"
+        "Return only one JSON object matching the following JSON Schema exactly. "
+        "Use only enum values defined by the schema, use null only where allowed, "
+        "and do not wrap the object in Markdown.\n"
+        f"JSON Schema:\n{schema}"
+    )
 
 
 def _invoke_runtime_chain(
@@ -392,6 +445,12 @@ def _invoke_chain(
     metadata: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    structured_config = dict(config.get("structured_output") or {})
+    task_payload = _task_payload_for_structured_output(
+        task_payload,
+        output_model=output_model,
+        method=str(structured_config.get("method") or "json_schema"),
+    )
     prompt_inputs = {
         "system_prompt": prompt_bundle["system"],
         "user_preamble": prompt_bundle["user_preamble"],
@@ -550,6 +609,10 @@ def _build_youtube_metadata(
         draft.get("thumbnail_text_options", []),
         int(policy["thumbnail_text_option_count"]),
     )
+    thumbnail_concepts = _clean_thumbnail_concepts(
+        draft.get("thumbnail_concepts", []),
+        int(policy["thumbnail_concept_count"]),
+    )
     tags = _build_tags(
         draft.get("tags", []),
         video_packet,
@@ -565,6 +628,7 @@ def _build_youtube_metadata(
     return {
         "title_options": title_options,
         "thumbnail_text_options": thumbnail_options,
+        "thumbnail_concepts": thumbnail_concepts,
         "blocked_title_angles": dedupe([clean_text(value) for value in draft.get("blocked_title_angles", [])]),
         "description_draft": description,
         "description_components": {
@@ -633,6 +697,39 @@ def _clean_title_options(
 
 def _clean_thumbnail_options(raw_options: list[Any], limit: int) -> list[str]:
     return dedupe([clean_thumbnail_text(str(value)) for value in raw_options])[:limit]
+
+
+def _clean_thumbnail_concepts(raw_concepts: list[Any], limit: int) -> list[dict[str, Any]]:
+    concepts: list[dict[str, Any]] = []
+    for item in raw_concepts:
+        if not isinstance(item, dict):
+            continue
+        visual_hook = clean_text(item.get("visual_hook", ""))
+        composition = clean_text(item.get("composition", ""))
+        generation_prompt = clean_text(item.get("generation_prompt", ""))
+        if not visual_hook or not composition or not generation_prompt:
+            continue
+        concepts.append(
+            {
+                "concept_id": f"thumbnail_{len(concepts) + 1:02d}",
+                "concept_name": clean_text(item.get("concept_name", "")),
+                "visual_hook": visual_hook,
+                "primary_subject": clean_text(item.get("primary_subject", "")),
+                "secondary_subjects": dedupe(list(item.get("secondary_subjects") or [])),
+                "composition": composition,
+                "background_direction": clean_text(item.get("background_direction", "")),
+                "text_overlay": clean_thumbnail_text(item.get("text_overlay", "")),
+                "color_direction": clean_text(item.get("color_direction", "")),
+                "emotional_tone": clean_text(item.get("emotional_tone", "")),
+                "represented_story_ids": dedupe(list(item.get("represented_story_ids") or [])),
+                "source_record_keys": dedupe(list(item.get("source_record_keys") or [])),
+                "generation_prompt": generation_prompt,
+                "avoid": dedupe(list(item.get("avoid") or [])),
+            }
+        )
+        if len(concepts) >= limit:
+            break
+    return concepts
 
 
 def _build_chapters(
@@ -765,6 +862,8 @@ def _check_metadata(metadata: dict[str, Any], sections: list[dict[str, Any]], co
         errors.append("fewer than 3 usable title options")
     if len(metadata.get("thumbnail_text_options", [])) < 3:
         errors.append("fewer than 3 usable thumbnail text options")
+    if not metadata.get("thumbnail_concepts"):
+        errors.append("missing usable thumbnail concepts")
     if len(metadata.get("chapters", [])) != len(sections):
         errors.append("chapter count does not match script section count")
     if not clean_text(metadata.get("description_draft", "")):
@@ -810,6 +909,7 @@ def _failed_response(
     metadata = {
         "title_options": [],
         "thumbnail_text_options": [],
+        "thumbnail_concepts": [],
         "blocked_title_angles": [],
         "description_draft": "",
         "chapters": chapters,
@@ -850,6 +950,7 @@ def _build_summary(metadata: dict[str, Any], llm_calls: list[dict[str, Any]], fa
     return {
         "title_option_count": len(metadata.get("title_options", [])),
         "thumbnail_option_count": len(metadata.get("thumbnail_text_options", [])),
+        "thumbnail_concept_count": len(metadata.get("thumbnail_concepts", [])),
         "chapter_count": len(metadata.get("chapters", [])),
         "tag_count": len(metadata.get("tags", [])),
         "source_url_count": len(metadata.get("source_urls", [])),

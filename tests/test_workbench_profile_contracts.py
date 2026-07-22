@@ -102,17 +102,38 @@ def test_module_config_has_independent_source_identity() -> None:
 def test_environment_overlays_change_only_declared_module_behavior() -> None:
     production = ConfigRepository(WORKBENCH_PATH, environment="prod")
     development = ConfigRepository(WORKBENCH_PATH, environment="dev")
+    staging = ConfigRepository(WORKBENCH_PATH, environment="staging")
     profile_name = production.default_profile
 
     production_planner = production.module(profile_name, "visuals", "planner")
     development_planner = development.module(profile_name, "visuals", "planner")
     production_render = production.module(profile_name, "visuals", "render")
     development_render = development.module(profile_name, "visuals", "render")
+    production_script = production.module(profile_name, "content", "script_generation")
+    development_script = development.module(profile_name, "content", "script_generation")
+    staging_script = staging.module(profile_name, "content", "script_generation")
 
-    assert production_planner.value["llm_roles"]["story_visual_planner"]["provider"] == "moonshot"
+    assert production_planner.value["llm_roles"]["story_visual_planner"]["provider"] == "deepseek"
     assert development_planner.value["llm_roles"]["story_visual_planner"]["provider"] == "openai"
-    assert production_render.value["backend"] == "remotion"
+    assert production_render.value["backend"] == "hyperframes"
     assert development_render.value["backend"] == "remotion"
+    assert production_script.value["llm_roles"]["story_writer"]["model"] == "deepseek-v4-pro"
+    assert staging_script.value["llm_roles"]["story_writer"]["model"] == "deepseek-v4-pro"
+    assert development_script.value["llm_roles"]["story_writer"]["model"] == "gpt-4o-mini"
     assert production_planner.sha256 != development_planner.sha256
     assert production_planner.source_paths[-1].endswith("visuals/planner.yaml")
     assert "environments/dev.yaml" in development_planner.source_paths
+
+
+def test_manifest_exposes_stage_ownership_and_default_dev_environment() -> None:
+    repository = ConfigRepository(WORKBENCH_PATH)
+    profile_name = repository.default_profile
+
+    assert repository.environment == "dev"
+    assert set(repository.environment_names()) == {"dev", "staging", "prod"}
+    assert repository.module(profile_name, "ingestion", "news_collection").value
+    assert repository.module(profile_name, "publishing", "metadata_finalizer").value
+    assert repository.module(profile_name, "publishing", "publish_handoff").value
+    assert repository.module(profile_name, "content", "metadata_creator").value[
+        "metadata_policy"
+    ]["thumbnail_concept_count"] == 3

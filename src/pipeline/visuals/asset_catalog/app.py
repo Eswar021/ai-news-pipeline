@@ -4,7 +4,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 import io
 import json
-import logging
 import math
 from pathlib import Path
 import shutil
@@ -21,18 +20,18 @@ from src.pipeline.contracts import (
     build_artifact_provenance,
     file_sha256,
     require_matching_run_id,
+    require_parent_fingerprint,
+    validate_artifact_provenance,
     validate_script_provenance,
 )
 
 from ..common import clean_text, counter_dict, dedupe, first_url, iso_now, screenshot_target_candidates, slugify
 from ..generators.logo_reveal.resolver import simple_icon_export_for
 from ..generators.source_screenshot.web_capture import capture_source_viewport
+from ..research.contract import visual_research_identity_payload
 from .config import CATALOG_VERSION, NEXT_MODULE, PACKAGE_TYPE
 from .contract import AssetCatalogRequest, AssetCatalogResponse
 from .identity import catalog_identity_payload
-
-
-RUNTIME_LOGGER = logging.getLogger("ai_content_creation.runtime.visual_asset_catalog")
 
 
 def _optional_int(value: Any) -> int | None:
@@ -258,6 +257,11 @@ def run(input_json: dict) -> dict:
         run_id=run_id,
         upstream_run_id=request.input.script_generation.data.run_id,
     )
+    visual_research_package, visual_research_provenance = _validated_visual_research(
+        request,
+        run_id=run_id,
+        script_fingerprint=script_provenance["script_fingerprint"],
+    )
 
     if request.config.force and output_dir.exists():
         shutil.rmtree(output_dir)
@@ -270,11 +274,13 @@ def run(input_json: dict) -> dict:
     sections_by_story = _sections_by_story(script_package)
     script_hints_by_story = _script_hints_by_story(script_package)
     truth_targets_by_record = _truth_targets_by_record(script_package)
+    research_by_story = _visual_research_by_story(visual_research_package)
     briefs_by_story = {
-        story_id: _asset_briefs_for_story(
+        story_id: _merged_asset_briefs_for_story(
             story_id=story_id,
             section=sections_by_story.get(story_id, {}),
             script_hint=script_hints_by_story.get(story_id, {}),
+            visual_research=research_by_story.get(story_id, {}),
         )
         for story_id in [clean_text(story.get("story_id")) for story in stories]
         if story_id
@@ -320,11 +326,6 @@ def run(input_json: dict) -> dict:
                 )
             )
 
-    RUNTIME_LOGGER.info(
-        "CATALOG source scan start stories=%d records=%d",
-        len(stories),
-        len(records_to_fetch),
-    )
     page_results = _collect_source_media(
         records_to_fetch,
         image_output_dir=source_images_dir,
@@ -335,11 +336,6 @@ def run(input_json: dict) -> dict:
             "collect_source_videos": request.config.collect_source_videos,
             "source_linked_video": request.config.source_linked_video.model_dump(mode="json"),
         },
-    )
-    RUNTIME_LOGGER.info(
-        "CATALOG source scan end fetched=%d candidate_assets=%d",
-        len(page_results),
-        len(assets),
     )
     source_candidate_telemetry: list[dict[str, Any]] = []
     for result in page_results:
@@ -363,11 +359,6 @@ def run(input_json: dict) -> dict:
         config=request.config.source_page_preflight.model_dump(mode="json"),
     )
     warnings.extend(preflight_warnings)
-    RUNTIME_LOGGER.info(
-        "CATALOG preflight end assets=%d warnings=%d",
-        len(assets),
-        len(warnings),
-    )
 
     candidate_filtering = _aggregate_candidate_telemetry(source_candidate_telemetry)
     candidate_summary = {
@@ -426,6 +417,11 @@ def run(input_json: dict) -> dict:
         "run_id": run_id,
         "generated_at": generated_at,
         "research_mode": request.config.research_mode,
+        "visual_research": {
+            "enabled": bool(visual_research_package),
+            "research_version": visual_research_package.get("research_version", ""),
+            "provenance": visual_research_provenance or {},
+        },
         "story_catalogs": story_catalogs,
         "assets": assets,
         "contact_sheet_path": str(contact_sheet_path) if contact_sheet_path else "",
@@ -455,10 +451,13 @@ def run(input_json: dict) -> dict:
         },
         "warnings": dedupe(warnings),
     }
+    parents = {"script": script_provenance["script_fingerprint"]}
+    if visual_research_provenance:
+        parents["visual_research"] = visual_research_provenance["artifact_fingerprint"]
     catalog["provenance"] = build_artifact_provenance(
         artifact_type="visual_asset_catalog",
         run_id=run_id,
-        parents={"script": script_provenance["script_fingerprint"]},
+        parents=parents,
         script_source=script_provenance.get("script_source", ""),
         payload=catalog_identity_payload(catalog),
     )
@@ -517,14 +516,34 @@ def run(input_json: dict) -> dict:
             "next_module": NEXT_MODULE,
         },
     )
-    RUNTIME_LOGGER.info(
-        "CATALOG complete status=%s stories=%d assets=%d available=%d",
-        status,
-        len(story_catalogs),
-        len(assets),
-        sum(clean_text(asset.get("status")) == "available" for asset in assets),
-    )
     return response.model_dump(mode="json")
+
+
+def _validated_visual_research(
+    request: AssetCatalogRequest,
+    *,
+    run_id: str,
+    script_fingerprint: str,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    envelope = request.input.visual_research
+    if envelope is None:
+        return {}, None
+    require_matching_run_id(run_id, envelope.data.run_id, "visual_research")
+    package = envelope.data.visual_research_package
+    provenance = validate_artifact_provenance(
+        package.get("provenance"),
+        artifact_type="visual_research",
+        run_id=run_id,
+        payload=visual_research_identity_payload(package),
+        label="visual_research_package",
+    )
+    require_parent_fingerprint(
+        provenance,
+        parent_name="script",
+        expected=script_fingerprint,
+        label="visual_research_package",
+    )
+    return package, provenance
 
 
 def _selected_stories(video_packet: dict[str, Any]) -> list[dict[str, Any]]:
@@ -554,6 +573,14 @@ def _script_hints_by_story(script_package: dict[str, Any]) -> dict[str, dict[str
     return {
         clean_text(item.get("story_id")): item
         for item in hints
+        if isinstance(item, dict) and clean_text(item.get("story_id"))
+    }
+
+
+def _visual_research_by_story(package: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        clean_text(item.get("story_id")): item
+        for item in package.get("story_research", [])
         if isinstance(item, dict) and clean_text(item.get("story_id"))
     }
 
@@ -676,6 +703,78 @@ def _asset_briefs_for_story(
                     "brief_source": "script_story_asset_hint",
                 }
             )
+    return briefs
+
+
+def _merged_asset_briefs_for_story(
+    *,
+    story_id: str,
+    section: dict[str, Any],
+    script_hint: dict[str, Any],
+    visual_research: dict[str, Any],
+) -> list[dict[str, Any]]:
+    script_briefs = _asset_briefs_for_story(
+        story_id=story_id,
+        section=section,
+        script_hint=script_hint,
+    )
+    research_briefs = _research_asset_briefs_for_story(story_id, visual_research)
+    if not research_briefs:
+        return script_briefs
+
+    covered_beats = {
+        clean_text(beat_id)
+        for brief in research_briefs
+        for beat_id in brief.get("beat_ids", [])
+        if clean_text(beat_id)
+    }
+    supplemental = [
+        brief
+        for brief in script_briefs
+        if not brief.get("beat_ids")
+        or any(clean_text(beat_id) not in covered_beats for beat_id in brief.get("beat_ids", []))
+    ]
+    return [*research_briefs, *supplemental]
+
+
+def _research_asset_briefs_for_story(
+    story_id: str,
+    research: dict[str, Any],
+) -> list[dict[str, Any]]:
+    briefs: list[dict[str, Any]] = []
+    for need in research.get("asset_needs", []):
+        if not isinstance(need, dict):
+            continue
+        asset_need_id = clean_text(need.get("asset_need_id"))
+        seed = {
+            "story_id": story_id,
+            "asset_need_id": asset_need_id,
+            "beat_ids": _text_list(need.get("beat_ids")),
+            "subject": clean_text(need.get("subject")),
+        }
+        briefs.append(
+            {
+                "asset_request_id": asset_need_id or _stable_id("research_request", seed),
+                "story_id": story_id,
+                "beat_ids": _text_list(need.get("beat_ids")),
+                "visual_goal": clean_text(need.get("editorial_purpose")),
+                "purpose": clean_text(need.get("editorial_purpose")),
+                "subject": clean_text(need.get("subject")),
+                "action_or_detail": clean_text(need.get("action_or_detail")),
+                "sequence_role": clean_text(need.get("sequence_role")),
+                "requested_asset_types": _normalized_asset_types(
+                    need.get("preferred_asset_types")
+                ),
+                "must_show": _text_list(need.get("must_show")),
+                "must_avoid": _text_list(need.get("must_avoid")),
+                "preferred_record_keys": _text_list(
+                    need.get("preferred_source_record_keys")
+                ),
+                "search_queries": _text_list(need.get("suggested_search_queries")),
+                "availability_strategy": clean_text(need.get("availability_strategy")),
+                "brief_source": "visual_research_agent",
+            }
+        )
     return briefs
 
 

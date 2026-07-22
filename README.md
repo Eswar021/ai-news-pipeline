@@ -23,10 +23,12 @@ modules may write media files because those files are their product.
 
 ```text
 src/pipeline/
-├── content/         # collection through metadata
+├── ingestion/       # source collection and normalization
+├── content/         # evidence through script and metadata draft
 ├── contracts/       # stable artifact identity and lineage
 ├── handoffs/        # ChatGPT and publish adapters
 ├── orchestration/   # run context, live module config, state, and logging
+├── publishing/      # metadata finalization and publish review handoff
 ├── voiceover/       # local TTS providers and WAV packaging
 ├── visuals/         # planning, media, assets, rendering, assembly
 └── config/          # profile manifest plus stage/module YAML
@@ -90,6 +92,12 @@ and record the effective value in each module's `config_snapshot.json`.
 
 The current production voice is Gemini 3.1 Flash TTS with Puck and
 provider-neutral beat delivery direction. Free local Kokoro remains available.
+
+Environment overlays under `src/pipeline/config/environments/` are deliberately
+sparse: `dev` selects inexpensive models and preview rendering, `staging` keeps
+production content models with preview media, and `prod` preserves the profile's
+quality routes. Select one with `PIPELINE_ENVIRONMENT`, `ENVIRONMENT`, or the
+runner's `--environment` flag. Video formats remain profile-level concerns.
 
 ## Development Checks
 

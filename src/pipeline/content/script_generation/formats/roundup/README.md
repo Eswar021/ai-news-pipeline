@@ -104,12 +104,12 @@ story, and the closing. Story sections also contain a title-card contract whose
 All prompt text is versioned below `prompts/`. `llm_client.py` only constructs
 providers, and `llm_logging.py` records calls in the returned envelope. Prompt
 bundles are sent as real system and user chat messages rather than flattened
-into one user message. OpenAI and Moonshot calls use strict Pydantic structured
-output. The structured-output transport is config-driven: production OpenAI
-and Kimi K3 use JSON Schema, while Kimi K2.6 comparisons may use forced function
-calling because that model follows complex nested schemas more reliably through
-its tool interface. Every schema field is required, with empty lists used
-explicitly when a category has no values.
+into one user message. Structured-output transport is config-driven. Production
+OpenAI roles use JSON Schema; DeepSeek V4 Pro creative roles use JSON mode with
+the exact Pydantic schema embedded in the prompt because that is the provider's
+reliable structured-output path. Kimi comparison variants remain available for
+benchmarks. Every schema field is required, with empty lists used explicitly
+when a category has no values.
 
 Moonshot experiments are fully config-driven through `provider`, `model`,
 `provider_options`, and `structured_output`. Kimi K2.6 requires temperature
@@ -119,11 +119,13 @@ JSON Schema instead. `provider_options.request_timeout_seconds` places a hard
 bound on any individual OpenAI-compatible request.
 
 Production routing is role-specific. GPT-4o remains responsible for source
-research and episode direction; Kimi K3 owns story writing/review and bookend
-writing/review. `worker_count: 2` runs two independent story pipelines in
-parallel while preserving deterministic output order. Metadata uses its own
-single Kimi K3 call in `content/metadata_creator`; code still owns timestamps,
-source URLs, and section identity.
+research and episode direction. DeepSeek V4 Pro with thinking enabled and
+`reasoning_effort: max` owns story writing/review and bookend writing/review.
+`worker_count: 2` runs two independent story pipelines in parallel while
+preserving deterministic output order. Metadata uses its own single DeepSeek
+V4 Pro thinking call in `content/metadata_creator`; code still owns timestamps,
+source URLs, and section identity. Development overrides these creative routes
+with GPT-4o-mini so routine pipeline checks stay fast and inexpensive.
 
 ## Model Comparison
 

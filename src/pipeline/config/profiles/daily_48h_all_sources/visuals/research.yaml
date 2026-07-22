@@ -1,0 +1,36 @@
+provider: openai
+model: gpt-4o-mini
+prompt_version: v1
+temperature: 0.2
+provider_options:
+  request_timeout_seconds: 300
+structured_output:
+  method: json_schema
+  strict: true
+max_attempts: 2
+worker_count: 2
+include_full_records: true
+external_search_enabled: false
+collectable_asset_types:
+- source_page
+- source_image
+- source_video
+- logo
+- official_product_interface
+- source_figure
+- context_photo
+- broll_video
+- code_graphic
+- kinetic_text
+active_render_kinds:
+- source_article_scene
+- context_image_scene
+- broll_video_scene
+- logo_reveal_scene
+- editorial_text_scene
+- simple_explainer_scene
+- story_transition_scene
+- quote_or_claim_highlight_scene
+- browser_walkthrough_scene
+- document_stack_scene
+- interface_transform_scene

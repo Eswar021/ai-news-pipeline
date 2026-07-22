@@ -1372,7 +1372,7 @@ def test_visual_slicer_bounds_long_beats_and_preserves_section_titles() -> None:
             "start_seconds": 0.0,
             "end_seconds": 1.0,
             "duration_seconds": 1.0,
-            "render_kind": "kinetic_type_scene",
+            "render_kind": "editorial_text_scene",
             "covered_unit_orders": [1],
             "payload": {},
         },
@@ -1382,7 +1382,7 @@ def test_visual_slicer_bounds_long_beats_and_preserves_section_titles() -> None:
             "start_seconds": 1.0,
             "end_seconds": 3.8,
             "duration_seconds": 2.8,
-            "render_kind": "transition_stinger_scene",
+            "render_kind": "story_transition_scene",
             "covered_unit_orders": [2],
             "payload": {"voice_behavior": "continue"},
         },
@@ -1437,14 +1437,16 @@ def test_chatgpt_visual_parser_uses_aligned_units_and_inserts_story_titles() -> 
                 "section_type": section["section_type"],
                 "start_seconds": 900 + unit_order,
                 "end_seconds": 901 + unit_order,
-                "render_kind": "kinetic_type_scene",
+                "render_kind": "editorial_text_scene",
                 "script_excerpt": section["narration_text"],
                 "visual_intent": "Explain the active section.",
                 "payload": {
-                    "phrases": [section["story_title"] or section["section_type"]],
-                    "emphasis_words": [],
-                    "animation_style": "word_snap",
-                    "background_motif": "newsroom_grid",
+                    "recipe_id": "editorial_hook",
+                    "headline": section["story_title"] or section["section_type"],
+                    "accent_words": [],
+                    "supporting_text": "",
+                    "composition": "editorial_center",
+                    "motion_style": "word_reveal",
                 },
                 "evidence_record_keys": [],
                 "evidence_text": "",
@@ -1483,7 +1485,7 @@ def test_chatgpt_visual_parser_uses_aligned_units_and_inserts_story_titles() -> 
             "run": {"run_id": "fixture_media_roundup_reference"},
             "config": {
                 "scene_policy": {
-                    "allowed_render_kinds": ["kinetic_type_scene", "transition_stinger_scene"],
+                    "allowed_render_kinds": ["editorial_text_scene", "story_transition_scene"],
                     "max_scene_seconds": 14,
                     "min_scene_seconds": 3,
                     "semantic_min_scene_seconds": 5,
@@ -1519,7 +1521,7 @@ def test_chatgpt_visual_parser_uses_aligned_units_and_inserts_story_titles() -> 
     title_scenes = [
         scene
         for scene in plan["scene_timeline"]
-        if scene["render_kind"] == "transition_stinger_scene" and scene["payload"].get("voice_behavior") == "continue"
+        if scene["render_kind"] == "story_transition_scene" and scene["payload"].get("voice_behavior") == "continue"
     ]
     assert len(title_scenes) == 3
     assert "Retimed" in " ".join(plan["checks"]["warnings"])

@@ -20,7 +20,7 @@ Files:
 - `visual_scene_planning_result.json`: curated planner-compatible scene plan.
 
 Generated WAV, MP4, manifests, and summaries belong under
-`output/tests/media_roundup_reference/` and are not committed.
+`output/tests/runs/fixture_media_roundup_reference/` and are not committed.
 
 The fixture is test-adapter data, not a production-code mode. Production apps
 never branch on fixture IDs. Contract and media regressions can therefore run
@@ -35,3 +35,23 @@ python3 -m pytest -q \
 For visual styling against a real completed episode, prefer runner artifact
 replay (`--from-module visual_render --stop-after visual_render`) so the exact
 saved plan and resolved assets are exercised without repeating upstream work.
+
+Deterministic fixture media replay:
+
+```bash
+python3 -m src.pipeline.orchestration.fixture_scenarios seed \
+  --scenario media_roundup_reference
+python3 -m src.pipeline.orchestration.runner voiceover \
+  --run-id fixture_media_roundup_reference \
+  --output-root output/tests \
+  --synthesis-mode preview \
+  --skip-metadata-finalization
+python3 -m src.pipeline.orchestration.fixture_scenarios bind-visual-plan \
+  --run-id fixture_media_roundup_reference
+python3 -m src.pipeline.orchestration.runner visuals \
+  --run-id fixture_media_roundup_reference \
+  --output-root output/tests \
+  --plan-source chatgpt \
+  --render-mode preview \
+  --from-module visual_planner
+```

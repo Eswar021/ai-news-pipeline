@@ -184,8 +184,8 @@ class RunnerRun(BaseModel):
         if value is None:
             return None
         normalized = value.strip().lower()
-        if normalized not in {"dev", "prod"}:
-            raise ValueError("config_environment must be dev or prod")
+        if not normalized or any(not (character.isalnum() or character in {"-", "_"}) for character in normalized):
+            raise ValueError("config_environment must be a non-empty slug")
         return normalized
 
 

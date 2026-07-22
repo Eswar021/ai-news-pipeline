@@ -71,7 +71,6 @@ def resolve_voiceover_package(
     variant: str | Path | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     run_root = Path(run_dir).expanduser().resolve()
-    project_root = _project_root_from_run_dir(run_root)
     root = run_root / "voiceover"
     if variant:
         requested = Path(variant)
@@ -97,7 +96,7 @@ def resolve_voiceover_package(
                 payload=voiceover_artifact_payload(package),
                 label="voiceover",
             )
-            _validate_voiceover_audio_file(package, project_root=project_root)
+            _validate_voiceover_audio_file(package, run_root=run_root)
             require_parent_fingerprint(
                 package.get("provenance"),
                 parent_name="script",
@@ -159,14 +158,14 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _validate_voiceover_audio_file(package: dict[str, Any], *, project_root: Path) -> None:
+def _validate_voiceover_audio_file(package: dict[str, Any], *, run_root: Path) -> None:
     audio = package.get("audio") or {}
     path_value = str(audio.get("full_audio_path") or "").strip()
     if not path_value:
         raise ValueError("voiceover.audio.full_audio_path is required")
     path = Path(path_value).expanduser()
     if not path.is_absolute():
-        path = project_root / path
+        path = _project_root_from_run_dir(run_root) / path
     path = path.resolve()
     if not path.exists() or not path.is_file():
         raise ValueError(f"voiceover audio file does not exist: {path}")

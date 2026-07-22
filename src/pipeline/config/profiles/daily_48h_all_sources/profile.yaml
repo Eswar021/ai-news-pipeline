@@ -22,7 +22,6 @@ orchestration:
     console_enabled: true
     max_bytes: 5000000
     backup_count: 3
-    runtime_logger_name: ai_content_creation.runtime
     dependency_levels:
       httpx: WARNING
       httpcore: WARNING

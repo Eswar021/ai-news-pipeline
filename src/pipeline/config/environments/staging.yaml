@@ -1,0 +1,13 @@
+config_environment_schema_version: pipeline_environment_overlay_v1
+shared:
+  orchestration:
+    logging:
+      profile: verbose
+modules:
+  voiceover:
+    voiceover_preview:
+      provider: kokoro_local
+  visuals:
+    render:
+      backend: remotion
+      active_mode: preview

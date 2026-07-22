@@ -1,6 +1,7 @@
 force: true
 output_dir: ''
 research_mode: trusted_only
+require_visual_research: true
 require_real_anchor_per_story: true
 collect_source_pages: true
 collect_source_images: true

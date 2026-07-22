@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import nullcontext
 import hashlib
 import json
-import logging
 import os
 from pathlib import Path
 import shutil
@@ -36,7 +35,6 @@ from .contract import VisualRenderRequest, VisualRenderResponse
 
 
 _RETRY_LOCK = Lock()
-_LOGGER = logging.getLogger("ai_content_creation.runtime.visual_render")
 _HYPERFRAMES_RENDER_KINDS = {
     clean_text(recipe.get("render_kind"))
     for recipe in RECIPE_REGISTRY.values()
@@ -85,15 +83,6 @@ def run(input_json: dict) -> dict:
         engine_dir = Path(
             request.config.remotion_engine_dir or default_remotion_engine_dir()
         )
-    _LOGGER.info(
-        "RENDER start scenes=%d backend=%s mode=%s preset=%s workers=%d cache=%s",
-        len(render_scenes),
-        request.config.backend,
-        request.config.render_mode,
-        request.config.quality_preset,
-        request.config.worker_count,
-        request.config.reuse_cached_scenes,
-    )
     render_started = monotonic()
     renderer = (
         _render_scenes_hyperframes
@@ -111,13 +100,6 @@ def run(input_json: dict) -> dict:
         visual_style=(manifest.get("visual_scene_plan") or {}).get("episode_style", {}),
     )
     render_elapsed_seconds = round(monotonic() - render_started, 2)
-    _LOGGER.info(
-        "RENDER complete scenes=%d rendered=%d failed=%d duration=%.2fs",
-        len(render_scenes),
-        sum(scene.get("status") == "rendered" for scene in rendered_scenes),
-        sum(scene.get("status") != "rendered" for scene in rendered_scenes),
-        render_elapsed_seconds,
-    )
 
     failure_reason = _failure_reason(rendered_scenes)
     package = _build_package(
@@ -249,21 +231,7 @@ def _render_scenes(
                 }
             )
 
-        cache_hits = sum(
-            scene.get("cache_status") == "hit" for scene in rendered_by_index.values()
-        )
-        preparation_failures = sum(
-            scene.get("status") == "failed" for scene in rendered_by_index.values()
-        )
-        _LOGGER.info(
-            "RENDER prepared requested=%d pending=%d cache_hits=%d preparation_failures=%d",
-            len(render_scenes),
-            len(jobs),
-            cache_hits,
-            preparation_failures,
-        )
         if jobs:
-            _LOGGER.info("RENDER bundle start pending_scenes=%d", len(jobs))
             bundle_error, bundle_log_path = _build_shared_bundle(
                 engine_dir=engine_dir,
                 public_dir=public_dir,
@@ -272,7 +240,6 @@ def _render_scenes(
                 request=request,
             )
             if bundle_error:
-                _LOGGER.error("RENDER bundle failed error=%s", clean_text(bundle_error))
                 for job in jobs:
                     rendered_by_index[job["index"]] = _failed_scene(
                         job["scene"],
@@ -282,7 +249,6 @@ def _render_scenes(
                         log_paths=[str(bundle_log_path)] if bundle_log_path else [],
                     )
             else:
-                _LOGGER.info("RENDER bundle complete pending_scenes=%d", len(jobs))
                 new_results = _render_prepared_jobs(
                         jobs=jobs,
                         engine_dir=engine_dir,
@@ -435,24 +401,10 @@ def _render_scenes_hyperframes(
             }
         )
 
-    _LOGGER.info(
-        "RENDER prepared backend=hyperframes requested=%d pending=%d cache_hits=%d preparation_failures=%d",
-        len(render_scenes),
-        len(jobs),
-        sum(item.get("cache_status") == "hit" for item in rendered_by_index.values()),
-        sum(item.get("status") == "failed" for item in rendered_by_index.values()),
-    )
     if jobs:
         with TemporaryDirectory(prefix="pipeline-hyperframes-render-") as runtime_value:
             runtime_root = Path(runtime_value)
             worker_count = max(1, min(int(request.config.worker_count), len(jobs)))
-            frame_workers = _hyperframes_frame_workers(request)
-            _LOGGER.info(
-                "RENDER jobs start backend=hyperframes scenes=%d workers=%d frame_workers=%d",
-                len(jobs),
-                worker_count,
-                frame_workers,
-            )
             with ThreadPoolExecutor(max_workers=worker_count) as executor:
                 futures = {
                     executor.submit(
@@ -465,7 +417,6 @@ def _render_scenes_hyperframes(
                     ): job
                     for job in jobs
                 }
-                completed_count = 0
                 for future in as_completed(futures):
                     job = futures[future]
                     try:
@@ -483,14 +434,6 @@ def _render_scenes_hyperframes(
                         result["cache_status"] = "stored"
                         result["cache_key"] = job["cache_key"]
                     rendered_by_index[job["index"]] = result
-                    completed_count += 1
-                    _LOGGER.info(
-                        "RENDER progress backend=hyperframes completed=%d/%d scene=%s status=%s",
-                        completed_count,
-                        len(jobs),
-                        clean_text(job["scene"].get("scene_id")),
-                        result.get("status", "unknown"),
-                    )
 
     return [rendered_by_index[index] for index in range(len(render_scenes))]
 
@@ -681,11 +624,6 @@ def _render_prepared_jobs(
 ) -> dict[int, dict[str, Any]]:
     worker_count = max(1, min(int(request.config.worker_count), len(jobs)))
     if request.config.batch_renderer_enabled and len(jobs) > 1:
-        _LOGGER.info(
-            "RENDER jobs start mode=batch scenes=%d workers=%d",
-            len(jobs),
-            worker_count,
-        )
         return _render_prepared_jobs_in_batches(
             jobs=jobs,
             engine_dir=engine_dir,
@@ -695,7 +633,6 @@ def _render_prepared_jobs(
             worker_count=worker_count,
         )
     if worker_count == 1:
-        _LOGGER.info("RENDER jobs start mode=serial scenes=%d", len(jobs))
         return {
             job["index"]: _render_prepared_scene(
                 job=job,
@@ -708,11 +645,6 @@ def _render_prepared_jobs(
         }
 
     rendered_by_index: dict[int, dict[str, Any]] = {}
-    _LOGGER.info(
-        "RENDER jobs start mode=parallel scenes=%d workers=%d",
-        len(jobs),
-        worker_count,
-    )
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         future_to_job = {
             executor.submit(
@@ -725,7 +657,6 @@ def _render_prepared_jobs(
             ): job
             for job in jobs
         }
-        completed_count = 0
         for future in as_completed(future_to_job):
             job = future_to_job[future]
             try:
@@ -737,15 +668,6 @@ def _render_prepared_jobs(
                     job["output_path"],
                     f"render worker failed: {exc}",
                 )
-            completed_count += 1
-            result = rendered_by_index[job["index"]]
-            _LOGGER.info(
-                "RENDER progress completed=%d/%d scene=%s status=%s",
-                completed_count,
-                len(jobs),
-                clean_text(job["scene"].get("scene_id")),
-                result.get("status", "unknown"),
-            )
     return rendered_by_index
 
 
@@ -761,11 +683,6 @@ def _render_prepared_jobs_in_batches(
     batches = [jobs[index::worker_count] for index in range(worker_count)]
     batches = [batch for batch in batches if batch]
     rendered: dict[int, dict[str, Any]] = {}
-    _LOGGER.info(
-        "RENDER batch plan batches=%d scenes=%d",
-        len(batches),
-        len(jobs),
-    )
     with ThreadPoolExecutor(max_workers=len(batches)) as executor:
         future_to_batch = {
             executor.submit(
@@ -779,7 +696,6 @@ def _render_prepared_jobs_in_batches(
             ): batch
             for index, batch in enumerate(batches)
         }
-        completed_count = 0
         for future in as_completed(future_to_batch):
             batch = future_to_batch[future]
             try:
@@ -792,17 +708,6 @@ def _render_prepared_jobs_in_batches(
                         job["scene"], job["spec_path"], job["output_path"], batch_error
                     )
             rendered.update(batch_results)
-            completed_count += len(batch)
-            failed_count = sum(
-                result.get("status") != "rendered" for result in batch_results.values()
-            )
-            _LOGGER.info(
-                "RENDER progress completed=%d/%d batch_scenes=%d batch_failed=%d",
-                completed_count,
-                len(jobs),
-                len(batch),
-                failed_count,
-            )
 
     # A failed scene gets the existing bounded single-scene retry path. This is
     # intentionally serialized on retry to avoid compounding a worker failure.
@@ -810,11 +715,6 @@ def _render_prepared_jobs_in_batches(
         result = rendered.get(job["index"])
         if result and result.get("status") == "rendered":
             continue
-        _LOGGER.warning(
-            "RENDER retry scene=%s reason=%s",
-            clean_text(job["scene"].get("scene_id")),
-            clean_text((result or {}).get("error")),
-        )
         rendered[job["index"]] = _render_prepared_scene(
             job=job,
             engine_dir=engine_dir,
@@ -838,12 +738,6 @@ def _render_batch(
     logs_dir: Path,
     request: VisualRenderRequest,
 ) -> dict[int, dict[str, Any]]:
-    _LOGGER.info(
-        "RENDER batch start worker=%d scenes=%d",
-        worker_index,
-        len(jobs),
-    )
-    batch_started = monotonic()
     manifest_path = logs_dir / f"batch_worker_{worker_index}.manifest.json"
     results_path = logs_dir / f"batch_worker_{worker_index}.results.json"
     manifest_path.write_text(
@@ -929,13 +823,6 @@ def _render_batch(
                 attempt_count=1,
                 log_paths=[str(log_path)] if log_path else [],
             )
-    _LOGGER.info(
-        "RENDER batch complete worker=%d scenes=%d failed=%d duration=%.2fs",
-        worker_index,
-        len(jobs),
-        sum(result.get("status") != "rendered" for result in rendered.values()),
-        monotonic() - batch_started,
-    )
     return rendered
 
 

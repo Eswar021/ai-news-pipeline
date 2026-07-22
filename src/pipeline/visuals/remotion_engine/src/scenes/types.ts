@@ -6,28 +6,10 @@ export type RenderKind =
   | "editorial_text_scene"
   | "simple_explainer_scene"
   | "story_transition_scene"
-  | "kinetic_type_scene"
-  | "bullet_build_scene"
   | "quote_or_claim_highlight_scene"
-  | "entity_compare_scene"
-  | "recap_sequence_scene"
-  | "data_counter_scene"
-  | "trend_line_scene"
-  | "bar_chart_scene"
-  | "bar_race_scene"
-  | "ranked_list_scene"
-  | "benchmark_delta_scene"
-  | "ecosystem_map_scene"
-  | "architecture_flow_scene"
-  | "process_zoom_scene"
   | "browser_walkthrough_scene"
-  | "decision_tree_scene"
-  | "capability_matrix_scene"
-  | "timeline_zoom_scene"
   | "document_stack_scene"
-  | "signal_radar_scene"
-  | "interface_transform_scene"
-  | "transition_stinger_scene";
+  | "interface_transform_scene";
 
 export type ResolvedAsset = {
   asset_type?: string;

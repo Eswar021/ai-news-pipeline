@@ -1163,13 +1163,15 @@ def _apply_explicit_fallback(scene: dict[str, Any], original_kind: str, reason: 
     if not phrase:
         return False
     beats = original_payload.get("beats") if isinstance(original_payload.get("beats"), list) else []
-    scene["render_kind"] = "kinetic_type_scene"
+    scene["render_kind"] = "editorial_text_scene"
     scene["visual_intent"] = "Explicit media-discovery fallback: emphasize the narration phrase when no usable remote media is available."
     scene["payload"] = {
-        "phrases": [phrase],
-        "emphasis_words": [word for word in phrase.split() if len(word) > 4][:4],
-        "animation_style": "highlight_sweep",
-        "background_motif": "newsroom_grid",
+        "recipe_id": "editorial_reset",
+        "headline": phrase,
+        "accent_words": [word for word in phrase.split() if len(word) > 4][:2],
+        "supporting_text": "",
+        "composition": "editorial_center",
+        "motion_style": "quiet_fade",
         "beats": beats,
         "media_fallback": {
             "original_render_kind": original_kind,

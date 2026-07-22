@@ -1,0 +1,9 @@
+schema_version: pipeline_fixture_scenario_v1
+scenario_id: media_roundup_reference
+run_id: fixture_media_roundup_reference
+run_profile: daily_48h_all_sources
+config_environment: dev
+artifacts:
+  video_packaging: video_packaging_result.json
+  script_generation: script_generation_result.json
+  visual_plan_template: visual_scene_planning_result.json

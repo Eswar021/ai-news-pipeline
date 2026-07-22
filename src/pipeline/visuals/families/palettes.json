@@ -1,0 +1,29 @@
+{
+  "editorial_signal": {
+    "background_color": "#f4efe6",
+    "surface_color": "#fffdf8",
+    "text_color": "#171611",
+    "accent_color": "#b64b2d",
+    "muted_color": "#69645c",
+    "editorial_font": "EB Garamond",
+    "sans_font": "Oswald"
+  },
+  "newsprint_blue": {
+    "background_color": "#edf1f4",
+    "surface_color": "#fbfcfd",
+    "text_color": "#15212b",
+    "accent_color": "#176b87",
+    "muted_color": "#52616d",
+    "editorial_font": "EB Garamond",
+    "sans_font": "Oswald"
+  },
+  "warm_signal": {
+    "background_color": "#f5eee2",
+    "surface_color": "#fffaf1",
+    "text_color": "#211a14",
+    "accent_color": "#c34e30",
+    "muted_color": "#6f6258",
+    "editorial_font": "EB Garamond",
+    "sans_font": "Oswald"
+  }
+}

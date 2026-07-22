@@ -4,10 +4,12 @@
 
 ```text
 src/pipeline/
+├── ingestion/       # normalized external data collection
 ├── content/         # pure JSON/dict content applications
 ├── contracts/       # public cross-module artifact identity contracts
 ├── handoffs/        # manual/external adapters
 ├── orchestration/   # run context, stage routers, state, and logging
+├── publishing/      # audio-timed metadata and manual publish handoff
 ├── voiceover/       # local TTS, loudness mastering, captions, and WAV packaging
 ├── visuals/         # planning through video assembly
 └── config/          # operator authoring config
@@ -24,10 +26,11 @@ They validate with Pydantic, receive effective config in the request, return a
 canonical envelope, and do not choose output paths. Voiceover and visual media
 modules use the same control style but may write caller-directed media files.
 
-Repeatable production automation uses three explicit stage commands:
+Repeatable production automation uses four explicit stage commands:
 
 ```bash
-python3 -m src.pipeline.orchestration.runner content --profile daily_48h_all_sources
+python3 -m src.pipeline.orchestration.runner collect --profile daily_48h_all_sources --environment prod
+python3 -m src.pipeline.orchestration.runner content --run-id current
 python3 -m src.pipeline.orchestration.runner voiceover --run-id current --script-source app
 python3 -m src.pipeline.orchestration.runner visuals --run-id current --render-mode preview
 ```
@@ -57,9 +60,12 @@ exact initial-profile reproduction. Module artifacts live below the same run
 directory. Local model caches live outside run output under
 `.cache/ai_content_creation/models/`.
 
-Current pure applications:
+Current ingestion application:
 
-- `content/news_collection`
+- `ingestion/news_collection`
+
+Current pure content applications:
+
 - `content/evidence_prep`
 - `content/editorial_triage`
 - `content/story_mapping`
@@ -67,14 +73,17 @@ Current pure applications:
 - `content/video_packaging`
 - `content/script_generation/formats/roundup`
 - `content/metadata_creator`
-- `content/metadata_finalizer`
+
+Current publishing applications:
+
+- `publishing/metadata_finalizer`
+- `publishing/publish_handoff`
 
 Current media/handoff modules:
 
 - `handoffs/chatgpt_exporter`
 - `handoffs/chatgpt_script_parser`
 - `handoffs/chatgpt_visual_plan_parser`
-- `handoffs/publish_handoff`
 - `voiceover`
 - `visuals`
 

@@ -1,55 +1,48 @@
 # HyperFrames Rendering Engine
 
-This is the recipe compiler used by the daily production profile for the
-canonical visual scene contract. It does
-not plan scenes, select media, or replace source ownership checks. The Python
-`visuals.render` app generates an isolated composition per resolved scene and
-invokes the pinned local HyperFrames CLI.
+This directory is the production recipe compiler for the canonical visual scene
+contract. It does not plan scenes, select media, or change source ownership.
+`visuals.render` creates an isolated HyperFrames project for each resolved scene
+and invokes the pinned local CLI.
 
-Supported production scene kinds:
+Supported scene kinds:
 
 - `source_article_scene`
+- `quote_or_claim_highlight_scene`
 - `context_image_scene`
 - `broll_video_scene`
+- `browser_walkthrough_scene`
+- `document_stack_scene`
 - `logo_reveal_scene`
+- `story_transition_scene`
 - `editorial_text_scene`
 - `simple_explainer_scene`
-- `story_transition_scene`
-- `quote_or_claim_highlight_scene`
-- `data_counter_scene`
-- `benchmark_delta_scene`
-- `ecosystem_map_scene`
-- `architecture_flow_scene`
-- `process_zoom_scene`
-- `browser_walkthrough_scene`
-- `capability_matrix_scene`
-- `document_stack_scene`
 - `interface_transform_scene`
 
-Every production scene requires a named recipe. The current set includes
-`editorial_hook`, `chapter_opener`, `source_proof_scan`,
-`layered_evidence_reveal`, `annotated_image_focus`, `annotated_video_focus`,
-`identity_reveal`, `mechanism_steps`, `metric_countup`, `metric_contrast`,
-`process_trace`, `process_detail_zoom`, `interface_walkthrough`,
-`evidence_stack`, `source_proof_montage`, and `interface_before_after`.
-`render_kind` remains the broad media family; `recipe_id` chooses the tested
-composition and motion behavior.
+Every scene requires a recipe from
+`src.pipeline.visuals.recipes.RECIPE_REGISTRY`. The HTML composition uses one
+shared palette and four layers: background, content, annotation, and
+typography. Real media stays opaque; generated overlays inherit the episode
+palette rather than painting a separate dark card or dashboard.
 
-There is no cross-engine fallback. Selecting HyperFrames with an unsupported
-scene kind fails before rendering that scene. Install dependencies once with:
+There is no cross-engine fallback. An unsupported kind, missing recipe, invalid
+payload, or overlong scene fails before rendering.
+
+Install the pinned compiler dependencies:
 
 ```bash
 npm install
 ```
 
-The daily profile selects it automatically. Override the renderer explicitly
-only for an A/B or historical plan:
+This directory contains `index.template.html`, not a standalone `index.html`.
+Run `hyperframes check` against a generated gallery/render project; the normal
+renderer does this when `hyperframes_strict=true`.
+
+Before changing render behavior, check the pinned CLI:
 
 ```bash
-python3 -m src.pipeline.orchestration.runner visuals \
-  --run-id current \
-  --plan-source generate \
-  --render-mode preview \
-  --render-backend remotion \
-  --from-module visual_render
+npx hyperframes@latest upgrade --project . --check
 ```
+
+The active visual-family gallery and focused sequence benchmark are documented
+in `../README.md`.

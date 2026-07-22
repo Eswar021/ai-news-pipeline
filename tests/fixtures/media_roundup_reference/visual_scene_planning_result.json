@@ -13,9 +13,9 @@
       "episode_style": {
         "visual_language": "clean editorial motion graphics",
         "pacing": "one clear visual idea per narration beat",
-        "recurring_motifs": ["flowing cyan signal", "warm evidence accents", "connected system nodes"],
-        "color_notes": "Dark graphite, warm white, cyan for movement, amber for evidence.",
-        "typography_notes": "Large headlines and short labels only.",
+        "recurring_motifs": ["warm evidence accent", "thin editorial rule", "open layered composition"],
+        "color_notes": "Warm paper, near-black ink, and one burnt-orange accent.",
+        "typography_notes": "Editorial serif headlines with concise sans-serif labels.",
         "transition_notes": "Continuous cuts with no slide-card transitions.",
         "sync_notes": "The five script sections map directly to five continuous timeline regions.",
         "avoid_patterns": ["PPT cards", "paragraph overlays", "decorative charts without narrated meaning"]
@@ -85,18 +85,18 @@
         }
       ],
       "visual_beat_map": [
-        {"scene_id": "scene_001", "scene_order": 1, "story_id": "", "section_type": "intro", "render_kind": "kinetic_type_scene", "start_seconds": 0.0, "end_seconds": 8.0, "text": "Every stage must agree on the story.", "visual_action": "reveal_point"},
-        {"scene_id": "scene_002", "scene_order": 2, "story_id": "", "section_type": "intro", "render_kind": "architecture_flow_scene", "start_seconds": 8.0, "end_seconds": 15.0, "text": "Sources become narration, motion, and a finished video.", "visual_action": "advance_diagram_step"},
+        {"scene_id": "scene_001", "scene_order": 1, "story_id": "", "section_type": "intro", "render_kind": "editorial_text_scene", "start_seconds": 0.0, "end_seconds": 8.0, "text": "Every stage must agree on the story.", "visual_action": "reveal_point"},
+        {"scene_id": "scene_002", "scene_order": 2, "story_id": "", "section_type": "intro", "render_kind": "simple_explainer_scene", "start_seconds": 8.0, "end_seconds": 15.0, "text": "Sources become narration, motion, and a finished video.", "visual_action": "advance_diagram_step"},
         {"scene_id": "scene_003", "scene_order": 3, "story_id": "story_evidence", "section_type": "story", "render_kind": "document_stack_scene", "start_seconds": 15.0, "end_seconds": 23.0, "text": "Collection brings in articles and transcripts.", "visual_action": "reveal_point"},
-        {"scene_id": "scene_004", "scene_order": 4, "story_id": "story_evidence", "section_type": "story", "render_kind": "ecosystem_map_scene", "start_seconds": 23.0, "end_seconds": 32.0, "text": "Records describing the same development become one story.", "visual_action": "advance_diagram_step"},
-        {"scene_id": "scene_005", "scene_order": 5, "story_id": "story_evidence", "section_type": "story", "render_kind": "process_zoom_scene", "start_seconds": 32.0, "end_seconds": 41.0, "text": "Source context moves forward with the story.", "visual_action": "advance_diagram_step"},
+        {"scene_id": "scene_004", "scene_order": 4, "story_id": "story_evidence", "section_type": "story", "render_kind": "simple_explainer_scene", "start_seconds": 23.0, "end_seconds": 32.0, "text": "Records describing the same development become one story.", "visual_action": "advance_diagram_step"},
+        {"scene_id": "scene_005", "scene_order": 5, "story_id": "story_evidence", "section_type": "story", "render_kind": "simple_explainer_scene", "start_seconds": 32.0, "end_seconds": 41.0, "text": "Source context moves forward with the story.", "visual_action": "advance_diagram_step"},
         {"scene_id": "scene_006", "scene_order": 6, "story_id": "story_sync", "section_type": "story", "render_kind": "interface_transform_scene", "start_seconds": 41.0, "end_seconds": 50.0, "text": "A script changes from one text wall into explicit sections.", "visual_action": "reveal_comparison"},
-        {"scene_id": "scene_007", "scene_order": 7, "story_id": "story_sync", "section_type": "story", "render_kind": "architecture_flow_scene", "start_seconds": 50.0, "end_seconds": 59.0, "text": "Voiceover chunks become timed semantic beats.", "visual_action": "advance_diagram_step"},
-        {"scene_id": "scene_008", "scene_order": 8, "story_id": "story_sync", "section_type": "story", "render_kind": "capability_matrix_scene", "start_seconds": 59.0, "end_seconds": 67.0, "text": "Each meaning gets the visual family that explains it best.", "visual_action": "reveal_comparison"},
-        {"scene_id": "scene_009", "scene_order": 9, "story_id": "story_render", "section_type": "story", "render_kind": "architecture_flow_scene", "start_seconds": 67.0, "end_seconds": 75.0, "text": "Validated scene specifications drive reusable components.", "visual_action": "advance_diagram_step"},
-        {"scene_id": "scene_010", "scene_order": 10, "story_id": "story_render", "section_type": "story", "render_kind": "capability_matrix_scene", "start_seconds": 75.0, "end_seconds": 83.0, "text": "Different ideas use different motion families.", "visual_action": "reveal_comparison"},
-        {"scene_id": "scene_011", "scene_order": 11, "story_id": "story_render", "section_type": "story", "render_kind": "process_zoom_scene", "start_seconds": 83.0, "end_seconds": 91.0, "text": "Short clips render independently before assembly.", "visual_action": "advance_diagram_step"},
-        {"scene_id": "scene_012", "scene_order": 12, "story_id": "", "section_type": "closing", "render_kind": "recap_sequence_scene", "start_seconds": 91.0, "end_seconds": 101.0, "text": "Independent modules, one coherent video.", "visual_action": "reveal_point"}
+        {"scene_id": "scene_007", "scene_order": 7, "story_id": "story_sync", "section_type": "story", "render_kind": "simple_explainer_scene", "start_seconds": 50.0, "end_seconds": 59.0, "text": "Voiceover chunks become timed semantic beats.", "visual_action": "advance_diagram_step"},
+        {"scene_id": "scene_008", "scene_order": 8, "story_id": "story_sync", "section_type": "story", "render_kind": "simple_explainer_scene", "start_seconds": 59.0, "end_seconds": 67.0, "text": "Each meaning gets the visual family that explains it best.", "visual_action": "reveal_comparison"},
+        {"scene_id": "scene_009", "scene_order": 9, "story_id": "story_render", "section_type": "story", "render_kind": "simple_explainer_scene", "start_seconds": 67.0, "end_seconds": 75.0, "text": "Validated scene specifications drive reusable components.", "visual_action": "advance_diagram_step"},
+        {"scene_id": "scene_010", "scene_order": 10, "story_id": "story_render", "section_type": "story", "render_kind": "simple_explainer_scene", "start_seconds": 75.0, "end_seconds": 83.0, "text": "Different ideas use different motion families.", "visual_action": "reveal_comparison"},
+        {"scene_id": "scene_011", "scene_order": 11, "story_id": "story_render", "section_type": "story", "render_kind": "simple_explainer_scene", "start_seconds": 83.0, "end_seconds": 91.0, "text": "Short clips render independently before assembly.", "visual_action": "advance_diagram_step"},
+        {"scene_id": "scene_012", "scene_order": 12, "story_id": "", "section_type": "closing", "render_kind": "editorial_text_scene", "start_seconds": 91.0, "end_seconds": 101.0, "text": "Independent modules, one coherent video.", "visual_action": "reveal_point"}
       ],
       "scene_timeline": [
         {
@@ -107,16 +107,17 @@
           "start_seconds": 0.0,
           "end_seconds": 8.0,
           "duration_seconds": 8.0,
-          "render_kind": "kinetic_type_scene",
+          "render_kind": "editorial_text_scene",
           "script_excerpt": "An automated video is only convincing when every stage agrees on what the story is.",
           "visual_intent": "State the episode thesis with one bold phrase.",
           "payload": {
             "eyebrow": "ONE COHERENT STORY",
-            "phrases": ["Every stage must agree", "from source to screen"],
-            "emphasis_words": ["agree", "source", "screen"],
-            "animation_style": "word_snap",
-            "background_motif": "newsroom_grid",
-            "show_progress_line": true
+            "recipe_id": "editorial_hook",
+            "headline": "Every stage must agree",
+            "accent_words": ["agree"],
+            "supporting_text": "from source to screen",
+            "composition": "editorial_center",
+            "motion_style": "word_reveal"
           },
           "covered_unit_orders": [1]
         },
@@ -128,20 +129,21 @@
           "start_seconds": 8.0,
           "end_seconds": 15.0,
           "duration_seconds": 7.0,
-          "render_kind": "architecture_flow_scene",
+          "render_kind": "simple_explainer_scene",
           "script_excerpt": "The pipeline moves from source material to narration, synchronized motion, and a finished video.",
           "visual_intent": "Preview the complete production path.",
           "payload": {
-            "eyebrow": "END-TO-END FLOW",
+            "recipe_id": "mechanism_steps",
             "headline": "From sources to a finished video",
-            "steps": [
+            "items": [
               {"label": "Evidence", "detail": "selected records"},
               {"label": "Narration", "detail": "sectioned script"},
               {"label": "Motion", "detail": "timed scenes"},
               {"label": "Video", "detail": "audio plus clips"}
             ],
-            "active_step_label": "Video",
-            "background_motif": "newsroom_grid"
+            "focus_item_label": "Video",
+            "orientation": "horizontal",
+            "motion_style": "sequential_focus"
           },
           "covered_unit_orders": [2]
         },
@@ -157,7 +159,7 @@
           "script_excerpt": "Collection brings in articles and transcripts, and evidence preparation cleans them.",
           "visual_intent": "Show several source types arriving as a usable evidence stack.",
           "payload": {
-            "eyebrow": "EVIDENCE IN",
+            "recipe_id": "evidence_stack",
             "headline": "Start with the source material",
             "documents": [
               {"title": "Company release", "source": "Official blog", "document_type": "article"},
@@ -166,7 +168,7 @@
             ],
             "focus_document_label": "Company release",
             "stack_summary": "Different records stay visible instead of disappearing into a summary.",
-            "background_motif": "newsroom_grid"
+            "motion_style": "evidence_stack"
           },
           "covered_unit_orders": [3]
         },
@@ -178,25 +180,22 @@
           "start_seconds": 23.0,
           "end_seconds": 32.0,
           "duration_seconds": 9.0,
-          "render_kind": "ecosystem_map_scene",
+          "render_kind": "simple_explainer_scene",
           "script_excerpt": "Story mapping groups records that describe the same development.",
           "visual_intent": "Converge three records into one story object without overlapping labels.",
           "payload": {
-            "eyebrow": "STORY MAPPING",
+            "recipe_id": "causal_chain",
             "headline": "Three records, one development",
-            "nodes": [
-              {"id": "story", "label": "Story", "role": "focus"},
-              {"id": "release", "label": "Release", "role": "official"},
-              {"id": "docs", "label": "Docs", "role": "technical"},
-              {"id": "report", "label": "Report", "role": "context"}
+            "items": [
+              {"label": "Release", "detail": "official source"},
+              {"label": "Docs", "detail": "technical context"},
+              {"label": "Report", "detail": "independent context"},
+              {"label": "Story", "detail": "one mapped development"}
             ],
-            "edges": [
-              {"from": "release", "to": "story", "label": "supports"},
-              {"from": "docs", "to": "story", "label": "explains"},
-              {"from": "report", "to": "story", "label": "context"}
-            ],
-            "focus_entity": "Story",
-            "background_motif": "device_glow"
+            "focus_item_label": "Story",
+            "connector_label": "supports",
+            "orientation": "horizontal",
+            "motion_style": "connector_reveal"
           },
           "covered_unit_orders": [4]
         },
@@ -208,21 +207,22 @@
           "start_seconds": 32.0,
           "end_seconds": 41.0,
           "duration_seconds": 9.0,
-          "render_kind": "process_zoom_scene",
+          "render_kind": "simple_explainer_scene",
           "script_excerpt": "When a story moves forward, its source records move with it.",
           "visual_intent": "Focus on the carry-forward contract that preserves grounding.",
           "payload": {
-            "eyebrow": "CONTRACT HANDOFF",
+            "recipe_id": "mechanism_steps",
             "headline": "Keep the evidence attached",
-            "steps": [
+            "items": [
               {"label": "Select", "detail": "choose the story"},
               {"label": "Carry", "detail": "include full records"},
               {"label": "Ground", "detail": "write from context"},
               {"label": "Trace", "detail": "retain source keys"}
             ],
-            "focus_step_label": "Carry",
-            "zoom_note": "The next module receives the story and its records together.",
-            "background_motif": "newsroom_grid"
+            "focus_item_label": "Carry",
+            "connector_label": "moves with the story",
+            "orientation": "horizontal",
+            "motion_style": "sequential_focus"
           },
           "covered_unit_orders": [5]
         },
@@ -238,12 +238,12 @@
           "script_excerpt": "A good script is not one undifferentiated wall of text; it has clear sections.",
           "visual_intent": "Transform an unstructured script into explicit production sections.",
           "payload": {
-            "eyebrow": "STRUCTURE FIRST",
+            "recipe_id": "interface_before_after",
             "headline": "Turn the text wall into sections",
             "before": {"label": "Before", "items": ["One text block", "No story boundaries", "Timing is guessed"]},
             "after": {"label": "After", "items": ["Intro", "Story sections", "Closing"]},
             "transformation_label": "structure makes timing possible",
-            "background_motif": "device_glow"
+            "motion_style": "panel_morph"
           },
           "covered_unit_orders": [6]
         },
@@ -255,20 +255,21 @@
           "start_seconds": 50.0,
           "end_seconds": 59.0,
           "duration_seconds": 9.0,
-          "render_kind": "architecture_flow_scene",
+          "render_kind": "simple_explainer_scene",
           "script_excerpt": "Voiceover turns sections into timed chunks, and the planner converts each chunk into a semantic beat.",
           "visual_intent": "Show the timing transformation as one clear horizontal flow.",
           "payload": {
-            "eyebrow": "TIMING PIPELINE",
+            "recipe_id": "mechanism_steps",
             "headline": "Narration becomes a beat map",
-            "steps": [
+            "items": [
               {"label": "Section", "detail": "meaning boundary"},
               {"label": "Audio chunk", "detail": "exact timing"},
               {"label": "Semantic beat", "detail": "visual intent"},
               {"label": "Scene", "detail": "render action"}
             ],
-            "active_step_label": "Scene",
-            "background_motif": "newsroom_grid"
+            "focus_item_label": "Scene",
+            "orientation": "horizontal",
+            "motion_style": "sequential_focus"
           },
           "covered_unit_orders": [7]
         },
@@ -280,20 +281,20 @@
           "start_seconds": 59.0,
           "end_seconds": 67.0,
           "duration_seconds": 8.0,
-          "render_kind": "capability_matrix_scene",
+          "render_kind": "simple_explainer_scene",
           "script_excerpt": "A workflow explanation gets a flow diagram while a key contrast gets a focused comparison.",
           "visual_intent": "Match narrative meaning to the correct visual family.",
           "payload": {
-            "eyebrow": "MATCH THE MEANING",
+            "recipe_id": "concept_contrast",
             "headline": "Choose the visual that explains",
-            "columns": ["Narration", "Best visual", "Purpose"],
-            "rows": [
-              {"label": "How it works", "values": ["steps", "flow", "explain"]},
-              {"label": "What changed", "values": ["contrast", "compare", "clarify"]},
-              {"label": "Who connects", "values": ["entities", "map", "relate"]}
+            "items": [
+              {"label": "How it works", "detail": "show the mechanism"},
+              {"label": "What changed", "detail": "show the contrast"},
+              {"label": "Who connects", "detail": "show the relationship"}
             ],
-            "highlight_cell": "flow",
-            "background_motif": "device_glow"
+            "focus_item_label": "How it works",
+            "orientation": "horizontal",
+            "motion_style": "quiet_build"
           },
           "covered_unit_orders": [8]
         },
@@ -305,20 +306,21 @@
           "start_seconds": 67.0,
           "end_seconds": 75.0,
           "duration_seconds": 8.0,
-          "render_kind": "architecture_flow_scene",
+          "render_kind": "simple_explainer_scene",
           "script_excerpt": "Validated scene specifications drive reusable motion components.",
           "visual_intent": "Show the deterministic rendering boundary.",
           "payload": {
-            "eyebrow": "RENDER CONTRACT",
+            "recipe_id": "mechanism_steps",
             "headline": "JSON drives reusable motion",
-            "steps": [
+            "items": [
               {"label": "Scene spec", "detail": "validated payload"},
               {"label": "Component", "detail": "reusable motion"},
               {"label": "Frames", "detail": "rendered output"},
               {"label": "Clip", "detail": "short MP4"}
             ],
-            "active_step_label": "Clip",
-            "background_motif": "newsroom_grid"
+            "focus_item_label": "Clip",
+            "orientation": "horizontal",
+            "motion_style": "sequential_focus"
           },
           "covered_unit_orders": [9]
         },
@@ -330,20 +332,20 @@
           "start_seconds": 75.0,
           "end_seconds": 83.0,
           "duration_seconds": 8.0,
-          "render_kind": "capability_matrix_scene",
+          "render_kind": "simple_explainer_scene",
           "script_excerpt": "Counters animate numbers, maps explain relationships, and process views reveal steps.",
           "visual_intent": "Demonstrate that visual families have distinct explanatory jobs.",
           "payload": {
-            "eyebrow": "VISUAL LIBRARY",
+            "recipe_id": "concept_contrast",
             "headline": "One family for each job",
-            "columns": ["Counter", "Map", "Process"],
-            "rows": [
-              {"label": "Best at", "values": ["scale", "relations", "steps"]},
-              {"label": "Motion", "values": ["count", "connect", "reveal"]},
-              {"label": "Viewer gets", "values": ["magnitude", "context", "clarity"]}
+            "items": [
+              {"label": "Evidence", "detail": "show the real source"},
+              {"label": "Explanation", "detail": "clarify the mechanism"},
+              {"label": "Emphasis", "detail": "land the key moment"}
             ],
-            "highlight_cell": "clarity",
-            "background_motif": "device_glow"
+            "focus_item_label": "Explanation",
+            "orientation": "horizontal",
+            "motion_style": "quiet_build"
           },
           "covered_unit_orders": [10]
         },
@@ -355,21 +357,22 @@
           "start_seconds": 83.0,
           "end_seconds": 91.0,
           "duration_seconds": 8.0,
-          "render_kind": "process_zoom_scene",
+          "render_kind": "simple_explainer_scene",
           "script_excerpt": "Each scene stays short, renders independently, and can be retried without rebuilding the whole episode.",
           "visual_intent": "Focus on independent retries before final assembly.",
           "payload": {
-            "eyebrow": "FAIL SMALL",
+            "recipe_id": "mechanism_steps",
             "headline": "Render short scenes independently",
-            "steps": [
+            "items": [
               {"label": "Validate", "detail": "reject bad specs"},
               {"label": "Render", "detail": "parallel short clips"},
               {"label": "Retry", "detail": "only failed scenes"},
               {"label": "Assemble", "detail": "attach audio once"}
             ],
-            "focus_step_label": "Retry",
-            "zoom_note": "A failed scene does not require regenerating the complete video.",
-            "background_motif": "newsroom_grid"
+            "focus_item_label": "Retry",
+            "connector_label": "without rebuilding",
+            "orientation": "horizontal",
+            "motion_style": "sequential_focus"
           },
           "covered_unit_orders": [11]
         },
@@ -381,34 +384,35 @@
           "start_seconds": 91.0,
           "end_seconds": 101.0,
           "duration_seconds": 10.0,
-          "render_kind": "recap_sequence_scene",
+          "render_kind": "editorial_text_scene",
           "script_excerpt": "Evidence, writing, voice, planning, rendering, and assembly can improve independently while the contracts keep the finished story coherent.",
           "visual_intent": "Close on the modular responsibilities converging into one result.",
           "payload": {
+            "recipe_id": "editorial_reset",
             "eyebrow": "THE ADVANTAGE",
             "headline": "Independent modules. One coherent video.",
-            "recap_items": ["Evidence", "Writing and voice", "Planning and rendering", "Final assembly"],
-            "final_takeaway": "Contracts keep every stage aligned.",
-            "takeaway_label": "SOURCE TO SCREEN",
-            "background_motif": "abstract_ai"
+            "accent_words": ["coherent"],
+            "supporting_text": "Contracts keep every stage aligned.",
+            "composition": "editorial_center",
+            "motion_style": "quiet_fade"
           },
           "covered_unit_orders": [12]
         }
       ],
       "asset_manifest": {
         "requests": [
-          {"scene_id": "scene_001", "render_kind": "kinetic_type_scene", "asset_type": "none"},
-          {"scene_id": "scene_002", "render_kind": "architecture_flow_scene", "asset_type": "none"},
+          {"scene_id": "scene_001", "render_kind": "editorial_text_scene", "asset_type": "none"},
+          {"scene_id": "scene_002", "render_kind": "simple_explainer_scene", "asset_type": "none"},
           {"scene_id": "scene_003", "render_kind": "document_stack_scene", "asset_type": "none"},
-          {"scene_id": "scene_004", "render_kind": "ecosystem_map_scene", "asset_type": "none"},
-          {"scene_id": "scene_005", "render_kind": "process_zoom_scene", "asset_type": "none"},
+          {"scene_id": "scene_004", "render_kind": "simple_explainer_scene", "asset_type": "none"},
+          {"scene_id": "scene_005", "render_kind": "simple_explainer_scene", "asset_type": "none"},
           {"scene_id": "scene_006", "render_kind": "interface_transform_scene", "asset_type": "none"},
-          {"scene_id": "scene_007", "render_kind": "architecture_flow_scene", "asset_type": "none"},
-          {"scene_id": "scene_008", "render_kind": "capability_matrix_scene", "asset_type": "none"},
-          {"scene_id": "scene_009", "render_kind": "architecture_flow_scene", "asset_type": "none"},
-          {"scene_id": "scene_010", "render_kind": "capability_matrix_scene", "asset_type": "none"},
-          {"scene_id": "scene_011", "render_kind": "process_zoom_scene", "asset_type": "none"},
-          {"scene_id": "scene_012", "render_kind": "recap_sequence_scene", "asset_type": "none"}
+          {"scene_id": "scene_007", "render_kind": "simple_explainer_scene", "asset_type": "none"},
+          {"scene_id": "scene_008", "render_kind": "simple_explainer_scene", "asset_type": "none"},
+          {"scene_id": "scene_009", "render_kind": "simple_explainer_scene", "asset_type": "none"},
+          {"scene_id": "scene_010", "render_kind": "simple_explainer_scene", "asset_type": "none"},
+          {"scene_id": "scene_011", "render_kind": "simple_explainer_scene", "asset_type": "none"},
+          {"scene_id": "scene_012", "render_kind": "editorial_text_scene", "asset_type": "none"}
         ]
       },
       "coverage": {
@@ -436,25 +440,17 @@
         "target_aspect_ratio": "16:9",
         "max_scene_seconds": 14,
         "allowed_render_kinds": [
-          "kinetic_type_scene",
-          "architecture_flow_scene",
+          "editorial_text_scene",
+          "simple_explainer_scene",
           "document_stack_scene",
-          "ecosystem_map_scene",
-          "process_zoom_scene",
-          "interface_transform_scene",
-          "capability_matrix_scene",
-          "recap_sequence_scene"
+          "interface_transform_scene"
         ]
       },
       "visual_capabilities": {
-        "kinetic_type_scene": {"description": "Short emphasis phrases."},
-        "architecture_flow_scene": {"description": "Ordered system flows."},
+        "editorial_text_scene": {"description": "Short hooks, punchlines, and resets."},
+        "simple_explainer_scene": {"description": "Two to four large ideas in one open explanatory composition."},
         "document_stack_scene": {"description": "Multiple evidence documents."},
-        "ecosystem_map_scene": {"description": "Entity relationships."},
-        "process_zoom_scene": {"description": "A process with one focused step."},
-        "interface_transform_scene": {"description": "Before and after workflows."},
-        "capability_matrix_scene": {"description": "Structured category comparisons."},
-        "recap_sequence_scene": {"description": "Closing recap beats."}
+        "interface_transform_scene": {"description": "Before and after workflows."}
       },
       "source_context": {
         "selected_story_ids": ["story_evidence", "story_sync", "story_render"],
@@ -472,7 +468,10 @@
     "scene_count": 12,
     "source_article_scene_count": 0,
     "logo_reveal_scene_count": 0,
-    "kinetic_type_scene_count": 1,
+    "editorial_text_scene_count": 2,
+    "simple_explainer_scene_count": 8,
+    "document_stack_scene_count": 1,
+    "interface_transform_scene_count": 1,
     "llm_call_count": 0,
     "failure_reason": "",
     "planning_strategy": "curated_reference_fixture",

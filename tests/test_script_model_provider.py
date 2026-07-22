@@ -6,7 +6,12 @@ from src.pipeline.content.script_generation.formats.roundup.app import _resolved
 from src.pipeline.content.script_generation.formats.roundup.contract import LLMProvider
 from src.pipeline.content.script_generation.formats.roundup.llm_client import make_llm
 from src.pipeline.content.script_generation.formats.roundup.llm_logging import build_llm_call_log
-from src.pipeline.content.script_generation.formats.roundup.writer import TASK_PROMPT
+from src.pipeline.content.script_generation.formats.roundup.models import StoryReviewOutput
+from src.pipeline.content.script_generation.formats.roundup.writer import (
+    TASK_PROMPT,
+    _structured_output_options,
+    _task_payload_for_structured_output,
+)
 from src.pipeline.orchestration.script_model_comparison import (
     ComparisonVariant,
     _aggregate_usage_by_route,
@@ -28,6 +33,44 @@ def test_script_prompt_keeps_system_and_user_roles_separate() -> None:
 
 def test_moonshot_is_a_valid_script_provider() -> None:
     assert TypeAdapter(LLMProvider).validate_python("moonshot") == "moonshot"
+
+
+def test_deepseek_is_a_valid_script_provider() -> None:
+    assert TypeAdapter(LLMProvider).validate_python("deepseek") == "deepseek"
+
+
+def test_deepseek_client_uses_beta_api_and_explicit_thinking_mode(monkeypatch) -> None:
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    llm = make_llm(
+        provider="deepseek",
+        model="deepseek-v4-pro",
+        temperature=0.4,
+        base_url="https://api.deepseek.com/beta",
+        provider_options={
+            "thinking": "disabled",
+            "omit_temperature": False,
+            "request_timeout_seconds": 240,
+        },
+    )
+
+    assert llm.model_name == "deepseek-v4-pro"
+    assert str(llm.openai_api_base) == "https://api.deepseek.com/beta"
+    assert llm.temperature == 0.4
+    assert llm.extra_body == {"thinking": {"type": "disabled"}}
+    assert llm.request_timeout == 240.0
+
+
+def test_json_mode_embeds_schema_without_passing_strict() -> None:
+    options = _structured_output_options({"method": "json_mode", "strict": False})
+    payload = _task_payload_for_structured_output(
+        '{"story_id":"story_1"}',
+        output_model=StoryReviewOutput,
+        method=options["method"],
+    )
+
+    assert options == {"include_raw": True, "method": "json_mode"}
+    assert "JSON Schema:" in payload
+    assert '"rewrite_required"' in payload
 
 
 def test_moonshot_client_uses_configured_api_and_thinking_mode(monkeypatch) -> None:

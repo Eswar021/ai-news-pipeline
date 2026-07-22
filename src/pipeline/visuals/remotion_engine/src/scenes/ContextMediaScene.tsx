@@ -1,7 +1,7 @@
 import React from "react";
 import { AbsoluteFill, Img, Loop, OffthreadVideo, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { VisualSceneSpec } from "./types";
-import { editorialStyle, font, isEditorialMinimal, listValue, palette, readableBodySize, readableTitleSize, shortDisplayText, textValue } from "./style";
+import { editorialStyle, listValue, readableBodySize, readableTitleSize, shortDisplayText, textValue } from "./style";
 
 export const ContextMediaScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec }) => {
   const frame = useCurrentFrame();
@@ -34,11 +34,10 @@ export const ContextMediaScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec })
   const annotations = listValue(payload.annotations || payload.callouts).slice(0, 3);
   const clipSeconds = Number(asset.media?.duration_seconds || 0);
   const loopFrames = Math.max(1, Math.round((clipSeconds > 0 ? clipSeconds : spec.duration_seconds) * fps));
-  const editorial = isEditorialMinimal(spec.visual_style);
   const editorialColors = editorialStyle(spec.visual_style);
 
   return (
-    <AbsoluteFill style={{ background: editorial ? editorialColors.background : palette.bg, color: editorial ? editorialColors.text : palette.text, fontFamily: editorial ? editorialColors.sansFont : font.family, overflow: "hidden" }}>
+    <AbsoluteFill style={{ background: editorialColors.background, color: editorialColors.text, fontFamily: editorialColors.sansFont, overflow: "hidden" }}>
       <div style={{ position: "absolute", inset: -18, transform: `translateX(${panX}%) scale(${scale})`, opacity: interpolate(enter, [0, 1], [0.35, 1]) }}>
         {isVideo && videoSource ? (
           <Loop durationInFrames={loopFrames}>
@@ -51,21 +50,21 @@ export const ContextMediaScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec })
         ) : imageSource ? (
           <Img src={imageSource} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <AbsoluteFill style={{ display: "flex", alignItems: "center", justifyContent: "center", color: palette.muted, fontSize: 42, fontWeight: 850 }}>
+          <AbsoluteFill style={{ display: "flex", alignItems: "center", justifyContent: "center", color: editorialColors.muted, fontSize: 42, fontWeight: 850 }}>
             CONTEXT MEDIA UNAVAILABLE
           </AbsoluteFill>
         )}
       </div>
 
-      <AbsoluteFill style={{ background: editorial ? "linear-gradient(180deg, rgba(15,13,10,0.03) 0%, rgba(15,13,10,0.02) 48%, rgba(15,13,10,0.68) 100%)" : "linear-gradient(180deg, rgba(4,8,14,0.08) 0%, rgba(4,8,14,0.04) 44%, rgba(4,8,14,0.74) 100%)" }} />
+      <AbsoluteFill style={{ background: "linear-gradient(180deg, rgba(15,13,10,0.03) 0%, rgba(15,13,10,0.02) 48%, rgba(15,13,10,0.68) 100%)" }} />
       {annotations.length > 0 && (
         <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 850, background: "linear-gradient(90deg, transparent, rgba(7,10,13,0.72) 30%, rgba(7,10,13,0.94))" }} />
       )}
-      <div style={{ position: "absolute", left: editorial ? 54 : 0, top: editorial ? 54 : 0, bottom: editorial ? undefined : 0, width: editorial ? 150 : 14, height: editorial ? 8 : undefined, background: editorial ? editorialColors.accent : `linear-gradient(180deg, ${palette.cyan}, ${palette.green})`, opacity: 0.86 }} />
+      <div style={{ position: "absolute", left: 54, top: 54, width: 150, height: 8, background: editorialColors.accent, opacity: 0.86 }} />
 
       {showOverlay && (
         <div style={{ position: "absolute", left: 82, bottom: 72, maxWidth: 1180, transform: `translateY(${interpolate(enter, [0, 1], [30, 0])}px)`, opacity: enter }}>
-          <div style={{ fontFamily: editorial ? editorialColors.editorialFont : font.family, fontSize: readableTitleSize(headline, editorial ? 74 : 68), lineHeight: 0.96, fontWeight: editorial ? 700 : 950, letterSpacing: "-0.045em", color: editorial ? "#fffaf2" : palette.text, textShadow: "0 5px 28px rgba(0,0,0,0.8)" }}>
+          <div style={{ fontFamily: editorialColors.editorialFont, fontSize: readableTitleSize(headline, 74), lineHeight: 0.96, fontWeight: 700, letterSpacing: "-0.045em", color: "#fffaf2", textShadow: "0 5px 28px rgba(0,0,0,0.8)" }}>
             {headline}
           </div>
         </div>
@@ -78,7 +77,7 @@ export const ContextMediaScene: React.FC<{ spec: VisualSceneSpec }> = ({ spec })
             const copy = shortDisplayText(annotation, 88);
             return (
               <div key={`${annotation}-${index}`} style={{ display: "grid", gridTemplateColumns: "18px 1fr", gap: 20, alignItems: "start", opacity: reveal, transform: `translateX(${interpolate(reveal, [0, 1], [48, 0])}px)` }}>
-                <div style={{ marginTop: 12, width: 15, height: 15, borderRadius: 99, background: editorial ? editorialColors.accent : palette.cyan, boxShadow: `0 0 22px ${editorial ? editorialColors.accent : palette.cyan}88` }} />
+                <div style={{ marginTop: 12, width: 15, height: 15, borderRadius: 99, background: editorialColors.accent, boxShadow: `0 0 22px ${editorialColors.accent}88` }} />
                 <div style={{ color: "#fffaf2", fontSize: readableBodySize(copy, 34), lineHeight: 1.09, fontWeight: 790, letterSpacing: "-0.025em", textShadow: "0 4px 24px rgba(0,0,0,0.78)" }}>{copy}</div>
               </div>
             );

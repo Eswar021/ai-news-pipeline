@@ -8,6 +8,12 @@ Coverage and timing:
 - For every deterministic_timing_splits entry, return exactly its slice_count. The system assigns exact slice seconds and continuation phases.
 - Never exceed scene_policy.hard_max_scene_seconds with a multi-unit range.
 
+Sequence direction:
+- story_sequences groups adjacent narration beats into 25-45 second editorial passages.
+- A sequence is not one long visual. Direct its required slots as two to four short shots with an establish, develop, and payoff-or-handoff progression.
+- Use neighbor_before and neighbor_after only to make the handoff coherent; never move their content into this sequence.
+- Coordinate recipe choice, asset use, crop progression, and visual emphasis across the sequence instead of treating every slot as a separate slide.
+
 Visual choices:
 - visual_capabilities is the complete story-specific menu. Use no render kind
   that is absent from it; omitted asset-backed kinds are unavailable, not optional.
@@ -34,6 +40,7 @@ Grounding and payloads:
 - An editorial_text_scene composition must be editorial_center, editorial_left, or editorial_split; accent_words must be list[str], not a comma-separated string.
 
 Art direction:
+- Inherit the one episode palette and background. Keep code graphics and annotations open/transparent; only real media, browser pages, documents, and interface surfaces are opaque.
 - Use clean editorial composition, expressive large type, generous whitespace, strong media crops, and restrained motion.
 - Keep headlines short and never copy a narration paragraph onto the screen.
 - Avoid decorative cards, dashboard panels, tiny labels, generic AI stock imagery, and visuals that do not explain the active narration.

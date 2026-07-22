@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime
-import os
 from pathlib import Path
 from typing import Any, Callable, Literal
 
@@ -10,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from ..io import load_json, write_json, write_jsonl
 from ..logging import configure_stage_logging
-from ..run_context import create_run_context, module_output_dir
+from ..run_context import module_output_dir
 from ..state import RunStateStore
 from .common import (
     BaseStageRequest,
@@ -31,7 +30,6 @@ from .common import (
 
 STAGE = "content"
 MODULES = [
-    "news_collection",
     "evidence_prep",
     "editorial_triage",
     "story_mapping",
@@ -62,26 +60,13 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
     options = ContentOptions.model_validate(request.config)
     project_root, output_root, config_path = project_paths(request.paths)
 
-    requested_run_id = (request.run.run_id or "").strip()
-    if requested_run_id == "current":
-        run_context = current_or_named_context(output_root, "current")
-        if request.run.run_profile and run_context.get("run_profile") != request.run.run_profile:
-            raise ValueError(
-                f"Current run uses profile {run_context.get('run_profile')!r}, "
-                f"not requested profile {request.run.run_profile!r}"
-            )
-        require_matching_config_environment(run_context, request.run.config_environment)
-    else:
-        run_context = create_run_context(
-            project_root=project_root,
-            run_profile=request.run.run_profile,
-            run_id=requested_run_id or None,
-            trigger="runner",
-            orchestrator="src.pipeline.orchestration.runner:content",
-            config_path=config_path,
-            output_root=output_root,
-            config_environment=request.run.config_environment,
+    run_context = current_or_named_context(output_root, (request.run.run_id or "current").strip())
+    if request.run.run_profile and run_context.get("run_profile") != request.run.run_profile:
+        raise ValueError(
+            f"Selected run uses profile {run_context.get('run_profile')!r}, "
+            f"not requested profile {request.run.run_profile!r}"
         )
+    require_matching_config_environment(run_context, request.run.config_environment)
 
     logger = configure_stage_logging(
         run_context,
@@ -96,7 +81,6 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
     try:
         result = _run_modules(
             run_context=run_context,
-            project_root=project_root,
             config_path=config_path,
             options=options,
             logger=logger,
@@ -130,7 +114,6 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
         write_json(stage_result_path, response)
         state.finish_stage(STAGE, status="ok")
         logger.logger.info("COMPLETE stage=%s duration=%.2fs", STAGE, duration)
-        logger.event("stage.completed", status="ok", duration_seconds=duration, details=response["summary"])
         return response
     except Exception as exc:
         duration = (datetime.now().astimezone() - stage_started).total_seconds()
@@ -151,14 +134,12 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
         write_json(stage_result_path, response)
         state.finish_stage(STAGE, status="failed", failure_reason=reason)
         logger.logger.exception("FAILED stage=%s duration=%.2fs", STAGE, duration)
-        logger.event("stage.failed", status="failed", duration_seconds=duration, details={"error": reason})
         return response
 
 
 def _run_modules(
     *,
     run_context: dict[str, Any],
-    project_root: Path,
     config_path: Path,
     options: ContentOptions,
     logger,
@@ -171,9 +152,19 @@ def _run_modules(
     run_profile = str(run_context["run_profile"])
     from_index = MODULES.index(options.from_module) if options.from_module else None
     stop_index = MODULES.index(options.stop_after) if options.stop_after else len(MODULES) - 1
-    results: dict[str, dict[str, Any]] = {}
-    inputs: dict[str, dict[str, Any]] = {}
-    result_paths: dict[str, str] = {}
+    collection_dir = module_output_dir(run_context, "news_collection")
+    collection_result_path = collection_dir / "news_collection_result.json"
+    collection_input_path = collection_dir / "news_collection_input.json"
+    if not collection_result_path.exists() or not collection_input_path.exists():
+        raise FileNotFoundError(
+            "Content requires a completed ingestion stage. Run `python3 -m "
+            "src.pipeline.orchestration.runner collect --profile <profile>` first."
+        )
+    collection_result = load_json(collection_result_path)
+    require_ready(collection_result, "news_collection", allowed_statuses=("ok", "partial"))
+    results: dict[str, dict[str, Any]] = {"news_collection": collection_result}
+    inputs: dict[str, dict[str, Any]] = {"news_collection": load_json(collection_input_path)}
+    result_paths: dict[str, str] = {"news_collection": str(collection_result_path)}
     completed: list[str] = []
     reused: list[str] = []
     config_changed_upstream = False
@@ -192,8 +183,7 @@ def _run_modules(
             and not config_changed_upstream
             and (from_index is None or index < from_index)
         )
-        ready_statuses = ("ok", "partial") if module == "news_collection" else ("ok",)
-        existing = reusable_result(result_path, allowed_statuses=ready_statuses) if can_reuse else None
+        existing = reusable_result(result_path) if can_reuse else None
         explicit_upstream_reuse = from_index is not None and index < from_index
         config_matches = explicit_upstream_reuse or reusable_config_matches(
             config_snapshot_path,
@@ -220,7 +210,6 @@ def _run_modules(
                 reused=True,
             )
             logger.logger.info("REUSE module=%s result=%s", module, result_path)
-            logger.event("module.reused", module=module, status=str(existing.get("status")), details={"result_path": str(result_path)})
             _require_module_result(module, existing)
             continue
         if can_reuse and existing is not None and not config_matches:
@@ -234,15 +223,11 @@ def _run_modules(
         module_input = _build_input(
             module=module,
             run_id=run_id,
-            run_profile=run_profile,
             module_config=module_document.value,
             shared_config=shared_config,
-            project_root=project_root,
             inputs=inputs,
             results=results,
         )
-        if module == "news_collection":
-            _validate_news_collection_credentials(module_input)
         function = _module_function(module)
         write_json(input_path, module_input)
         write_module_config_snapshot(
@@ -282,49 +267,12 @@ def _build_input(
     *,
     module: str,
     run_id: str,
-    run_profile: str,
     module_config: dict[str, Any],
     shared_config: dict[str, Any],
-    project_root: Path,
     inputs: dict[str, dict[str, Any]],
     results: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     run = {"run_id": run_id, "generated_at": now_iso()}
-    if module == "news_collection":
-        collection_profile = deepcopy(module_config.get("profile") or {})
-        source_groups = deepcopy(module_config.get("source_groups") or {})
-        if not collection_profile or not source_groups:
-            raise KeyError("news_collection config requires profile and source_groups")
-        end = datetime.now().astimezone()
-        lookback_hours = int(collection_profile["lookback_hours"])
-        from datetime import timedelta
-
-        window = {
-            "start": (end - timedelta(hours=lookback_hours)).isoformat(),
-            "end": end.isoformat(),
-            "lookback_hours": lookback_hours,
-        }
-        collectors: dict[str, Any] = {}
-        for group in collection_profile["enabled_source_groups"]:
-            collector = deepcopy(source_groups[group])
-            collector.update(
-                {
-                    "source_group": group,
-                    "collection_window": window,
-                    "query_themes": list(collection_profile["query_themes"]),
-                    "runtime": deepcopy(collection_profile.get("collector_caps", {}).get(group, {})),
-                }
-            )
-            collectors[group] = collector
-        return {
-            "run": run,
-            "config": {
-                "enabled_source_groups": list(collection_profile["enabled_source_groups"]),
-                "query_themes": list(collection_profile["query_themes"]),
-                "collectors": collectors,
-            },
-            "input": {"run_profile": run_profile, "channel": deepcopy(shared_config["channel"])},
-        }
     if module == "evidence_prep":
         config = deepcopy(module_config)
         first_collector = next(iter(inputs["news_collection"]["config"]["collectors"].values()))
@@ -401,10 +349,7 @@ def _write_outputs(
     if result.get("llm_calls") is not None:
         write_jsonl(output_dir / "llm_calls.jsonl", result.get("llm_calls", []))
     data = result.get("data") or {}
-    if module == "news_collection":
-        write_json(output_dir / "raw_records.json", data)
-        write_json(output_dir / "candidate_ledger.json", {"candidates": data.get("candidate_ledger", [])})
-    elif module == "evidence_prep":
+    if module == "evidence_prep":
         write_json(output_dir / "prepared_records.json", {"record_count": data.get("record_count", 0), "records": data.get("records", [])})
         write_json(output_dir / "decision_ledger.json", {"decisions": data.get("decision_ledger", [])})
     elif module == "editorial_triage":
@@ -428,9 +373,7 @@ def _write_outputs(
 
 
 def _require_module_result(module: str, result: dict[str, Any]) -> None:
-    if module == "news_collection":
-        require_ready(result, module, allowed_statuses=("ok", "partial"))
-    elif module == "editorial_triage":
+    if module == "editorial_triage":
         require_ready(result, module, handoff_key="ready_for_story_mapping")
     elif module == "story_mapping":
         require_ready(result, module, handoff_key="ready_for_editorial_selection")
@@ -447,9 +390,7 @@ def _require_module_result(module: str, result: dict[str, Any]) -> None:
 
 
 def _module_function(module: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
-    if module == "news_collection":
-        from src.pipeline.content.news_collection import run
-    elif module == "evidence_prep":
+    if module == "evidence_prep":
         from src.pipeline.content.evidence_prep import run
     elif module == "editorial_triage":
         from src.pipeline.content.editorial_triage import run
@@ -464,37 +405,3 @@ def _module_function(module: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
     else:
         from src.pipeline.content.metadata_creator import run
     return run
-
-
-def _validate_news_collection_credentials(module_input: dict[str, Any]) -> None:
-    config = module_input.get("config") or {}
-    collectors = config.get("collectors") or {}
-    missing: list[str] = []
-
-    for group_name in config.get("enabled_source_groups") or []:
-        collector = collectors.get(group_name) or {}
-        _record_missing_credential(missing, group_name, collector.get("env_keys"))
-        for source in collector.get("sources") or []:
-            if not source.get("enabled", True):
-                continue
-            source_name = str(source.get("id") or source.get("name") or "unknown_source")
-            _record_missing_credential(
-                missing,
-                f"{group_name}.{source_name}",
-                source.get("env_keys"),
-            )
-
-    if missing:
-        raise RuntimeError(
-            "Missing credentials for enabled news sources: " + "; ".join(missing)
-        )
-
-
-def _record_missing_credential(
-    missing: list[str],
-    source_name: str,
-    env_keys: Any,
-) -> None:
-    keys = [str(key).strip() for key in (env_keys or []) if str(key).strip()]
-    if keys and not any(os.getenv(key) for key in keys):
-        missing.append(f"{source_name} ({' | '.join(keys)})")

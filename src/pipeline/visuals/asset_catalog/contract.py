@@ -190,6 +190,7 @@ class AssetCatalogConfig(BaseModel):
     output_dir: str
     force: bool = False
     research_mode: Literal["trusted_only"] = "trusted_only"
+    require_visual_research: bool = False
     require_real_anchor_per_story: bool = True
     collect_source_pages: bool = True
     collect_source_images: bool = True
@@ -246,9 +247,26 @@ class VideoPackagingEnvelope(BaseModel):
     handoff: dict[str, Any] = Field(default_factory=dict)
 
 
+class VisualResearchData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    run_id: str
+    visual_research_package: dict[str, Any]
+
+
+class VisualResearchEnvelope(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str
+    data: VisualResearchData
+    summary: dict[str, Any] = Field(default_factory=dict)
+    handoff: dict[str, Any] = Field(default_factory=dict)
+
+
 class AssetCatalogInput(BaseModel):
     script_generation: ScriptGenerationEnvelope
     video_packaging: VideoPackagingEnvelope
+    visual_research: VisualResearchEnvelope | None = None
 
     @model_validator(mode="after")
     def upstream_results_must_be_ready(self) -> "AssetCatalogInput":
@@ -263,6 +281,14 @@ class AssetCatalogRequest(BaseModel):
     run: AssetCatalogRun
     config: AssetCatalogConfig
     input: AssetCatalogInput
+
+    @model_validator(mode="after")
+    def visual_research_must_be_ready_when_required(self) -> "AssetCatalogRequest":
+        if self.config.require_visual_research and self.input.visual_research is None:
+            raise ValueError("input.visual_research is required by config.require_visual_research")
+        if self.input.visual_research is not None and self.input.visual_research.status != "ok":
+            raise ValueError("input.visual_research.status must be ok")
+        return self
 
 
 class AssetCatalogResponse(BaseModel):

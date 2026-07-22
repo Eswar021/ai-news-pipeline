@@ -1,25 +1,9 @@
-export const palette = {
-  bg: "#070b10",
-  panel: "rgba(13, 22, 34, 0.82)",
-  panelStrong: "rgba(7, 13, 22, 0.94)",
-  text: "#f7fbff",
-  muted: "#9fb2c7",
-  cyan: "#63d7ff",
-  amber: "#ffcf70",
-  red: "#ff5c7a",
-  green: "#8df7bd"
-};
-
 // Scene components use one stable design grid. The root renderer scales this
 // canvas to the requested 16:9 output so 720p, 1080p, 2K, and 4K preserve the
 // same composition instead of exposing fixed-coordinate clipping.
 export const designCanvas = {
   width: 1920,
   height: 1080,
-};
-
-export const font = {
-  family: "Avenir Next, Helvetica Neue, Arial, sans-serif"
 };
 
 export const editorialDefaults = {
@@ -30,8 +14,6 @@ export const editorialDefaults = {
   editorialFont: "Iowan Old Style, Baskerville, Georgia, Times New Roman, serif",
   sansFont: "Avenir Next Condensed, Avenir Next, Helvetica Neue, Arial, sans-serif",
 };
-
-export const isEditorialMinimal = (style?: VisualStyleSpec) => style?.style_id === "editorial_minimal";
 
 export const editorialStyle = (style?: VisualStyleSpec) => ({
   background: style?.background_color || editorialDefaults.background,

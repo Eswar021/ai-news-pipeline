@@ -1,0 +1,44 @@
+{
+  "render_kind": "story_transition_scene",
+  "examples": [
+    {
+      "name": "chapter_opener",
+      "payload": {
+        "recipe_id": "chapter_opener",
+        "headline": "When AI advice makes confidence worse",
+        "accent_words": ["confidence"],
+        "motion_style": "chapter_wipe",
+        "story_number": "1",
+        "subtitle": "Helpful tone. Unhelpful result."
+      }
+    },
+    {
+      "name": "chapter_media_opener",
+      "payload": {
+        "recipe_id": "chapter_media_opener",
+        "headline": "A computer designed around noise",
+        "accent_words": ["noise"],
+        "motion_style": "quiet_reveal",
+        "story_number": "2",
+        "subtitle": "The p-bit changes the rules.",
+        "asset_id": "asset_reference_image",
+        "background_media_type": "image",
+        "background_render_kind": "context_image_scene"
+      }
+    },
+    {
+      "name": "chapter_identity_opener",
+      "payload": {
+        "recipe_id": "chapter_identity_opener",
+        "headline": "The lab betting on uncertainty",
+        "accent_words": ["uncertainty"],
+        "motion_style": "editorial_slide",
+        "story_number": "3",
+        "subtitle": "Meet the team behind the machine.",
+        "asset_id": "asset_reference_logo",
+        "background_media_type": "logo",
+        "background_render_kind": "logo_reveal_scene"
+      }
+    }
+  ]
+}

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
-import re
 from typing import Any
 
 from .common import clean_text
-from .recipes import validate_scene_recipe
+from .recipes import ACTIVE_RENDER_KINDS, validate_scene_recipe
 
 
 SOURCE_ARTICLE_KINDS = {"source_article_scene", "quote_or_claim_highlight_scene"}
@@ -15,58 +14,11 @@ HEADLINE_KINDS = {
     "editorial_text_scene",
     "simple_explainer_scene",
     "story_transition_scene",
-    "data_counter_scene",
-    "trend_line_scene",
-    "bar_chart_scene",
-    "bar_race_scene",
-    "ranked_list_scene",
-    "benchmark_delta_scene",
-    "ecosystem_map_scene",
-    "architecture_flow_scene",
-    "process_zoom_scene",
     "browser_walkthrough_scene",
-    "decision_tree_scene",
-    "capability_matrix_scene",
-    "timeline_zoom_scene",
     "document_stack_scene",
-    "signal_radar_scene",
     "interface_transform_scene",
-    "entity_compare_scene",
-    "bullet_build_scene",
-    "recap_sequence_scene",
 }
-TREND_DIRECTIONS = {"rising", "falling", "volatile", "pressure_building", "flat_then_jump"}
-SUPPORTED_RENDER_KINDS = {
-    "source_article_scene",
-    "context_image_scene",
-    "broll_video_scene",
-    "logo_reveal_scene",
-    "editorial_text_scene",
-    "simple_explainer_scene",
-    "story_transition_scene",
-    "kinetic_type_scene",
-    "bullet_build_scene",
-    "quote_or_claim_highlight_scene",
-    "entity_compare_scene",
-    "recap_sequence_scene",
-    "data_counter_scene",
-    "trend_line_scene",
-    "bar_chart_scene",
-    "bar_race_scene",
-    "ranked_list_scene",
-    "benchmark_delta_scene",
-    "ecosystem_map_scene",
-    "architecture_flow_scene",
-    "process_zoom_scene",
-    "browser_walkthrough_scene",
-    "decision_tree_scene",
-    "capability_matrix_scene",
-    "timeline_zoom_scene",
-    "document_stack_scene",
-    "signal_radar_scene",
-    "interface_transform_scene",
-    "transition_stinger_scene",
-}
+SUPPORTED_RENDER_KINDS = set(ACTIVE_RENDER_KINDS)
 
 
 # These are provider-facing descriptions of the renderer contract. The
@@ -178,52 +130,6 @@ PROMPT_PAYLOAD_CONTRACTS: dict[str, dict[str, Any]] = {
             "motion_style": "layered_reveal | highlight_scan | proof_push",
         },
     },
-    "data_counter_scene": {
-        "required": {
-            "headline": "one concise string",
-            "metrics": "list of 1-3 objects shaped {label: str, value: numeric string, unit?: str, context?: str}",
-        },
-        "optional": {"motion_style": "count_up | slot_reveal | scale_land"},
-    },
-    "benchmark_delta_scene": {
-        "required": {
-            "headline": "one concise string",
-            "benchmarks": "list of 1-3 objects shaped {label, before, after, delta, unit?, context?}",
-        },
-        "optional": {
-            "kicker_text": "short outcome label",
-            "motion_style": "delta_land | before_after | split_reveal",
-        },
-    },
-    "ecosystem_map_scene": {
-        "required": {
-            "headline": "one concise string",
-            "nodes": "list of 2-7 objects shaped {id, label, role?}",
-            "edges": "list of objects shaped {from, to, label} using supplied node IDs",
-            "focus_entity": "exact nodes[].label",
-        },
-        "optional": {"motion_style": "orbit_reveal | relationship_trace | focus_pull"},
-    },
-    "architecture_flow_scene": {
-        "required": {
-            "headline": "one concise string",
-            "steps": "list of 2-6 objects shaped {label, detail?}",
-            "active_step_label": "exact steps[].label",
-        },
-        "optional": {
-            "direction": "left_to_right | top_to_bottom",
-            "motion_style": "signal_trace | sequential_focus | pipeline_build",
-        },
-    },
-    "process_zoom_scene": {
-        "required": {
-            "headline": "one concise string",
-            "steps": "list of 2-6 objects shaped {label, detail?}",
-            "focus_step_label": "exact steps[].label",
-            "zoom_note": "short explanation of the focal step",
-        },
-        "optional": {"motion_style": "focus_zoom | sequence_then_zoom"},
-    },
     "browser_walkthrough_scene": {
         "required": {
             "url": "absolute selected-story http(s) URL",
@@ -236,15 +142,6 @@ PROMPT_PAYLOAD_CONTRACTS: dict[str, dict[str, Any]] = {
             "asset_id": "exact available source_page asset ID",
             "motion_style": "guided_focus | cursor_trace | browser_zoom",
         },
-    },
-    "capability_matrix_scene": {
-        "required": {
-            "headline": "one concise string",
-            "columns": "list of 2-4 column labels",
-            "rows": "list of 2-5 objects shaped {label, values: list matching columns}",
-            "focus_row_label": "exact rows[].label",
-        },
-        "optional": {"motion_style": "row_focus | matrix_reveal"},
     },
     "document_stack_scene": {
         "required": {
@@ -338,54 +235,6 @@ def validate_scene_payload(render_kind: str, payload: dict[str, Any]) -> list[st
             errors.append("payload.background_media_type must be image, video, or logo")
         if background_type and not clean_text(payload.get("asset_id", "")):
             errors.append("payload.asset_id is required when background_media_type is set")
-    elif render_kind == "kinetic_type_scene":
-        _require_text_list(payload, "phrases", errors)
-    elif render_kind == "bullet_build_scene":
-        _require_text_list(payload, "points", errors, minimum=2)
-    elif render_kind == "recap_sequence_scene":
-        _require_text_list(payload, "recap_items", errors, minimum=2)
-        _require_text(payload, "final_takeaway", errors)
-    elif render_kind == "transition_stinger_scene":
-        _require_text(payload, "transition_label", errors)
-    elif render_kind == "data_counter_scene":
-        rows = _require_object_rows(payload, "metrics", errors, minimum=1, required_text=("label", "value"))
-        _require_numeric_fields(rows, "metrics", ("value",), errors)
-    elif render_kind == "trend_line_scene":
-        direction = clean_text(payload.get("trend_direction", ""))
-        if direction not in TREND_DIRECTIONS:
-            errors.append(f"payload.trend_direction must be one of {sorted(TREND_DIRECTIONS)}")
-        _require_text_list(payload, "annotations", errors)
-    elif render_kind == "bar_chart_scene":
-        rows = _require_object_rows(payload, "bars", errors, minimum=2, required_text=("label", "value"))
-        _require_numeric_fields(rows, "bars", ("value",), errors)
-    elif render_kind == "bar_race_scene":
-        rows = _require_object_rows(
-            payload,
-            "items",
-            errors,
-            minimum=2,
-            required_text=("label", "start_value", "end_value"),
-        )
-        _require_numeric_fields(rows, "items", ("start_value", "end_value"), errors)
-    elif render_kind == "ranked_list_scene":
-        _require_object_rows(payload, "items", errors, minimum=2, required_text=("label",))
-    elif render_kind == "benchmark_delta_scene":
-        _require_object_rows(
-            payload,
-            "benchmarks",
-            errors,
-            minimum=1,
-            required_text=("label", "before", "after", "delta"),
-        )
-    elif render_kind == "ecosystem_map_scene":
-        _validate_ecosystem(payload, errors)
-    elif render_kind == "architecture_flow_scene":
-        rows = _require_object_rows(payload, "steps", errors, minimum=2, required_text=("label",))
-        _require_member_label(payload, "active_step_label", rows, errors, required=True)
-    elif render_kind == "process_zoom_scene":
-        rows = _require_object_rows(payload, "steps", errors, minimum=2, required_text=("label",))
-        _require_member_label(payload, "focus_step_label", rows, errors, required=True)
-        _require_text(payload, "zoom_note", errors)
     elif render_kind == "browser_walkthrough_scene":
         _require_text(payload, "focus_text", errors)
         _require_object_rows(
@@ -396,27 +245,6 @@ def validate_scene_payload(render_kind: str, payload: dict[str, Any]) -> list[st
             required_text=("label",),
             require_any_text=("detail", "target_text"),
         )
-    elif render_kind == "decision_tree_scene":
-        _require_text(payload, "root_label", errors)
-        rows = _require_object_rows(payload, "branches", errors, minimum=2, required_text=("label",))
-        selected = clean_text(payload.get("selected_path_label", ""))
-        if not selected:
-            errors.append("payload.selected_path_label is required")
-        else:
-            options = {
-                clean_text(row.get(field, "")).lower()
-                for row in rows
-                for field in ("label", "outcome")
-                if clean_text(row.get(field, ""))
-            }
-            if selected.lower() not in options:
-                errors.append("payload.selected_path_label must match a branch label or outcome")
-    elif render_kind == "capability_matrix_scene":
-        _validate_matrix(payload, errors)
-    elif render_kind == "timeline_zoom_scene":
-        rows = _require_object_rows(payload, "events", errors, minimum=2, required_text=("label",))
-        _require_member_label(payload, "focus_event_label", rows, errors, required=True)
-        _require_text(payload, "zoom_note", errors)
     elif render_kind == "document_stack_scene":
         rows = _require_object_rows(payload, "documents", errors, minimum=1, required_text=("title", "source"))
         focus = clean_text(payload.get("focus_document_label", ""))
@@ -438,18 +266,10 @@ def validate_scene_payload(render_kind: str, payload: dict[str, Any]) -> list[st
                     errors.append(
                         f"payload.documents[{index}].url must be an absolute http(s) URL"
                     )
-    elif render_kind == "signal_radar_scene":
-        rows = _require_object_rows(payload, "signals", errors, minimum=2, required_text=("label", "strength"))
-        _require_numeric_fields(rows, "signals", ("strength",), errors, minimum=0, maximum=100)
-        _require_text(payload, "scan_label", errors)
     elif render_kind == "interface_transform_scene":
         _validate_interface_panel(payload, "before", errors)
         _validate_interface_panel(payload, "after", errors)
         _require_text(payload, "transformation_label", errors)
-    elif render_kind == "entity_compare_scene":
-        _require_text_list(payload, "entities", errors, minimum=2)
-        _require_text(payload, "comparison_axis", errors)
-
     return errors
 
 
@@ -506,36 +326,6 @@ def _require_object_rows(
     return rows
 
 
-def _number(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    match = re.search(r"[-+]?\d+(?:\.\d+)?", clean_text(value).replace(",", ""))
-    return float(match.group(0)) if match else None
-
-
-def _require_numeric_fields(
-    rows: list[dict[str, Any]],
-    field: str,
-    keys: tuple[str, ...],
-    errors: list[str],
-    *,
-    minimum: float | None = None,
-    maximum: float | None = None,
-) -> None:
-    for index, row in enumerate(rows, start=1):
-        for key in keys:
-            value = _number(row.get(key))
-            if value is None:
-                errors.append(f"payload.{field}[{index}].{key} must contain a numeric value")
-                continue
-            if minimum is not None and value < minimum:
-                errors.append(f"payload.{field}[{index}].{key} must be >= {minimum:g}")
-            if maximum is not None and value > maximum:
-                errors.append(f"payload.{field}[{index}].{key} must be <= {maximum:g}")
-
-
 def _require_member_label(
     payload: dict[str, Any],
     field: str,
@@ -551,47 +341,6 @@ def _require_member_label(
     labels = {clean_text(row.get("label", "")).lower() for row in rows}
     if value and value.lower() not in labels:
         errors.append(f"payload.{field} must match an item label")
-
-
-def _validate_ecosystem(payload: dict[str, Any], errors: list[str]) -> None:
-    nodes = _require_object_rows(payload, "nodes", errors, minimum=2, required_text=("id", "label"))
-    ids = [clean_text(node.get("id", "")) for node in nodes if clean_text(node.get("id", ""))]
-    if len(ids) != len(set(ids)):
-        errors.append("payload.nodes ids must be unique")
-    edges = _require_object_rows(
-        payload,
-        "edges",
-        errors,
-        minimum=1,
-        required_text=("from", "to", "label"),
-    )
-    valid_ids = set(ids)
-    focus = clean_text(payload.get("focus_entity", ""))
-    labels = {clean_text(node.get("label", "")).lower() for node in nodes}
-    if not focus:
-        errors.append("payload.focus_entity is required")
-    elif focus.lower() not in labels:
-        errors.append("payload.focus_entity must match a node label")
-    for index, edge in enumerate(edges, start=1):
-        source = clean_text(edge.get("from", ""))
-        target = clean_text(edge.get("to", ""))
-        if source and source not in valid_ids:
-            errors.append(f"payload.edges[{index}].from does not reference a node id")
-        if target and target not in valid_ids:
-            errors.append(f"payload.edges[{index}].to does not reference a node id")
-        if source and target and source == target:
-            errors.append(f"payload.edges[{index}] cannot connect a node to itself")
-
-
-def _validate_matrix(payload: dict[str, Any], errors: list[str]) -> None:
-    columns = _require_text_list(payload, "columns", errors, minimum=2)
-    rows = _require_object_rows(payload, "rows", errors, minimum=2, required_text=("label",))
-    for index, row in enumerate(rows, start=1):
-        values = _text_values(row.get("values"))
-        if len(values) != len(columns):
-            errors.append(
-                f"payload.rows[{index}].values must contain exactly {len(columns)} value(s), one per column"
-            )
 
 
 def _validate_interface_panel(payload: dict[str, Any], field: str, errors: list[str]) -> None:

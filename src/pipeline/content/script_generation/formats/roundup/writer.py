@@ -695,11 +695,12 @@ def _invoke_chain(
     llm_calls: list[dict[str, Any]],
 ):
     structured_config = dict(script_cfg.get("structured_output") or {})
-    structured_options: dict[str, Any] = {
-        "include_raw": True,
-        "method": str(structured_config.get("method") or "json_schema"),
-        "strict": bool(structured_config.get("strict", True)),
-    }
+    structured_options = _structured_output_options(structured_config)
+    task_payload = _task_payload_for_structured_output(
+        task_payload,
+        output_model=output_model,
+        method=structured_options["method"],
+    )
     structured_llm = llm.with_structured_output(output_model, **structured_options)
     chain = TASK_PROMPT | structured_llm
     prompt_inputs = {
@@ -849,6 +850,35 @@ def _invoke_chain(
             )
         )
         return parsed_model
+
+
+def _structured_output_options(structured_config: dict[str, Any]) -> dict[str, Any]:
+    method = str(structured_config.get("method") or "json_schema")
+    options: dict[str, Any] = {
+        "include_raw": True,
+        "method": method,
+    }
+    if method != "json_mode":
+        options["strict"] = bool(structured_config.get("strict", True))
+    return options
+
+
+def _task_payload_for_structured_output(
+    task_payload: str,
+    *,
+    output_model,
+    method: str,
+) -> str:
+    if method != "json_mode":
+        return task_payload
+    schema = json_dumps(output_model.model_json_schema())
+    return (
+        f"{task_payload}\n\n"
+        "Return only one JSON object matching the following JSON Schema exactly. "
+        "Use only enum values defined by the schema, use null only where allowed, "
+        "and do not wrap the object in Markdown.\n"
+        f"JSON Schema:\n{schema}"
+    )
 
 
 def _exception_status_code(exc: Exception) -> int | None:

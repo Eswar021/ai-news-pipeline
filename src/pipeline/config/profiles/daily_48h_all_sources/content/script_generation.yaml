@@ -9,19 +9,20 @@ provider_options:
   request_timeout_seconds: 300
 llm_roles:
   story_writer:
-    provider: moonshot
-    model: kimi-k3
+    provider: deepseek
+    model: deepseek-v4-pro
     temperature: 1.0
     provider_options:
-      thinking: null
+      thinking: enabled
       omit_temperature: true
-      request_timeout_seconds: 360
+      reasoning_effort: max
+      request_timeout_seconds: 600
     structured_output:
-      method: json_schema
-      strict: true
+      method: json_mode
+      strict: false
     llm_retry:
       enabled: true
-      max_attempts: 1
+      max_attempts: 2
       max_structured_output_attempts: 2
       initial_delay_seconds: 1.0
       max_delay_seconds: 10.0
@@ -35,19 +36,20 @@ llm_roles:
         method: json_schema
         strict: true
   story_reviewer:
-    provider: moonshot
-    model: kimi-k3
+    provider: deepseek
+    model: deepseek-v4-pro
     temperature: 1.0
     provider_options:
-      thinking: null
+      thinking: enabled
       omit_temperature: true
-      request_timeout_seconds: 480
+      reasoning_effort: max
+      request_timeout_seconds: 600
     structured_output:
-      method: json_schema
-      strict: true
+      method: json_mode
+      strict: false
     llm_retry:
       enabled: true
-      max_attempts: 1
+      max_attempts: 2
       max_structured_output_attempts: 2
       initial_delay_seconds: 1.0
       max_delay_seconds: 10.0
@@ -61,19 +63,20 @@ llm_roles:
         method: json_schema
         strict: true
   bookend_writer:
-    provider: moonshot
-    model: kimi-k3
+    provider: deepseek
+    model: deepseek-v4-pro
     temperature: 1.0
     provider_options:
-      thinking: null
+      thinking: enabled
       omit_temperature: true
-      request_timeout_seconds: 360
+      reasoning_effort: max
+      request_timeout_seconds: 600
     structured_output:
-      method: json_schema
-      strict: true
+      method: json_mode
+      strict: false
     llm_retry:
       enabled: true
-      max_attempts: 1
+      max_attempts: 2
       max_structured_output_attempts: 2
       initial_delay_seconds: 1.0
       max_delay_seconds: 10.0
@@ -87,19 +90,20 @@ llm_roles:
         method: json_schema
         strict: true
   bookend_reviewer:
-    provider: moonshot
-    model: kimi-k3
+    provider: deepseek
+    model: deepseek-v4-pro
     temperature: 1.0
     provider_options:
-      thinking: null
+      thinking: enabled
       omit_temperature: true
-      request_timeout_seconds: 480
+      reasoning_effort: max
+      request_timeout_seconds: 600
     structured_output:
-      method: json_schema
-      strict: true
+      method: json_mode
+      strict: false
     llm_retry:
       enabled: true
-      max_attempts: 1
+      max_attempts: 2
       max_structured_output_attempts: 2
       initial_delay_seconds: 1.0
       max_delay_seconds: 10.0

@@ -4,9 +4,103 @@ shared:
     logging:
       profile: verbose
 modules:
-  visuals:
-    planner:
+  ingestion:
+    news_collection:
+      profile:
+        collector_caps:
+          ai_company_blogs:
+            max_items_per_source: 2
+          tech_news_apis:
+            max_items_per_source: 4
+          research_papers:
+            max_items_per_category: 4
+          youtube_podcast_transcripts:
+            max_videos_per_channel: 1
+          community_signals:
+            max_items: 12
+  content:
+    editorial_triage:
+      provider: openai
+      model: gpt-4o-mini
+      batch_size: 10
+      max_attempts: 2
+    story_mapping:
+      clustering:
+        event_identity:
+          provider: openai
+          model: gpt-4o-mini
+          worker_count: 2
+          max_attempts: 2
+        pair_adjudication:
+          provider: openai
+          model: gpt-4o-mini
+          worker_count: 2
+          max_attempts: 2
+          full_record_review:
+            provider: openai
+            model: gpt-4o-mini
+        cluster_reconciliation:
+          provider: openai
+          model: gpt-4o-mini
+          worker_count: 2
+          max_attempts: 2
+      story_label:
+        provider: openai
+        model: gpt-4o-mini
+        worker_count: 2
+    editorial_selection:
+      provider: openai
+      model: gpt-4o-mini
+      max_attempts: 2
+      slate_review:
+        provider: openai
+        model: gpt-4o-mini
+        max_attempts: 2
+    script_generation:
+      provider: openai
+      model: gpt-4o-mini
+      worker_count: 2
       llm_roles:
+        story_writer:
+          provider: openai
+          model: gpt-4o-mini
+          temperature: 0.4
+          content_filter_fallback: null
+        story_reviewer:
+          provider: openai
+          model: gpt-4o-mini
+          temperature: 0.3
+          content_filter_fallback: null
+        bookend_writer:
+          provider: openai
+          model: gpt-4o-mini
+          temperature: 0.4
+          content_filter_fallback: null
+        bookend_reviewer:
+          provider: openai
+          model: gpt-4o-mini
+          temperature: 0.3
+          content_filter_fallback: null
+    metadata_creator:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.4
+      content_filter_fallback: null
+  visuals:
+    research:
+      provider: openai
+      model: gpt-4o-mini
+      worker_count: 2
+    planner:
+      provider: openai
+      model: gpt-4o-mini
+      llm_roles:
+        episode_director:
+          provider: openai
+          model: gpt-4o-mini
+        bookend_visual_planner:
+          provider: openai
+          model: gpt-4o-mini
         story_visual_planner:
           provider: openai
           model: gpt-4o-mini

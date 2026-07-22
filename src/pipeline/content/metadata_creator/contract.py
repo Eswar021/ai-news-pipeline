@@ -12,7 +12,7 @@ from .config import (
 
 
 MetadataStatus = Literal["ok", "failed"]
-LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot"]
+LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot", "deepseek"]
 
 
 class MetadataRun(BaseModel):
@@ -46,6 +46,7 @@ class MetadataPolicy(BaseModel):
 
     title_option_count: int = DEFAULT_TITLE_OPTION_COUNT
     thumbnail_text_option_count: int = DEFAULT_THUMBNAIL_TEXT_OPTION_COUNT
+    thumbnail_concept_count: int = 3
     max_tags: int = DEFAULT_MAX_TAGS
     include_source_urls: bool = True
     chapter_title_max_chars: int = 64
@@ -63,6 +64,13 @@ class MetadataPolicy(BaseModel):
     def thumbnail_count_must_be_valid(cls, value: int) -> int:
         if value < 3 or value > 8:
             raise ValueError("metadata_policy.thumbnail_text_option_count must be between 3 and 8")
+        return value
+
+    @field_validator("thumbnail_concept_count")
+    @classmethod
+    def thumbnail_concept_count_must_be_valid(cls, value: int) -> int:
+        if value < 1 or value > 6:
+            raise ValueError("metadata_policy.thumbnail_concept_count must be between 1 and 6")
         return value
 
     @field_validator("max_tags")
@@ -102,6 +110,7 @@ class ProviderOptions(BaseModel):
 
     thinking: Literal["enabled", "disabled"] | None = None
     omit_temperature: bool = False
+    reasoning_effort: Literal["high", "max"] | None = None
     request_timeout_seconds: float = Field(default=300.0, ge=10.0, le=1800.0)
 
 
@@ -251,6 +260,7 @@ class MetadataSummary(BaseModel):
 
     title_option_count: int
     thumbnail_option_count: int
+    thumbnail_concept_count: int
     chapter_count: int
     tag_count: int
     source_url_count: int

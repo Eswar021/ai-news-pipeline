@@ -919,10 +919,10 @@ def test_safe_stitcher_fallback_does_not_invent_a_metric_scene() -> None:
         source_index=_source_index(),
         counts={},
         group_index=1,
-        policy={"allowed_render_kinds": ["kinetic_type_scene", "data_counter_scene"]},
+        policy={"allowed_render_kinds": ["editorial_text_scene", "source_article_scene"]},
     )
 
-    assert candidate["render_kind"] == "kinetic_type_scene"
+    assert candidate["render_kind"] == "editorial_text_scene"
     assert "metrics" not in candidate["payload"]
     assert candidate["semantic_grounding"]["status"] == "grounded"
 
@@ -1434,7 +1434,7 @@ def test_failed_story_plan_is_not_replaced_when_fallbacks_are_disabled() -> None
         config={
             "allow_deterministic_story_fallbacks": False,
             "scene_policy": {
-                "allowed_render_kinds": ["kinetic_type_scene"],
+                "allowed_render_kinds": ["editorial_text_scene"],
                 "max_scene_seconds": 14.0,
             },
         },
@@ -1758,15 +1758,21 @@ def test_overlong_story_unit_requires_distinct_planner_treatments() -> None:
         "order": 1,
         "start_unit_order": 2,
         "end_unit_order": 2,
-        "render_kind": "kinetic_type_scene",
-        "payload_json": json.dumps({"phrases": ["First idea"]}),
+        "render_kind": "editorial_text_scene",
+        "payload_json": json.dumps({"headline": "First idea", "composition": "editorial_center"}),
     }
     duplicate = {**first, "order": 2}
     distinct = {
         **first,
         "order": 2,
-        "render_kind": "architecture_flow_scene",
-        "payload_json": json.dumps({"headline": "How it works", "steps": [{"label": "A"}, {"label": "B"}]}),
+        "render_kind": "simple_explainer_scene",
+        "payload_json": json.dumps(
+            {
+                "headline": "How it works",
+                "items": [{"label": "A"}, {"label": "B"}],
+                "orientation": "horizontal",
+            }
+        ),
     }
 
     single_errors = _story_scene_timing_errors([first], section=section, max_scene_seconds=14.0)
@@ -1956,8 +1962,14 @@ def test_small_scene_target_overrun_is_allowed_below_hard_cap() -> None:
         "order": 1,
         "start_unit_order": 11,
         "end_unit_order": 11,
-        "render_kind": "data_counter_scene",
-        "payload_json": json.dumps({"headline": "Funding", "metrics": [{"value": "439"}]}),
+        "render_kind": "simple_explainer_scene",
+        "payload_json": json.dumps(
+            {
+                "headline": "Funding",
+                "items": [{"label": "Before"}, {"label": "After"}],
+                "orientation": "horizontal",
+            }
+        ),
     }
 
     errors = _story_scene_timing_errors(
@@ -2024,10 +2036,15 @@ def test_stitcher_allocates_one_long_unit_across_distinct_planned_scenes() -> No
             "section_type": "story",
             "start_unit_order": 1,
             "end_unit_order": 1,
-            "render_kind": "kinetic_type_scene",
+            "render_kind": "editorial_text_scene",
             "script_excerpt": "First, establish the problem.",
             "visual_intent": "Show the problem.",
-            "payload": {"phrases": ["THE PROBLEM"]},
+            "payload": {
+                "headline": "THE PROBLEM",
+                "accent_words": ["PROBLEM"],
+                "composition": "editorial_center",
+                "motion_style": "word_reveal",
+            },
             "source_record_keys": [],
             "source_urls": [],
             "semantic_grounding": {"status": "grounded", "errors": []},
@@ -2062,11 +2079,11 @@ def test_stitcher_allocates_one_long_unit_across_distinct_planned_scenes() -> No
         story={"story_id": "story_apple", "story_title": "Apple update"},
         source_index=_source_index(),
         counts=Counter(),
-        policy={"max_scene_seconds": 14.0, "allowed_render_kinds": ["kinetic_type_scene", "logo_reveal_scene"]},
+        policy={"max_scene_seconds": 14.0, "allowed_render_kinds": ["editorial_text_scene", "logo_reveal_scene"]},
     )
 
     assert [(scene["start_seconds"], scene["end_seconds"]) for scene in scenes] == [(0.0, 10.0), (10.0, 20.0)]
-    assert [scene["render_kind"] for scene in scenes] == ["kinetic_type_scene", "logo_reveal_scene"]
+    assert [scene["render_kind"] for scene in scenes] == ["editorial_text_scene", "logo_reveal_scene"]
     assert [scene["script_excerpt"] for scene in scenes] == [
         "First, establish the problem.",
         "Then reveal who changes it.",
@@ -2116,15 +2133,15 @@ def test_stitcher_refuses_to_clone_one_long_semantic_scene() -> None:
 
 def test_adjacent_identical_render_payloads_are_reported() -> None:
     scenes = [
-        {"scene_id": "scene_001", "story_id": "story_apple", "render_kind": "kinetic_type_scene", "payload": {"phrases": ["SAME"]}},
-        {"scene_id": "scene_002", "story_id": "story_apple", "render_kind": "kinetic_type_scene", "payload": {"phrases": ["SAME"]}},
+        {"scene_id": "scene_001", "story_id": "story_apple", "render_kind": "editorial_text_scene", "payload": {"headline": "SAME"}},
+        {"scene_id": "scene_002", "story_id": "story_apple", "render_kind": "editorial_text_scene", "payload": {"headline": "SAME"}},
     ]
 
     assert _adjacent_duplicate_visual_payloads(scenes) == [
         {
             "first_scene_id": "scene_001",
             "second_scene_id": "scene_002",
-            "render_kind": "kinetic_type_scene",
+            "render_kind": "editorial_text_scene",
         }
     ]
 
@@ -2292,7 +2309,7 @@ def test_catalog_asset_type_does_not_rewrite_the_selected_render_kind() -> None:
     assert "contract_repairs" not in scene
 
 
-def test_numeric_scene_is_not_semantically_rejected_by_literal_matching_code() -> None:
+def test_explainer_scene_is_not_semantically_rejected_by_literal_matching_code() -> None:
     source_index = _source_index()
     source_index["truth_items_by_id"]["truth_apple_45_minutes"] = {
         "story_id": "story_apple",
@@ -2307,7 +2324,7 @@ def test_numeric_scene_is_not_semantically_rejected_by_literal_matching_code() -
             "order": 1,
             "start_unit_order": 2,
             "end_unit_order": 2,
-            "render_kind": "data_counter_scene",
+            "render_kind": "simple_explainer_scene",
             "script_excerpt": "Performance rose by 80 percent.",
             "visual_intent": "Show the reported change.",
             "evidence_record_keys": ["record_apple"],
@@ -2317,7 +2334,12 @@ def test_numeric_scene_is_not_semantically_rejected_by_literal_matching_code() -
             "payload_json": json.dumps(
                 {
                     "headline": "Performance",
-                    "metrics": [{"label": "Gain", "value": "45 minutes"}],
+                    "items": [
+                        {"label": "Setup", "detail": "45 minutes"},
+                        {"label": "Result", "detail": "Performance changed"},
+                    ],
+                    "orientation": "horizontal",
+                    "motion_style": "sequential_focus",
                 }
             ),
             "reason": "Display a number.",
@@ -2343,12 +2365,12 @@ def test_numeric_scene_is_not_semantically_rejected_by_literal_matching_code() -
         asset_catalog_index={"assets_by_id": {}, "assets_by_story": {}},
         config={
             "scene_policy": {
-                "allowed_render_kinds": ["data_counter_scene", "source_article_scene"]
+                "allowed_render_kinds": ["simple_explainer_scene", "source_article_scene"]
             }
         },
     )
 
-    assert scene["render_kind"] == "data_counter_scene"
+    assert scene["render_kind"] == "simple_explainer_scene"
     assert "contract_repairs" not in scene
     assert "contract_validation_errors" not in scene
 
@@ -2363,12 +2385,13 @@ def test_visual_payload_validation_rejects_incomplete_semantic_graphics() -> Non
                 {"label": "After", "value": "88"},
             ],
         },
-    ) == ["payload.bars[1].value must contain a numeric value"]
-    assert "payload.active_step_label is required" in validate_scene_payload(
-        "architecture_flow_scene",
+    ) == ["unsupported render_kind: bar_chart_scene"]
+    assert "payload.items requires at least 2 object item(s)" in validate_scene_payload(
+        "simple_explainer_scene",
         {
             "headline": "Request path",
-            "steps": [{"label": "Client"}, {"label": "API"}],
+            "items": [{"label": "Client"}],
+            "orientation": "horizontal",
         },
     )
     assert validate_scene_payload(
@@ -2391,46 +2414,48 @@ def test_visual_payload_validation_rejects_incomplete_semantic_graphics() -> Non
             "headline": "Efficiency delta",
             "metrics": [{"label": "Reported gain", "value": "Competitive Edge"}],
         },
-    ) == ["payload.metrics[1].value must contain a numeric value"]
+    ) == ["unsupported render_kind: data_counter_scene"]
 
 
 def test_visual_payload_validation_checks_nested_relationships() -> None:
-    ecosystem_errors = validate_scene_payload(
-        "ecosystem_map_scene",
+    explainer_errors = validate_scene_payload(
+        "simple_explainer_scene",
         {
             "headline": "Platform relationships",
-            "focus_entity": "OpenAI",
-            "nodes": [
-                {"id": "openai", "label": "OpenAI"},
-                {"id": "developers", "label": "Developers"},
+            "items": [
+                {"label": "OpenAI"},
+                {"label": "Developers"},
             ],
-            "edges": [{"from": "openai", "to": "missing", "label": "serves"}],
+            "focus_item_label": "Missing",
+            "orientation": "horizontal",
         },
     )
-    matrix_errors = validate_scene_payload(
-        "capability_matrix_scene",
+    transform_errors = validate_scene_payload(
+        "interface_transform_scene",
         {
-            "headline": "Product tradeoffs",
-            "columns": ["Speed", "Cost"],
-            "rows": [
-                {"label": "Product A", "values": ["Fast"]},
-                {"label": "Product B", "values": ["Medium", "Low"]},
-            ],
+            "headline": "Workflow change",
+            "before": {"label": "Before", "items": ["Manual"]},
+            "after": {"label": "After", "items": ["Review", "Publish"]},
+            "transformation_label": "Assisted workflow",
         },
     )
 
-    assert "payload.edges[1].to does not reference a node id" in ecosystem_errors
-    assert "payload.rows[1].values must contain exactly 2 value(s), one per column" in matrix_errors
+    assert "payload.focus_item_label must match an item label" in explainer_errors
+    assert "payload.before.items requires at least 2 non-empty text item(s)" in transform_errors
 
 
 def test_semantic_graphic_accepts_selected_record_or_canonical_script_beat_grounding() -> None:
     invalid = _semantic_grounding_for_scene(
         draft={"evidence_record_keys": [], "evidence_text": ""},
-        render_kind="data_counter_scene",
+        render_kind="simple_explainer_scene",
         story_id="story_apple",
         source_record_key="",
         url="",
-        payload={"headline": "Reported performance increase", "metrics": [{"label": "Performance", "value": "80%"}]},
+        payload={
+            "headline": "Reported performance increase",
+            "items": [{"label": "Before"}, {"label": "After"}],
+            "orientation": "horizontal",
+        },
         source_index=_source_index(),
     )
     valid = _semantic_grounding_for_scene(
@@ -2440,11 +2465,15 @@ def test_semantic_graphic_accepts_selected_record_or_canonical_script_beat_groun
             "evidence_text": "The selected record explicitly reports an 80 percent increase.",
             "grounding_basis": "selected_record",
         },
-        render_kind="data_counter_scene",
+        render_kind="simple_explainer_scene",
         story_id="story_apple",
         source_record_key="",
         url="",
-        payload={"headline": "Reported performance increase", "metrics": [{"label": "Reported increase", "value": "80%"}]},
+        payload={
+            "headline": "Reported performance increase",
+            "items": [{"label": "Before"}, {"label": "After"}],
+            "orientation": "horizontal",
+        },
         source_index=_source_index(),
     )
     script_beat = _semantic_grounding_for_scene(
@@ -2453,14 +2482,14 @@ def test_semantic_graphic_accepts_selected_record_or_canonical_script_beat_groun
             "evidence_text": "The assigned narration contrasts privacy with data retention.",
             "grounding_basis": "script_beat",
         },
-        render_kind="entity_compare_scene",
+        render_kind="simple_explainer_scene",
         story_id="story_apple",
         source_record_key="",
         url="",
         payload={
             "headline": "Privacy or retention",
-            "entities": ["Privacy", "Data retention"],
-            "comparison_axis": "User choice",
+            "items": [{"label": "Privacy"}, {"label": "Data retention"}],
+            "orientation": "horizontal",
         },
         source_index=_source_index(),
     )
@@ -2470,14 +2499,14 @@ def test_semantic_graphic_accepts_selected_record_or_canonical_script_beat_groun
             "evidence_text": "Claims to use a selected record without naming one.",
             "grounding_basis": "selected_record",
         },
-        render_kind="entity_compare_scene",
+        render_kind="simple_explainer_scene",
         story_id="story_apple",
         source_record_key="",
         url="",
         payload={
             "headline": "Product comparison",
-            "entities": ["Product A", "Product B"],
-            "comparison_axis": "Capabilities",
+            "items": [{"label": "Product A"}, {"label": "Product B"}],
+            "orientation": "horizontal",
         },
         source_index=_source_index(),
     )
@@ -2488,7 +2517,7 @@ def test_semantic_graphic_accepts_selected_record_or_canonical_script_beat_groun
     assert missing_selected_record["status"] == "invalid"
 
 
-def test_numeric_graphic_context_is_owned_by_llm_and_structural_provenance() -> None:
+def test_explainer_context_is_owned_by_llm_and_structural_provenance() -> None:
     result = _semantic_grounding_for_scene(
         draft={
             "evidence_record_keys": ["record_apple"],
@@ -2496,13 +2525,17 @@ def test_numeric_graphic_context_is_owned_by_llm_and_structural_provenance() -> 
             "evidence_text": "The selected record reports an 80 percent increase.",
             "grounding_basis": "selected_record",
         },
-        render_kind="data_counter_scene",
+        render_kind="simple_explainer_scene",
         story_id="story_apple",
         source_record_key="",
         url="",
         payload={
             "headline": "Reported performance increase",
-            "metrics": [{"label": "Reported increase", "value": "100%"}],
+            "items": [
+                {"label": "Before", "detail": "Baseline"},
+                {"label": "After", "detail": "Reported increase"},
+            ],
+            "orientation": "horizontal",
         },
         source_index=_source_index(),
     )
@@ -2511,7 +2544,7 @@ def test_numeric_graphic_context_is_owned_by_llm_and_structural_provenance() -> 
     assert result["errors"] == []
 
 
-def test_manual_visual_plan_preserves_the_same_numeric_truth_contract() -> None:
+def test_manual_visual_plan_preserves_structural_provenance_for_active_explainer() -> None:
     source_index = _build_manual_source_index(
         {
             "stories": [
@@ -2551,7 +2584,7 @@ def test_manual_visual_plan_preserves_the_same_numeric_truth_contract() -> None:
                 "section_type": "story",
                 "start_seconds": 0,
                 "end_seconds": 6,
-                "render_kind": "data_counter_scene",
+                "render_kind": "simple_explainer_scene",
                 "script_excerpt": "The report says performance rose by 80 percent.",
                 "visual_intent": "Show the exact reported gain.",
                 "evidence_record_keys": ["record_apple"],
@@ -2560,12 +2593,17 @@ def test_manual_visual_plan_preserves_the_same_numeric_truth_contract() -> None:
                 "grounding_basis": "selected_record",
                 "payload": {
                     "headline": "Reported performance gain",
-                    "metrics": [{"label": "Gain", "value": "80%"}],
+                    "items": [
+                        {"label": "Before", "detail": "Baseline"},
+                        {"label": "After", "detail": "Reported gain"},
+                    ],
+                    "orientation": "horizontal",
+                    "motion_style": "sequential_focus",
                 },
                 "covered_unit_orders": [1],
             }
         ],
-        allowed_render_kinds={"data_counter_scene"},
+        allowed_render_kinds={"simple_explainer_scene"},
         source_index=source_index,
         asset_catalog_index={},
         errors=errors,

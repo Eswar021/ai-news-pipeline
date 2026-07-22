@@ -138,7 +138,7 @@ class VisualMediaConfig(BaseModel):
     reuse_equivalent_image_requests: bool = True
     max_fallback_requests: int | None = None
     max_fallback_scenes: int = 3
-    unresolved_fallback_render_kind: Literal["kinetic_type_scene"] | None = "kinetic_type_scene"
+    unresolved_fallback_render_kind: Literal["editorial_text_scene"] | None = None
     semantic_verification: SemanticVerificationConfig = Field(
         default_factory=SemanticVerificationConfig
     )

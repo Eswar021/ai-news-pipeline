@@ -371,7 +371,15 @@ def _apply_reconciled_semantic_edges(
                     for index in member_indices
                 ],
                 "pair_decisions": [
-                    decision
+                    {
+                        **decision,
+                        "left_record_key": clean_text(
+                            candidate["left_record"].get("record_key")
+                        ),
+                        "right_record_key": clean_text(
+                            candidate["right_record"].get("record_key")
+                        ),
+                    }
                     for candidate, decision in zip(candidates, resolved, strict=True)
                     if candidate["_left_index"] in member_set
                     and candidate["_right_index"] in member_set

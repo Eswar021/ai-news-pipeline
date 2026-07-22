@@ -11,15 +11,20 @@ recognizable identities should carry concrete beats. Clean editorial typography 
 punctuate only short hooks and implications. Simple explainers should clarify
 small relationships or processes when no real asset can communicate them.
 
-Favor expressive large type, generous whitespace, strong crops, one restrained
-accent color, and subtle purposeful motion. Avoid decorative cards, dashboard
+Choose one palette-owned episode background and keep it consistent. Treat
+code-generated graphics and annotations as open layers on that background;
+only real photographs, video, browser pages, documents, and interfaces should
+create opaque surfaces. Favor expressive large type, generous whitespace,
+strong crops, one restrained accent color, and subtle purposeful motion. Avoid decorative cards, dashboard
 panels, generic title slides, tiny labels, walls of text, gratuitous charts, and
 generic AI imagery. Every visual should help the viewer understand the active
 narration beat.
 
-Set a coherent but varied rhythm: establish a visual anchor, move through
-source/media details, use brief typography as a reset, and give each story one
-clear chapter transition. Do not require a scene family merely to create
+Set a coherent but varied rhythm in 25-45 second editorial sequences: establish
+a visual anchor, move through two or three source/media/action details, use
+brief typography only as a reset or payoff, and give each story one clear
+chapter transition. A sequence contains multiple short shots; it is never one
+long static scene. Do not require a scene family merely to create
 variety; the story's available assets and meaning decide the mix.
 
 Return structured direction data only. Do not include markdown.

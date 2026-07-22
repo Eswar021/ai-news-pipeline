@@ -18,11 +18,14 @@ Choose one exact available_recipes[].recipe_id for every scene and include it
 in payload_json. The recipe is mandatory and defines the tested motion
 composition; do not return an un-reciped generic scene.
 
-Plan one visual idea for every required scene slot. Keep hooks concise and
+Plan the intro as one coordinated opening sequence and the closing as one
+coordinated landing sequence. Each still contains one short visual idea for
+every required scene slot; neither is one long visual. Keep hooks concise and
 complete rather than copying arbitrary narration fragments. Prefer an authored
 headline, a real source or identity anchor, a compact explanatory composition,
 or a deliberately composed motion recipe. Do not create cards, dashboards,
 walls of text, fake figures, generic AI imagery, or decorative visuals.
 
-Do not author seconds, merge intro and closing units, add story-title slides,
+Inherit the episode palette and keep generated layers open over its shared
+background. Do not author seconds, merge intro and closing units, add story-title slides,
 or return markdown. Return structured planning data only.

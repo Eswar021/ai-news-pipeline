@@ -11,7 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict
 
 from src.pipeline.config import ConfigDocument
-from src.pipeline.content.metadata_finalizer import run as run_metadata_finalizer
+from src.pipeline.publishing.metadata_finalizer import run as run_metadata_finalizer
 from src.pipeline.voiceover.contract import VoiceoverConfig
 from ..artifact_selection import fingerprint_token, resolve_script_result, resolve_voiceover_package
 from ..io import load_json, write_json
@@ -74,7 +74,6 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
         write_json(result_path, response)
         state.finish_stage(STAGE, status="ok")
         logger.logger.info("COMPLETE stage=%s", STAGE)
-        logger.event("stage.completed", status="ok", details=response["summary"])
         return response
     except Exception as exc:
         reason = f"{type(exc).__name__}: {exc}"
@@ -88,7 +87,6 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
         write_json(result_path, response)
         state.finish_stage(STAGE, status="failed", failure_reason=reason)
         logger.logger.exception("FAILED stage=%s", STAGE)
-        logger.event("stage.failed", status="failed", details={"error": reason})
         return response
 
 
@@ -157,7 +155,6 @@ def _run_stage(
         summary = load_json(package_path.parent / "summary.json")
         voiceover_result = _voiceover_envelope(run_id, voiceover_package, summary)
         logger.logger.info("REUSE module=voiceover package=%s", package_path)
-        logger.event("module.reused", module="voiceover", status="ok", details={"package_path": str(package_path)})
         state.record_module(
             STAGE,
             "voiceover",
@@ -221,7 +218,7 @@ def _run_stage(
     if options.finalize_metadata:
         metadata_creator_path = run_dir / "metadata_creator" / "metadata_creator_result.json"
         metadata_creator_result = load_json(metadata_creator_path)
-        metadata_document = config_resolver.module("content", "metadata_finalizer")
+        metadata_document = config_resolver.module("publishing", "metadata_finalizer")
         metadata_input = {
             "run": {"run_id": run_id, "generated_at": now_iso()},
             "config": deepcopy(metadata_document.value),

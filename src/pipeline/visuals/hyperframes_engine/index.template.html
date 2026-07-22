@@ -6,120 +6,150 @@
     <script src="node_modules/gsap/dist/gsap.min.js"></script>
     <style>
       * { box-sizing: border-box; }
-      :root { --paper: #f4efe6; --ink: #171611; --accent: #b64b2d; --muted: #69645c; --serif: "EB Garamond"; --sans: "Oswald"; }
-      html, body { margin: 0; width: __WIDTH__px; height: __HEIGHT__px; overflow: hidden; }
-      body { background: var(--paper); color: var(--ink); font-family: var(--sans); }
-      #root { position: relative; width: __WIDTH__px; height: __HEIGHT__px; overflow: hidden; }
-      #stage { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; overflow: hidden; color: var(--ink); font-family: var(--sans); }
-      .canvas-fill { position: absolute; inset: 0; z-index: -3; background: var(--paper); }
-      #stage::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        opacity: .24;
-        background-image: linear-gradient(rgba(23,22,17,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(23,22,17,.025) 1px, transparent 1px);
-        background-size: 72px 72px;
+      :root {
+        --paper: #f4efe6;
+        --ink: #171611;
+        --accent: #b64b2d;
+        --muted: #69645c;
+        --surface: #fffdf8;
+        --sans: "Oswald", "Avenir Next Condensed", sans-serif;
+        --serif: "EB Garamond", Georgia, serif;
       }
-      .accent-rule { position: absolute; left: 5.4%; top: 7%; width: 8%; height: 7px; background: var(--accent); transform-origin: left center; }
-      .eyebrow { color: var(--accent); font-size: clamp(18px, 1.35vw, 27px); font-weight: 850; letter-spacing: .17em; text-transform: uppercase; }
-      .headline { margin: 0; font-family: var(--serif); font-size: clamp(64px, 6.4vw, 124px); line-height: .9; letter-spacing: -.052em; font-weight: 700; text-wrap: balance; }
-      .headline.small { font-size: clamp(54px, 4.8vw, 94px); }
-      .accent-word { color: var(--accent); text-decoration: underline; text-decoration-thickness: .07em; text-underline-offset: .08em; }
-      .support { color: var(--muted); font-size: clamp(25px, 2vw, 39px); line-height: 1.15; font-weight: 560; text-wrap: balance; }
-      .media-fill { width: 100%; height: 100%; object-fit: cover; }
-      .shade { position: absolute; inset: 0; z-index: 2; background: linear-gradient(90deg, rgba(18,16,13,.92), rgba(18,16,13,.48) 58%, rgba(18,16,13,.12)); }
-      .source-credit { position: absolute; right: 3.2%; bottom: 3.4%; z-index: 12; padding: 8px 12px; color: #fffaf2; background: rgba(23,22,17,.9); font-size: clamp(14px, 1vw, 20px); font-weight: 750; letter-spacing: .04em; }
-      .full-copy { position: absolute; left: 7.2%; top: 17%; width: 66%; z-index: 4; }
-      .full-copy .headline { margin-top: 34px; }
-      .full-copy .support { margin-top: 30px; max-width: 82%; }
-      .ghost-word { position: absolute; right: 2.5%; bottom: -2%; z-index: 0; max-width: 48%; overflow: hidden; color: color-mix(in srgb, var(--accent) 10%, transparent); font-family: var(--sans); font-size: clamp(128px, 15vw, 286px); line-height: .78; font-weight: 700; letter-spacing: -.045em; text-transform: uppercase; text-align: right; white-space: nowrap; }
-      .split-media { position: absolute; inset: 0 0 0 40%; overflow: hidden; clip-path: polygon(11% 0,100% 0,100% 100%,0 100%); }
-      .split-copy { position: absolute; left: 5.4%; top: 14%; bottom: 10%; width: 47%; z-index: 4; display: flex; flex-direction: column; justify-content: center; }
-      .split-copy .headline { margin-top: 34px; }
-      .split-copy .support { margin-top: 28px; max-width: 88%; }
-      .browser { position: absolute; left: 4.2%; right: 4.2%; top: 18%; bottom: 6%; overflow: hidden; border: 1px solid rgba(23,22,17,.25); border-radius: 12px; background: #fffdfa; box-shadow: 0 28px 80px rgba(42,35,25,.18); }
-      .browser-bar { height: 54px; display: flex; align-items: center; gap: 12px; padding: 0 22px; color: var(--muted); background: #e9e1d5; border-bottom: 1px solid rgba(23,22,17,.16); font-size: clamp(14px, 1.05vw, 21px); font-weight: 700; }
-      .dot { width: 15px; height: 15px; border-radius: 50%; }
-      .browser-image { width: 100%; height: calc(100% - 54px); object-fit: cover; object-position: center 24%; }
-      .source-title { position: absolute; left: 5%; top: 5%; right: 5%; z-index: 4; display: flex; justify-content: space-between; gap: 40px; align-items: flex-start; }
-      .source-title .headline { max-width: 82%; font-size: clamp(43px, 3.5vw, 68px); }
-      .highlight { position: absolute; left: 7%; right: 7%; bottom: 8%; z-index: 6; padding: 18px 28px; color: var(--ink); background: rgba(255,253,250,.95); border-left: 8px solid var(--accent); box-shadow: 0 14px 42px rgba(42,35,25,.18); font-size: clamp(21px, 1.7vw, 33px); line-height: 1.12; font-weight: 700; text-align: center; }
-      .identity { position: absolute; right: 6%; top: 24%; width: 35%; height: 52%; display: flex; align-items: center; justify-content: center; padding: 4%; text-align: center; }
-      .identity-name { position: relative; width: 100%; font-family: var(--serif); font-size: clamp(48px, 4.6vw, 90px); line-height: .9; letter-spacing: -.05em; font-weight: 700; }
-      .identity-name::after { content: ""; display: block; width: 58%; height: 6px; margin: 28px auto 0; background: var(--accent); }
-      .identity img { position: relative; width: 88%; height: 76%; object-fit: contain; filter: drop-shadow(0 18px 34px rgba(45,34,22,.12)); }
-      .explainer { position: absolute; inset: 0; padding: 8% 7%; }
-      .explainer .headline { width: 76%; font-size: clamp(52px, 4.4vw, 86px); }
-      .explainer > .headline, .metric-stage > .headline, .map-stage > .headline, .trace-stage > .headline, .docs-stage > .headline, .matrix-stage > .headline, .transform-stage > .headline { margin-top: 26px; }
-      .flow { position: absolute; left: 7%; right: 7%; top: 43%; display: flex; align-items: center; justify-content: center; gap: 2.2%; }
-      .flow-item { position: relative; min-width: 17%; max-width: 23%; text-align: center; }
-      .flow-label { font-family: var(--serif); font-size: clamp(32px, 2.7vw, 53px); line-height: .96; font-weight: 700; }
-      .flow-detail { margin-top: 14px; color: var(--muted); font-size: clamp(18px, 1.35vw, 27px); line-height: 1.1; font-weight: 650; }
-      .connector { width: 9%; height: 3px; background: var(--accent); transform-origin: left center; }
-      .story-number { color: var(--accent); font-size: clamp(22px, 1.6vw, 31px); font-weight: 850; letter-spacing: .18em; text-transform: uppercase; }
-      .transition-copy { position: absolute; left: 6.5%; right: 6.5%; top: 17%; bottom: 13%; z-index: 5; display: flex; flex-direction: column; justify-content: center; }
-      .transition-copy .headline { max-width: 82%; }
-      .transition-subtitle { margin-top: 28px; max-width: 68%; color: var(--muted); font-size: clamp(24px, 1.8vw, 36px); line-height: 1.14; font-weight: 620; text-wrap: balance; }
-      .transition-ghost-number { position: absolute; right: 5%; top: 8%; z-index: 1; color: color-mix(in srgb, var(--accent) 10%, transparent); font-family: var(--serif); font-size: clamp(180px, 22vw, 420px); line-height: .8; font-weight: 700; }
-      .transition-media .transition-copy { color: #fffaf2; width: 64%; }
-      .transition-media .headline { text-shadow: 0 8px 38px rgba(0,0,0,.56); }
-      .transition-media .transition-subtitle { color: rgba(255,250,242,.82); text-shadow: 0 4px 24px rgba(0,0,0,.62); }
-      .context-media .full-copy { z-index: 6; }
-      .annotated-media .full-copy { left: 5%; width: 43%; }
-      .annotation-scrim { position: absolute; right: 0; top: 0; bottom: 0; width: 46%; z-index: 7; background: linear-gradient(90deg, transparent, rgba(15,13,10,.72) 28%, rgba(15,13,10,.94)); }
-      .annotation-rail { position: absolute; right: 5.2%; top: 13%; bottom: 13%; width: 32%; z-index: 8; display: flex; flex-direction: column; justify-content: center; gap: 28px; }
-      .annotation { padding: 12px 0 12px 22px; border-left: 5px solid var(--accent); color: #fffaf2; font-size: clamp(20px, 1.42vw, 28px); line-height: 1.12; font-weight: 760; text-wrap: balance; text-shadow: 0 4px 20px rgba(0,0,0,.58); }
-      .metric-stage { position: absolute; inset: 0; padding: 7% 6.5%; }
-      .metric-stage .headline { max-width: 78%; font-size: clamp(52px, 4.7vw, 92px); }
-      .metric-grid { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 10%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4%; align-items: stretch; }
-      .metric { display: flex; flex-direction: column; justify-content: center; border-top: 3px solid color-mix(in srgb, var(--accent) 76%, transparent); }
-      .metric-value { margin-top: 18px; font-family: var(--serif); font-size: clamp(82px, 8vw, 154px); line-height: .78; letter-spacing: -.065em; font-weight: 720; }
-      .metric-label { margin-top: 25px; color: var(--muted); font-size: clamp(22px, 1.7vw, 34px); font-weight: 760; }
-      .delta-grid { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 11%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 5%; }
-      .delta { display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: auto 1fr auto; align-items: center; column-gap: 6%; border-top: 3px solid var(--accent); padding-top: 20px; }
-      .delta-label { grid-column: 1 / -1; color: var(--muted); font-size: clamp(20px, 1.45vw, 29px); font-weight: 820; text-transform: uppercase; letter-spacing: .1em; }
-      .delta-side { font-family: var(--serif); font-size: clamp(55px, 5vw, 98px); line-height: .84; font-weight: 700; }
-      .delta-arrow { color: var(--accent); font-size: clamp(44px, 4vw, 78px); }
-      .delta-result { grid-column: 1 / -1; color: var(--accent); font-size: clamp(34px, 2.9vw, 56px); font-weight: 900; }
-      .map-stage, .trace-stage, .docs-stage, .matrix-stage, .transform-stage { position: absolute; inset: 0; padding: 7% 6.5%; }
-      .map-stage .headline, .trace-stage .headline, .matrix-stage .headline, .transform-stage .headline { max-width: 75%; font-size: clamp(50px, 4.5vw, 88px); }
-      .docs-stage .headline { max-width: 36%; font-size: clamp(48px, 4.1vw, 80px); }
-      .orbit { position: absolute; left: 12%; right: 12%; top: 35%; bottom: 9%; }
-      .orbit-core { position: absolute; left: 50%; top: 50%; width: 25%; aspect-ratio: 1; transform: translate(-50%,-50%); border: 3px solid var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-family: var(--serif); font-size: clamp(31px, 2.6vw, 50px); line-height: .92; font-weight: 700; background: color-mix(in srgb, var(--paper) 88%, transparent); }
-      .orbit-ring { position: absolute; left: 10%; right: 10%; top: 4%; bottom: 4%; border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 50%; }
-      .orbit-node { position: absolute; width: 19%; min-height: 84px; display: flex; align-items: center; justify-content: center; padding: 14px 18px; border-bottom: 3px solid var(--accent); background: color-mix(in srgb, var(--paper) 90%, transparent); font-size: clamp(21px, 1.55vw, 31px); line-height: 1; text-align: center; font-weight: 800; }
-      .trace { position: absolute; left: 7%; right: 7%; top: 44%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: center; gap: 2%; }
-      .trace-step { min-height: 190px; padding: 28px 22px; border-top: 5px solid color-mix(in srgb, var(--accent) 35%, transparent); display: flex; flex-direction: column; justify-content: center; }
-      .trace-step.active { border-color: var(--accent); }
-      .trace-label { font-family: var(--serif); font-size: clamp(31px, 2.45vw, 48px); line-height: .94; font-weight: 700; }
-      .trace-detail { margin-top: 15px; color: var(--muted); font-size: clamp(18px, 1.2vw, 24px); line-height: 1.08; font-weight: 650; }
-      .trace-arrow { color: var(--accent); font-size: clamp(36px, 3vw, 60px); text-align: center; }
-      .focus-note { position: absolute; left: 7%; bottom: 7%; min-height: 44px; max-width: 70%; padding: 7px 0 7px 24px; border-left: 6px solid var(--accent); color: var(--muted); font-size: clamp(21px, 1.55vw, 31px); line-height: 1.12; font-weight: 720; }
-      .walkthrough-markers { position: absolute; right: 5%; top: 24%; z-index: 9; width: 31%; display: flex; flex-direction: column; gap: 18px; }
-      .walkthrough-step { padding: 16px 20px; background: rgba(255,253,250,.94); border-left: 6px solid var(--accent); box-shadow: 0 16px 42px rgba(30,24,17,.18); font-size: clamp(19px, 1.35vw, 27px); line-height: 1.05; font-weight: 770; }
-      .docs { position: absolute; right: 4.5%; top: 20%; width: 55%; height: 73%; }
-      .document { position: absolute; width: 75%; min-height: 40%; padding: 28px 32px; background: #fffdfa; border: 1px solid rgba(23,22,17,.25); box-shadow: 0 25px 65px rgba(35,29,21,.18); }
-      .document-type { color: var(--accent); font-size: clamp(16px, 1vw, 21px); font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
-      .document-title { margin-top: 16px; font-family: var(--serif); font-size: clamp(29px, 2.2vw, 43px); line-height: .93; font-weight: 700; }
-      .document-source { margin-top: 15px; color: var(--muted); font-size: clamp(17px, 1.1vw, 23px); font-weight: 700; }
-      .source-montage { position: absolute; left: 40%; right: 4.2%; top: 17%; bottom: 7%; }
-      .proof-page { position: absolute; width: 78%; height: 76%; overflow: hidden; border: 1px solid rgba(23,22,17,.22); border-radius: 10px; background: #fffdfa; box-shadow: 0 30px 80px rgba(35,29,21,.22); transform-origin: center center; }
-      .proof-page.active { z-index: 6; border: 3px solid var(--accent); }
-      .proof-bar { position: relative; z-index: 3; height: 44px; padding: 0 18px; display: flex; align-items: center; gap: 10px; color: #625e56; background: #e9e1d5; border-bottom: 1px solid rgba(23,22,17,.16); font-size: clamp(14px, .95vw, 19px); font-weight: 760; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .proof-image-frame { position: relative; z-index: 1; width: 100%; height: calc(100% - 44px); overflow: hidden; }
-      .proof-image { width: 100%; height: 100%; object-fit: cover; object-position: center 24%; }
-      .matrix { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 10%; display: grid; align-content: center; }
-      .matrix-row { display: grid; grid-template-columns: 1.35fr repeat(var(--cols), 1fr); border-bottom: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); }
-      .matrix-cell { padding: 16px 18px; min-height: 60px; display: flex; align-items: center; font-size: clamp(18px, 1.25vw, 25px); line-height: 1; font-weight: 720; }
-      .matrix-head { color: var(--accent); font-weight: 900; text-transform: uppercase; letter-spacing: .07em; }
-      .matrix-row.focus { background: color-mix(in srgb, var(--accent) 11%, transparent); border-left: 5px solid var(--accent); }
-      .transform-panels { position: absolute; left: 7%; right: 7%; top: 38%; bottom: 10%; display: grid; grid-template-columns: 1fr auto 1fr; gap: 4%; align-items: center; }
-      .transform-panel { border-top: 4px solid color-mix(in srgb, var(--accent) 45%, transparent); padding-top: 22px; }
-      .transform-panel.after { border-color: var(--accent); }
-      .transform-label { font-family: var(--serif); font-size: clamp(36px, 3vw, 58px); font-weight: 700; }
-      .transform-item { margin-top: 15px; color: var(--muted); font-size: clamp(21px, 1.5vw, 30px); font-weight: 690; }
-      .transform-arrow { color: var(--accent); font-size: clamp(54px, 5vw, 96px); }
-      .grain { position: absolute; inset: 0; z-index: 20; pointer-events: none; opacity: .22; background-image: radial-gradient(rgba(23,22,17,.16) .7px, transparent .7px); background-size: 5px 5px; }
+      html, body { margin: 0; width: __WIDTH__px; height: __HEIGHT__px; overflow: hidden; }
+      body { color: var(--ink); background: var(--paper); font-family: var(--sans); }
+      #root { position: relative; width: __WIDTH__px; height: __HEIGHT__px; overflow: hidden; }
+      #stage { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+      .hf-background-layer, .hf-content-layer, .hf-annotation-layer, .hf-typography-layer {
+        position: absolute; inset: 0;
+      }
+      .hf-background-layer { z-index: 0; overflow: hidden; background: var(--paper); }
+      .hf-content-layer { z-index: 2; overflow: hidden; }
+      .hf-annotation-layer { z-index: 4; pointer-events: none; }
+      .hf-typography-layer { z-index: 6; pointer-events: none; }
+      .real-video-scene .hf-background-layer { background: transparent; }
+      .paper-grid {
+        position: absolute; inset: 0; opacity: .42;
+        background-image:
+          linear-gradient(color-mix(in srgb, var(--ink) 4%, transparent) 2px, transparent 2px),
+          linear-gradient(90deg, color-mix(in srgb, var(--ink) 3%, transparent) 2px, transparent 2px);
+        background-size: 94px 94px;
+      }
+      .ambient-disc {
+        position: absolute; right: -7%; top: -19%; width: 49%; aspect-ratio: 1; border-radius: 50%;
+        background: color-mix(in srgb, var(--accent) 19%, transparent);
+        filter: blur(2px);
+      }
+      .registration-line { position: absolute; left: 5.4%; top: 7%; width: 9%; height: 8px; background: var(--accent); transform-origin: left center; }
+      .grain {
+        position: absolute; inset: 0; z-index: 20; pointer-events: none; opacity: .18;
+        background-image: radial-gradient(color-mix(in srgb, var(--ink) 18%, transparent) .75px, transparent .75px);
+        background-size: 5px 5px;
+      }
+      .eyebrow { color: var(--accent); font-size: clamp(22px, 1.35vw, 28px); font-weight: 850; letter-spacing: .16em; text-transform: uppercase; }
+      .headline { margin: 0; font-family: var(--serif); font-size: clamp(68px, 6.4vw, 126px); line-height: .9; letter-spacing: -.052em; font-weight: 700; text-wrap: balance; }
+      .headline.medium { font-size: clamp(54px, 4.8vw, 94px); }
+      .headline.compact { font-size: clamp(44px, 3.7vw, 73px); }
+      .support { color: var(--muted); font-size: clamp(27px, 2vw, 40px); line-height: 1.14; font-weight: 580; text-wrap: balance; }
+      .accent-word { color: var(--accent); }
+      .accent-mark { display: inline-block; position: relative; }
+      .accent-mark::after { content: ""; position: absolute; left: -.02em; right: -.02em; bottom: -.09em; height: .085em; background: var(--accent); transform-origin: left center; }
+      .source-credit { position: absolute; right: 3%; bottom: 3%; padding: 10px 16px; color: var(--surface); background: color-mix(in srgb, var(--ink) 88%, transparent); font-size: clamp(17px, 1vw, 21px); font-weight: 760; letter-spacing: .04em; }
+
+      /* Editorial text remains open on the shared palette background. */
+      .editorial-copy { position: absolute; left: 7%; top: 18%; width: 75%; }
+      .editorial-copy .headline { margin-top: 34px; }
+      .editorial-copy .support { margin-top: 34px; max-width: 78%; }
+      .recipe-editorial_punchline .editorial-copy { left: 10%; top: 27%; width: 80%; text-align: center; }
+      .recipe-editorial_punchline .headline { font-size: clamp(82px, 8.2vw, 162px); }
+      .recipe-editorial_reset .editorial-copy { left: 12%; top: 31%; width: 70%; }
+      .recipe-editorial_reset .headline { font-size: clamp(60px, 5.2vw, 102px); }
+      .ghost-word { position: absolute; right: 2%; bottom: -3%; max-width: 50%; overflow: hidden; color: color-mix(in srgb, var(--accent) 11%, transparent); font-size: clamp(150px, 16vw, 310px); line-height: .75; font-weight: 850; text-transform: uppercase; white-space: nowrap; }
+
+      /* Real media is the only full-bleed opaque visual surface. */
+      .media-frame { position: absolute; inset: 0; overflow: hidden; }
+      .media-fill, .root-media { width: 100%; height: 100%; object-fit: cover; }
+      .root-media { position: absolute; inset: 0; z-index: 1; }
+      .media-shade { position: absolute; inset: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 84%, transparent), color-mix(in srgb, var(--ink) 28%, transparent) 60%, transparent); }
+      .media-copy { position: absolute; left: 6%; top: 55%; width: 55%; color: #fffaf2; text-shadow: 0 8px 34px rgba(0,0,0,.55); }
+      .media-copy .headline { font-size: clamp(54px, 4.7vw, 92px); }
+      .annotation-rail { position: absolute; right: 4.5%; top: 17%; bottom: 17%; width: 31%; display: flex; flex-direction: column; justify-content: center; gap: 26px; }
+      .annotation { padding: 15px 18px 15px 24px; color: #fffaf2; border-left: 7px solid var(--accent); background: rgba(22,19,15,.58); backdrop-filter: blur(7px); font-size: clamp(23px, 1.5vw, 31px); line-height: 1.08; font-weight: 760; text-shadow: 0 3px 16px rgba(0,0,0,.5); }
+      .recipe-full_bleed_image .media-shade, .recipe-full_bleed_video .media-shade { display: none; }
+      .recipe-full_bleed_image .media-copy, .recipe-full_bleed_video .media-copy { display: none; }
+      .recipe-image_detail_sequence .media-fill, .recipe-video_detail_sequence .root-media { object-position: 64% 45%; }
+
+      /* Browser and source proof use a real opaque page, never a dark dashboard card. */
+      .source-heading { position: absolute; left: 5.2%; top: 5.2%; right: 5.2%; display: flex; align-items: flex-start; justify-content: space-between; gap: 42px; }
+      .source-heading .headline { max-width: 76%; }
+      .browser { position: absolute; left: 4.2%; right: 4.2%; top: 19%; bottom: 5.5%; overflow: hidden; border: 2px solid color-mix(in srgb, var(--ink) 20%, transparent); border-radius: 18px; background: var(--surface); box-shadow: 0 32px 90px color-mix(in srgb, var(--ink) 18%, transparent); }
+      .browser-bar { height: 58px; display: flex; align-items: center; gap: 12px; padding: 0 22px; color: var(--muted); background: color-mix(in srgb, var(--paper) 84%, #d9ccba); border-bottom: 2px solid color-mix(in srgb, var(--ink) 11%, transparent); font-size: clamp(17px, 1.02vw, 21px); font-weight: 730; }
+      .browser-dot { width: 16px; height: 16px; border-radius: 50%; }
+      .browser-image { width: 100%; height: calc(100% - 58px); object-fit: cover; object-position: center 20%; transform-origin: center 24%; }
+      .source-highlight { position: absolute; left: 8%; right: 8%; bottom: 8%; padding: 22px 30px; color: var(--ink); background: color-mix(in srgb, var(--surface) 96%, transparent); border-bottom: 8px solid var(--accent); box-shadow: 0 18px 52px rgba(38,30,20,.19); font-family: var(--serif); font-size: clamp(25px, 1.8vw, 36px); line-height: 1.08; font-weight: 700; text-align: center; }
+      .recipe-source_headline_push .browser-image { object-position: center top; }
+      .recipe-source_detail_focus .browser-image { object-position: center 48%; }
+      .recipe-evidence_split .browser { right: 43%; }
+      .recipe-evidence_split .source-highlight { left: 62%; right: 5%; top: 31%; bottom: auto; text-align: left; border-bottom: 0; border-left: 8px solid var(--accent); background: transparent; box-shadow: none; }
+      .recipe-quote_source_focus .source-highlight { left: 18%; right: 18%; }
+
+      /* Identity scenes float on the palette instead of sitting inside cards. */
+      .identity-copy { position: absolute; left: 6%; top: 22%; width: 50%; }
+      .identity-copy .headline { margin-top: 34px; }
+      .identity-mark { position: absolute; right: 7%; top: 22%; width: 32%; height: 54%; display: flex; align-items: center; justify-content: center; }
+      .identity-mark img { width: 88%; height: 80%; object-fit: contain; filter: drop-shadow(0 22px 38px color-mix(in srgb, var(--ink) 16%, transparent)); }
+      .identity-name { font-family: var(--serif); font-size: clamp(62px, 5.2vw, 104px); line-height: .9; letter-spacing: -.05em; text-align: center; font-weight: 700; }
+      .recipe-identity_lockup .identity-copy { top: 31%; }
+      .recipe-identity_pair_reveal .identity-mark { right: 4%; width: 39%; }
+
+      /* Explain one relationship with open labels and a moving line, not cards. */
+      .explainer { position: absolute; inset: 0; padding: 7% 6.5%; }
+      .explainer .headline { max-width: 74%; }
+      .flow { position: absolute; left: 7%; right: 7%; top: 47%; display: flex; align-items: center; gap: 2%; }
+      .flow-item { flex: 1; min-width: 0; padding: 22px 8px 20px; border-top: 6px solid color-mix(in srgb, var(--accent) 34%, transparent); }
+      .flow-item.focus { border-color: var(--accent); }
+      .flow-label { font-family: var(--serif); font-size: clamp(37px, 2.9vw, 58px); line-height: .92; font-weight: 700; }
+      .flow-detail { margin-top: 16px; color: var(--muted); font-size: clamp(21px, 1.35vw, 28px); line-height: 1.08; font-weight: 650; }
+      .connector { flex: 0 0 7%; height: 5px; background: var(--accent); transform-origin: left center; }
+      .recipe-concept_contrast .flow { justify-content: center; gap: 8%; }
+      .recipe-concept_contrast .flow-item { flex: 0 1 38%; border-top-width: 9px; }
+
+      /* Chapter transitions are one decisive opener, not a generic title slide. */
+      .transition-copy { position: absolute; left: 6.5%; right: 6.5%; top: 17%; bottom: 13%; display: flex; flex-direction: column; justify-content: center; }
+      .story-number { color: var(--accent); font-size: clamp(27px, 1.7vw, 34px); font-weight: 850; letter-spacing: .18em; text-transform: uppercase; }
+      .transition-copy .headline { max-width: 82%; margin-top: 28px; }
+      .transition-subtitle { margin-top: 28px; max-width: 67%; color: var(--muted); font-size: clamp(27px, 1.8vw, 37px); line-height: 1.14; font-weight: 620; }
+      .transition-number { position: absolute; right: 4%; top: 5%; color: color-mix(in srgb, var(--accent) 12%, transparent); font-family: var(--serif); font-size: clamp(220px, 23vw, 450px); line-height: .8; font-weight: 700; }
+      .transition-with-media .transition-copy { color: #fffaf2; text-shadow: 0 8px 34px rgba(0,0,0,.6); }
+      .transition-with-media .transition-subtitle { color: rgba(255,250,242,.86); }
+
+      /* Guided source/interface motion. */
+      .walkthrough-steps { position: absolute; right: 4.5%; top: 26%; width: 31%; display: flex; flex-direction: column; gap: 18px; }
+      .walkthrough-step { display: grid; grid-template-columns: 46px 1fr; gap: 14px; align-items: start; padding: 15px 18px; color: var(--ink); background: color-mix(in srgb, var(--surface) 95%, transparent); border-left: 7px solid var(--accent); box-shadow: 0 16px 40px rgba(35,28,20,.16); font-size: clamp(20px, 1.3vw, 27px); line-height: 1.08; font-weight: 740; }
+      .walkthrough-index { color: var(--accent); font-weight: 900; }
+      .recipe-guided_scroll .browser-image { transform-origin: center top; }
+      .recipe-interface_detail_zoom .browser-image { transform-origin: 68% 55%; }
+
+      /* Documents are tangible paper surfaces over the shared canvas. */
+      .documents-heading { position: absolute; left: 6%; top: 13%; width: 36%; }
+      .documents-heading .headline { margin-top: 27px; }
+      .document-stage { position: absolute; left: 42%; right: 4.5%; top: 16%; bottom: 7%; }
+      .document { position: absolute; width: 78%; min-height: 43%; padding: 30px 34px; color: var(--ink); background: var(--surface); border: 2px solid color-mix(in srgb, var(--ink) 18%, transparent); box-shadow: 0 28px 72px rgba(35,28,20,.18); }
+      .document img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .document-type { color: var(--accent); font-size: clamp(18px, 1vw, 22px); font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+      .document-title { margin-top: 17px; font-family: var(--serif); font-size: clamp(33px, 2.35vw, 48px); line-height: .93; font-weight: 700; }
+      .document-source { margin-top: 17px; color: var(--muted); font-size: clamp(20px, 1.18vw, 25px); font-weight: 700; }
+      .document.focus { outline: 7px solid color-mix(in srgb, var(--accent) 76%, transparent); }
+      .document-summary { position: absolute; left: 6%; bottom: 9%; width: 31%; padding-left: 24px; border-left: 8px solid var(--accent); color: var(--muted); font-size: clamp(24px, 1.55vw, 32px); line-height: 1.12; font-weight: 710; }
+
+      /* Interface change is an open transformation path, not dashboard chrome. */
+      .transform-heading { position: absolute; left: 6.5%; top: 10%; width: 74%; }
+      .transform-stage { position: absolute; left: 7%; right: 7%; top: 41%; bottom: 11%; display: grid; grid-template-columns: 1fr auto 1fr; gap: 4%; align-items: center; }
+      .transform-side { padding-top: 20px; border-top: 7px solid color-mix(in srgb, var(--accent) 32%, transparent); }
+      .transform-side.after { border-color: var(--accent); }
+      .transform-label { font-family: var(--serif); font-size: clamp(44px, 3.3vw, 66px); font-weight: 700; }
+      .transform-item { margin-top: 16px; color: var(--muted); font-size: clamp(24px, 1.55vw, 32px); font-weight: 680; }
+      .transform-arrow { color: var(--accent); font-size: clamp(68px, 5vw, 100px); }
+      .transform-note { position: absolute; left: 7%; bottom: 6%; padding-left: 22px; border-left: 7px solid var(--accent); color: var(--muted); font-size: clamp(24px, 1.5vw, 31px); font-weight: 720; }
     </style>
   </head>
   <body>
@@ -138,410 +168,291 @@
       const text = (value, fallback = "") => typeof value === "string" && value.trim() ? value.trim() : fallback;
       const list = (value) => Array.isArray(value) ? value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()) : [];
       const objects = (value) => Array.isArray(value) ? value.filter((item) => item && typeof item === "object") : [];
-      const node = (tag, className, value = "") => {
+      const create = (tag, className = "", value = "") => {
         const element = document.createElement(tag);
         if (className) element.className = className;
         if (value) element.textContent = value;
         return element;
       };
+      const append = (parent, ...children) => children.filter(Boolean).forEach((child) => parent.appendChild(child));
       const normalizeWord = (value) => text(value).toLocaleLowerCase().replace(/[^\p{L}\p{N}'’-]+/gu, "");
       const accentWords = new Set(list(payload.accent_words).flatMap((value) => value.split(/\s+/)).map(normalizeWord).filter(Boolean));
       const headlineNode = (value, className = "headline hf-enter") => {
-        const element = node("h1", className);
+        const element = create("h1", className);
         text(value).split(/(\s+)/).forEach((part) => {
-          if (!part.trim()) {
-            element.appendChild(document.createTextNode(part));
-            return;
-          }
-          if (accentWords.has(normalizeWord(part))) {
-            element.appendChild(node("span", "accent-word", part));
-          } else {
-            element.appendChild(document.createTextNode(part));
-          }
+          if (!part.trim()) return element.appendChild(document.createTextNode(part));
+          if (accentWords.has(normalizeWord(part))) element.appendChild(create("span", "accent-word", part));
+          else element.appendChild(document.createTextNode(part));
         });
         return element;
       };
-      const append = (parent, ...children) => children.filter(Boolean).forEach((child) => parent.appendChild(child));
-      const eyebrowNode = () => {
-        const value = text(payload.eyebrow);
-        return value ? node("div", "eyebrow hf-enter", value) : null;
-      };
+      const eyebrowNode = () => text(payload.eyebrow) ? create("div", "eyebrow hf-enter", text(payload.eyebrow)) : null;
       const assetUrl = text(asset.asset_render_url) || text(asset.asset_data_uri);
       const headline = text(payload.headline) || text(payload.overlay_headline) || text(payload.companion_text) || text(scene.script_excerpt, "Untitled story");
       const support = text(payload.supporting_text) || text(payload.companion_text);
-      const sourceLabel = text(payload.source_label) || text(asset.capture && asset.capture.domain);
+      const sourceLabel = text(payload.source_label) || text(asset.capture && asset.capture.domain) || text(asset.media && asset.media.attribution);
       const recipeId = text(payload.recipe_id);
 
       root.style.setProperty("--paper", text(style.background_color, "#f4efe6"));
       root.style.setProperty("--ink", text(style.text_color, "#171611"));
       root.style.setProperty("--accent", text(style.accent_color, "#b64b2d"));
       root.style.setProperty("--muted", text(style.muted_color, "#69645c"));
-      root.style.setProperty("--sans", text(style.sans_font, 'Oswald, "Avenir Next Condensed", Helvetica, sans-serif'));
+      root.style.setProperty("--surface", text(style.surface_color, "#fffdf8"));
+      root.style.setProperty("--sans", text(style.sans_font, 'Oswald, "Avenir Next Condensed", sans-serif'));
       root.style.setProperty("--serif", text(style.editorial_font, '"EB Garamond", Georgia, serif'));
       stage.dataset.recipeId = recipeId;
       stage.classList.add(`recipe-${recipeId}`);
-      stage.appendChild(node("div", "canvas-fill"));
 
-      const addGrain = () => stage.appendChild(node("div", "grain"));
-      const addRule = () => stage.appendChild(node("div", "accent-rule hf-rule"));
-      const addCredit = (label) => label && stage.appendChild(node("div", "source-credit hf-enter", label));
-      const addImage = (parent, className = "media-fill hf-media") => {
-        if (!assetUrl) return null;
-        const image = node("img", className);
-        image.src = assetUrl;
+      const backgroundLayer = create("div", "hf-background-layer");
+      const contentLayer = create("div", "hf-content-layer");
+      const annotationLayer = create("div", "hf-annotation-layer");
+      const typographyLayer = create("div", "hf-typography-layer");
+      append(backgroundLayer, create("div", "paper-grid"), create("div", "ambient-disc hf-ambient"));
+      append(stage, backgroundLayer, contentLayer, annotationLayer, typographyLayer, create("div", "grain"));
+
+      const addRule = () => typographyLayer.appendChild(create("div", "registration-line hf-rule"));
+      const addCredit = (label) => label && annotationLayer.appendChild(create("div", "source-credit hf-enter", label));
+      const addImage = (parent, className = "media-fill hf-media", url = assetUrl) => {
+        if (!url) return null;
+        const image = create("img", className);
+        image.src = url;
         image.alt = text(asset.alt_text, text(payload.primary_entity, "Story visual"));
         parent.appendChild(image);
         return image;
       };
+      const addVideo = () => {
+        if (!assetUrl) return null;
+        const media = create("video", "root-media hf-media");
+        media.src = assetUrl;
+        media.muted = true;
+        media.preload = "auto";
+        media.setAttribute("playsinline", "");
+        media.setAttribute("data-start", "0");
+        media.setAttribute("data-duration", String(spec.duration_seconds || 6));
+        root.insertBefore(media, stage);
+        return media;
+      };
 
       const renderEditorial = () => {
         addRule();
-        const copy = node("section", "full-copy");
-        const eyebrow = eyebrowNode();
-        const title = headlineNode(headline);
-        const body = support ? node("div", "support hf-enter", support) : null;
-        append(copy, eyebrow, title, body);
-        stage.appendChild(copy);
+        const copy = create("section", "editorial-copy");
+        append(copy, eyebrowNode(), headlineNode(headline), support ? create("div", "support hf-enter", support) : null);
+        typographyLayer.appendChild(copy);
         const ghost = list(payload.accent_words)[0];
-        if (ghost) {
-          const ghostNode = node("div", "ghost-word hf-ghost", ghost);
-          ghostNode.setAttribute("data-layout-allow-overlap", "");
-          stage.appendChild(ghostNode);
-        }
+        if (ghost) typographyLayer.appendChild(create("div", "ghost-word hf-ghost", ghost));
       };
 
-      const renderContextMedia = (video = false) => {
-        stage.classList.add("context-media");
-        const canvasFill = stage.querySelector(".canvas-fill");
-        if (canvasFill) canvasFill.style.display = "none";
-        const mediaWrap = node("div", "hf-media-wrap");
-        mediaWrap.style.position = "absolute";
-        mediaWrap.style.inset = "0";
-        if (video && assetUrl) {
-          const media = node("video", "media-fill hf-media root-media");
-          media.src = assetUrl;
-          media.muted = true;
-          media.preload = "auto";
-          media.setAttribute("playsinline", "");
-          media.style.position = "absolute";
-          media.style.inset = "0";
-          media.style.zIndex = "0";
-          root.appendChild(media);
-        } else {
-          addImage(mediaWrap);
-        }
-        if (!video || !assetUrl) stage.appendChild(mediaWrap);
-        stage.appendChild(node("div", "shade"));
+      const renderContextMedia = (video) => {
+        if (video && assetUrl) stage.classList.add("real-video-scene");
+        const frame = create("div", "media-frame hf-media-frame");
+        if (video) addVideo(); else addImage(frame);
+        if (!video) contentLayer.appendChild(frame);
+        contentLayer.appendChild(create("div", "media-shade hf-shade"));
         if (payload.show_overlay === true && headline) {
-          const copy = node("section", "full-copy");
-          copy.style.color = "#fffaf2";
-          copy.style.top = "56%";
-          append(copy, headlineNode(headline, "headline small hf-enter"));
-          stage.appendChild(copy);
+          const copy = create("section", "media-copy");
+          copy.appendChild(headlineNode(headline, "headline medium hf-enter"));
+          typographyLayer.appendChild(copy);
         }
-        const annotations = list(payload.annotations || payload.callouts).slice(0, 3);
-        if (annotations.length) {
-          stage.classList.add("annotated-media");
-          stage.appendChild(node("div", "annotation-scrim hf-annotation-scrim"));
-          const rail = node("div", "annotation-rail");
-          annotations.forEach((item) => rail.appendChild(node("div", "annotation hf-annotation", item)));
-          stage.appendChild(rail);
-        }
-        addCredit(sourceLabel || text(asset.media && asset.media.attribution));
+        list(payload.annotations).slice(0, 3).forEach((item) => {
+          let rail = annotationLayer.querySelector(".annotation-rail");
+          if (!rail) { rail = create("div", "annotation-rail"); annotationLayer.appendChild(rail); }
+          rail.appendChild(create("div", "annotation hf-annotation", item));
+        });
+        addCredit(sourceLabel);
       };
 
-      const renderSource = () => {
-        const titleRow = node("section", "source-title");
-        append(titleRow, headlineNode(text(payload.overlay_headline, headline)));
-        stage.appendChild(titleRow);
-        const browser = node("section", "browser hf-enter");
-        const bar = node("div", "browser-bar");
-        [["#ff5f57"], ["#ffbd2e"], ["#28c840"]].forEach(([color]) => {
-          const dot = node("span", "dot"); dot.style.background = color; bar.appendChild(dot);
+      const browserSurface = () => {
+        const browser = create("section", "browser hf-browser");
+        const bar = create("div", "browser-bar");
+        ["#e05e4b", "#dca836", "#5a9c6d"].forEach((color) => {
+          const dot = create("span", "browser-dot"); dot.style.background = color; bar.appendChild(dot);
         });
-        bar.appendChild(node("span", "", text(payload.url).replace(/^https?:\/\//, "").slice(0, 92)));
+        bar.appendChild(create("span", "", text(payload.url).replace(/^https?:\/\//, "").slice(0, 92)));
         browser.appendChild(bar);
-        addImage(browser, "browser-image hf-media");
-        stage.appendChild(browser);
-        const target = text(payload.target_text);
-        if (target) stage.appendChild(node("div", "highlight hf-enter", target.slice(0, 190)));
+        addImage(browser, "browser-image hf-source-image");
+        contentLayer.appendChild(browser);
+        return browser;
+      };
+
+      const renderSource = (evidence = false) => {
+        const heading = create("section", "source-heading");
+        heading.appendChild(headlineNode(text(payload.overlay_headline, headline), "headline compact hf-enter"));
+        typographyLayer.appendChild(heading);
+        browserSurface();
+        const proof = evidence ? text(payload.claim_text) || text(payload.supporting_text) || text(payload.target_text) : text(payload.target_text);
+        if (proof) annotationLayer.appendChild(create("div", `source-highlight hf-highlight${evidence ? " hf-evidence" : ""}`, proof.slice(0, 210)));
       };
 
       const renderLogo = () => {
         addRule();
-        const copy = node("section", "split-copy");
-        append(
-          copy,
-          eyebrowNode(),
-          headlineNode(support || headline),
-        );
-        stage.appendChild(copy);
-        const identity = node("div", "identity hf-enter");
-        if (assetUrl) addImage(identity, "");
-        else identity.appendChild(node("div", "identity-name", text(payload.primary_entity, headline)));
-        stage.appendChild(identity);
+        const copy = create("section", "identity-copy");
+        append(copy, eyebrowNode(), headlineNode(support || headline, "headline medium hf-enter"));
+        typographyLayer.appendChild(copy);
+        const mark = create("div", "identity-mark hf-mark");
+        if (assetUrl) addImage(mark, "");
+        else mark.appendChild(create("div", "identity-name", text(payload.primary_entity, headline)));
+        contentLayer.appendChild(mark);
       };
 
       const renderExplainer = () => {
-        const wrap = node("section", "explainer");
-        append(wrap, eyebrowNode(), headlineNode(headline));
-        const flow = node("div", "flow");
-        const items = Array.isArray(payload.items) ? payload.items.slice(0, 4) : [];
-        items.forEach((item, index) => {
-          if (index) flow.appendChild(node("div", "connector hf-connector"));
-          const itemNode = node("div", "flow-item hf-item");
-          const label = typeof item === "object" && item ? text(item.label, `Step ${index + 1}`) : text(item, `Step ${index + 1}`);
-          const detail = typeof item === "object" && item ? text(item.detail) : "";
-          append(itemNode, node("div", "flow-label", label), detail ? node("div", "flow-detail", detail) : null);
-          flow.appendChild(itemNode);
+        const wrap = create("section", "explainer");
+        append(wrap, eyebrowNode(), headlineNode(headline, "headline medium hf-enter"));
+        const flow = create("div", "flow");
+        const focus = text(payload.focus_item_label).toLowerCase();
+        objects(payload.items).slice(0, 4).forEach((item, index) => {
+          if (index) flow.appendChild(create("div", "connector hf-connector"));
+          const label = text(item.label, `Step ${index + 1}`);
+          const block = create("div", `flow-item hf-flow-item${label.toLowerCase() === focus ? " focus" : ""}`);
+          append(block, create("div", "flow-label", label), text(item.detail) ? create("div", "flow-detail", text(item.detail)) : null);
+          flow.appendChild(block);
         });
         wrap.appendChild(flow);
-        stage.appendChild(wrap);
+        contentLayer.appendChild(wrap);
       };
 
       const renderTransition = () => {
-        if (assetUrl) {
-          stage.classList.add("transition-media");
-          const media = node("div", "hf-media-wrap");
-          media.style.position = "absolute"; media.style.inset = "0";
-          addImage(media);
-          stage.appendChild(media);
-          stage.appendChild(node("div", "shade"));
+        const withMedia = Boolean(assetUrl);
+        if (withMedia) {
+          const frame = create("div", "media-frame hf-media-frame");
+          if (text(payload.background_media_type) === "video") {
+            stage.classList.add("real-video-scene");
+            addVideo();
+          } else addImage(frame);
+          if (text(payload.background_media_type) !== "video") contentLayer.appendChild(frame);
+          contentLayer.appendChild(create("div", "media-shade hf-shade"));
+          stage.classList.add("transition-with-media");
         } else addRule();
-        const copy = node("section", "transition-copy");
+        const copy = create("section", "transition-copy");
         const storyNumber = text(payload.story_number);
-        const ordinal = storyNumber ? `Story ${storyNumber}` : "Next story";
-        const subtitle = text(payload.subtitle);
-        append(copy, node("div", "story-number hf-enter", ordinal), headlineNode(headline), subtitle ? node("div", "transition-subtitle hf-enter", subtitle) : null);
-        stage.appendChild(copy);
-        if (storyNumber && !assetUrl) stage.appendChild(node("div", "transition-ghost-number hf-ghost", storyNumber));
-      };
-
-      const renderEvidence = () => {
-        renderSource();
-        const proof = text(payload.claim_text) || text(payload.supporting_text) || text(payload.target_text);
-        const highlight = stage.querySelector(".highlight");
-        if (highlight && proof) {
-          highlight.textContent = proof.slice(0, 190);
-          highlight.classList.add("hf-evidence");
-        }
-      };
-
-      const renderMetricCounter = () => {
-        const wrap = node("section", "metric-stage");
-        append(wrap, eyebrowNode(), headlineNode(headline));
-        const grid = node("div", "metric-grid");
-        objects(payload.metrics).slice(0, 3).forEach((metric) => {
-          const item = node("div", "metric hf-metric");
-          const value = `${text(metric.value)}${text(metric.unit)}`;
-          append(item, node("div", "metric-value hf-number", value), node("div", "metric-label", text(metric.label)), text(metric.context) ? node("div", "support", text(metric.context)) : null);
-          grid.appendChild(item);
-        });
-        wrap.appendChild(grid);
-        stage.appendChild(wrap);
-      };
-
-      const renderMetricContrast = () => {
-        const wrap = node("section", "metric-stage");
-        append(wrap, eyebrowNode(), headlineNode(headline));
-        const grid = node("div", "delta-grid");
-        objects(payload.benchmarks).slice(0, 3).forEach((metric) => {
-          const item = node("div", "delta hf-metric");
-          append(item, node("div", "delta-label", text(metric.label)), node("div", "delta-side hf-before", text(metric.before)), node("div", "delta-arrow hf-arrow", "→"), node("div", "delta-side hf-after", text(metric.after)), node("div", "delta-result hf-number", text(metric.delta)));
-          grid.appendChild(item);
-        });
-        wrap.appendChild(grid);
-        stage.appendChild(wrap);
-      };
-
-      const renderEcosystem = () => {
-        const wrap = node("section", "map-stage");
-        append(wrap, eyebrowNode(), headlineNode(headline));
-        const orbit = node("div", "orbit");
-        orbit.appendChild(node("div", "orbit-ring hf-orbit"));
-        const nodes = objects(payload.nodes).slice(0, 7);
-        const focus = text(payload.focus_entity);
-        const primary = nodes.find((item) => text(item.label).toLowerCase() === focus.toLowerCase()) || nodes[0] || {};
-        orbit.appendChild(node("div", "orbit-core hf-focus", text(primary.label, focus)));
-        const secondary = nodes.filter((item) => item !== primary).slice(0, 6);
-        secondary.forEach((item, index) => {
-          const angle = (Math.PI * 2 * index) / Math.max(1, secondary.length) - Math.PI / 2;
-          const x = 50 + Math.cos(angle) * 40;
-          const y = 50 + Math.sin(angle) * 40;
-          const child = node("div", "orbit-node hf-orbit-node", text(item.label));
-          child.style.left = `${x}%`; child.style.top = `${y}%`; child.style.transform = "translate(-50%,-50%)";
-          orbit.appendChild(child);
-        });
-        wrap.appendChild(orbit);
-        stage.appendChild(wrap);
-      };
-
-      const renderTrace = (zoom = false) => {
-        const wrap = node("section", "trace-stage");
-        append(wrap, eyebrowNode(), headlineNode(headline));
-        const trace = node("div", "trace");
-        const steps = objects(payload.steps).slice(0, 6);
-        const focus = text(zoom ? payload.focus_step_label : payload.active_step_label);
-        steps.forEach((step, index) => {
-          if (index) trace.appendChild(node("div", "trace-arrow hf-arrow", "→"));
-          const item = node("div", `trace-step hf-trace-step${text(step.label).toLowerCase() === focus.toLowerCase() ? " active hf-focus" : ""}`);
-          append(item, node("div", "trace-label", text(step.label)), text(step.detail) ? node("div", "trace-detail", text(step.detail)) : null);
-          trace.appendChild(item);
-        });
-        wrap.appendChild(trace);
-        if (zoom && text(payload.zoom_note)) wrap.appendChild(node("div", "focus-note hf-enter", text(payload.zoom_note)));
-        stage.appendChild(wrap);
+        append(
+          copy,
+          create("div", "story-number hf-enter", storyNumber ? `Story ${storyNumber}` : "Next story"),
+          headlineNode(headline, "headline hf-enter"),
+          text(payload.subtitle) ? create("div", "transition-subtitle hf-enter", text(payload.subtitle)) : null,
+        );
+        typographyLayer.appendChild(copy);
+        if (storyNumber && !withMedia) typographyLayer.appendChild(create("div", "transition-number hf-ghost", storyNumber));
       };
 
       const renderWalkthrough = () => {
-        renderSource();
-        const markers = node("div", "walkthrough-markers");
+        const heading = create("section", "source-heading");
+        heading.appendChild(headlineNode(headline, "headline compact hf-enter"));
+        typographyLayer.appendChild(heading);
+        browserSurface();
+        const steps = create("div", "walkthrough-steps");
         objects(payload.walkthrough_steps).slice(0, 4).forEach((step, index) => {
-          const label = text(step.label, `Step ${index + 1}`);
-          const detail = text(step.detail) || text(step.target_text);
-          markers.appendChild(node("div", "walkthrough-step hf-walkthrough-step", detail ? `${label} — ${detail}` : label));
+          const row = create("div", "walkthrough-step hf-walkthrough-step");
+          append(row, create("span", "walkthrough-index", String(index + 1).padStart(2, "0")), create("span", "", [text(step.label), text(step.detail) || text(step.target_text)].filter(Boolean).join(" — ")));
+          steps.appendChild(row);
         });
-        stage.appendChild(markers);
+        annotationLayer.appendChild(steps);
       };
 
       const renderDocuments = () => {
-        const wrap = node("section", "docs-stage");
-        append(wrap, eyebrowNode(), headlineNode(headline));
-        const resolvedDocuments = objects(asset.assets).slice(0, 3);
-        if (resolvedDocuments.length) {
-          const montage = node("div", "source-montage");
-          const focus = text(payload.focus_document_label).toLowerCase();
-          resolvedDocuments.forEach((resolved, index) => {
-            const documentPayload = objects(payload.documents).find((doc) => text(doc.asset_id) === text(resolved.asset_id)) || objects(payload.documents)[index] || {};
-            const active = focus ? text(documentPayload.title).toLowerCase() === focus : index === 0;
-            const page = node("article", `proof-page hf-proof${active ? " active hf-focus" : ""}`);
-            page.style.left = `${index * 9}%`;
-            page.style.top = `${index * 9}%`;
-            page.style.transform = `rotate(${(index - 1) * 2.4}deg)`;
-            page.style.zIndex = active ? "8" : String(index + 1);
-            const bar = node("div", "proof-bar", text(resolved.domain) || text(documentPayload.source) || "SOURCE");
-            page.appendChild(bar);
-            const imageFrame = node("div", "proof-image-frame");
-            const image = node("img", "proof-image hf-proof-image");
-            image.src = text(resolved.asset_render_url) || text(resolved.asset_data_uri);
-            image.alt = text(documentPayload.title, "Source document");
-            imageFrame.appendChild(image);
-            page.appendChild(imageFrame);
-            montage.appendChild(page);
-          });
-          wrap.appendChild(montage);
-          if (text(payload.stack_summary)) wrap.appendChild(node("div", "focus-note hf-enter", text(payload.stack_summary)));
-          stage.appendChild(wrap);
-          return;
-        }
-        const docs = node("div", "docs");
-        const focus = text(payload.focus_document_label);
-        objects(payload.documents).slice(0, 5).forEach((doc, index) => {
-          const sheet = node("article", `document hf-document${text(doc.title).toLowerCase() === focus.toLowerCase() ? " hf-focus" : ""}`);
-          const active = text(doc.title).toLowerCase() === focus.toLowerCase();
-          sheet.style.left = `${active ? 9 : index * 6}%`; sheet.style.top = `${active ? 18 : index * 9}%`; sheet.style.transform = `rotate(${active ? 0 : (index - 2) * 2.2}deg)`; sheet.style.zIndex = active ? "8" : String(index + 1);
-          append(sheet, node("div", "document-type", text(doc.document_type, "SOURCE")), node("div", "document-title", text(doc.title)), node("div", "document-source", [text(doc.source), text(doc.date)].filter(Boolean).join(" · ")));
-          docs.appendChild(sheet);
+        const heading = create("section", "documents-heading");
+        append(heading, eyebrowNode(), headlineNode(headline, "headline compact hf-enter"));
+        typographyLayer.appendChild(heading);
+        const stack = create("div", "document-stage");
+        const nestedAssets = objects(asset.assets);
+        const documents = objects(payload.documents).slice(0, 5);
+        const focus = text(payload.focus_document_label).toLowerCase();
+        documents.forEach((doc, index) => {
+          const isFocus = text(doc.title).toLowerCase() === focus || (!focus && index === 0);
+          const sheet = create("article", `document hf-document${isFocus ? " focus hf-focus" : ""}`);
+          sheet.style.left = `${index * 7}%`;
+          sheet.style.top = `${index * 8}%`;
+          sheet.style.transform = `rotate(${(index - 1) * 2.1}deg)`;
+          sheet.style.zIndex = isFocus ? "9" : String(index + 1);
+          const resolved = nestedAssets.find((item) => text(item.asset_id) === text(doc.asset_id)) || nestedAssets[index];
+          const resolvedUrl = resolved ? text(resolved.asset_render_url) || text(resolved.asset_data_uri) : "";
+          if (resolvedUrl) addImage(sheet, "", resolvedUrl);
+          else append(sheet, create("div", "document-type", text(doc.document_type, "SOURCE")), create("div", "document-title", text(doc.title)), create("div", "document-source", [text(doc.source), text(doc.date)].filter(Boolean).join(" · ")));
+          stack.appendChild(sheet);
         });
-        wrap.appendChild(docs);
-        if (text(payload.stack_summary)) wrap.appendChild(node("div", "focus-note hf-enter", text(payload.stack_summary)));
-        stage.appendChild(wrap);
-      };
-
-      const renderMatrix = () => {
-        const wrap = node("section", "matrix-stage");
-        append(wrap, eyebrowNode(), headlineNode(headline));
-        const columns = list(payload.columns).slice(0, 4);
-        const matrix = node("div", "matrix"); matrix.style.setProperty("--cols", String(columns.length));
-        const header = node("div", "matrix-row hf-matrix-row");
-        header.appendChild(node("div", "matrix-cell matrix-head", "Capability"));
-        columns.forEach((column) => header.appendChild(node("div", "matrix-cell matrix-head", column)));
-        matrix.appendChild(header);
-        const focus = text(payload.focus_row_label);
-        objects(payload.rows).slice(0, 5).forEach((row) => {
-          const rowNode = node("div", `matrix-row hf-matrix-row${text(row.label).toLowerCase() === focus.toLowerCase() ? " focus" : ""}`);
-          rowNode.appendChild(node("div", "matrix-cell", text(row.label)));
-          list(row.values).slice(0, columns.length).forEach((value) => rowNode.appendChild(node("div", "matrix-cell", value)));
-          matrix.appendChild(rowNode);
-        });
-        wrap.appendChild(matrix); stage.appendChild(wrap);
+        contentLayer.appendChild(stack);
+        if (text(payload.stack_summary)) annotationLayer.appendChild(create("div", "document-summary hf-enter", text(payload.stack_summary)));
       };
 
       const renderTransform = () => {
-        const wrap = node("section", "transform-stage");
-        append(wrap, eyebrowNode(), headlineNode(headline));
-        const panels = node("div", "transform-panels");
+        const heading = create("section", "transform-heading");
+        heading.appendChild(headlineNode(headline, "headline medium hf-enter"));
+        typographyLayer.appendChild(heading);
+        const path = create("div", "transform-stage");
         [payload.before || {}, payload.after || {}].forEach((panel, index) => {
-          if (index) panels.appendChild(node("div", "transform-arrow hf-arrow", "→"));
-          const item = node("div", `transform-panel hf-transform${index ? " after hf-focus" : ""}`);
-          item.appendChild(node("div", "transform-label", text(panel.label, index ? "After" : "Before")));
-          list(panel.items).slice(0, 5).forEach((value) => item.appendChild(node("div", "transform-item", value)));
-          panels.appendChild(item);
+          if (index) path.appendChild(create("div", "transform-arrow hf-arrow", "→"));
+          const side = create("section", `transform-side hf-transform${index ? " after hf-focus" : ""}`);
+          side.appendChild(create("div", "transform-label", text(panel.label, index ? "After" : "Before")));
+          list(panel.items).slice(0, 5).forEach((item) => side.appendChild(create("div", "transform-item", item)));
+          path.appendChild(side);
         });
-        wrap.appendChild(panels);
-        if (text(payload.transformation_label)) wrap.appendChild(node("div", "focus-note hf-enter", text(payload.transformation_label)));
-        stage.appendChild(wrap);
+        contentLayer.appendChild(path);
+        if (text(payload.transformation_label)) annotationLayer.appendChild(create("div", "transform-note hf-enter", text(payload.transformation_label)));
       };
 
       const recipeRenderers = {
         editorial_hook: renderEditorial,
+        editorial_punchline: renderEditorial,
+        editorial_reset: renderEditorial,
         chapter_opener: renderTransition,
-        source_proof_scan: renderSource,
-        layered_evidence_reveal: renderEvidence,
+        chapter_media_opener: renderTransition,
+        chapter_identity_opener: renderTransition,
+        source_proof_scan: () => renderSource(false),
+        source_headline_push: () => renderSource(false),
+        source_detail_focus: () => renderSource(false),
+        layered_evidence_reveal: () => renderSource(true),
+        evidence_split: () => renderSource(true),
+        quote_source_focus: () => renderSource(true),
         annotated_image_focus: () => renderContextMedia(false),
+        full_bleed_image: () => renderContextMedia(false),
+        image_detail_sequence: () => renderContextMedia(false),
         annotated_video_focus: () => renderContextMedia(true),
+        full_bleed_video: () => renderContextMedia(true),
+        video_detail_sequence: () => renderContextMedia(true),
         identity_reveal: renderLogo,
+        identity_lockup: renderLogo,
+        identity_pair_reveal: renderLogo,
         mechanism_steps: renderExplainer,
-        metric_countup: renderMetricCounter,
-        metric_contrast: renderMetricContrast,
-        entity_orbit: renderEcosystem,
-        process_trace: () => renderTrace(false),
-        process_detail_zoom: () => renderTrace(true),
+        causal_chain: renderExplainer,
+        concept_contrast: renderExplainer,
         interface_walkthrough: renderWalkthrough,
+        guided_scroll: renderWalkthrough,
+        interface_detail_zoom: renderWalkthrough,
         evidence_stack: renderDocuments,
         source_proof_montage: renderDocuments,
+        focal_document: renderDocuments,
         interface_before_after: renderTransform,
-        capability_compare: renderMatrix,
+        workflow_morph: renderTransform,
+        interface_focus_shift: renderTransform,
       };
-      if (!recipeId || !recipeRenderers[recipeId]) {
-        throw new Error(`Unsupported or missing HyperFrames recipe_id: ${recipeId || "<empty>"}`);
-      }
+      if (!recipeId || !recipeRenderers[recipeId]) throw new Error(`Unsupported or missing HyperFrames recipe_id: ${recipeId || "<empty>"}`);
       recipeRenderers[recipeId]();
-      addGrain();
 
       window.__timelines = window.__timelines || {};
       const timeline = gsap.timeline({ paused: true });
       const sceneDuration = Math.max(2, Number(spec.duration_seconds || 6));
-      const midBeat = Math.max(1.15, sceneDuration * .34);
+      const focusMoment = Math.max(1.1, Math.min(sceneDuration * .42, sceneDuration - .8));
       const animate = (selector, from, to, at) => {
         const targets = stage.querySelectorAll(selector);
         if (targets.length) timeline.fromTo(targets, from, to, at);
       };
-      animate(".hf-rule", { scaleX: 0 }, { scaleX: 1, duration: .55, ease: "power3.out" }, .1);
-      animate(".hf-enter", { y: 48, opacity: 0 }, { y: 0, opacity: 1, duration: .72, stagger: .12, ease: "power3.out" }, .18);
-      animate(".hf-item", { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: .56, stagger: .18, ease: "power3.out" }, .75);
-      animate(".hf-connector", { scaleX: 0 }, { scaleX: 1, duration: .38, stagger: .18, ease: "power2.out" }, .9);
-      animate(".hf-media-wrap", { opacity: .15 }, { opacity: 1, duration: .85, ease: "power2.out" }, 0);
-      animate(".hf-media", { scale: 1.065 }, { scale: 1.0, duration: sceneDuration, ease: "none" }, 0);
-      animate(".hf-annotation", { x: 52, opacity: 0 }, { x: 0, opacity: 1, duration: .52, stagger: .34, ease: "power3.out" }, midBeat);
-      animate(".hf-annotation-scrim", { opacity: 0 }, { opacity: 1, duration: .55, ease: "power2.out" }, midBeat - .18);
-      animate(".hf-proof", { x: 74, y: 48, opacity: 0, rotate: -5 }, { x: 0, y: 0, opacity: 1, rotate: 0, duration: .72, stagger: .22, ease: "power3.out" }, .55);
-      animate(".hf-proof-image", { scale: 1.05 }, { scale: 1, duration: sceneDuration, ease: "none" }, 0);
-      animate(".hf-metric", { y: 54, opacity: 0 }, { y: 0, opacity: 1, duration: .66, stagger: .18, ease: "power3.out" }, .72);
-      animate(".hf-number", { scale: .72, opacity: 0 }, { scale: 1, opacity: 1, duration: .68, stagger: .2, ease: "back.out(1.45)" }, midBeat);
-      animate(".hf-before", { opacity: .25 }, { opacity: 1, duration: .5, ease: "power2.out" }, .9);
-      animate(".hf-after", { x: 42, opacity: 0 }, { x: 0, opacity: 1, duration: .62, ease: "power3.out" }, midBeat);
-      animate(".hf-arrow", { scaleX: .2, opacity: 0 }, { scaleX: 1, opacity: 1, duration: .44, stagger: .12, ease: "power2.out" }, midBeat - .2);
-      animate(".hf-orbit", { scale: .65, opacity: 0, rotate: -10 }, { scale: 1, opacity: 1, rotate: 0, duration: .82, ease: "power3.out" }, .65);
-      animate(".hf-orbit-node", { scale: .6, opacity: 0 }, { scale: 1, opacity: 1, duration: .48, stagger: .16, ease: "back.out(1.35)" }, 1.05);
-      animate(".hf-trace-step", { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: .5, stagger: .18, ease: "power3.out" }, .82);
-      animate(".hf-walkthrough-step", { x: 48, opacity: 0 }, { x: 0, opacity: 1, duration: .48, stagger: .32, ease: "power3.out" }, midBeat);
-      animate(".hf-document", { y: 80, rotate: -6, opacity: 0 }, { y: 0, rotate: 0, opacity: 1, duration: .62, stagger: .18, ease: "power3.out" }, .8);
-      animate(".hf-matrix-row", { x: 36, opacity: 0 }, { x: 0, opacity: 1, duration: .42, stagger: .14, ease: "power2.out" }, .78);
-      animate(".hf-transform", { y: 42, opacity: 0 }, { y: 0, opacity: 1, duration: .62, stagger: .32, ease: "power3.out" }, .86);
-      animate(".hf-focus", { scale: .96 }, { scale: 1, duration: .48, ease: "power2.out" }, midBeat);
-      animate(".hf-evidence", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: .75, ease: "power3.out" }, midBeat);
-      animate(".hf-ghost", { x: 90, opacity: 0 }, { x: 0, opacity: 1, duration: 1.1, ease: "power3.out" }, .35);
+      animate(".hf-ambient", { scale: .92, x: 0 }, { scale: 1.08, x: -24, duration: sceneDuration, ease: "sine.inOut" }, 0);
+      animate(".hf-rule", { scaleX: 0 }, { scaleX: 1, duration: .52, ease: "power3.out" }, .08);
+      animate(".hf-enter", { y: 52, opacity: 0 }, { y: 0, opacity: 1, duration: .72, stagger: .12, ease: "power3.out" }, .16);
+      animate(".hf-ghost", { x: 100, opacity: 0 }, { x: 0, opacity: 1, duration: 1.05, ease: "power3.out" }, .3);
+      animate(".hf-media-frame", { opacity: .15 }, { opacity: 1, duration: .78, ease: "power2.out" }, 0);
+      animate(".hf-media", { scale: 1.065 }, { scale: 1, duration: sceneDuration, ease: "none" }, 0);
+      animate(".hf-browser", { y: 48, opacity: 0 }, { y: 0, opacity: 1, duration: .75, ease: "power3.out" }, .3);
+      animate(".hf-source-image", { scale: 1.035 }, { scale: 1.11, y: -22, duration: sceneDuration, ease: "none" }, 0);
+      animate(".hf-highlight", { clipPath: "inset(0 100% 0 0)", opacity: 0 }, { clipPath: "inset(0 0% 0 0)", opacity: 1, duration: .72, ease: "power3.out" }, focusMoment);
+      animate(".hf-annotation", { x: 58, opacity: 0 }, { x: 0, opacity: 1, duration: .52, stagger: .34, ease: "power3.out" }, focusMoment);
+      animate(".hf-mark", { scale: .62, opacity: 0, rotate: -5 }, { scale: 1, opacity: 1, rotate: 0, duration: .8, ease: "back.out(1.4)" }, .52);
+      animate(".hf-flow-item", { y: 42, opacity: 0 }, { y: 0, opacity: 1, duration: .56, stagger: .2, ease: "power3.out" }, .76);
+      animate(".hf-connector", { scaleX: 0 }, { scaleX: 1, duration: .42, stagger: .2, ease: "power2.out" }, .96);
+      animate(".hf-walkthrough-step", { x: 58, opacity: 0 }, { x: 0, opacity: 1, duration: .48, stagger: .34, ease: "power3.out" }, focusMoment);
+      animate(".hf-document", { y: 92, rotate: -6, opacity: 0 }, { y: 0, rotate: 0, opacity: 1, duration: .66, stagger: .2, ease: "power3.out" }, .58);
+      animate(".hf-transform", { y: 48, opacity: 0 }, { y: 0, opacity: 1, duration: .62, stagger: .32, ease: "power3.out" }, .78);
+      animate(".hf-arrow", { scale: .45, opacity: 0 }, { scale: 1, opacity: 1, duration: .48, ease: "back.out(1.35)" }, focusMoment - .2);
+      animate(".hf-focus", { scale: .96 }, { scale: 1, duration: .52, ease: "power2.out" }, focusMoment);
       window.__timelines.main = timeline;
     </script>
   </body>

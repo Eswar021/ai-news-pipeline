@@ -36,7 +36,7 @@ def _request(tmp_path: Path, **config_overrides: object) -> VisualRenderRequest:
                                 {
                                     "scene_id": "scene_001",
                                     "scene_order": 1,
-                                    "render_kind": "kinetic_type_scene",
+                                    "render_kind": "editorial_text_scene",
                                     "duration_seconds": 5,
                                 }
                             ]
@@ -190,7 +190,7 @@ def test_scene_render_retries_once_and_keeps_logs(tmp_path: Path, monkeypatch: p
     scene = {
         "scene_id": "scene_001",
         "scene_order": 1,
-        "render_kind": "kinetic_type_scene",
+        "render_kind": "editorial_text_scene",
         "duration_seconds": 5,
     }
     spec_path = tmp_path / "scene_001.json"
@@ -265,9 +265,15 @@ def test_persistent_scene_cache_skips_unchanged_render(
     scene = {
         "scene_id": "scene_001",
         "scene_order": 1,
-        "render_kind": "kinetic_type_scene",
+        "render_kind": "editorial_text_scene",
         "duration_seconds": 5,
-        "payload": {"phrases": ["Cache this scene"]},
+        "payload": {
+            "recipe_id": "editorial_hook",
+            "headline": "Cache this scene",
+            "accent_words": ["Cache"],
+            "composition": "editorial_center",
+            "motion_style": "word_reveal",
+        },
     }
     render_calls = 0
 

@@ -7,12 +7,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.pipeline.handoffs.publish_handoff import run as run_publish_handoff
+from src.pipeline.publishing.publish_handoff import run as run_publish_handoff
 from src.pipeline.visuals.assembly import run as run_video_assembly
 from src.pipeline.visuals.asset_catalog import run as run_asset_catalog
 from src.pipeline.visuals.asset_resolver import run as run_asset_resolver
 from src.pipeline.visuals.media_discovery import run as run_media_discovery
 from src.pipeline.visuals.planner import run as run_visual_planner
+from src.pipeline.visuals.research import run as run_visual_research
 from src.pipeline.visuals.render import run as run_visual_render
 from src.pipeline.visuals.review import run as run_visual_review
 
@@ -41,6 +42,7 @@ from .common import (
 
 STAGE = "visuals"
 MODULES = [
+    "visual_research",
     "asset_catalog",
     "visual_planner",
     "media_discovery",
@@ -52,6 +54,7 @@ MODULES = [
 ]
 
 CONFIG_MODULE_KEYS = {
+    "visual_research": "research",
     "asset_catalog": "asset_catalog",
     "visual_planner": "planner",
     "media_discovery": "media_discovery",
@@ -126,7 +129,6 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
         write_json(stage_result_path, response)
         state.finish_stage(STAGE, status="ok")
         logger.logger.info("COMPLETE stage=%s", STAGE)
-        logger.event("stage.completed", status="ok", details=response["summary"])
         return response
     except Exception as exc:
         reason = f"{type(exc).__name__}: {exc}"
@@ -145,7 +147,6 @@ def run(input_json: dict[str, Any]) -> dict[str, Any]:
         write_json(stage_result_path, response)
         state.finish_stage(STAGE, status="failed", failure_reason=reason)
         logger.logger.exception("FAILED stage=%s", STAGE)
-        logger.event("stage.failed", status="failed", details={"error": reason})
         return response
 
 
@@ -163,7 +164,10 @@ def _run_stage(
     run_dir = Path(run_context["run_dir"])
     config_resolver = StageConfigResolver(run_context, config_path, options.config_mode)
     config_documents = {
-        module: config_resolver.module("visuals", config_key)
+        module: config_resolver.module(
+            "publishing" if module == "publish_handoff" else "visuals",
+            config_key,
+        )
         for module, config_key in CONFIG_MODULE_KEYS.items()
     }
 
@@ -236,6 +240,63 @@ def _run_stage(
                 options.config_mode,
             )
 
+    research_dir = visuals_dir / "research"
+    research_result_path = research_dir / "visual_research_result.json"
+    research_result = _reuse_before(
+        "visual_research",
+        research_result_path,
+        options,
+        from_index,
+        logger,
+        state,
+    )
+    if research_result is None:
+        research_config = rendered_config(
+            run_context,
+            config_documents["visual_research"].value,
+            project_root=project_root,
+            output_root=output_root,
+        )
+        research_input = {
+            "run": {"run_id": run_id, "generated_at": now_iso()},
+            "config": research_config,
+            "input": {
+                "script_generation": script_result,
+                "video_packaging": video_packaging_result,
+            },
+        }
+        research_dir.mkdir(parents=True, exist_ok=True)
+        write_module_config_snapshot(
+            research_dir,
+            stage=STAGE,
+            module="visual_research",
+            mode=options.config_mode,
+            profile_name=str(run_context["run_profile"]),
+            document=config_documents["visual_research"],
+            effective_config=research_config,
+            environment_name=config_resolver.environment_name,
+        )
+        write_json(inputs_dir / f"{run_id}_visual_research_input.json", research_input)
+        research_result = logger.run_module("visual_research", run_visual_research, research_input)
+        write_json(research_dir / "visual_research_input.json", research_input)
+        write_json(research_result_path, research_result)
+        write_json(
+            research_dir / "visual_research_package.json",
+            research_result.get("data", {}).get("visual_research_package", {}),
+        )
+        write_json(research_dir / "summary.json", research_result.get("summary", {}))
+        write_jsonl(research_dir / "llm_calls.jsonl", research_result.get("llm_calls", []))
+        _record(state, "visual_research", research_result_path, research_result)
+    require_ready(research_result, "visual_research", handoff_key="ready_for_asset_catalog")
+    if options.stop_after == "visual_research":
+        return _stopped_response(
+            run_context,
+            options,
+            "visual_research",
+            research_result_path,
+            research_result,
+        )
+
     asset_catalog_dir = visuals_dir / "asset_catalog"
     asset_catalog_result_path = asset_catalog_dir / "visual_asset_catalog_result.json"
     asset_catalog_result = _reuse_before(
@@ -257,7 +318,11 @@ def _run_stage(
         asset_input = {
             "run": {"run_id": run_id, "generated_at": now_iso()},
             "config": config,
-            "input": {"script_generation": script_result, "video_packaging": video_packaging_result},
+            "input": {
+                "script_generation": script_result,
+                "video_packaging": video_packaging_result,
+                "visual_research": research_result,
+            },
         }
         write_module_config_snapshot(
             asset_catalog_dir,
@@ -309,6 +374,7 @@ def _run_stage(
                     "script_generation": script_result,
                     "voiceover": voiceover_package,
                     "asset_catalog": asset_catalog_result,
+                    "visual_research": research_result,
                 },
             }
             planning_result = logger.run_module("visual_planner", run_visual_planner, planner_input)
@@ -665,7 +731,6 @@ def _reuse_before(
     if result.get("status") not in {"ok", "partial"}:
         return None
     logger.logger.info("REUSE module=%s result=%s", module, path)
-    logger.event("module.reused", module=module, status=str(result.get("status")), details={"result_path": str(path)})
     state.record_module(
         STAGE,
         module,
@@ -689,6 +754,8 @@ def _record(state: RunStateStore, module: str, path: Path, result: dict[str, Any
 
 def _module_output_dir(run_dir: Path, options: VisualsOptions, module: str) -> Path:
     visuals_dir = run_dir / "visuals"
+    if module == "visual_research":
+        return visuals_dir / "research"
     if module == "asset_catalog":
         return visuals_dir / "asset_catalog"
     if module == "visual_planner":
@@ -712,6 +779,7 @@ def _module_output_dir(run_dir: Path, options: VisualsOptions, module: str) -> P
 
 def _module_result_path(run_dir: Path, options: VisualsOptions, module: str) -> Path:
     names = {
+        "visual_research": "visual_research_result.json",
         "asset_catalog": "visual_asset_catalog_result.json",
         "visual_planner": "visual_scene_planning_result.json",
         "media_discovery": "visual_media_discovery_result.json",

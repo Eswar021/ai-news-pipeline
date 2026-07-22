@@ -1,24 +1,17 @@
 import React from "react";
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { MotionBackground } from "./Background";
+import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { EditorialCanvas } from "./EditorialCanvas";
 import { VisualSceneSpec } from "./types";
-import { clamp01, font, listValue, palette, readableTitleSize, sceneEyebrow, textValue } from "./style";
+import { clamp01, editorialStyle, listValue, readableTitleSize, sceneEyebrow, shortDisplayText, textValue } from "./style";
 
-type Panel = {
-  title?: string;
-  elements?: string[];
-};
-
-const objectValue = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {});
+type Panel = { title?: string; elements?: string[] };
 
 const panelFromPayload = (value: unknown): Panel => {
-  if (typeof value === "string") {
-    return { title: value, elements: [] };
-  }
-  const obj = objectValue(value);
+  if (typeof value === "string") return { title: value, elements: [] };
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
   return {
-    title: textValue(obj.title) || textValue(obj.label),
-    elements: (listValue(obj.elements).length ? listValue(obj.elements) : listValue(obj.items).length ? listValue(obj.items) : listValue(obj.points)).slice(0, 4),
+    title: textValue(source.title) || textValue(source.label),
+    elements: (listValue(source.elements).length ? listValue(source.elements) : listValue(source.items)).slice(0, 4),
   };
 };
 
@@ -26,48 +19,52 @@ export const InterfaceTransformScene: React.FC<{ spec: VisualSceneSpec }> = ({ s
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const payload = spec.scene.payload || {};
+  const colors = editorialStyle(spec.visual_style);
   const headline = textValue(payload.headline) || spec.scene.script_excerpt || "";
-  const eyebrow = sceneEyebrow(payload, "INTERFACE TRANSFORM");
-  const beforePanel = panelFromPayload(payload.before);
-  const afterPanel = panelFromPayload(payload.after);
+  const eyebrow = sceneEyebrow(payload, "WORKFLOW SHIFT");
+  const before = panelFromPayload(payload.before);
+  const after = panelFromPayload(payload.after);
   const label = textValue(payload.transformation_label);
-  const p = spring({ fps, frame, config: { damping: 18, stiffness: 112, mass: 0.72 } });
-  const wipe = clamp01(interpolate(frame, [42, 94], [0, 1], { extrapolateRight: "clamp" }));
+  const enter = spring({ fps, frame, config: { damping: 19, stiffness: 104, mass: 0.78 } });
+  const shift = clamp01(interpolate(frame, [38, 92], [0, 1], { extrapolateRight: "clamp" }));
 
-  const renderPanel = (panel: Panel, color: string, side: "left" | "right") => (
-    <div style={{ width: 700, height: 520, borderRadius: 48, padding: "42px 46px", background: side === "left" ? "rgba(255,255,255,0.075)" : `${color}18`, border: `2px solid ${side === "left" ? "rgba(255,255,255,0.16)" : color}`, boxShadow: side === "right" ? `0 40px 140px ${color}25` : "0 34px 110px rgba(0,0,0,0.34)" }}>
-      <div style={{ color, fontSize: 28, fontWeight: 950, letterSpacing: "0.14em", textTransform: "uppercase" }}>{panel.title}</div>
-      <div style={{ marginTop: 34, display: "flex", flexDirection: "column", gap: 18 }}>
-        {(panel.elements || []).slice(0, 4).map((item, index) => {
-          const reveal = clamp01(interpolate(frame, [18 + index * 9 + (side === "right" ? 46 : 0), 34 + index * 9 + (side === "right" ? 46 : 0)], [0, 1], { extrapolateRight: "clamp" }));
-          return (
-            <div key={`${item}-${index}`} style={{ opacity: reveal, transform: `translateX(${interpolate(reveal, [0, 1], [side === "left" ? -24 : 24, 0])}px)`, display: "grid", gridTemplateColumns: "54px 1fr", gap: 18, alignItems: "center", padding: "18px 20px", borderRadius: 26, background: "rgba(255,255,255,0.095)", border: "1px solid rgba(255,255,255,0.12)" }}>
-              <div style={{ width: 50, height: 50, borderRadius: 18, background: color, color: "#071018", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 950 }}>{index + 1}</div>
-              <div style={{ color: palette.text, fontSize: 30, lineHeight: 0.98, fontWeight: 850, letterSpacing: "-0.035em" }}>{item}</div>
-            </div>
-          );
-        })}
+  const panel = (value: Panel, side: "before" | "after") => {
+    const active = side === "after";
+    const items = value.elements || [];
+    return (
+      <div style={{ width: 690, minHeight: 500, padding: "38px 42px", background: active ? "#fffdfa" : "rgba(255,253,250,0.56)", border: `1px solid ${active ? colors.accent : colors.text}35`, boxShadow: active ? "0 28px 80px rgba(45,34,22,0.16)" : "none", opacity: active ? 0.35 + shift * 0.65 : 1 - shift * 0.45 }}>
+        <div style={{ color: active ? colors.accent : colors.muted, fontSize: 21, fontWeight: 850, letterSpacing: "0.16em", textTransform: "uppercase" }}>{value.title}</div>
+        <div style={{ marginTop: 32, display: "flex", flexDirection: "column", gap: 24 }}>
+          {items.map((item, index) => {
+            const reveal = clamp01(interpolate(frame, [14 + index * 10 + (active ? 38 : 0), 30 + index * 10 + (active ? 38 : 0)], [0, 1], { extrapolateRight: "clamp" }));
+            return (
+              <div key={`${item}-${index}`} style={{ display: "grid", gridTemplateColumns: "42px 1fr", gap: 18, alignItems: "center", opacity: reveal }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${active ? colors.accent : colors.muted}`, color: active ? colors.accent : colors.muted, fontSize: 18, fontWeight: 820 }}>{index + 1}</div>
+                <div style={{ paddingBottom: 16, borderBottom: `1px solid ${colors.text}24`, color: colors.text, fontSize: 30, lineHeight: 1.02, fontWeight: 700 }}>{shortDisplayText(item, 58)}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
-    <AbsoluteFill style={{ fontFamily: font.family, color: palette.text }}>
-      <MotionBackground motif={textValue(payload.background_motif) || "device_glow"} />
-      {eyebrow && <div style={{ position: "absolute", left: 96, top: 72, color: palette.cyan, fontSize: 23, fontWeight: 950, letterSpacing: "0.18em", textTransform: "uppercase" }}>{eyebrow}</div>}
-      <div style={{ position: "absolute", left: 96, right: 96, top: eyebrow ? 122 : 92, fontSize: readableTitleSize(headline, 84), lineHeight: 0.9, fontWeight: 950, letterSpacing: "-0.06em" }}>{headline}</div>
-
-      <div style={{ position: "absolute", left: 105, right: 105, top: 318, display: "flex", justifyContent: "space-between", alignItems: "center", opacity: clamp01(p), transform: `translateY(${interpolate(p, [0, 1], [46, 0])}px)` }}>
-        {renderPanel(beforePanel, palette.amber, "left")}
-        <div style={{ position: "relative", width: 240, height: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ position: "absolute", width: 220, height: 8, borderRadius: 999, background: "rgba(255,255,255,0.16)" }} />
-          <div style={{ position: "absolute", left: 10, height: 8, width: `${200 * wipe}px`, borderRadius: 999, background: palette.cyan, boxShadow: `0 0 34px ${palette.cyan}77` }} />
-          <div style={{ position: "absolute", right: 16 + (1 - wipe) * 190, color: palette.cyan, fontSize: 72, fontWeight: 950 }}>→</div>
-        </div>
-        {renderPanel(afterPanel, palette.cyan, "right")}
+    <EditorialCanvas spec={spec} accentPosition="center">
+      <div style={{ position: "absolute", left: 98, right: 98, top: 78 }}>
+        {eyebrow && <div style={{ color: colors.accent, fontSize: 22, fontWeight: 850, letterSpacing: "0.18em", textTransform: "uppercase" }}>{eyebrow}</div>}
+        <div style={{ marginTop: eyebrow ? 14 : 0, fontFamily: colors.editorialFont, fontSize: readableTitleSize(headline, 72), lineHeight: 0.94, fontWeight: 700, letterSpacing: "-0.045em" }}>{headline}</div>
       </div>
 
-      <div style={{ position: "absolute", left: 540, right: 540, bottom: 82, padding: "20px 26px", borderRadius: 999, textAlign: "center", background: `${palette.cyan}1f`, border: `1px solid ${palette.cyan}66`, color: palette.cyan, fontSize: 34, lineHeight: 1, fontWeight: 930, letterSpacing: "-0.035em" }}>{label}</div>
-    </AbsoluteFill>
+      <div style={{ position: "absolute", left: 100, right: 100, top: 292, display: "flex", alignItems: "center", justifyContent: "space-between", opacity: clamp01(enter) }}>
+        {panel(before, "before")}
+        <div style={{ width: 250, display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+          <div style={{ width: 190, height: 4, background: `linear-gradient(90deg, ${colors.muted}55, ${colors.accent})`, transform: `scaleX(${shift})`, transformOrigin: "left" }} />
+          <div style={{ color: colors.accent, fontSize: 64, lineHeight: 1 }}>→</div>
+          {label && <div style={{ color: colors.muted, fontSize: 22, lineHeight: 1.1, fontWeight: 760, textAlign: "center" }}>{shortDisplayText(label, 48)}</div>}
+        </div>
+        {panel(after, "after")}
+      </div>
+    </EditorialCanvas>
   );
 };

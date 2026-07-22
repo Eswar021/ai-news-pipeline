@@ -19,7 +19,7 @@ def build_llm_call_log(
     log_metadata = dict(metadata or {})
     if parse_error:
         log_metadata["parse_error"] = parse_error
-    return {
+    call_log = {
         "module_name": module_name,
         "provider": provider,
         "model": model,
@@ -30,6 +30,7 @@ def build_llm_call_log(
         "duration_seconds": round(duration_seconds, 3),
         "usage": extract_usage(raw_response),
     }
+    return call_log
 
 
 def raw_response_text(raw: Any) -> str:

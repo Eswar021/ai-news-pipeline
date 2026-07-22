@@ -1,14 +1,15 @@
-provider: moonshot
-model: kimi-k3
+provider: deepseek
+model: deepseek-v4-pro
 prompt_version: v1
 temperature: 1.0
 provider_options:
-  thinking: null
+  thinking: enabled
   omit_temperature: true
+  reasoning_effort: max
   request_timeout_seconds: 600
 structured_output:
-  method: json_schema
-  strict: true
+  method: json_mode
+  strict: false
 llm_retry:
   enabled: true
   max_attempts: 2
@@ -27,6 +28,7 @@ content_filter_fallback:
 metadata_policy:
   title_option_count: 8
   thumbnail_text_option_count: 5
+  thumbnail_concept_count: 3
   max_tags: 20
   include_source_urls: true
   chapter_title_max_chars: 64

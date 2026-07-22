@@ -10,12 +10,13 @@ const defaultSceneSpec: VisualSceneSpec = {
   duration_seconds: 6,
   scene: {
     scene_id: "scene_preview",
-    render_kind: "kinetic_type_scene",
+    render_kind: "editorial_text_scene",
     payload: {
-      phrases: ["Preview scene"],
-      emphasis_words: ["Preview"],
-      animation_style: "typewriter",
-      background_motif: "newsroom_grid"
+      recipe_id: "editorial_hook",
+      headline: "Preview scene",
+      accent_words: ["Preview"],
+      composition: "editorial_center",
+      motion_style: "word_reveal"
     },
     script_excerpt: "Preview scene",
     visual_intent: "Preview",

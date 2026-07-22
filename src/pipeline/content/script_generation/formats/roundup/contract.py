@@ -22,7 +22,7 @@ from .config import (
 
 
 ScriptGenerationStatus = Literal["ok", "failed"]
-LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot"]
+LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot", "deepseek"]
 ScriptLLMRole = Literal[
     "source_researcher",
     "director",
