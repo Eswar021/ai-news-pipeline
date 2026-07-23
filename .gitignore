@@ -43,6 +43,7 @@ ENV/
 
 # ── Output Data (generated at runtime, not source code) ───────────────────────
 output/
+ui/.local/
 
 data/
 # Historical pre-canonicalization runs. New runs use output/runs/.
