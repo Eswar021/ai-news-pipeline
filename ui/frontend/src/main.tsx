@@ -1032,9 +1032,10 @@ function PublishKit({ detail }: { detail: RunDetail }) {
   const draft = useModule(runId, "metadata_creator");
   const visuals = useModule(runId, "visuals");
   const voiceover = useModule(runId, "voiceover");
-  const meta = (final.data?.youtube_metadata && Object.keys(final.data.youtube_metadata).length ? final.data.youtube_metadata : draft.data?.youtube_metadata) || {};
-  const video = visuals.data?.final_video;
-  const audio = voiceover.data?.variants?.[0]?.audio_path;
+  const finalMeta = final.data?.curated?.youtube_metadata;
+  const meta = (finalMeta && Object.keys(finalMeta).length ? finalMeta : draft.data?.curated?.youtube_metadata) || {};
+  const video = visuals.data?.curated?.final_video;
+  const audio = voiceover.data?.curated?.variants?.[0]?.audio_path;
   const titleOptions: Json[] = meta.title_options || [];
   const title = titleOptions.map((option: Json) => typeof option === "string" ? option : option?.title).find(Boolean) || "";
   const description = String(meta.description || "");
