@@ -60,7 +60,8 @@ async function installRoutes(page) {
     const runId = requested.run_id || "run_fixture_new";
     const order = ["collect", "content", "voiceover", "visuals"];
     const target = order.indexOf(requested.target_stage || "content");
-    const stages = requested.operation === "new" ? order.slice(0, target + 1) : [requested.target_stage];
+    const end = requested.run_to_stage ? order.indexOf(requested.run_to_stage) : target;
+    const stages = requested.operation === "new" ? order.slice(0, target + 1) : order.slice(target, end + 1);
     return json(route, {
       plan: { ...requested, run_id: runId, profile: requested.profile || "fixture_daily", environment: requested.environment || "dev" },
       run_id: runId,

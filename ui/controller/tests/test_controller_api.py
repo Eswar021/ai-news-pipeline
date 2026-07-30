@@ -285,6 +285,35 @@ def test_resume_boundaries_are_validated_and_command_is_scoped(tmp_path: Path) -
         assert "--skip-render" in visuals_command
 
 
+def test_resume_can_run_through_a_later_stage(tmp_path: Path) -> None:
+    root = make_project(tmp_path)
+    seed_run(root)
+    with client_for(root) as client:
+        chained = client.post(
+            "/control/plans/preview",
+            json={
+                "operation": "resume",
+                "run_id": "run_existing",
+                "target_stage": "voiceover",
+                "run_to_stage": "visuals",
+                "synthesis_mode": "preview",
+            },
+        )
+        assert chained.status_code == 200
+        assert [command["stage"] for command in chained.json()["commands"]] == ["voiceover", "visuals"]
+
+        backwards = client.post(
+            "/control/plans/preview",
+            json={
+                "operation": "resume",
+                "run_id": "run_existing",
+                "target_stage": "visuals",
+                "run_to_stage": "voiceover",
+            },
+        )
+        assert backwards.status_code == 400
+
+
 def test_running_job_can_be_cancelled_and_blocks_another_writer(tmp_path: Path) -> None:
     root = make_project(tmp_path)
     seed_run(root)

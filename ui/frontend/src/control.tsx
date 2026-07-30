@@ -86,6 +86,7 @@ type RunPlan = {
   profile?: string;
   environment?: string;
   target_stage: "collect" | "content" | "voiceover" | "visuals";
+  run_to_stage?: "collect" | "content" | "voiceover" | "visuals";
   config_mode: "live" | "frozen";
   synthesis_mode: "preview" | "final";
   voiceover_variant?: string;
@@ -228,6 +229,16 @@ export function NewRunView({
   }, [capabilities, JSON.stringify(plan)]);
 
   const stage = capabilities?.stages.find((item) => item.key === plan.target_stage);
+  const stageOrder = (capabilities?.stages || []).map((item) => item.key);
+  const startIndex = stageOrder.indexOf(plan.target_stage);
+  const endIndex = plan.operation === "new"
+    ? startIndex
+    : (plan.run_to_stage ? stageOrder.indexOf(plan.run_to_stage) : startIndex);
+  const plannedStages = startIndex < 0
+    ? []
+    : (plan.operation === "new" ? stageOrder.slice(0, startIndex + 1) : stageOrder.slice(startIndex, endIndex + 1));
+  const inPlan = (key: string) => (plannedStages as string[]).includes(key);
+  const runThroughOptions = startIndex < 0 ? [] : stageOrder.slice(startIndex + 1);
   const setOperation = (operation: RunPlan["operation"]) => {
     setPlan((current) => ({
       ...current,
@@ -243,6 +254,7 @@ export function NewRunView({
     setPlan((current) => ({
       ...current,
       target_stage,
+      run_to_stage: undefined,
       from_module: undefined,
       stop_after: undefined,
       confirm_provider_costs: false,
@@ -334,21 +346,30 @@ export function NewRunView({
                 </button>
               ))}
             </div>
+            {plan.operation !== "new" && runThroughOptions.length > 0 && (
+              <ControlSelect
+                label="Run through (optional)"
+                value={plan.run_to_stage || ""}
+                onChange={(run_to_stage) => setPlan((current) => ({ ...current, run_to_stage: (run_to_stage || undefined) as RunPlan["run_to_stage"], from_module: undefined, stop_after: undefined, confirm_provider_costs: false, confirm_final_media: false }))}
+                options={["", ...runThroughOptions]}
+                labels={{ "": "Only this stage" }}
+              />
+            )}
           </BuilderSection>
 
           <BuilderSection number="03" title="Execution policy">
             <div className="formGrid three">
               <ControlSelect label="Config mode" value={plan.config_mode} onChange={(config_mode) => setPlan((current) => ({ ...current, config_mode: config_mode as RunPlan["config_mode"] }))} options={["live", "frozen"]} />
-              {plan.target_stage === "voiceover" && (
+              {inPlan("voiceover") && (
                 <ControlSelect label="Voice mode" value={plan.synthesis_mode} onChange={(synthesis_mode) => setPlan((current) => ({ ...current, synthesis_mode: synthesis_mode as RunPlan["synthesis_mode"], confirm_final_media: false }))} options={["preview", "final"]} />
               )}
-              {plan.target_stage === "visuals" && (
+              {inPlan("visuals") && (
                 <ControlSelect label="Art director" value={plan.deterministic ? "bridge" : "llm"} onChange={(mode) => setPlan((current) => ({ ...current, deterministic: mode === "bridge", confirm_provider_costs: false }))} options={["llm", "bridge"]} labels={{ llm: "LLM art director", bridge: "Deterministic bridge" }} />
               )}
-              {plan.target_stage === "visuals" && (
+              {inPlan("visuals") && (
                 <ControlSelect label="Render" value={plan.skip_render ? "build" : "render"} onChange={(mode) => setPlan((current) => ({ ...current, skip_render: mode === "build", confirm_final_media: false }))} options={["render", "build"]} labels={{ render: "Full episode render", build: "Build only (no MP4)" }} />
               )}
-              {plan.target_stage === "visuals" && (
+              {inPlan("visuals") && (
                 <ControlText label="Unit slice (optional)" value={plan.units == null ? "" : String(plan.units)} placeholder="all units" onChange={(value) => {
                   const parsed = parseInt(value, 10);
                   setPlan((current) => ({ ...current, units: Number.isFinite(parsed) && parsed > 0 ? parsed : null }));
@@ -356,7 +377,7 @@ export function NewRunView({
               )}
             </div>
 
-            {plan.operation !== "new" && stage?.supports_boundaries && (
+            {plan.operation !== "new" && plannedStages.length === 1 && stage?.supports_boundaries && (
               <div className="boundaryBand">
                 <ControlSelect label="Rerun from module" value={plan.from_module || ""} onChange={(from_module) => setPlan((current) => ({ ...current, from_module: from_module || undefined }))} options={["", ...(stage.modules || [])]} labels={{ "": "Automatic reuse boundary" }} />
                 <ArrowRight size={18} />

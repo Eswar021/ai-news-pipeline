@@ -29,6 +29,9 @@ class RunPlan(BaseModel):
     profile: str | None = None
     environment: str | None = None
     target_stage: StageName = "content"
+    # Resume/retry only: run target_stage through this later endpoint in one plan.
+    # None (or equal to target_stage) runs just the selected stage.
+    run_to_stage: StageName | None = None
     config_mode: Literal["live", "frozen"] = "live"
     synthesis_mode: Literal["preview", "final"] = "preview"
     voiceover_variant: str | None = None

@@ -115,9 +115,10 @@ class RunPlanner:
         plan = self._normalize(requested)
         commands = self._commands(plan)
         provider_confirmation = self._provider_confirmation(plan, commands)
+        stage_names = {command.stage for command in commands}
         final_confirmation = (
-            plan.target_stage == "voiceover" and plan.synthesis_mode == "final"
-        ) or (plan.target_stage == "visuals" and not plan.skip_render)
+            "voiceover" in stage_names and plan.synthesis_mode == "final"
+        ) or ("visuals" in stage_names and not plan.skip_render)
         risks = [
             STAGE_CATALOG[command.stage]["provider_risk"]
             for command in commands
@@ -165,10 +166,24 @@ class RunPlanner:
             data["environment"] = str(context.get("config_environment") or "prod")
 
         stage = data["target_stage"]
+        # A new run always executes collect -> target; run_to_stage only applies to
+        # resume/retry, where it extends the plan through a later endpoint.
+        if requested.operation == "new":
+            data["run_to_stage"] = None
+        elif data.get("run_to_stage"):
+            if STAGE_ORDER.index(data["run_to_stage"]) < STAGE_ORDER.index(stage):
+                raise PlanError("run_to_stage must not come before the selected stage")
+        planned = self._planned_stage_names(
+            operation=requested.operation,
+            target_stage=stage,
+            run_to_stage=data.get("run_to_stage"),
+        )
+
         modules = list(STAGE_CATALOG[stage]["modules"])
-        if not STAGE_CATALOG[stage]["supports_boundaries"]:
+        # Module boundaries refine a single stage; they are meaningless across a chain.
+        if not STAGE_CATALOG[stage]["supports_boundaries"] or len(planned) > 1:
             if data.get("from_module") or data.get("stop_after"):
-                raise PlanError(f"{stage} does not support module boundaries")
+                raise PlanError(f"{stage} does not support module boundaries in this plan")
             data["from_module"] = None
             data["stop_after"] = None
         else:
@@ -179,18 +194,31 @@ class RunPlanner:
             if data.get("from_module") and data.get("stop_after"):
                 if modules.index(data["from_module"]) > modules.index(data["stop_after"]):
                     raise PlanError("from_module must not come after stop_after")
-        if stage != "visuals":
+        if "visuals" not in planned:
             data["deterministic"] = False
             data["units"] = None
             data["skip_render"] = False
         return RunPlan.model_validate(data)
 
+    def _planned_stage_names(
+        self,
+        *,
+        operation: str,
+        target_stage: str,
+        run_to_stage: str | None,
+    ) -> tuple[str, ...]:
+        start = STAGE_ORDER.index(target_stage)
+        if operation == "new":
+            return tuple(STAGE_ORDER[: start + 1])
+        end = STAGE_ORDER.index(run_to_stage) if run_to_stage else start
+        return tuple(STAGE_ORDER[start : end + 1])
+
     def _commands(self, plan: RunPlan) -> list[CommandSpec]:
-        if plan.operation == "new":
-            target_index = STAGE_ORDER.index(plan.target_stage)
-            stages = STAGE_ORDER[: target_index + 1]
-        else:
-            stages = (plan.target_stage,)
+        stages = self._planned_stage_names(
+            operation=plan.operation,
+            target_stage=plan.target_stage,
+            run_to_stage=plan.run_to_stage,
+        )
         return [self._command_for(stage, plan) for stage in stages]
 
     def _command_for(self, stage: str, plan: RunPlan) -> CommandSpec:
