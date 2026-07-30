@@ -203,9 +203,18 @@ export function NewRunView({
     if (controller.activeJob?.id) setJobId(controller.activeJob.id);
   }, [controller.activeJob?.id]);
 
+  // Keep resume/retry pinned to an actually-persisted run so the picker value and
+  // the previewed run id can never drift onto a non-existent run.
+  useEffect(() => {
+    if (plan.operation === "new" || !runs.length) return;
+    if (!runs.some((run) => run.run_id === plan.run_id)) {
+      setPlan((current) => ({ ...current, run_id: runs[0].run_id }));
+    }
+  }, [plan.operation, plan.run_id, runs]);
+
   useEffect(() => {
     if (!capabilities) return;
-    if (plan.operation !== "new" && !plan.run_id) return;
+    if (plan.operation !== "new" && !runs.some((run) => run.run_id === plan.run_id)) return;
     const timer = window.setTimeout(() => {
       setPreviewing(true);
       setPreviewError("");
@@ -240,15 +249,21 @@ export function NewRunView({
   const inPlan = (key: string) => (plannedStages as string[]).includes(key);
   const runThroughOptions = startIndex < 0 ? [] : stageOrder.slice(startIndex + 1);
   const setOperation = (operation: RunPlan["operation"]) => {
-    setPlan((current) => ({
-      ...current,
-      operation,
-      run_id: operation === "new" ? undefined : current.run_id || runs[0]?.run_id,
-      from_module: undefined,
-      stop_after: undefined,
-      confirm_provider_costs: false,
-      confirm_final_media: false,
-    }));
+    setPlan((current) => {
+      // Resume/retry must target a PERSISTED run. Never carry over a suggested
+      // new-run id (which does not exist on disk yet) or any id not in the list.
+      const keepRun = runs.some((run) => run.run_id === current.run_id);
+      return {
+        ...current,
+        operation,
+        run_id: operation === "new" ? undefined : (keepRun ? current.run_id : runs[0]?.run_id),
+        run_to_stage: undefined,
+        from_module: undefined,
+        stop_after: undefined,
+        confirm_provider_costs: false,
+        confirm_final_media: false,
+      };
+    });
   };
   const setTargetStage = (target_stage: RunPlan["target_stage"]) => {
     setPlan((current) => ({

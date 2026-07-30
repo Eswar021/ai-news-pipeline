@@ -71,16 +71,23 @@ class RunPlanner:
         )
         self.runner_module = runner_module
 
-    def capabilities(self) -> dict[str, Any]:
+    def _manifest_capabilities(self) -> dict[str, Any]:
+        """Profiles/environments/defaults from the manifest only. No subprocess, so
+        it is cheap enough to call on every plan preview."""
         manifest = self._manifest()
         profiles = manifest.get("profiles") if isinstance(manifest.get("profiles"), dict) else {}
         environments = manifest.get("environments") if isinstance(manifest.get("environments"), dict) else {}
         return {
-            "local_only": True,
             "profiles": list(profiles),
             "environments": list(environments) or [str(manifest.get("default_environment") or "prod")],
             "default_profile": str(manifest.get("default_run_profile") or next(iter(profiles), "")),
             "default_environment": str(manifest.get("default_environment") or next(iter(environments), "prod")),
+        }
+
+    def capabilities(self) -> dict[str, Any]:
+        return {
+            "local_only": True,
+            **self._manifest_capabilities(),
             "stages": [
                 {"key": key, **STAGE_CATALOG[key]}
                 for key in STAGE_ORDER
@@ -140,7 +147,7 @@ class RunPlanner:
 
     def _normalize(self, requested: RunPlan) -> RunPlan:
         data = requested.model_dump(mode="python")
-        capabilities = self.capabilities()
+        capabilities = self._manifest_capabilities()
         if requested.operation == "new":
             profile = requested.profile or capabilities["default_profile"]
             environment = requested.environment or capabilities["default_environment"]
