@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,48 @@ INSTALL_HINT = (
 )
 
 _PIPELINES: dict[str, Any] = {}
+_ESPEAK_CONFIGURED = False
+
+
+def _configure_espeak() -> None:
+    """Make Kokoro/misaki phonemization work when the project path has spaces.
+
+    espeak-ng's C data loader cannot read its data directory when the absolute
+    path contains a space; it silently falls back to a build-time path that does
+    not exist locally ("espeak-ng-data/phontab: No such file or directory"), and
+    synthesis fails. When our install path has a space, route espeak at a
+    space-free symlink to the same bundled data so it works regardless of where
+    the project is checked out.
+    """
+    global _ESPEAK_CONFIGURED
+    if _ESPEAK_CONFIGURED:
+        return
+    _ESPEAK_CONFIGURED = True
+    try:
+        import espeakng_loader
+        from phonemizer.backend.espeak.wrapper import EspeakWrapper
+    except Exception:
+        return
+
+    data_path = str(espeakng_loader.get_data_path())
+    library_path = str(espeakng_loader.get_library_path())
+    if " " in data_path:
+        link = Path(tempfile.gettempdir()) / "espeak_ng_data_ai_content"
+        try:
+            if link.is_symlink() and os.readlink(link) != data_path:
+                link.unlink()
+            if not link.exists():
+                link.symlink_to(data_path)
+            data_path = str(link)
+        except OSError:
+            pass  # Fall through with the original path; nothing lost if it fails.
+    # The env var is what espeak_Initialize actually honors at first use.
+    os.environ["ESPEAK_DATA_PATH"] = data_path
+    try:
+        EspeakWrapper.set_library(library_path)
+        EspeakWrapper.set_data_path(data_path)
+    except Exception:
+        pass
 
 
 def synthesize_chunk_to_wav(
@@ -87,6 +131,7 @@ def concatenate_wav_files(
 def _pipeline(language_code: str) -> Any:
     if language_code in _PIPELINES:
         return _PIPELINES[language_code]
+    _configure_espeak()
     try:
         from kokoro import KPipeline
     except ImportError as exc:
