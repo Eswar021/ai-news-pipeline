@@ -1,0 +1,376 @@
+# Component registry — SYSTEM config (NOT LLM-facing).
+#
+# Maps each component to (a) its family folder and (b) its FIXED sound design.
+# Sound is a property of the component's motion — the LLM never chooses it.
+# To retune audio, edit here; the components stay untouched.
+#
+# Cue shape: { cue, at, volume, repeat?, spread? }
+#   at      = seconds after the component's start
+#   repeat  = a number, or an array param name (items / series / points / segments)
+#   spread  = seconds between repeated hits
+#
+# SFX are organized by SOURCE so they never mix up:
+#   bundled/ = offline pro   custom/ = ffmpeg synth   catalog/ = HeyGen professional
+#
+# ⚑ TUNING TODO (deferred, per user feedback — do a pass later):
+#   - Some cues feel "over the board" in places → thin out where too busy.
+#   - LOWER volume on tension/build sounds: riser, riser-tension, riser-synth, uplifter.
+
+sfx:
+  # --- bundled (offline pro) ---
+  whoosh: assets/sfx/bundled/whoosh.mp3
+  whoosh-long: assets/sfx/bundled/whoosh-long.mp3
+  swipe: assets/sfx/bundled/swipe.mp3
+  impact: assets/sfx/bundled/impact.mp3
+  boom: assets/sfx/bundled/boom.mp3
+  pop: assets/sfx/bundled/pop.mp3
+  ping: assets/sfx/bundled/ping.mp3
+  tick: assets/sfx/bundled/tick.mp3
+  click: assets/sfx/bundled/click.mp3
+  key: assets/sfx/bundled/key.mp3
+  typing: assets/sfx/bundled/typing.mp3
+  riser: assets/sfx/bundled/riser.mp3
+  sparkle: assets/sfx/bundled/sparkle.mp3
+  chime: assets/sfx/bundled/chime.mp3
+  notify: assets/sfx/bundled/notify.mp3
+  glitch: assets/sfx/bundled/glitch.mp3
+  glitch2: assets/sfx/bundled/glitch2.mp3
+  glitch3: assets/sfx/bundled/glitch3.mp3
+  error: assets/sfx/bundled/error.mp3
+  # --- custom (ffmpeg synth) ---
+  sub-drop: assets/sfx/custom/sub-drop.mp3
+  riser-synth: assets/sfx/custom/riser-synth.mp3
+  boom-synth: assets/sfx/custom/boom-synth.mp3
+  blip-hi: assets/sfx/custom/blip-hi.mp3
+  blip-lo: assets/sfx/custom/blip-lo.mp3
+  whoosh-synth: assets/sfx/custom/whoosh-synth.mp3
+  zap: assets/sfx/custom/zap.mp3
+  digi: assets/sfx/custom/digi.mp3
+  # --- catalog (HeyGen professional) ---
+  whoosh-deep: assets/sfx/catalog/whoosh-deep.mp3
+  whoosh-rev: assets/sfx/catalog/whoosh-rev.mp3
+  swish: assets/sfx/catalog/swish.mp3
+  impact-hit: assets/sfx/catalog/impact-hit.mp3
+  impact-trailer: assets/sfx/catalog/impact-trailer.mp3
+  snap: assets/sfx/catalog/snap.mp3
+  clang: assets/sfx/catalog/clang.mp3
+  riser-tension: assets/sfx/catalog/riser-tension.mp3
+  uplifter: assets/sfx/catalog/uplifter.mp3
+  subdrop: assets/sfx/catalog/subdrop.mp3
+  glitch-accent: assets/sfx/catalog/glitch-accent.mp3
+  ui-beep: assets/sfx/catalog/ui-beep.mp3
+  data-blip: assets/sfx/catalog/data-blip.mp3
+  process: assets/sfx/catalog/process.mp3
+  notify-ding: assets/sfx/catalog/notify-ding.mp3
+  select: assets/sfx/catalog/select.mp3
+  shimmer: assets/sfx/catalog/shimmer.mp3
+  success: assets/sfx/catalog/success.mp3
+  powerup: assets/sfx/catalog/powerup.mp3
+  sting: assets/sfx/catalog/sting.mp3
+
+# ============================================================
+# Transition sound design (Glue family G) — one whoosh per scene handoff.
+# The runner plays these at the transition's start time. Type -> { cue, volume }.
+# ============================================================
+transitions:
+  crossfade: { cue: swish, volume: 0.20 } # soft — "this continues"
+  dip: { cue: sub-drop, volume: 0.32 } # weighted drop into black
+  push: { cue: swipe, volume: 0.34 } # editorial page-turn
+  whip: { cue: whoosh-long, volume: 0.42 } # fast pan punch
+  zoom: { cue: whoosh-deep, volume: 0.36 } # dramatic push-through
+  mask: { cue: shimmer, volume: 0.3 } # iris reveal
+  match: { cue: swish, volume: 0.3 } # matched zoom blend
+
+# ============================================================
+# Component sound design — diversified so each moment has its own character.
+# ============================================================
+components:
+  # --- Typography (T) ---
+  title-card:
+    family: typography
+    sfx:
+      - { cue: whoosh-deep, at: 0.10, volume: 0.5 } # kicker
+      - { cue: impact-hit, at: 0.28, volume: 0.5 } # title slam (cinematic)
+
+  kinetic-sentence:
+    family: typography
+    sfx:
+      - { cue: swish, at: 0.10, volume: 0.4 } # line in
+      - { cue: pop, at: 0.48, volume: 0.45 } # emphasis
+
+  quote-card:
+    family: typography
+    sfx:
+      - { cue: typing, at: 0.20, volume: 0.42 } # word-by-word reveal
+      - { cue: select, at: 1.15, volume: 0.35 } # attribution
+
+  lower-third:
+    family: typography
+    sfx:
+      - { cue: swipe, at: 0.25, volume: 0.5 } # accent bar
+      - { cue: blip-lo, at: 0.45, volume: 0.4 } # name
+
+  stat-punch:
+    family: typography
+    sfx:
+      - { cue: boom-synth, at: 0.20, volume: 0.55 } # number slam
+      - { cue: data-blip, at: 0.25, volume: 0.2, repeat: 5, spread: 0.14 } # count-up
+
+  section-marker:
+    family: typography
+    sfx:
+      - { cue: whoosh-rev, at: 0.0, volume: 0.4 } # counter rise
+      - { cue: select, at: 0.35, volume: 0.24, repeat: segments, spread: 0.08 } # segments
+      - { cue: snap, at: 0.72, volume: 0.4 } # label
+
+  callout:
+    family: typography
+    sfx:
+      - { cue: ui-beep, at: 0.10, volume: 0.5 } # ring ping
+      - { cue: whoosh, at: 0.35, volume: 0.35 } # label
+
+  list-build:
+    family: typography
+    sfx:
+      - { cue: select, at: 0.25, volume: 0.3, repeat: items, spread: 0.13 } # one per item
+
+  # --- Real media (R) ---
+  photo:
+    family: real-media
+    sfx:
+      - { cue: whoosh-deep, at: 0.0, volume: 0.28 } # cut to footage
+
+  image-reveal:
+    family: real-media
+    sfx:
+      - { cue: swipe, at: 0.15, volume: 0.4 } # wipe
+
+  side-by-side:
+    family: real-media
+    sfx:
+      - { cue: whoosh-synth, at: 0.0, volume: 0.35 }
+      - { cue: snap, at: 0.40, volume: 0.35 } # divider
+
+  spotlight:
+    family: real-media
+    sfx:
+      - { cue: whoosh-synth, at: 0.10, volume: 0.3 }
+      - { cue: ui-beep, at: 0.35, volume: 0.4 } # focus ring
+
+  image-grid:
+    family: real-media
+    sfx:
+      - { cue: whoosh, at: 0.0, volume: 0.3 }
+      - { cue: snap, at: 0.12, volume: 0.24, repeat: queries, spread: 0.12 } # each cell
+
+  image-compare:
+    family: real-media
+    sfx:
+      - { cue: whoosh-deep, at: 0.0, volume: 0.3 } # before
+      - { cue: swish, at: 2.40, volume: 0.38 } # transform to after
+
+  # --- Data & numbers (D) ---
+  bar-chart:
+    family: data
+    sfx:
+      - { cue: whoosh, at: 0.10, volume: 0.3 }
+      - { cue: data-blip, at: 0.35, volume: 0.2, repeat: series, spread: 0.1 } # per bar
+
+  comparison-bars:
+    family: data
+    sfx:
+      - { cue: whoosh-deep, at: 0.10, volume: 0.3 }
+      - { cue: boom-synth, at: 0.40, volume: 0.4, repeat: items, spread: 0.18 } # column slams
+
+  donut:
+    family: data
+    sfx:
+      - { cue: whoosh-synth, at: 0.20, volume: 0.3 }
+      - { cue: data-blip, at: 0.25, volume: 0.16, repeat: 5, spread: 0.16 } # count-up
+      - { cue: success, at: 0.95, volume: 0.3 } # complete
+
+  line-chart:
+    family: data
+    sfx:
+      - { cue: uplifter, at: 0.20, volume: 0.3 } # rising bed under the climb
+      - { cue: data-blip, at: 0.45, volume: 0.2, repeat: points, spread: 0.18 } # dots
+      - { cue: pop, at: 1.15, volume: 0.35 } # endpoint
+
+  timeline:
+    family: data
+    sfx:
+      - { cue: whoosh, at: 0.10, volume: 0.3 } # axis draw
+      - { cue: data-blip, at: 0.35, volume: 0.22, repeat: events, spread: 0.32 } # each event lands
+
+  # --- Diagrams & flows (P) ---
+  flow-sequence:
+    family: diagrams
+    sfx:
+      - { cue: whoosh-synth, at: 0.10, volume: 0.3 }
+      - { cue: select, at: 0.20, volume: 0.3, repeat: steps, spread: 0.5 } # per step
+
+  before-after:
+    family: diagrams
+    sfx:
+      - { cue: swish, at: 0.20, volume: 0.35 } # before in
+      - { cue: whoosh-deep, at: 0.60, volume: 0.3 } # transform arrow
+      - { cue: impact, at: 0.85, volume: 0.4 } # after reveal
+
+  cycle:
+    family: diagrams
+    sfx:
+      - { cue: whoosh-synth, at: 0.20, volume: 0.3 } # ring draw
+      - { cue: select, at: 0.35, volume: 0.28, repeat: steps, spread: 0.22 } # nodes
+      - { cue: chime, at: 1.20, volume: 0.3 } # center lands
+
+  architecture:
+    family: diagrams
+    sfx:
+      - { cue: whoosh-synth, at: 0.10, volume: 0.3 }
+      - { cue: select, at: 0.25, volume: 0.28, repeat: layers, spread: 0.16 } # each layer
+      - { cue: impact, at: 0.55, volume: 0.3 } # highlight layer
+
+  # --- Brand & entity (B) — real logos via the asset resolver ---
+  entity-intro:
+    family: brand
+    sfx:
+      - { cue: whoosh-deep, at: 0.0, volume: 0.4 } # chip in
+      - { cue: shimmer, at: 0.55, volume: 0.35 } # logo lands
+      - { cue: select, at: 0.35, volume: 0.3 } # name
+
+  logo-vs-logo:
+    family: brand
+    sfx:
+      - { cue: whoosh-synth, at: 0.15, volume: 0.35 } # left in
+      - { cue: whoosh-rev, at: 0.30, volume: 0.35 } # right in
+      - { cue: impact-hit, at: 0.55, volume: 0.45 } # VS slam
+
+  episode-open:
+    family: brand
+    sfx:
+      - { cue: riser, at: 0.0, volume: 0.28 } # build
+      - { cue: whoosh-deep, at: 0.30, volume: 0.35 } # title
+      - { cue: impact-trailer, at: 0.85, volume: 0.5 } # slam
+
+  outro:
+    family: brand
+    sfx:
+      - { cue: whoosh-synth, at: 0.10, volume: 0.3 }
+      - { cue: success, at: 0.70, volume: 0.3 } # sign-off
+
+  logo-reveal:
+    family: brand
+    sfx:
+      - { cue: whoosh-deep, at: 0.15, volume: 0.4 } # chip in
+      - { cue: impact-hit, at: 0.22, volume: 0.4 } # land
+      - { cue: shimmer, at: 0.65, volume: 0.4 } # shine sweep
+
+  logo-wall:
+    family: brand
+    sfx:
+      - { cue: whoosh, at: 0.10, volume: 0.3 }
+      - { cue: select, at: 0.25, volume: 0.26, repeat: entities, spread: 0.09 } # per cell
+      - { cue: chime, at: 1.10, volume: 0.28 }
+
+  # --- Source / proof (S) — credibility treatments ---
+  headline-highlight:
+    family: source
+    sfx:
+      - { cue: whoosh-deep, at: 0.10, volume: 0.32 }
+      - { cue: select, at: 0.30, volume: 0.3 } # source tag
+      - { cue: swipe, at: 0.90, volume: 0.38 } # highlight marker sweep
+
+  quote-from-source:
+    family: source
+    sfx:
+      - { cue: whoosh-synth, at: 0.0, volume: 0.3 } # card in
+      - { cue: typing, at: 0.30, volume: 0.35 } # passage reveal
+      - { cue: select, at: 1.0, volume: 0.3 } # attribution
+
+  citation-chip:
+    family: source
+    sfx:
+      - { cue: swipe, at: 0.10, volume: 0.35 } # chip slides in
+
+  # --- Glue & set (G) — ambient backgrounds (silent beds; sit UNDER content) ---
+  gradient-bg:
+    family: glue
+    sfx: []
+  grid-bg:
+    family: glue
+    sfx: []
+  particle-bg:
+    family: glue
+    sfx: []
+  grain-bg:
+    family: glue
+    sfx: []
+  environment-bg:
+    family: glue
+    sfx: []
+  blob-bg:
+    family: glue
+    sfx: []
+
+  # --- Data (round 2) ---
+  gauge:
+    family: data
+    sfx:
+      - { cue: whoosh-synth, at: 0.20, volume: 0.3 }
+      - { cue: data-blip, at: 0.30, volume: 0.16, repeat: 6, spread: 0.16 }
+      - { cue: success, at: 1.25, volume: 0.3 }
+  table:
+    family: data
+    sfx:
+      - { cue: whoosh, at: 0.10, volume: 0.3 }
+      - { cue: select, at: 0.40, volume: 0.26, repeat: rows, spread: 0.14 }
+
+  # --- Diagrams (round 2) ---
+  tree:
+    family: diagrams
+    sfx:
+      - { cue: whoosh-synth, at: 0.20, volume: 0.3 }
+      - { cue: select, at: 0.50, volume: 0.28, repeat: children, spread: 0.18 }
+  schematic:
+    family: diagrams
+    sfx:
+      - { cue: whoosh-synth, at: 0.20, volume: 0.3 }
+      - { cue: ui-beep, at: 0.55, volume: 0.28, repeat: annotations, spread: 0.16 }
+
+  # --- Brand (round 2) ---
+  watermark:
+    family: brand
+    sfx: []
+  attribution:
+    family: brand
+    sfx:
+      - { cue: whoosh-deep, at: 0.0, volume: 0.32 }
+      - { cue: shimmer, at: 0.40, volume: 0.3 }
+
+  # --- Source (round 2) ---
+  social-post:
+    family: source
+    sfx:
+      - { cue: whoosh-synth, at: 0.0, volume: 0.3 }
+      - { cue: notify-ding, at: 0.25, volume: 0.35 }
+  document-excerpt:
+    family: source
+    sfx:
+      - { cue: whoosh, at: 0.0, volume: 0.3 }
+      - { cue: swipe, at: 0.90, volume: 0.35 } # highlight
+  multi-source-montage:
+    family: source
+    sfx:
+      - { cue: whoosh, at: 0.10, volume: 0.3 }
+      - { cue: snap, at: 0.25, volume: 0.26, repeat: sources, spread: 0.16 }
+
+  # --- Real-media (round 2) ---
+  parallax:
+    family: real-media
+    sfx:
+      - { cue: whoosh-deep, at: 0.0, volume: 0.3 }
+  pip:
+    family: real-media
+    sfx:
+      - { cue: whoosh-synth, at: 0.0, volume: 0.3 }
+      - { cue: snap, at: 0.45, volume: 0.35 } # inset pops in

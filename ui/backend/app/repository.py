@@ -236,24 +236,18 @@ class SafeRepository:
         module_index = {module["name"]: module for module in modules}
         state_stages = state.get("stages") if isinstance(state.get("stages"), dict) else {}
         stages = []
-        for stage_order, stage_name in enumerate(("ingestion", "content", "voiceover", "visuals", "publish"), start=1):
-            orchestration_stage = "visuals" if stage_name == "publish" else stage_name
-            stage_state = state_stages.get(orchestration_stage) if isinstance(state_stages, dict) else {}
+        for stage_order, stage_name in enumerate(("ingestion", "content", "voiceover", "visuals"), start=1):
+            stage_state = state_stages.get(stage_name) if isinstance(state_stages, dict) else {}
             stage_state = stage_state if isinstance(stage_state, dict) else {}
-            if stage_name == "publish":
-                names = ["publish_handoff"]
-            else:
-                state_order = stage_state.get("module_order")
-                names = list(state_order) if isinstance(state_order, list) else list(STAGE_MODULES.get(stage_name, []))
-                if stage_name == "visuals":
-                    names = [name for name in names if name != "publish_handoff"]
-                for fallback_name in STAGE_MODULES.get(stage_name, []):
-                    if fallback_name != "publish_handoff" and fallback_name not in names:
-                        names.append(fallback_name)
+            state_order = stage_state.get("module_order")
+            names = list(state_order) if isinstance(state_order, list) else list(STAGE_MODULES.get(stage_name, []))
+            for fallback_name in STAGE_MODULES.get(stage_name, []):
+                if fallback_name not in names:
+                    names.append(fallback_name)
             stage_modules = [
                 self._workflow_module(run_id, module_index.get(name) or {
                     "name": name,
-                    "stage": orchestration_stage,
+                    "stage": stage_name,
                     "status": "missing",
                     "path": MODULE_PATHS.get(name, name),
                     "summary": {},
@@ -261,18 +255,12 @@ class SafeRepository:
                 }, sequence=index)
                 for index, name in enumerate(names, start=1)
             ]
-            if stage_name == "publish":
-                stage_status = self._aggregate_status([module.get("status", "missing") for module in stage_modules])
-                started_at = stage_modules[0].get("recorded_at", "") if stage_modules else ""
-                completed_at = started_at
-                invocation_count = 1 if stage_status not in {"missing", "not_started"} else 0
-            else:
-                stage_status = stage_state.get("status") or self._aggregate_status(
-                    [module.get("status", "missing") for module in stage_modules]
-                )
-                started_at = stage_state.get("started_at", "")
-                completed_at = stage_state.get("completed_at", "")
-                invocation_count = stage_state.get("invocation_count", 0)
+            stage_status = stage_state.get("status") or self._aggregate_status(
+                [module.get("status", "missing") for module in stage_modules]
+            )
+            started_at = stage_state.get("started_at", "")
+            completed_at = stage_state.get("completed_at", "")
+            invocation_count = stage_state.get("invocation_count", 0)
             definition = STAGE_CATALOG[stage_name]
             stages.append({
                 "key": stage_name,
@@ -527,83 +515,26 @@ class SafeRepository:
         }
 
     def visual_scenes(self, run_id: str) -> dict[str, Any]:
-        plan, plan_error = self.read_json_rel(run_id, "visuals/planning/generate/visual_scene_plan.json")
-        render, _ = self.read_json_rel(run_id, "visuals/render/visual_render_package.json")
-        render_preview, _ = self.read_json_rel(run_id, "visuals/render_preview/visual_render_package.json")
-        catalog, _ = self.read_json_rel(run_id, "visuals/asset_catalog/visual_asset_catalog.json")
-        manifest, _ = self.read_json_rel(run_id, "visuals/asset_resolution/visual_asset_manifest.json")
-        research, _ = self.read_json_rel(run_id, "visuals/research/visual_research_package.json")
-        research_summary, _ = self.read_json_rel(run_id, "visuals/research/summary.json")
-        catalog_summary, _ = self.read_json_rel(run_id, "visuals/asset_catalog/summary.json")
-        discovery_summary, _ = self.read_json_rel(run_id, "visuals/media_discovery/summary.json")
-        resolution_summary, _ = self.read_json_rel(run_id, "visuals/asset_resolution/summary.json")
-        render_summary, _ = self.read_json_rel(run_id, "visuals/render/summary.json")
-        assembly_summary, _ = self.read_json_rel(run_id, "visuals/assembly/assembly_summary.json")
-        review_result, _ = self.read_json_rel(run_id, "visuals/review/visual_review_result.json")
-        plan = plan if isinstance(plan, dict) else {}
-        render = render if isinstance(render, dict) else {}
-        render_preview = render_preview if isinstance(render_preview, dict) else {}
-        catalog = catalog if isinstance(catalog, dict) else {}
-        manifest = manifest if isinstance(manifest, dict) else {}
-        research = research if isinstance(research, dict) else {}
-        rendered = self._rendered_scene_map(render.get("rendered_scenes") or [])
-        rendered_preview = self._rendered_scene_map(render_preview.get("rendered_scenes") or [])
-        assets = catalog.get("assets") or []
-        scenes = []
-        for scene in plan.get("scene_timeline") or []:
-            if not isinstance(scene, dict):
-                continue
-            scene_id = scene.get("scene_id")
-            final = rendered.get(scene_id, {})
-            preview = rendered_preview.get(scene_id, {})
-            scenes.append({
-                **self._sanitize_value(scene),
-                "final_video_path": self.safe_output_ref(final.get("output_path")),
-                "preview_video_path": self.safe_output_ref(preview.get("output_path")),
-                "render_status": final.get("status") or preview.get("status") or "unrendered",
-                "render_elapsed_seconds": final.get("render_elapsed_seconds") or preview.get("render_elapsed_seconds"),
-            })
+        result, result_error = self.read_json_rel(run_id, "orchestration/visuals_stage_result.json")
+        result = result if isinstance(result, dict) else {}
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+        handoff = result.get("handoff") if isinstance(result.get("handoff"), dict) else {}
+        rendered = bool(summary.get("rendered", handoff.get("episode_rendered", False)))
         return {
+            "status": result.get("status", ""),
             "summary": self._sanitize_value({
-                "scene_count": len(scenes),
-                "asset_count": len(assets),
-                "coverage": plan.get("coverage") or {},
-                "render_settings": render.get("render_settings") or render_preview.get("render_settings") or {},
+                "engine": summary.get("engine", ""),
+                "art_director": summary.get("art_director", ""),
+                "units": summary.get("units"),
+                "rendered": rendered,
             }),
-            "scenes": scenes,
-            "assets": [self._safe_asset(asset) for asset in assets if isinstance(asset, dict)],
-            "resolved_assets": [
-                self._summarize_resolved_asset(asset)
-                for asset in (manifest.get("resolved_assets") or [])
-                if isinstance(asset, dict)
-            ],
-            "research": {
-                "strategy": research.get("research_strategy", ""),
-                "source_policy": self._sanitize_value(research.get("source_policy") or {}),
-                "summary": self._summary_preview(research_summary if isinstance(research_summary, dict) else {}),
-                "stories": self._summarize_visual_research(research.get("story_research") or []),
-            },
-            "production": [
-                self._production_step("Asset catalog", catalog_summary),
-                self._production_step("Media discovery", discovery_summary),
-                self._production_step("Asset resolution", resolution_summary),
-                self._production_step("Render", render_summary),
-                self._production_step("Assembly", assembly_summary),
-                self._production_step(
-                    "Review",
-                    review_result.get("summary") if isinstance(review_result, dict) else {},
-                    review_result.get("status") if isinstance(review_result, dict) else "",
-                ),
-            ],
-            "contact_sheets": {
-                "catalog": self.safe_output_ref(catalog.get("contact_sheet_path")),
-                "review": self.safe_output_ref("output/runs/" + run_id + "/visuals/review/contact_sheet.jpg"),
-                "review_preview": self.safe_output_ref("output/runs/" + run_id + "/visuals/review_preview/contact_sheet.jpg"),
-            },
-            "final_video": self.safe_output_ref("output/runs/" + run_id + "/visuals/assembly/final_video.mp4"),
-            "preview_video": self.safe_output_ref("output/runs/" + run_id + "/visuals/assembly_preview/final_video.mp4"),
-            "review_report": self.safe_output_ref("output/runs/" + run_id + "/visuals/review/story_review_report.html"),
-            "plan_error": plan_error,
+            "final_video": self.safe_output_ref(
+                "output/runs/" + run_id + "/visuals/" + run_id + "-ad.mp4"
+            ),
+            "voiceover_package_path": data.get("voiceover_package_path", ""),
+            "failure_reason": summary.get("failure_reason", ""),
+            "result_error": result_error if result_error != "Missing" else None,
         }
 
     def artifact_tree(self, run_id: str) -> list[dict[str, Any]]:
@@ -908,9 +839,7 @@ class SafeRepository:
             "selected_story_count",
             "script_word_count",
             "audio_duration_seconds",
-            "scene_count",
             "final_video_available",
-            "preview_video_available",
         ]
         return [
             {
@@ -1259,71 +1188,8 @@ class SafeRepository:
             }
         if module == "voiceover":
             return {"variants": self.voiceovers(run_id)}
-        if module == "visual_research":
-            visual = self.visual_scenes(run_id)
-            return {"research": visual.get("research", {}), "production": visual.get("production", [])[:1]}
-        if module == "asset_catalog":
-            visual = self.visual_scenes(run_id)
-            return {
-                "summary": visual.get("production", [{}])[0],
-                "assets": visual.get("assets", []),
-                "contact_sheet": (visual.get("contact_sheets") or {}).get("catalog", ""),
-            }
-        if module == "visual_planner":
-            visual = self.visual_scenes(run_id)
-            return {
-                "summary": visual.get("summary", {}),
-                "scenes": visual.get("scenes", []),
-                "plan_error": visual.get("plan_error"),
-            }
-        if module == "media_discovery":
-            data, error = self.read_json_rel(run_id, "visuals/media_discovery/visual_media_package.json")
-            data = data if isinstance(data, dict) else {}
-            return {
-                "selections": self._summarize_media_selections(data.get("selections") or []),
-                "unresolved": self._sanitize_value(data.get("unresolved") or []),
-                "provider_errors": self._sanitize_value(data.get("provider_errors") or []),
-                "fallbacks": self._sanitize_value(data.get("fallbacks") or []),
-                "error": error if error != "Missing" else None,
-            }
-        if module == "asset_resolver":
-            visual = self.visual_scenes(run_id)
-            return {
-                "summary": visual.get("production", [{}, {}, {}])[2],
-                "resolved_assets": visual.get("resolved_assets", []),
-            }
-        if module == "visual_render":
-            visual = self.visual_scenes(run_id)
-            return {
-                "summary": visual.get("production", [{}, {}, {}, {}])[3],
-                "render_settings": (visual.get("summary") or {}).get("render_settings", {}),
-                "scenes": visual.get("scenes", []),
-            }
-        if module == "video_assembly":
-            visual = self.visual_scenes(run_id)
-            return {
-                "summary": visual.get("production", [{}, {}, {}, {}, {}])[4],
-                "final_video": visual.get("final_video", ""),
-                "preview_video": visual.get("preview_video", ""),
-            }
-        if module == "visual_review":
-            visual = self.visual_scenes(run_id)
-            return {
-                "summary": visual.get("production", [{}, {}, {}, {}, {}, {}])[5],
-                "contact_sheets": visual.get("contact_sheets", {}),
-                "review_report": visual.get("review_report", ""),
-            }
-        if module == "publish_handoff":
-            result, error = self.read_json_rel(run_id, "handoffs/publish_review/publish_handoff_result.json")
-            result = result if isinstance(result, dict) else {}
-            package = (result.get("data") or {}).get("publish_handoff_package") if isinstance(result.get("data"), dict) else {}
-            return {
-                "status": result.get("status", ""),
-                "summary": self._sanitize_value(result.get("summary") or {}),
-                "handoff": self._sanitize_value(result.get("handoff") or {}),
-                "package": self._publish_package_preview(package),
-                "error": error if error != "Missing" else None,
-            }
+        if module == "visuals":
+            return self.visual_scenes(run_id)
         return {}
 
     def _workflow_module(self, run_id: str, module: dict[str, Any], sequence: int) -> dict[str, Any]:
@@ -1334,22 +1200,14 @@ class SafeRepository:
             "consumes": "Upstream persisted artifacts",
             "produces": "Module result and handoff",
         })
-        modes: list[str] = []
         run_dir = self.run_dir(run_id)
-        if name in {"visual_render", "video_assembly", "visual_review"}:
-            final_rel = MODULE_PATHS.get(name, name)
-            preview_rel = MODULE_PATHS.get(f"{name}_preview", "")
-            if preview_rel and (run_dir / preview_rel).exists():
-                modes.append("preview")
-            if (run_dir / final_rel).exists():
-                modes.append("final")
         return {
             **module,
             **definition,
             "sequence": sequence,
             "artifact_count": self._count_artifact_nodes(module.get("artifacts") or []),
             "has_llm_calls": (run_dir / str(module.get("path", "")) / "llm_calls.jsonl").is_file(),
-            "available_modes": modes,
+            "available_modes": [],
         }
 
     def _module_sources(self, module_dir: Path, rel: str) -> list[dict[str, Any]]:
@@ -1408,13 +1266,6 @@ class SafeRepository:
             "metadata_package.json",
             "youtube_metadata.json",
             "voiceover_package.json",
-            "visual_research_package.json",
-            "visual_asset_catalog.json",
-            "visual_scene_plan.json",
-            "visual_media_package.json",
-            "visual_asset_manifest.json",
-            "visual_render_package.json",
-            "final_video_package.json",
         }
         return "primary" if name in primary_names else "artifact"
 
@@ -1723,38 +1574,7 @@ class SafeRepository:
             if units:
                 voice_usage.append({"variant": variant, "audio_units": units})
         visual = self.visual_scenes(run_id) if story_id else {}
-        scenes = [
-            scene for scene in visual.get("scenes", [])
-            if isinstance(scene, dict) and (
-                scene.get("story_id") == story_id
-                or (record_key and record_key in (scene.get("source_record_keys") or []))
-            )
-        ]
-        scene_ids = {scene.get("scene_id") for scene in scenes if scene.get("scene_id")}
-        assets = [
-            asset for asset in visual.get("assets", [])
-            if isinstance(asset, dict) and (
-                asset.get("story_id") == story_id or asset.get("source_record_key") == record_key
-            )
-        ]
-        research_stories = ((visual.get("research") or {}).get("stories") or []) if isinstance(visual, dict) else []
-        research = next(
-            (item for item in research_stories if isinstance(item, dict) and item.get("story_id") == story_id),
-            {},
-        )
-        media_data, _ = self.read_json_rel(run_id, "visuals/media_discovery/visual_media_package.json")
-        media_selections = [
-            selection_item for selection_item in self._summarize_media_selections(
-                media_data.get("selections") if isinstance(media_data, dict) else []
-            )
-            if selection_item.get("scene_id") in scene_ids
-        ]
-        resolved_assets = [
-            asset for asset in visual.get("resolved_assets", [])
-            if isinstance(asset, dict) and asset.get("scene_id") in scene_ids
-        ]
-        publish_result, _ = self.read_json_rel(run_id, "handoffs/publish_review/publish_handoff_result.json")
-        publish_result = publish_result if isinstance(publish_result, dict) else {}
+        episode_rendered = bool((visual.get("summary") or {}).get("rendered"))
         stages = [
             self._lineage_step(
                 "news_collection",
@@ -1854,76 +1674,16 @@ class SafeRepository:
                 ["metadata_finalizer/metadata_package.json", "metadata_finalizer/youtube_metadata.json"],
             ),
             self._lineage_step(
-                "visual_research",
                 "visuals",
-                "produced" if research else "not_reached",
-                "Visual needs were researched at story and sequence level.",
-                self._sanitize_value(research),
-                ["visuals/research/visual_research_package.json"],
-            ),
-            self._lineage_step(
-                "asset_catalog",
                 "visuals",
-                "produced" if assets else "not_reached",
-                "Trusted assets retain their story and source-record provenance.",
-                {"assets": self._sanitize_value(assets)},
-                ["visuals/asset_catalog/visual_asset_catalog.json"],
-            ),
-            self._lineage_step(
-                "visual_planner",
-                "visuals",
-                "produced" if scenes else "not_reached",
-                "Scenes inherit story identity and direct source-record grounding from script beats.",
-                {"scenes": self._sanitize_value(scenes)},
-                ["visuals/planning/generate/visual_scene_plan.json"],
-            ),
-            self._lineage_step(
-                "media_discovery",
-                "visuals",
-                "produced" if media_selections else ("inherited" if scenes else "not_reached"),
-                "Selected media is linked through the planned scene IDs.",
-                {"selections": media_selections},
-                ["visuals/media_discovery/visual_media_package.json"],
-            ),
-            self._lineage_step(
-                "asset_resolver",
-                "visuals",
-                "produced" if resolved_assets else ("inherited" if scenes else "not_reached"),
-                "Resolved local assets are linked through scene IDs.",
-                {"resolved_assets": self._sanitize_value(resolved_assets)},
-                ["visuals/asset_resolution/visual_asset_manifest.json"],
-            ),
-            self._lineage_step(
-                "visual_render",
-                "visuals",
-                "produced" if any(scene.get("final_video_path") or scene.get("preview_video_path") for scene in scenes) else ("inherited" if scenes else "not_reached"),
-                "Rendered clips preserve the planned scene identity.",
-                {"scenes": [self._rendered_lineage_scene(scene) for scene in scenes]},
-                ["visuals/render/visual_render_package.json", "visuals/render_preview/visual_render_package.json"],
-            ),
-            self._lineage_step(
-                "video_assembly",
-                "visuals",
-                "episode_level" if scenes and visual.get("final_video") else "not_reached",
-                "Assembly is episode-level; this record contributes through the listed rendered scenes.",
-                {"final_video": visual.get("final_video", ""), "preview_video": visual.get("preview_video", ""), "scene_ids": sorted(scene_ids)},
-                ["visuals/assembly/final_video_package.json", "visuals/assembly_preview/final_video_package.json"],
-            ),
-            self._lineage_step(
-                "visual_review",
-                "visuals",
-                "episode_level" if scenes and visual.get("review_report") else "not_reached",
-                "Review samples the assembled episode and retains the contributing scene IDs.",
-                {"contact_sheets": visual.get("contact_sheets", {}), "review_report": visual.get("review_report", "")},
-                ["visuals/review/visual_review_result.json", "visuals/review/contact_sheet.jpg"],
-            ),
-            self._lineage_step(
-                "publish_handoff",
-                "publish",
-                "episode_level" if matched_sections and publish_result else "not_reached",
-                "The manual publish package is episode-level and fingerprint-validated.",
-                {"status": publish_result.get("status", ""), "summary": self._sanitize_value(publish_result.get("summary") or {}), "handoff": self._sanitize_value(publish_result.get("handoff") or {})},
-                ["handoffs/publish_review/publish_handoff_result.json"],
+                "episode_level" if matched_sections and visual.get("final_video") else "not_reached",
+                "The rendered episode is a single motion-graphics video; this record contributes through its script sections and voice timing.",
+                {
+                    "episode_video": visual.get("final_video", ""),
+                    "rendered": episode_rendered,
+                    "summary": self._sanitize_value(visual.get("summary") or {}),
+                },
+                [f"visuals/{run_id}-ad.mp4", "orchestration/visuals_stage_result.json"],
             ),
         ]
         return {
@@ -2011,76 +1771,9 @@ class SafeRepository:
             ]),
         }
 
-    def _rendered_lineage_scene(self, scene: dict[str, Any]) -> dict[str, Any]:
-        return self._pick(
-            scene,
-            "scene_id",
-            "scene_order",
-            "story_id",
-            "render_kind",
-            "start_seconds",
-            "end_seconds",
-            "script_excerpt",
-            "source_record_keys",
-            "render_status",
-            "final_video_path",
-            "preview_video_path",
-        )
-
     def _excerpt(self, value: Any, limit: int = 700) -> str:
         text = self._sanitize_text(str(value or ""))
         return text[:limit] + ("..." if len(text) > limit else "")
-
-    def _summarize_media_selections(self, selections: Any) -> list[dict[str, Any]]:
-        if not isinstance(selections, list):
-            return []
-        result = []
-        for selection in selections:
-            if not isinstance(selection, dict):
-                continue
-            row = self._pick(
-                selection,
-                "candidate_id",
-                "scene_id",
-                "render_kind",
-                "provider",
-                "media_type",
-                "status",
-                "title",
-                "description",
-                "source_url",
-                "width",
-                "height",
-                "selection_basis",
-                "review_status",
-                "provenance_verification",
-                "semantic_verification",
-                "clip_start_seconds",
-                "clip_duration_seconds",
-            )
-            row["asset_path"] = self.safe_output_ref(selection.get("asset_path"))
-            result.append(row)
-        return result
-
-    def _publish_package_preview(self, package: Any) -> dict[str, Any]:
-        if not isinstance(package, dict):
-            return {}
-        preview = self._pick(
-            package,
-            "run_id",
-            "package_type",
-            "generated_at",
-            "selected_title",
-            "title_options",
-            "chapters_finalized",
-            "source_urls",
-            "files",
-            "review_status",
-        )
-        for key in ("final_video_path", "voiceover_path", "contact_sheet_path"):
-            if package.get(key):
-                preview[key] = self.safe_output_ref(package.get(key))
-        return preview
 
     def _summary_metrics(self, run_id: str) -> dict[str, Any]:
         metrics: dict[str, Any] = {}
@@ -2101,28 +1794,16 @@ class SafeRepository:
                 if summary.get(source_key) is not None:
                     metrics[metric] = summary[source_key]
                     break
-        summary_files = {
-            "script": "script_generation/summary.json",
-            "voiceover": "",
-            "visual_planner": "visuals/planning/generate/summary.json",
-            "assembly": "visuals/assembly/summary.json",
-        }
-        script, _ = self.read_json_rel(run_id, summary_files["script"]) if (run_dir / summary_files["script"]).exists() else ({}, None)
+        script_summary = "script_generation/summary.json"
+        script, _ = self.read_json_rel(run_id, script_summary) if (run_dir / script_summary).exists() else ({}, None)
         if isinstance(script, dict):
             metrics["script_word_count"] = script.get("total_word_count")
         voiceovers = self.voiceovers(run_id)
         if voiceovers:
             metrics["selected_voiceover_variant"] = voiceovers[0]["variant_id"]
             metrics["audio_duration_seconds"] = voiceovers[0].get("duration_seconds")
-        planner_path = run_dir / summary_files["visual_planner"]
-        if planner_path.exists():
-            planner, _ = self.read_json_file(planner_path)
-            if isinstance(planner, dict):
-                metrics["scene_count"] = planner.get("scene_count")
-        final_video = run_dir / "visuals" / "assembly" / "final_video.mp4"
-        preview_video = run_dir / "visuals" / "assembly_preview" / "final_video.mp4"
-        metrics["final_video_available"] = final_video.exists()
-        metrics["preview_video_available"] = preview_video.exists()
+        episode_video = run_dir / "visuals" / f"{run_id}-ad.mp4"
+        metrics["final_video_available"] = episode_video.exists()
         return metrics
 
     def _stage_statuses(self, state: dict[str, Any]) -> dict[str, str]:
@@ -2242,9 +1923,6 @@ class SafeRepository:
     def _top_level_module_dirs(self, run_dir: Path) -> list[str]:
         ignore = {"inputs", "orchestration", "handoffs", "voiceover", "visuals"}
         return [p.name for p in sorted(run_dir.iterdir()) if p.is_dir() and p.name not in ignore]
-
-    def _rendered_scene_map(self, scenes: list[Any]) -> dict[str, dict[str, Any]]:
-        return {scene.get("scene_id"): scene for scene in scenes if isinstance(scene, dict) and scene.get("scene_id")}
 
     def _pick(self, data: Any, *keys: str) -> dict[str, Any]:
         if not isinstance(data, dict):
@@ -2401,100 +2079,6 @@ class SafeRepository:
                 "confidence": rejection.get("confidence"),
                 "selection_stage": rejection.get("selection_stage", ""),
             })
-        return result
-
-    def _summarize_visual_research(self, stories: Any) -> list[dict[str, Any]]:
-        if not isinstance(stories, list):
-            return []
-        result = []
-        for story in stories:
-            if not isinstance(story, dict):
-                continue
-            sequences = []
-            for sequence in story.get("sequence_notes") or []:
-                if not isinstance(sequence, dict):
-                    continue
-                sequences.append(self._pick(
-                    sequence,
-                    "sequence_label",
-                    "visual_arc",
-                    "preferred_shot_progression",
-                    "continuity_motif",
-                    "beat_ids",
-                ))
-            needs = []
-            for need in story.get("asset_needs") or []:
-                if not isinstance(need, dict):
-                    continue
-                needs.append(self._pick(
-                    need,
-                    "asset_need_id",
-                    "sequence_role",
-                    "subject",
-                    "action_or_detail",
-                    "editorial_purpose",
-                    "preferred_asset_types",
-                    "must_show",
-                    "must_avoid",
-                    "availability_strategy",
-                    "beat_ids",
-                ))
-            result.append({
-                "story_id": story.get("story_id", ""),
-                "visual_thesis": self._sanitize_text(str(story.get("visual_thesis", ""))),
-                "sequences": sequences,
-                "asset_needs": needs,
-                "unresolved_gaps": self._sanitize_value(story.get("unresolved_gaps") or []),
-                "warnings": self._sanitize_value(story.get("warnings") or []),
-            })
-        return result
-
-    def _summarize_resolved_asset(self, asset: dict[str, Any]) -> dict[str, Any]:
-        result = self._pick(
-            asset,
-            "scene_id",
-            "asset_id",
-            "asset_type",
-            "status",
-            "source_url",
-            "resolution_method",
-            "failure_reason",
-        )
-        for key in ("local_path", "resolved_path", "output_path"):
-            if asset.get(key):
-                result[key] = self.safe_output_ref(asset.get(key))
-        return result
-
-    def _production_step(self, label: str, summary: Any, status: str = "") -> dict[str, Any]:
-        summary = summary if isinstance(summary, dict) else {}
-        failure = summary.get("failure_reason", "")
-        return {
-            "label": label,
-            "status": status or ("failed" if failure else (summary.get("status") or ("ok" if summary else "missing"))),
-            "failure_reason": self._sanitize_text(str(failure)),
-            "summary": self._summary_preview(summary, limit=20),
-        }
-
-    def _safe_asset(self, asset: dict[str, Any]) -> dict[str, Any]:
-        result = self._pick(
-            asset,
-            "asset_id",
-            "story_id",
-            "asset_type",
-            "status",
-            "review_status",
-            "source_record_key",
-            "source_url",
-            "asset_url",
-            "title",
-            "description",
-            "source_name",
-            "provenance_class",
-            "capture_preflight_status",
-            "availability_reason",
-        )
-        for key in ["local_path", "capture_preflight_preview_path"]:
-            result[key] = self.safe_output_ref(asset.get(key))
         return result
 
     def _summarize_stories(self, stories: list[Any]) -> list[dict[str, Any]]:

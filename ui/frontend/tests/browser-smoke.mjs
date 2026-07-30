@@ -67,7 +67,7 @@ async function installRoutes(page) {
       commands: stages.map((stage) => ({ stage, display: `python3 -m src.pipeline.orchestration.runner ${stage} --run-id ${runId}` })),
       risk_notes: ["Fixture provider calls may occur.", "Live mode reloads current authoring YAML."],
       requires_provider_confirmation: stages.includes("content"),
-      requires_final_confirmation: requested.synthesis_mode === "final" || requested.render_mode === "final",
+      requires_final_confirmation: (requested.target_stage === "voiceover" && requested.synthesis_mode === "final") || (requested.target_stage === "visuals" && !requested.skip_render),
     });
   });
   await page.route("**/control/config/files", (route) => json(route, { files: configFiles }));

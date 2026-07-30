@@ -87,8 +87,6 @@ class RunPlanner:
             ],
             "config_modes": ["live", "frozen"],
             "synthesis_modes": ["preview", "final"],
-            "render_modes": ["preview", "final"],
-            "render_backends": ["remotion", "hyperframes"],
             "runtime": self.runtime_status(),
         }
 
@@ -118,8 +116,8 @@ class RunPlanner:
         commands = self._commands(plan)
         provider_confirmation = self._provider_confirmation(plan, commands)
         final_confirmation = (
-            plan.target_stage in {"voiceover", "visuals"} and plan.synthesis_mode == "final"
-        ) or (plan.target_stage == "visuals" and plan.render_mode == "final")
+            plan.target_stage == "voiceover" and plan.synthesis_mode == "final"
+        ) or (plan.target_stage == "visuals" and not plan.skip_render)
         risks = [
             STAGE_CATALOG[command.stage]["provider_risk"]
             for command in commands
@@ -168,7 +166,7 @@ class RunPlanner:
 
         stage = data["target_stage"]
         modules = list(STAGE_CATALOG[stage]["modules"])
-        if stage not in {"content", "visuals"}:
+        if not STAGE_CATALOG[stage]["supports_boundaries"]:
             if data.get("from_module") or data.get("stop_after"):
                 raise PlanError(f"{stage} does not support module boundaries")
             data["from_module"] = None
@@ -181,13 +179,10 @@ class RunPlanner:
             if data.get("from_module") and data.get("stop_after"):
                 if modules.index(data["from_module"]) > modules.index(data["stop_after"]):
                     raise PlanError("from_module must not come after stop_after")
-        if requested.operation == "new":
-            data["selected_scene_ids"] = []
-            data["selected_story_ids"] = []
         if stage != "visuals":
-            data["selected_scene_ids"] = []
-            data["selected_story_ids"] = []
-            data["render_backend"] = None
+            data["deterministic"] = False
+            data["units"] = None
+            data["skip_render"] = False
         return RunPlan.model_validate(data)
 
     def _commands(self, plan: RunPlan) -> list[CommandSpec]:
@@ -224,8 +219,6 @@ class RunPlanner:
                 argv.extend(["--stop-after", plan.stop_after])
         elif stage == "voiceover":
             argv.extend([
-                "--script-source",
-                plan.script_source,
                 "--synthesis-mode",
                 plan.synthesis_mode,
             ])
@@ -236,30 +229,12 @@ class RunPlanner:
             if plan.skip_metadata_finalization:
                 argv.append("--skip-metadata-finalization")
         else:
-            argv.extend([
-                "--script-source",
-                plan.script_source,
-                "--plan-source",
-                plan.plan_source,
-                "--render-mode",
-                plan.render_mode,
-            ])
-            if plan.voiceover_variant:
-                argv.extend(["--voiceover-variant", plan.voiceover_variant])
-            if plan.render_backend:
-                argv.extend(["--render-backend", plan.render_backend])
-            if plan.from_module:
-                argv.extend(["--from-module", plan.from_module])
-            if plan.stop_after:
-                argv.extend(["--stop-after", plan.stop_after])
-            if plan.operation == "retry" and not plan.from_module:
-                argv.append("--no-resume")
-            for scene_id in plan.selected_scene_ids:
-                argv.extend(["--scene-id", scene_id])
-            for story_id in plan.selected_story_ids:
-                argv.extend(["--story-id", story_id])
-            if plan.skip_publish_handoff:
-                argv.append("--skip-publish-handoff")
+            if plan.deterministic:
+                argv.append("--deterministic")
+            if plan.units is not None:
+                argv.extend(["--units", str(plan.units)])
+            if plan.skip_render:
+                argv.append("--skip-render")
         display = " ".join(
             shlex.quote("python3" if index == 0 else value)
             for index, value in enumerate(argv)
@@ -272,7 +247,7 @@ class RunPlanner:
             return True
         if "voiceover" in stages and plan.synthesis_mode == "final":
             return True
-        if "visuals" in stages and plan.plan_source == "generate":
+        if "visuals" in stages and not plan.deterministic:
             return True
         return False
 

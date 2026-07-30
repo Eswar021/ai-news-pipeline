@@ -1,0 +1,52 @@
+# Real-media (R) family showcase — now with REAL photographs (free-license).
+# The components are identical to before; only the `src` paths changed from the
+# gradient placeholders to real .jpg photos. This is what real scraped source
+# images will look like flowing through the same components.
+
+scenes:
+  # R1 — photo, Ken-Burns on a real photo
+  - component: photo
+    duration: 4
+    params:
+      src: "assets/images/real-1.jpg"
+      motion: ken-burns-in
+
+  # LAYERED: real photo + transparent lower-third
+  - duration: 4
+    layers:
+      - component: photo
+        params: { src: "assets/images/real-3.jpg", motion: ken-burns-in }
+      - component: lower-third
+        params: { primary: "Zeiss Ikon", secondary: "35mm rangefinder · c. 1960" }
+
+  # R2 — image reveal on a real photo
+  - component: image-reveal
+    duration: 4
+    params:
+      src: "assets/images/real-2.jpg"
+      direction: right
+
+  # R3 — side-by-side comparison of two real photos
+  - component: side-by-side
+    duration: 5
+    params:
+      left: "assets/images/real-1.jpg"
+      right: "assets/images/real-3.jpg"
+      leftLabel: "The workshop"
+      rightLabel: "The tool"
+
+  # R9 — spotlight focusing on the lens
+  - component: spotlight
+    duration: 4
+    params:
+      src: "assets/images/real-3.jpg"
+      x: 44
+      y: 58
+
+  # LAYERED: real photo + transparent callout
+  - duration: 5
+    layers:
+      - component: photo
+        params: { src: "assets/images/real-1.jpg", motion: pan-left }
+      - component: callout
+        params: { label: "Hand-cut leather, still on the bench", x: 40, y: 40 }

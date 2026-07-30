@@ -1,0 +1,15 @@
+{
+  "name": "video_engine",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "npx --yes hyperframes@0.7.68 preview",
+    "check": "npx --yes hyperframes@0.7.68 check",
+    "render": "npx --yes hyperframes@0.7.68 render",
+    "publish": "npx --yes hyperframes@0.7.68 publish"
+  },
+  "dependencies": {
+    "js-yaml": "4.1.0"
+  }
+}

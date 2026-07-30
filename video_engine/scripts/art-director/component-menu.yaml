@@ -1,0 +1,91 @@
+# The LLM art-director's MENU — the only components it may choose, with their
+# params and when to use each. This is the family contract, LLM-facing.
+# (Config-driven: to expose/rename a component to the art-director, edit here.)
+#
+# BRAND logos (entity-intro, logo-vs-logo, logo-reveal, logo-wall) — name the entity,
+# the resolver fetches the official logo. REAL PHOTOS (photo, image-reveal, spotlight) —
+# describe the image, the resolver fetches it. SOURCE proof (headline-highlight,
+# quote-from-source, citation-chip) — for grounding claims in a publication.
+# STILL EXCLUDED (not built): live article-page screenshots.
+
+rules:
+  - Choose the component whose SHAPE fits the beat's job — vary it; never use the same one for many beats in a row.
+  - Author CONCISE on-screen copy. Rewrite the narration into short phrases — never paste a full sentence. A title is a few words; a stat value is the number itself.
+  - A long beat (>~10s) should usually be 2-3 short shots that establish → develop → pay off ONE idea, not one static card. Give each shot a `weight` (relative time share within the beat).
+  - Only use data/diagram components when the beat actually gives you the numbers/steps. Never invent values, series, or steps.
+  - Put the beat's own emphasis on screen where it helps (numbers, names, the turn).
+  - Keep step / item / label / caption strings VERY short (~4 words max) — they sit in small boxes and overflow if long.
+  - Brand components (entity-intro, logo-vs-logo) are ONLY for real, well-known COMPANIES with an official logo (OpenAI, Google Cloud, NVIDIA, Anthropic, Hugging Face, Meta…). NEVER pass a product, feature, or internal project name (e.g. "Model Armor", "GB300") as the entity — introduce those with a title-card instead.
+
+components:
+  # --- Typography ---
+  title-card: { params: [kicker, title, subtitle], use: "Big statement / episode or story title. Short title (<=8 words)." }
+  kinetic-sentence: { params: [text], use: "One punchy line; wrap 1-2 key words in *asterisks* for emphasis. Keep under ~12 words." }
+  quote-card: { params: [quote, author, role], use: "A verbatim quote or a strong opinion/take. author/role optional." }
+  stat-punch: { params: [eyebrow, value, caption], use: "ONE hero number. value = the number itself (e.g. '$1.5B', '324,000 sq ft'); caption = a few words of context." }
+  section-marker: { params: [index, total, label, sublabel], use: "Numbered story divider (index of total). label = short story title." }
+  list-build: { params: [title, items, marker], use: "3-5 short parallel items revealed one by one. items = array of short strings. marker = number|dot|check." }
+  lower-third: { params: [primary, secondary], use: "Name/label chyron. Transparent — pair as an overlay over a background." }
+  callout: { params: [label, x, y], use: "Pin + label at a point. x,y are PERCENT (0-100). Transparent overlay." }
+
+  # --- Data — ALL `value`/`y` fields MUST be plain NUMBERS (no text, no units in the number).
+  #     If the beat has no real numbers to compare, DO NOT use these — use before-after,
+  #     list-build, or two title/kinetic shots for a qualitative contrast.
+  bar-chart: { params: [title, series, highlight], use: "Compare a few labeled NUMBERS. series = [{label, value:<number>}]; highlight = index." }
+  comparison-bars: { params: [title, items], use: "Two NUMBERS head-to-head. items = [{label, value:<number>}] (exactly 2). NOT for word-vs-word contrasts — use before-after for those." }
+  donut: { params: [title, value, label], use: "A single percentage. value = <number 0-100>." }
+  line-chart: { params: [title, points, caption], use: "A trend. points = [{x:<number>, y:<number>}]." }
+  timeline: { params: [title, events], use: "A chronology on a horizontal axis. events = array of {date, label} (3-5), in order. Good for how-a-story-unfolded beats." }
+  gauge: { params: [title, value, label], use: "A single percentage on a radial gauge. value = number 0-100." }
+  table: { params: [title, columns, rows], use: "A small comparison table. columns = array of headers; rows = array of arrays (2-4 rows). Text or numbers." }
+
+  # --- Brand (real official logos — you give the ENTITY NAME only; the resolver fetches the logo) ---
+  # ONLY for real, well-known COMPANIES that have an official logo (OpenAI, Google Cloud, NVIDIA,
+  # Anthropic, Hugging Face, Meta, Microsoft, TechCrunch, …). NEVER for a product, feature, or
+  # internal project name (e.g. "Model Armor", "GB300") — use title-card for those.
+  entity-intro: { params: [entity, tagline], use: "Introduce ONE real company by its official logo + name + short tagline. entity = the company name only." }
+  logo-vs-logo: { params: [leftEntity, rightEntity, label], use: "Two real companies head-to-head: their official logos + a short label. Use for competition / X-vs-Y beats." }
+  logo-reveal: { params: [entity], use: "A big, dramatic single-company logo sting (logo + name). Use for a punchy company reveal moment." }
+  logo-wall: { params: [title, entities], use: "A grid of several company logos. entities = array of real company names (3-6). Use for 'the players' / who's-involved beats." }
+  episode-open: { params: [kicker, title, subtitle], use: "The EPISODE intro bumper. Use ONLY as the first shot of the intro. kicker = show name; title = the episode promise." }
+  outro: { params: [title, subtitle, handle], use: "The closing end-card. Use ONLY as the last shot of the closing. title = sign-off; subtitle = CTA; handle = channel @." }
+  watermark: { params: [text, corner], use: "A small persistent channel bug (transparent overlay). text = @handle; corner = tr|br|tl|bl. Layer over content." }
+  attribution: { params: [label, entity], use: "A sponsor/partner credit card with the entity's logo. label = 'In partnership with' etc; entity = real company name." }
+
+  # --- Source / proof (ground a claim in a publication; text-based, no assets) ---
+  headline-highlight: { params: [headline, highlight, source, date], use: "Show a news headline with a key phrase highlighted + the source. highlight = a substring of headline." }
+  quote-from-source: { params: [quote, source, meta], use: "A passage quoted from a PUBLICATION/article (not a person). source = the outlet; meta = section/date." }
+  citation-chip: { params: [source, headline, date], use: "A small SOURCE badge (transparent overlay, bottom-left). Layer it over other content to cite where a claim comes from." }
+  social-post: { params: [author, handle, text, meta], use: "A stylized social-media post card. author/handle = poster; text = the post; meta = date/platform." }
+  document-excerpt: { params: [docLabel, excerpt, highlight], use: "A document/filing excerpt with a highlighted phrase. docLabel = doc name; highlight = a substring of excerpt." }
+  multi-source-montage: { params: [title, sources], use: "Several outlets covering the same story, stacked. sources = array of {source, headline} (2-4)." }
+
+  # --- Real media (real stock/news photos — you DESCRIBE the image; the resolver fetches it) ---
+  # query = a short description of what to show. Real people and companies are fine for
+  # CONTEXT (e.g. "Jensen Huang on stage", "data center servers", "courtroom gavel"). Use
+  # photos for context/atmosphere and keep them relevant to the beat; never to fabricate or
+  # imply a specific false claim. Prefer clean images without heavy conflicting on-screen text.
+  photo: { params: [query, motion], use: "Full-frame photo, slow motion. motion = ken-burns-in|ken-burns-out|pan-left|pan-right." }
+  image-reveal: { params: [query, direction], use: "Photo wiped onscreen. direction = left|right|up|down." }
+  spotlight: { params: [query, x, y], use: "Photo dimmed with a focus ring at x,y (PERCENT 0-100). query = image." }
+  image-grid: { params: [title, queries], use: "A mosaic of several photos. queries = array of image descriptions (2-4). Good for a montage / 'the landscape' beat." }
+  image-compare: { params: [beforeLabel, afterLabel, caption, beforeQuery, afterQuery], use: "One frame that transforms before→after in place (two photos cross-dissolve). *Query fields = generic image descriptions." }
+  parallax: { params: [caption, query], use: "A single photo with depth/parallax drift + optional caption. query = image description." }
+  pip: { params: [mainLabel, pipLabel, corner, mainQuery, pipQuery], use: "A main photo with a smaller inset photo in a corner. *Query fields = image descriptions; corner = br|bl|tr|tl." }
+
+  # --- Diagrams (only with real steps from the beat) ---
+  flow-sequence: { params: [title, steps, highlight], use: "A → B → C process/chain. steps = 3-5 short strings; highlight = index (default last)." }
+  before-after: { params: [title, before, after, caption], use: "X becomes Y / a turn. before,after = short labels." }
+  cycle: { params: [title, steps, center], use: "A repeating loop. steps = 3-6 short strings; center = short label." }
+  architecture: { params: [title, layers, highlight], use: "A layered/tiered system diagram (top→bottom). layers = array of {label, note}; highlight = index of the key layer. Use for boundary/middleware/stack STRUCTURE (not a linear A→B→C — that's flow-sequence)." }
+  tree: { params: [title, root, children], use: "A hierarchy — one root with a row of children. root = label; children = array of 2-4 short labels." }
+  schematic: { params: [title, subject, annotations], use: "A central subject with labeled callouts around it. subject = center label; annotations = array of {label, note} (2-4)." }
+
+# transitions the art-director may request INTO a shot:
+transitions: [crossfade, dip, push, whip, zoom, mask, match, cut]
+transition_guidance:
+  - crossfade — related beats (default within a story)
+  - dip — a section change / breath (use entering a new story)
+  - push — an editorial "next point" (good entering the first story)
+  - whip — a high-energy pivot
+  - zoom — a dramatic reveal

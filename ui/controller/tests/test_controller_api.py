@@ -151,7 +151,6 @@ def test_capabilities_and_preview_use_only_canonical_arguments(tmp_path: Path) -
                 "profile": "fixture",
                 "environment": "dev",
                 "synthesis_mode": "preview",
-                "render_mode": "preview",
             },
         )
         assert preview.status_code == 200
@@ -164,7 +163,8 @@ def test_capabilities_and_preview_use_only_canonical_arguments(tmp_path: Path) -
         ]
         assert all("--project-root" not in command["display"] for command in plan["commands"])
         assert plan["requires_provider_confirmation"] is True
-        assert plan["requires_final_confirmation"] is False
+        # A full episode render (no --skip-render) is heavy final-media generation.
+        assert plan["requires_final_confirmation"] is True
 
 
 def test_new_pipeline_job_is_idempotent_and_completes(tmp_path: Path) -> None:
@@ -255,18 +255,34 @@ def test_resume_boundaries_are_validated_and_command_is_scoped(tmp_path: Path) -
             json={
                 "operation": "retry",
                 "run_id": "run_existing",
-                "target_stage": "visuals",
-                "from_module": "visual_render",
-                "stop_after": "visual_render",
-                "selected_scene_ids": ["scene_003"],
-                "plan_source": "chatgpt",
+                "target_stage": "content",
+                "from_module": "story_mapping",
+                "stop_after": "script_generation",
             },
         )
         assert valid.status_code == 200
         command = valid.json()["commands"][0]["display"]
-        assert "--from-module visual_render" in command
-        assert "--stop-after visual_render" in command
-        assert "--scene-id scene_003" in command
+        assert "--from-module story_mapping" in command
+        assert "--stop-after script_generation" in command
+
+        # The visuals stage no longer supports module boundaries; it takes the
+        # motion-graphics engine flags instead.
+        visuals = client.post(
+            "/control/plans/preview",
+            json={
+                "operation": "retry",
+                "run_id": "run_existing",
+                "target_stage": "visuals",
+                "deterministic": True,
+                "units": 2,
+                "skip_render": True,
+            },
+        )
+        assert visuals.status_code == 200
+        visuals_command = visuals.json()["commands"][0]["display"]
+        assert "--deterministic" in visuals_command
+        assert "--units 2" in visuals_command
+        assert "--skip-render" in visuals_command
 
 
 def test_running_job_can_be_cancelled_and_blocks_another_writer(tmp_path: Path) -> None:

@@ -1,0 +1,92 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"kicker","type":"string","label":"Kicker","default":"EP.47 · WEEKLY AI ROUNDUP"},
+  {"id":"title","type":"string","label":"Title","default":"An AI Escaped Its Own Test"},
+  {"id":"subtitle","type":"string","label":"Subtitle","default":"…then hacked a real company mid-evaluation."}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute; inset: 0; overflow: hidden;
+          --bg:#0B0E14; --text:#E6EDF3; --text-dim:#8B94A3; --text-mut:#586274;
+          --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.09);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 100% at 22% -10%, #16202F 0%, var(--bg) 52%, #06090E 100%); }
+        .grid { position:absolute; inset:0;
+          background-image:radial-gradient(rgba(230,237,243,0.09) 1px, transparent 1.4px);
+          background-size:46px 46px;
+          -webkit-mask:radial-gradient(80% 70% at 26% 50%, #000 22%, transparent 100%);
+          mask:radial-gradient(80% 70% at 26% 50%, #000 22%, transparent 100%); }
+        .glow { position:absolute; width:1000px; height:1000px; left:-120px; top:-280px;
+          background:radial-gradient(circle, rgba(255,138,61,0.15), transparent 62%); pointer-events:none; }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column;
+          justify-content:center; align-items:flex-start; padding:0 150px; }
+        .kicker { display:flex; align-items:center; gap:16px; margin-bottom:34px;
+          font-family:var(--fm); font-size:26px; letter-spacing:0.14em; color:var(--accent); font-weight:700; }
+        .kicker .sq { width:14px; height:14px; background:var(--accent); border-radius:3px; }
+        .title { font-size:130px; font-weight:900; line-height:1.05; letter-spacing:-0.02em;
+          max-width:1580px; margin:0; }
+        .title .w { display:inline-block; }
+        .rule { height:8px; width:220px; background:var(--accent); border-radius:4px;
+          margin:44px 0 34px; transform-origin:left center; }
+        .subtitle { font-size:44px; font-weight:400; color:var(--text-dim); max-width:1200px; line-height:1.3; }
+      </style>
+
+      <div id="root" data-composition-id="title-card" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="grid"></div>
+        <div class="glow" data-layout-allow-overflow></div>
+        <div class="stage">
+          <div class="kicker"><span class="sq"></span><span class="ktext"></span></div>
+          <h1 class="title"></h1>
+          <div class="rule"></div>
+          <div class="subtitle"></div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="title-card"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+
+          const kicker = get("kicker", "EP.47 · WEEKLY AI ROUNDUP");
+          const title = get("title", "An AI Escaped Its Own Test");
+          const subtitle = get("subtitle", "…then hacked a real company mid-evaluation.");
+
+          const kickerEl = R.querySelector(".kicker");
+          R.querySelector(".ktext").textContent = kicker;
+          if (!kicker) kickerEl.style.display = "none";
+
+          const titleEl = R.querySelector(".title");
+          titleEl.textContent = "";
+          title.split(/\s+/).filter(Boolean).forEach((w) => {
+            const s = document.createElement("span");
+            s.className = "w"; s.textContent = w;
+            titleEl.appendChild(s);
+            titleEl.appendChild(document.createTextNode(" "));
+          });
+
+          const subEl = R.querySelector(".subtitle");
+          subEl.textContent = subtitle;
+          if (!subtitle) subEl.style.display = "none";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          if (kicker) tl.fromTo(kickerEl, { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 0.1);
+          tl.fromTo(R.querySelectorAll(".title .w"), { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.62, ease: "power3.out", stagger: 0.07 }, 0.28);
+          tl.fromTo(R.querySelector(".rule"), { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: "power2.out" }, 0.9);
+          if (subtitle) tl.fromTo(subEl, { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 1.05);
+          window.__timelines["title-card"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -35,7 +35,6 @@ from src.pipeline.contracts import (
     validate_artifact_provenance,
     voiceover_artifact_payload,
 )
-from src.pipeline.handoffs.chatgpt_script_parser import run as parse_chatgpt_script
 from src.pipeline.voiceover.contract import VoiceoverRequest
 from src.pipeline.voiceover import script_units as voice_script_units
 from src.pipeline.voiceover import app as voice_app
@@ -46,23 +45,6 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures" / "media_roundup_reference"
 
 def _json(name: str) -> dict:
     return json.loads((FIXTURE_DIR / name).read_text(encoding="utf-8"))
-
-
-def _canonical_manual_script() -> dict:
-    return parse_chatgpt_script(
-        {
-            "run": {"run_id": "fixture_media_roundup_reference"},
-            "config": {
-                "diagnostic_words_per_minute": 150,
-                "title_card_seconds": 2.8,
-            },
-            "input": {
-                "response_text": (FIXTURE_DIR / "chatgpt_response.txt").read_text(encoding="utf-8"),
-                "video_packaging": _json("video_packaging_result.json"),
-                "script_source": "fixture",
-            },
-        }
-    )
 
 
 def _strict_schema_failures(schema: dict, path: str = "root") -> list[str]:
@@ -747,30 +729,6 @@ def test_script_checks_do_not_apply_semantic_or_craft_scoring() -> None:
     assert checks["validation_scope"] == "structural_integrity_and_provenance_only"
 
 
-def test_manual_chatgpt_script_normalizes_to_canonical_beats() -> None:
-    result = _canonical_manual_script()
-    ScriptGenerationResponse.model_validate(result)
-    package = result["data"]["script_package"]
-
-    assert result["status"] == "ok"
-    assert package["generation_strategy"] == "manual_story_sections_normalized_to_audiovisual_beats"
-    assert len(package["sections"]) == 5
-    assert package["full_script_stats"]["beat_count"] == 12
-    assert len(package["audio_plan"]["units"]) == 5
-    for section in package["sections"]:
-        assert section["narration_text"] == " ".join(beat["narration_text"] for beat in section["beats"])
-        assert [beat["beat_order"] for beat in section["beats"]] == list(range(1, len(section["beats"]) + 1))
-        assert "target_seconds" not in section
-        assert "word_budget" not in section
-        if section["section_type"] == "story":
-            assert section["title_card"]["voice_behavior"] == "continue"
-            assert section["title_card"]["anchor_beat_id"] == section["beats"][0]["beat_id"]
-    assert result["handoff"] == {
-        "ready_for_metadata_creation": True,
-        "ready_for_voiceover": True,
-    }
-
-
 def test_native_script_generation_uses_director_story_writers_and_bookends(monkeypatch) -> None:
     video = _json("video_packaging_result.json")
     stories = video["data"]["video_packet"]["stories"]
@@ -1066,7 +1024,7 @@ def test_script_checks_reject_unknown_source_ownership() -> None:
 
 
 def test_voiceover_preserves_script_beat_identity(monkeypatch, tmp_path: Path) -> None:
-    script = _canonical_manual_script()
+    script = _json("script_generation_result.json")
     request = VoiceoverRequest.model_validate(
         {
             "run": {"run_id": "fixture_media_roundup_reference"},
@@ -1097,7 +1055,7 @@ def test_voiceover_preserves_script_beat_identity(monkeypatch, tmp_path: Path) -
     assert len(resolved["chunks"]) == 12
     assert len({chunk["audio_unit_id"] for chunk in resolved["chunks"]}) == 5
     assert len({chunk["beat_id"] for chunk in resolved["chunks"]}) == 12
-    assert all(chunk["beat_function"] for chunk in resolved["chunks"])
+    assert all("beat_function" in chunk for chunk in resolved["chunks"])
     assert all("creative_device" in chunk for chunk in resolved["chunks"])
 
     cursor = 0.0

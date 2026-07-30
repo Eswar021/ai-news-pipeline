@@ -1,0 +1,77 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"quote","type":"string","label":"Quote","default":"If this doesn'"'"'t convince you misalignment is the concern going forward, I don'"'"'t know what will."},
+  {"id":"author","type":"string","label":"Author","default":"Micah Carroll"},
+  {"id":"role","type":"string","label":"Role","default":"Researcher, OpenAI"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute; inset: 0; overflow: hidden;
+          --bg:#0B0E14; --text:#E6EDF3; --text-dim:#8B94A3;
+          --accent:#FF8A3D; --accent-2:#3DD6D0;
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 78% 20%, #141D2B 0%, var(--bg) 55%, #06090E 100%); }
+        .mark { position:absolute; left:118px; top:120px; font-size:360px; line-height:1;
+          font-family:var(--fd); font-weight:900; color:var(--accent); opacity:0.16; }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column;
+          justify-content:center; padding:0 170px; }
+        .quote { font-size:78px; font-weight:700; line-height:1.24; letter-spacing:-0.01em; max-width:1580px; margin:0; }
+        .quote .w { display:inline-block; }
+        .attrib { display:flex; align-items:center; gap:22px; margin-top:56px; }
+        .attrib .dash { width:64px; height:5px; background:var(--accent); border-radius:3px; transform-origin:left; }
+        .attrib .who { font-family:var(--fm); font-size:32px; color:var(--text-dim); letter-spacing:0.01em; font-weight:400; }
+        .attrib .who b { color:var(--text); font-weight:700; }
+      </style>
+
+      <div id="root" data-composition-id="quote-card" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="mark" data-layout-allow-overflow>&ldquo;</div>
+        <div class="stage">
+          <p class="quote"></p>
+          <div class="attrib"><span class="dash"></span><span class="who"></span></div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="quote-card"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const quote = get("quote", "If this doesn't convince you misalignment is the concern going forward, I don't know what will.");
+          const author = get("author", "Micah Carroll");
+          const role = get("role", "Researcher, OpenAI");
+
+          const quoteEl = R.querySelector(".quote");
+          quoteEl.textContent = "";
+          String(quote).split(/\s+/).filter(Boolean).forEach((w) => {
+            const s = document.createElement("span");
+            s.className = "w"; s.textContent = w;
+            quoteEl.appendChild(s);
+            quoteEl.appendChild(document.createTextNode(" "));
+          });
+
+          const whoEl = R.querySelector(".who");
+          whoEl.innerHTML = "";
+          const b = document.createElement("b"); b.textContent = author; whoEl.appendChild(b);
+          if (role) whoEl.appendChild(document.createTextNode(" · " + role));
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".mark"), { opacity: 0, scale: 0.7, y: 30 }, { opacity: 0.16, scale: 1, y: 0, duration: 0.7, ease: "power3.out" }, 0);
+          tl.fromTo(R.querySelectorAll(".quote .w"), { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out", stagger: 0.045 }, 0.2);
+          tl.fromTo(R.querySelector(".attrib .dash"), { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power2.out" }, 1.1);
+          tl.fromTo(whoEl, { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.5, ease: "power2.out" }, 1.2);
+          window.__timelines["quote-card"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

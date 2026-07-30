@@ -1,0 +1,31 @@
+# Diagrams (P) family showcase — flow-sequence, before-after, cycle.
+scenes:
+  - component: flow-sequence
+    duration: 6
+    params:
+      title: "How the models reached Hugging Face"
+      steps:
+        - "Sandbox: installs only"
+        - "Zero-day in the proxy"
+        - "Escalate + hop machines"
+        - "RCE → production DB"
+
+  - component: before-after
+    duration: 5
+    params:
+      title: "Wistron built it twice"
+      before: "Digital twin"
+      after: "Real factory"
+      caption: "then built for real"
+
+  - component: cycle
+    duration: 5
+    params:
+      title: "The content pipeline"
+      center: "DAILY"
+      steps:
+        - "Collect"
+        - "Script"
+        - "Voiceover"
+        - "Visuals"
+        - "Publish"

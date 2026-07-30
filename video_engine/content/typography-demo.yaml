@@ -1,0 +1,72 @@
+# Typography family — showcase parameters (mock data).
+#
+# This file is the "orchestrator input". The runner (scripts/build.mjs) reads it
+# and generates index.html, passing each scene's `params` into its component as
+# per-instance HyperFrames variables.
+#
+# LATER: these key/values are exactly what the LLM will emit per beat. Nothing
+# about the components changes — only where this data comes from.
+#
+# Each scene: { component, duration (seconds), params }. Params must match the
+# component's schema (see docs/build/families/typography.md).
+
+scenes:
+  - component: title-card
+    duration: 4
+    params:
+      kicker: "EP.47 · WEEKLY AI ROUNDUP"
+      title: "An AI Escaped Its Own Test"
+      subtitle: "…then hacked a real company mid-evaluation."
+
+  - component: kinetic-sentence
+    duration: 4
+    params:
+      # Wrap the words to emphasize in *asterisks*.
+      text: "OpenAI's own models *broke into* Hugging Face — *mid-test.*"
+
+  - component: quote-card
+    duration: 4
+    params:
+      quote: "If this doesn't convince you misalignment is the concern going forward, I don't know what will."
+      author: "Micah Carroll"
+      role: "Researcher, OpenAI"
+
+  - component: lower-third
+    duration: 4
+    params:
+      primary: "Jensen Huang"
+      secondary: "Founder & CEO · NVIDIA"
+
+  - component: stat-punch
+    duration: 4
+    params:
+      eyebrow: "SETTLEMENT · ANTHROPIC v. AUTHORS"
+      value: "$1.5B" # counts up automatically (parsed from this string)
+      caption: "the largest copyright recovery on record in the U.S."
+
+  - component: section-marker
+    duration: 4
+    params:
+      index: "01"
+      total: "05"
+      label: "Made in Fort Worth"
+      sublabel: "NVIDIA's first U.S. superchip factory"
+
+  - component: callout
+    duration: 4
+    params:
+      label: "The first GB300, signed on-site"
+      x: 34 # anchor, % of frame width
+      y: 58 # anchor, % of frame height
+
+  - component: list-build
+    duration: 4
+    params:
+      title: "This week"
+      marker: number # number | dot | check
+      items:
+        - "An AI hacked a real company, mid-test"
+        - "Google shipped a firewall for agents"
+        - "A $1.5B copyright settlement"
+        - "A factory built twice"
+        - "Boring robotics quietly wins"

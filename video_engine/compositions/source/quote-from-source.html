@@ -1,0 +1,71 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"quote","type":"string","label":"Quoted passage","default":"the first known case of an evaluation becoming a real attack"},
+  {"id":"source","type":"string","label":"Publication","default":"TechCrunch"},
+  {"id":"meta","type":"string","label":"Section / date","default":""}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --surface:#161C26; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.14);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 70% 22%, #141D2B 0%, var(--bg) 55%, #06090E 100%); }
+        .stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:0 190px; }
+        .card { position:relative; background:var(--surface); border:1.5px solid var(--border); border-left:6px solid var(--accent-2);
+          border-radius:20px; padding:64px 72px; max-width:1440px; box-shadow:0 30px 70px rgba(0,0,0,0.45); will-change:transform; }
+        .q { font-size:60px; font-weight:600; line-height:1.32; letter-spacing:-0.005em; }
+        .q .w { display:inline-block; }
+        .attr { display:flex; align-items:center; gap:18px; margin-top:44px; font-family:var(--fm); font-size:28px; }
+        .attr .pub { color:var(--accent-2); font-weight:700; letter-spacing:0.04em; }
+        .attr .sep { width:8px; height:8px; border-radius:50%; background:var(--text-dim); }
+        .attr .meta { color:var(--text-dim); letter-spacing:0.06em; }
+      </style>
+
+      <div id="root" data-composition-id="quote-from-source" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="stage">
+          <div class="card">
+            <div class="q qtext"></div>
+            <div class="attr"><span class="pub ptext"></span><span class="sep"></span><span class="meta mtext"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="quote-from-source"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const quote = get("quote", "the first known case of an evaluation becoming a real attack");
+          R.querySelector(".ptext").textContent = get("source", "TechCrunch");
+          const meta = get("meta", "");
+          const mEl = R.querySelector(".mtext"); mEl.textContent = meta;
+          if (!meta) { mEl.style.display = "none"; R.querySelector(".attr .sep").style.display = "none"; }
+
+          const qEl = R.querySelector(".qtext"); qEl.textContent = "";
+          qEl.appendChild(document.createTextNode("“"));
+          String(quote).split(/\s+/).filter(Boolean).forEach((w) => {
+            const s = document.createElement("span"); s.className = "w"; s.textContent = w;
+            qEl.appendChild(s); qEl.appendChild(document.createTextNode(" "));
+          });
+          qEl.appendChild(document.createTextNode("”"));
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".card"), { opacity: 0, y: 30, scale: 0.98 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out" }, 0);
+          tl.fromTo(qEl.querySelectorAll(".w"), { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.35, ease: "power2.out", stagger: 0.03 }, 0.3);
+          tl.fromTo(R.querySelector(".attr"), { opacity: 0, x: 16 }, { opacity: 1, x: 0, duration: 0.5, ease: "power2.out" }, 1.0);
+          window.__timelines["quote-from-source"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

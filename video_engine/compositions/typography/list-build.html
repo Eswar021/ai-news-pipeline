@@ -1,0 +1,90 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"This week"},
+  {"id":"items","type":"string","label":"Items (| separated)","default":"An AI hacked a real company, mid-test|Google shipped a firewall for agents|A $1.5B copyright settlement|A factory built twice|Boring robotics quietly wins"},
+  {"id":"marker","type":"enum","label":"Marker","default":"number","options":[{"value":"number","label":"Number"},{"value":"dot","label":"Dot"},{"value":"check","label":"Check"}]}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute; inset: 0; overflow: hidden;
+          --bg:#0B0E14; --text:#E6EDF3; --text-dim:#8B94A3;
+          --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.10);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 100% at 25% 20%, #16202F 0%, var(--bg) 52%, #06090E 100%); }
+        .grid { position:absolute; inset:0;
+          background-image:radial-gradient(rgba(230,237,243,0.07) 1px, transparent 1.4px);
+          background-size:46px 46px;
+          -webkit-mask:radial-gradient(80% 75% at 30% 50%, #000 25%, transparent 100%);
+          mask:radial-gradient(80% 75% at 30% 50%, #000 25%, transparent 100%); }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column;
+          justify-content:center; padding:0 150px; }
+        .title { font-family:var(--fm); font-size:30px; letter-spacing:0.14em; text-transform:uppercase;
+          color:var(--accent); font-weight:700; margin-bottom:46px; display:flex; align-items:center; gap:16px; }
+        .title .sq { width:14px; height:14px; background:var(--accent); border-radius:3px; }
+        .list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:30px; }
+        .row { display:flex; align-items:center; gap:32px; }
+        .marker { flex:none; width:66px; display:flex; align-items:center; justify-content:center; }
+        .marker.num { font-family:var(--fm); font-size:48px; font-weight:700; color:var(--accent); }
+        .marker.dot span { width:20px; height:20px; border-radius:50%; background:var(--accent); display:block; }
+        .marker.check { font-size:46px; color:var(--accent); line-height:1; }
+        .rowtext { font-size:56px; font-weight:700; color:var(--text); letter-spacing:-0.01em; line-height:1.1; }
+      </style>
+
+      <div id="root" data-composition-id="list-build" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="grid"></div>
+        <div class="stage">
+          <div class="title"><span class="sq"></span><span class="ttext"></span></div>
+          <ul class="list"></ul>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="list-build"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const title = get("title", "This week");
+          const marker = get("marker", "number");
+          let items = V.items;
+          if (!Array.isArray(items)) {
+            items = (typeof items === "string" && items.trim())
+              ? items.split("|").map((s) => s.trim()).filter(Boolean)
+              : ["An AI hacked a real company, mid-test", "Google shipped a firewall for agents",
+                 "A $1.5B copyright settlement", "A factory built twice", "Boring robotics quietly wins"];
+          }
+
+          const titleEl = R.querySelector(".title");
+          R.querySelector(".ttext").textContent = title;
+          if (!title) titleEl.style.display = "none";
+
+          const ul = R.querySelector(".list");
+          ul.textContent = "";
+          items.forEach((it, i) => {
+            const li = document.createElement("li"); li.className = "row";
+            const mk = document.createElement("span");
+            if (marker === "dot") { mk.className = "marker dot"; mk.appendChild(document.createElement("span")); }
+            else if (marker === "check") { mk.className = "marker check"; mk.textContent = "✓"; }
+            else { mk.className = "marker num"; mk.textContent = String(i + 1).padStart(2, "0"); }
+            const tx = document.createElement("span"); tx.className = "rowtext"; tx.textContent = it;
+            li.appendChild(mk); li.appendChild(tx); ul.appendChild(li);
+          });
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          if (title) tl.fromTo(titleEl, { opacity: 0, y: -18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0);
+          tl.fromTo(R.querySelectorAll(".list .row"), { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", stagger: 0.13 }, 0.25);
+          window.__timelines["list-build"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

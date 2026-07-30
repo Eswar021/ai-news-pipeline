@@ -26,30 +26,11 @@ def resolve_script_result(
     *,
     run_dir: str | Path,
     run_id: str,
-    source: str = "auto",
 ) -> tuple[Path, dict[str, Any]]:
     root = Path(run_dir)
-    candidates = {
-        "app": root / "script_generation" / "script_generation_result.json",
-        "chatgpt": root / "script_generation" / "chatgpt" / "script_generation_result.json",
-    }
-    selected_source = source.strip().lower()
-    if selected_source == "native":
-        selected_source = "app"
-    if selected_source == "auto":
-        existing = [(name, path) for name, path in candidates.items() if path.exists()]
-        if not existing:
-            raise FileNotFoundError(f"No canonical script result exists under {root / 'script_generation'}")
-        if len(existing) > 1:
-            names = ", ".join(name for name, _ in existing)
-            raise ValueError(f"Multiple canonical scripts exist ({names}); set SCRIPT_SOURCE explicitly")
-        selected_source, path = existing[0]
-    else:
-        if selected_source not in candidates:
-            raise ValueError("SCRIPT_SOURCE must be one of auto, app, native, or chatgpt")
-        path = candidates[selected_source]
+    path = root / "script_generation" / "script_generation_result.json"
     if not path.exists():
-        raise FileNotFoundError(f"Selected canonical script does not exist: {path}")
+        raise FileNotFoundError(f"No canonical script result exists: {path}")
     result = _load_json(path)
     if result.get("status") != "ok":
         raise ValueError(f"Selected script result is not ready: {path}")

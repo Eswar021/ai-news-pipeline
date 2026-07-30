@@ -1,0 +1,38 @@
+# Data (D) family showcase — bar, comparison, donut, line.
+scenes:
+  - component: bar-chart
+    duration: 5
+    params:
+      title: "AI factory investment by site ($M)"
+      highlight: 0
+      series:
+        - { label: "Fort Worth", value: 700 }
+        - { label: "Arizona", value: 520 }
+        - { label: "Ohio", value: 410 }
+        - { label: "Oregon", value: 300 }
+
+  - component: comparison-bars
+    duration: 5
+    params:
+      title: "Solar panels installed per crew, per day"
+      items:
+        - { label: "Manual crew", value: 800 }
+        - { label: "With Gritt AI", value: 3500 }
+
+  - component: donut
+    duration: 5
+    params:
+      title: "ANTHROPIC SETTLEMENT"
+      value: 91
+      unit: "%"
+      label: "of authors have claimed their share"
+
+  - component: line-chart
+    duration: 5
+    params:
+      title: "Fort Worth plant — jobs ramp"
+      points:
+        - { label: "Now", value: 500 }
+        - { label: "Q2", value: 650 }
+        - { label: "Q3", value: 820 }
+        - { label: "Year-end", value: 1000 }

@@ -1,0 +1,61 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"pattern","type":"string","label":"Pattern (dots|lines)","default":"dots"},
+  {"id":"tint","type":"string","label":"Accent tint (warm|cool)","default":"cool"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --deep:#06090E; --line:rgba(230,237,243,0.06);
+          --warm:rgba(255,138,61,0.16); --cool:rgba(61,214,208,0.16);
+        }
+        .base { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 50% 30%, #101623 0%, var(--bg) 58%, var(--deep) 100%); }
+        /* the grid layer is larger than the frame so it can parallax-drift via transform */
+        .grid { position:absolute; left:-120px; top:-120px; width:2160px; height:1320px; will-change:transform; }
+        .glow { position:absolute; width:1300px; height:1300px; left:50%; top:34%;
+          transform:translate(-50%,-50%); border-radius:50%; filter:blur(24px); will-change:transform; }
+        .vig { position:absolute; inset:0; pointer-events:none;
+          background:radial-gradient(115% 95% at 50% 42%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.6) 100%); }
+      </style>
+
+      <div id="root" data-composition-id="grid-bg" data-width="1920" data-height="1080">
+        <div class="base"></div>
+        <div class="glow"></div>
+        <div class="grid"></div>
+        <div class="vig"></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="grid-bg"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const pattern = get("pattern", "dots");
+          const tint = get("tint", "cool");
+          const grid = R.querySelector(".grid");
+          if (pattern === "lines") {
+            grid.style.backgroundImage = "linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px)";
+            grid.style.backgroundSize = "68px 68px";
+          } else {
+            grid.style.backgroundImage = "radial-gradient(rgba(230,237,243,0.11) 1.6px, transparent 1.6px)";
+            grid.style.backgroundSize = "58px 58px";
+          }
+          R.querySelector(".glow").style.background =
+            "radial-gradient(circle at 50% 50%, " + (tint === "warm" ? "var(--warm)" : "var(--cool)") + " 0%, rgba(0,0,0,0) 68%)";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          // Gentle parallax drift of the grid + a breathing accent glow.
+          tl.fromTo(grid, { x: 0, y: 0 }, { x: -58, y: -34, duration: 16, ease: "none" }, 0);
+          tl.fromTo(R.querySelector(".glow"), { scale: 0.92, opacity: 0.7 }, { scale: 1.1, opacity: 1, duration: 10, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+          window.__timelines["grid-bg"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

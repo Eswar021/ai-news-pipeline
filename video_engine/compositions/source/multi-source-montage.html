@@ -1,0 +1,61 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"Everyone covered it"},
+  {"id":"sources","type":"string","label":"Sources (JSON array of {source,headline})","default":"[{\"source\":\"TechCrunch\",\"headline\":\"First eval-to-attack case\"},{\"source\":\"The Verge\",\"headline\":\"Reads like an ad\"},{\"source\":\"Reuters\",\"headline\":\"OpenAI models breached a firm\"}]"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --surface:#161C26; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.14);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 50% 16%, #16202F 0%, var(--bg) 55%, #06090E 100%); }
+        .title { position:absolute; top:150px; width:100%; text-align:center; font-family:var(--fm);
+          font-size:32px; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); font-weight:700; }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; padding:0 200px; }
+        .row { width:100%; max-width:1360px; background:var(--surface); border:1.5px solid var(--border); border-left:5px solid var(--accent);
+          border-radius:14px; padding:32px 42px; display:flex; align-items:center; gap:34px; will-change:transform; }
+        .row .src { font-family:var(--fm); font-size:30px; font-weight:700; color:var(--accent-2); letter-spacing:0.04em; min-width:280px; }
+        .row .head { font-size:38px; font-weight:600; }
+      </style>
+
+      <div id="root" data-composition-id="multi-source-montage" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="title ttext"></div>
+        <div class="stage"></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="multi-source-montage"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const parseArr = (v) => { try { const a = typeof v === "string" ? JSON.parse(v) : v; return Array.isArray(a) ? a : []; } catch { return []; } };
+          const title = get("title", ""); const tEl = R.querySelector(".ttext"); tEl.textContent = title; if (!title) tEl.style.display = "none";
+          const sources = parseArr(get("sources", "[]"));
+          const stage = R.querySelector(".stage");
+          sources.forEach((s) => {
+            const row = document.createElement("div"); row.className = "row";
+            row.innerHTML = '<div class="src"></div><div class="head"></div>';
+            row.querySelector(".src").textContent = s.source || "";
+            row.querySelector(".head").textContent = s.headline || "";
+            stage.appendChild(row);
+          });
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(tEl, { opacity: 0, y: -14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 0);
+          tl.fromTo(stage.querySelectorAll(".row"), { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.45, ease: "power2.out", stagger: 0.16 }, 0.25);
+          window.__timelines["multi-source-montage"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

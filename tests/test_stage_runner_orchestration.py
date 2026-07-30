@@ -205,8 +205,6 @@ def test_runner_builds_voiceover_envelope_and_accepts_config_overrides(monkeypat
             "voiceover",
             "--run-id",
             "run_test",
-            "--script-source",
-            "app",
             "--synthesis-mode",
             "preview",
             "--config-overrides-json",
@@ -217,7 +215,6 @@ def test_runner_builds_voiceover_envelope_and_accepts_config_overrides(monkeypat
     console = json.loads(capsys.readouterr().out)
     assert exit_code == 0
     assert captured["run"]["run_id"] == "run_test"
-    assert captured["config"]["script_source"] == "app"
     assert captured["config"]["synthesis_mode"] == "preview"
     assert captured["input"]["voiceover_config_overrides"] == {
         "voice": "af_heart",

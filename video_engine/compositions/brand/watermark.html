@@ -1,0 +1,46 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"text","type":"string","label":"Handle / bug text","default":"@theairoundup"},
+  {"id":"corner","type":"string","label":"Corner (tr|br|tl|bl)","default":"br"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /* Transparent persistent channel bug — composites over other content. */
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --text:#E6EDF3; --accent:#FF8A3D;
+          --fm:"JetBrains Mono",ui-monospace,monospace; background:transparent;
+        }
+        .bug { position:absolute; display:flex; align-items:center; gap:12px; opacity:0.85;
+          font-family:var(--fm); font-size:28px; font-weight:700; letter-spacing:0.06em; color:var(--text);
+          text-shadow:0 2px 12px rgba(0,0,0,0.7); will-change:transform; }
+        .bug .dot { width:11px; height:11px; border-radius:50%; background:var(--accent); box-shadow:0 0 12px var(--accent); }
+        .bug.tr { top:64px; right:80px; } .bug.br { bottom:64px; right:80px; }
+        .bug.tl { top:64px; left:80px; } .bug.bl { bottom:64px; left:80px; }
+      </style>
+
+      <div id="root" data-composition-id="watermark" data-width="1920" data-height="1080">
+        <div class="bug"><span class="dot"></span><span class="btext"></span></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="watermark"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const bug = R.querySelector(".bug");
+          bug.classList.add(["tr", "br", "tl", "bl"].includes(get("corner", "br")) ? get("corner", "br") : "br");
+          R.querySelector(".btext").textContent = get("text", "@theairoundup");
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(bug, { opacity: 0, y: 10 }, { opacity: 0.85, y: 0, duration: 0.5, ease: "power2.out" }, 0.1);
+          window.__timelines["watermark"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

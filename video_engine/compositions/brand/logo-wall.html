@@ -1,0 +1,68 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"Who’s involved"},
+  {"id":"entities","type":"string","label":"Entity names (JSON array)","default":"[\"OpenAI\",\"NVIDIA\",\"Google Cloud\",\"Anthropic\",\"Hugging Face\",\"Meta\"]"},
+  {"id":"logos","type":"string","label":"Logo files (JSON array, asset resolver)","default":"[]"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --chip:#F4F5F7;
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 50% 16%, #16202F 0%, var(--bg) 55%, #06090E 100%); }
+        .title { position:absolute; top:150px; width:100%; text-align:center; font-family:var(--fm);
+          font-size:34px; letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); font-weight:700; }
+        .stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+        .wall { display:flex; flex-wrap:wrap; gap:44px; justify-content:center; align-items:center; max-width:1500px; padding:0 80px; }
+        .cell { width:230px; height:230px; border-radius:32px; background:var(--chip); display:flex;
+          align-items:center; justify-content:center; padding:42px; box-shadow:0 22px 54px rgba(0,0,0,0.45);
+          will-change:transform; }
+        .cell img { width:100%; height:100%; object-fit:contain; }
+        .cell.text { background:#161C26; border:1.5px solid rgba(230,237,243,0.12); }
+        .cell.text span { font-size:34px; font-weight:800; color:var(--text); text-align:center; letter-spacing:-0.01em; }
+      </style>
+
+      <div id="root" data-composition-id="logo-wall" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="title ttext"></div>
+        <div class="stage"><div class="wall"></div></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="logo-wall"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const parseArr = (v) => { try { const a = typeof v === "string" ? JSON.parse(v) : v; return Array.isArray(a) ? a : []; } catch { return []; } };
+          const title = get("title", "Who’s involved");
+          const tEl = R.querySelector(".ttext"); tEl.textContent = title; if (!title) tEl.style.display = "none";
+          const entities = parseArr(get("entities", "[]"));
+          const logos = parseArr(get("logos", "[]"));
+
+          const wall = R.querySelector(".wall");
+          entities.forEach((name, i) => {
+            const logo = logos[i] || "";
+            const cell = document.createElement("div");
+            if (logo) { cell.className = "cell"; const img = document.createElement("img"); img.src = logo; img.alt = name; cell.appendChild(img); }
+            else { cell.className = "cell text"; const s = document.createElement("span"); s.textContent = name; cell.appendChild(s); }
+            wall.appendChild(cell);
+          });
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(tEl, { opacity: 0, y: -14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 0);
+          tl.fromTo(wall.querySelectorAll(".cell"), { opacity: 0, scale: 0.7, y: 24 }, { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: "back.out(1.5)", stagger: 0.09 }, 0.2);
+          window.__timelines["logo-wall"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -31,8 +31,7 @@ export const catalog = {
     { key: "ingestion", label: "Ingestion", desk_summary: "Collect and normalize", purpose: "Collect sources.", consumes: "Source policy", produces: "Records", primary_origin: "source", modules: ["news_collection"] },
     { key: "content", label: "Content", desk_summary: "Decide, map, and write", purpose: "Produce the episode.", consumes: "Records", produces: "Script", primary_origin: "mixed", modules: ["script_generation"] },
     { key: "voiceover", label: "Voiceover", desk_summary: "Synthesize and time", purpose: "Produce audio.", consumes: "Script", produces: "Audio", primary_origin: "mixed", modules: ["voiceover"] },
-    { key: "visuals", label: "Visuals", desk_summary: "Plan, render, and review", purpose: "Produce visuals.", consumes: "Audio", produces: "Video", primary_origin: "mixed", modules: ["visual_render"] },
-    { key: "publish", label: "Publish review", desk_summary: "Validate final handoff", purpose: "Review handoff.", consumes: "Video", produces: "Handoff", primary_origin: "deterministic", modules: ["publish_handoff"] },
+    { key: "visuals", label: "Visuals", desk_summary: "Render the episode", purpose: "Render the episode video.", consumes: "Audio", produces: "Video", primary_origin: "mixed", modules: ["visuals"] },
   ],
   modules: {},
 };
@@ -47,9 +46,9 @@ export const runs = [
     trigger: "fixture",
     overall_status: "ok",
     stage_status: { ingestion: "ok", content: "ok", voiceover: "ok", visuals: "ok" },
-    last_completed_module: "publish_handoff",
+    last_completed_module: "visuals",
     failure_reason: "",
-    metrics: { script_word_count: 1200, audio_duration_seconds: 540, scene_count: 42, final_video_available: true },
+    metrics: { script_word_count: 1200, audio_duration_seconds: 540, final_video_available: true },
     problems: [],
   },
   {
@@ -63,7 +62,7 @@ export const runs = [
     stage_status: { ingestion: "ok", content: "ok", voiceover: "partial", visuals: "missing" },
     last_completed_module: "voiceover",
     failure_reason: "",
-    metrics: { script_word_count: 980, audio_duration_seconds: 460, scene_count: 0, final_video_available: false },
+    metrics: { script_word_count: 980, audio_duration_seconds: 460, final_video_available: false },
     problems: [],
   },
 ];
@@ -78,12 +77,10 @@ export const capabilities = {
     { key: "collect", label: "Ingestion", description: "Collect normalized source records.", modules: ["news_collection"], supports_boundaries: false, provider_risk: "Sources are contacted." },
     { key: "content", label: "Content", description: "Prepare, select, write, and draft metadata.", modules: ["evidence_prep", "script_generation"], supports_boundaries: true, provider_risk: "LLMs may be called." },
     { key: "voiceover", label: "Voiceover", description: "Synthesize narration.", modules: ["voiceover", "metadata_finalizer"], supports_boundaries: false, provider_risk: "Speech provider may be called." },
-    { key: "visuals", label: "Visuals and review", description: "Plan and render visuals.", modules: ["visual_planner", "visual_render"], supports_boundaries: true, provider_risk: "Visual providers may be called." },
+    { key: "visuals", label: "Visuals", description: "Render the episode video from the finished voiceover.", modules: ["visuals"], supports_boundaries: false, provider_risk: "The LLM art director is called unless the deterministic bridge is selected." },
   ],
   config_modes: ["live", "frozen"],
   synthesis_modes: ["preview", "final"],
-  render_modes: ["preview", "final"],
-  render_backends: ["remotion", "hyperframes"],
   runtime: { ready: true, python: "python3", reason: "" },
 };
 

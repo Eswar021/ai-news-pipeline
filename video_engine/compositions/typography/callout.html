@@ -1,0 +1,85 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"label","type":"string","label":"Label","default":"The first GB300, signed on-site"},
+  {"id":"x","type":"number","label":"Anchor X (%)","default":34},
+  {"id":"y","type":"number","label":"Anchor Y (%)","default":58}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute; inset: 0; overflow: hidden;
+          --bg:#0B0E14; --surface:#161B22; --text:#E6EDF3; --text-dim:#8B94A3;
+          --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.14);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        /* Transparent overlay: composites over a media layer below (or the
+           composition bg when standalone). Only the ring + leader + label paint. */
+        .pulse { position:absolute; width:40px; height:40px; border:3px solid var(--accent);
+          border-radius:50%; pointer-events:none; }
+        .ring { position:absolute; width:40px; height:40px; border:4px solid var(--accent);
+          border-radius:50%; box-shadow:0 0 22px rgba(255,138,61,0.45); }
+        .ring .dot { position:absolute; inset:11px; background:var(--accent); border-radius:50%; }
+        .leader { position:absolute; height:3px; background:var(--accent); border-radius:2px; }
+        .label { position:absolute; max-width:620px; }
+        .label .pill { display:inline-block; background:rgba(18,22,30,0.92);
+          border:1px solid var(--border); border-left:5px solid var(--accent); border-radius:12px;
+          padding:18px 28px; font-size:38px; font-weight:700; color:var(--text); line-height:1.15; }
+      </style>
+
+      <div id="root" data-composition-id="callout" data-width="1920" data-height="1080">
+        <div class="pulse" data-layout-allow-overflow></div>
+        <div class="ring"><div class="dot"></div></div>
+        <div class="leader"></div>
+        <div class="label"><span class="pill ptext"></span></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="callout"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const label = get("label", "The first GB300, signed on-site");
+          const x = parseFloat(get("x", 34));
+          const y = parseFloat(get("y", 58));
+
+          const W = 1920, Hh = 1080;
+          const ax = (x / 100) * W, ay = (y / 100) * Hh;
+          const right = ax < W * 0.55;   // label extends toward frame centre
+          const leaderLen = 210;
+
+          const ring = R.querySelector(".ring");
+          const pulse = R.querySelector(".pulse");
+          const leader = R.querySelector(".leader");
+          const lab = R.querySelector(".label");
+          R.querySelector(".ptext").textContent = label;
+
+          ring.style.left = ax + "px"; ring.style.top = ay + "px";
+          pulse.style.left = ax + "px"; pulse.style.top = ay + "px";
+          leader.style.top = ay + "px"; leader.style.width = leaderLen + "px";
+          lab.style.top = ay + "px";
+          if (right) {
+            leader.style.left = ax + "px";
+            lab.style.left = (ax + leaderLen + 20) + "px";
+          } else {
+            leader.style.left = (ax - leaderLen) + "px";
+            lab.style.right = (W - (ax - leaderLen - 20)) + "px";
+            lab.style.textAlign = "right";
+          }
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(ring, { scale: 0, xPercent: -50, yPercent: -50 }, { scale: 1, xPercent: -50, yPercent: -50, duration: 0.5, ease: "back.out(2)" }, 0.1);
+          tl.fromTo(pulse, { scale: 0.6, opacity: 0.7, xPercent: -50, yPercent: -50 }, { scale: 2.4, opacity: 0, xPercent: -50, yPercent: -50, duration: 1.1, ease: "power2.out", repeat: 2 }, 0.2);
+          tl.fromTo(leader, { scaleX: 0, yPercent: -50, transformOrigin: right ? "left center" : "right center" }, { scaleX: 1, yPercent: -50, duration: 0.45, ease: "power2.out" }, 0.35);
+          tl.fromTo(lab, { opacity: 0, x: right ? -18 : 18, yPercent: -50 }, { opacity: 1, x: 0, yPercent: -50, duration: 0.5, ease: "power3.out" }, 0.5);
+          window.__timelines["callout"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,80 @@
+# Glue & set (G) showcase — every transition type + the ambient backgrounds.
+# `transition` on a scene = how it ENTERS from the previous scene.
+scenes:
+  # 1 — opens with a fade-from-black (automatic on scene 0)
+  - component: title-card
+    duration: 4
+    params:
+      kicker: "GLUE & SET"
+      title: "The layer that makes it feel edited"
+      subtitle: "Transitions + ambient backgrounds"
+
+  # 2 — PUSH (editorial "next point")
+  - component: stat-punch
+    duration: 3.5
+    transition: { type: push, dir: left }
+    params:
+      eyebrow: "IN THIS FAMILY"
+      value: "5"
+      caption: "transition types"
+
+  # 3 — WHIP (high-energy punch)
+  - component: kinetic-sentence
+    duration: 3.5
+    transition: whip
+    params:
+      text: "Every cut now *moves*"
+
+  # 4 — DIP to black (section change)
+  - component: section-marker
+    duration: 3.5
+    transition: dip
+    params:
+      index: 2
+      total: 3
+      label: "Backgrounds"
+      sublabel: "ambient beds under the content"
+
+  # 5 — ZOOM through (dramatic)
+  - component: before-after
+    duration: 4
+    transition: zoom
+    params:
+      title: "Hard cut"
+      before: "Jump cut"
+      after: "Handoff"
+      caption: "the motion IS the edit"
+
+  # 6 — CROSSFADE into a gradient-bg with a lower-third overlay
+  - duration: 4
+    transition: crossfade
+    layers:
+      - component: gradient-bg
+        params: { tint: warm }
+      - component: lower-third
+        params:
+          primary: "gradient-bg"
+          secondary: "drifting glow · warm / cool / neutral"
+
+  # 7 — PUSH into a grid-bg with a callout
+  - duration: 4
+    transition: { type: push, dir: up }
+    layers:
+      - component: grid-bg
+        params: { pattern: dots, tint: cool }
+      - component: callout
+        params:
+          label: "grid-bg — parallax tech grid"
+          x: 34
+          y: 48
+
+  # 8 — CROSSFADE into particle-bg outro (fades to black automatically)
+  - duration: 4.5
+    transition: crossfade
+    layers:
+      - component: particle-bg
+        params: { tint: cool }
+      - component: lower-third
+        params:
+          primary: "particle-bg"
+          secondary: "deterministic drifting bokeh"

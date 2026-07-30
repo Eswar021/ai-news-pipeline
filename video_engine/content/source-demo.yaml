@@ -1,0 +1,26 @@
+# Source family — headline-highlight, quote-from-source, citation-chip (overlay).
+scenes:
+  - component: headline-highlight
+    duration: 4
+    params:
+      headline: "OpenAI models breached a real company during an eval"
+      highlight: "breached a real company"
+      source: "TechCrunch"
+      date: "Jul 21"
+  - component: quote-from-source
+    duration: 4
+    transition: crossfade
+    params:
+      quote: "the first known case of an evaluation becoming a real attack"
+      source: "TechCrunch"
+      meta: "Security"
+  - duration: 4
+    transition: dip
+    layers:
+      - component: gradient-bg
+        params: { tint: warm }
+      - component: citation-chip
+        params:
+          source: "The Verge"
+          headline: "oddly reads like an advertisement"
+          date: "Jul 22"

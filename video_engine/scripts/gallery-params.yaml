@@ -1,0 +1,31 @@
+# Representative params for the component gallery (scripts/gallery.mjs).
+# Components NOT listed here render with their own built-in defaults.
+# Asset components (logos/photos) MUST be listed so the resolver has something to fetch.
+
+# --- Brand (need entity names so the resolver fetches logos) ---
+entity-intro: { entity: "OpenAI", tagline: "AI research & deployment" }
+logo-vs-logo: { leftEntity: "NVIDIA", rightEntity: "Google Cloud", label: "Chips vs Cloud" }
+logo-reveal: { entity: "NVIDIA" }
+logo-wall: { title: "This week's players", entities: ["OpenAI", "NVIDIA", "Google Cloud", "Anthropic", "Hugging Face", "Meta"] }
+
+# --- Real-media (need image descriptions so the resolver fetches photos) ---
+photo: { query: "semiconductor factory clean room", motion: ken-burns-in }
+image-reveal: { query: "data center servers glowing blue", direction: left }
+spotlight: { query: "circuit board macro closeup", x: 42, y: 52 }
+side-by-side: { left: "assets/images/real-1.jpg", right: "assets/images/real-2.jpg", leftLabel: "Before", rightLabel: "After" }
+image-grid: { title: "The AI landscape", queries: ["semiconductor chip macro", "data center servers", "robotic arm factory", "circuit board closeup"] }
+image-compare: { beforeLabel: "Digital twin", afterLabel: "Real factory", caption: "Built in simulation, then for real", beforeQuery: "3d factory simulation render", afterQuery: "semiconductor factory floor" }
+
+# --- A few others where a richer example beats the bare default ---
+list-build: { title: "What Model Armor catches", items: ["Malicious URLs", "Hard-coded API keys", "Credit-card checksums"], marker: check }
+timeline: { title: "How the case unfolded", events: [{ date: "2024", label: "Authors sue" }, { date: "Jun 2025", label: "Fair use" }, { date: "Sep 2025", label: "$1.5B" }, { date: "Jul 2026", label: "Approved" }] }
+architecture: { title: "Where Model Armor sits", layers: [{ label: "AI agents", note: "protected" }, { label: "Model Armor", note: "inspects prompts" }, { label: "Untrusted input", note: "users, docs" }], highlight: 1 }
+
+# --- Round 3: asset + map components (need params so the resolver fetches real media) ---
+attribution: { label: "In partnership with", entity: "Hugging Face" }
+parallax: { caption: "Inside the data center", query: "data center servers glowing blue" }
+pip: { mainLabel: "The factory", pipLabel: "The chip", corner: br, mainQuery: "semiconductor factory floor", pipQuery: "computer chip macro closeup" }
+tree: { title: "NVIDIA's U.S. buildout", root: "NVIDIA", children: ["Wistron · Fort Worth", "Foxconn · Houston", "$500B commitment"] }
+schematic: { title: "Anatomy of the attack", subject: "AI agent", annotations: [{ label: "Zero-day", note: "in the proxy" }, { label: "Escalation", note: "hopped machines" }, { label: "Exfiltration", note: "pulled answers" }, { label: "RCE", note: "on production" }] }
+social-post: { author: "Sam Altman", handle: "@sama", text: "we did not expect the models to get this creative during an eval.", meta: "on X" }
+multi-source-montage: { title: "Everyone covered it", sources: [{ source: "TechCrunch", headline: "First eval-to-attack case" }, { source: "The Verge", headline: "Reads like an ad" }, { source: "Reuters", headline: "OpenAI models breached a firm" }] }

@@ -1,0 +1,57 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"source","type":"string","label":"Publication","default":"TechCrunch"},
+  {"id":"headline","type":"string","label":"Headline / claim","default":"OpenAI models breached a real company during an eval"},
+  {"id":"date","type":"string","label":"Date","default":""}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /* Transparent overlay — composites over content below. Anchored bottom-left. */
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --surface:rgba(18,22,30,0.92); --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --border:rgba(230,237,243,0.14);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .chip { position:absolute; left:120px; bottom:130px; max-width:1100px;
+          background:var(--surface); border:1px solid var(--border); border-left:5px solid var(--accent);
+          border-radius:14px; padding:26px 34px; box-shadow:0 22px 50px rgba(0,0,0,0.5); will-change:transform; }
+        .lab { font-family:var(--fm); font-size:22px; letter-spacing:0.16em; text-transform:uppercase; color:var(--accent); font-weight:700; }
+        .row { display:flex; align-items:baseline; gap:16px; margin-top:12px; }
+        .pub { font-size:36px; font-weight:800; letter-spacing:-0.01em; }
+        .date { font-family:var(--fm); font-size:24px; color:var(--text-dim); letter-spacing:0.04em; }
+        .head { font-size:30px; font-weight:500; color:var(--text-dim); margin-top:8px; max-width:1000px; line-height:1.3; }
+      </style>
+
+      <div id="root" data-composition-id="citation-chip" data-width="1920" data-height="1080">
+        <div class="chip">
+          <div class="lab">Source</div>
+          <div class="row"><span class="pub ptext"></span><span class="date dtext"></span></div>
+          <div class="head htext"></div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="citation-chip"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          R.querySelector(".ptext").textContent = get("source", "TechCrunch");
+          const date = get("date", "");
+          const dEl = R.querySelector(".dtext"); dEl.textContent = date; if (!date) dEl.style.display = "none";
+          const head = get("headline", "");
+          const hEl = R.querySelector(".htext"); hEl.textContent = head; if (!head) hEl.style.display = "none";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".chip"), { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.55, ease: "power3.out" }, 0.1);
+          window.__timelines["citation-chip"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

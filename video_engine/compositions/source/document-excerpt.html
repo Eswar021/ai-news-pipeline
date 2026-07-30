@@ -1,0 +1,69 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"docLabel","type":"string","label":"Document label","default":"Bartz v. Anthropic · Settlement Order"},
+  {"id":"excerpt","type":"string","label":"Excerpt text","default":"Defendant shall pay one billion five hundred million dollars into a settlement fund for the benefit of the class of authors."},
+  {"id":"highlight","type":"string","label":"Phrase to highlight","default":"one billion five hundred million dollars"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --paper:#12161F; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --border:rgba(230,237,243,0.14);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 40% 20%, #141B27 0%, var(--bg) 55%, #06090E 100%); }
+        .stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:0 200px; }
+        .doc { width:100%; max-width:1360px; background:var(--paper); border:1.5px solid var(--border); border-radius:16px;
+          padding:70px 80px; box-shadow:0 34px 80px rgba(0,0,0,0.55); position:relative; will-change:transform; }
+        .doc::before { content:""; position:absolute; left:0; top:36px; bottom:36px; width:6px; background:var(--accent); border-radius:3px; }
+        .lab { font-family:var(--fm); font-size:26px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-dim); margin-bottom:40px; }
+        .body { font-size:52px; font-weight:500; line-height:1.5; }
+        .body .hl { background:rgba(255,138,61,0.22); box-shadow:0 0 0 2px rgba(255,138,61,0.5) inset; border-radius:6px;
+          padding:2px 8px; color:#fff; font-weight:700; }
+      </style>
+
+      <div id="root" data-composition-id="document-excerpt" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="stage">
+          <div class="doc">
+            <div class="lab ltext"></div>
+            <div class="body btext"></div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="document-excerpt"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          R.querySelector(".ltext").textContent = get("docLabel", "");
+          const excerpt = get("excerpt", "");
+          const highlight = String(get("highlight", "")).trim();
+          const bEl = R.querySelector(".btext");
+          if (highlight && excerpt.includes(highlight)) {
+            const [a, b] = excerpt.split(highlight);
+            bEl.appendChild(document.createTextNode(a));
+            const s = document.createElement("span"); s.className = "hl"; s.textContent = highlight; bEl.appendChild(s);
+            bEl.appendChild(document.createTextNode(b));
+          } else { bEl.textContent = excerpt; }
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".doc"), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 0);
+          tl.fromTo(R.querySelector(".lab"), { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0.3);
+          tl.fromTo(bEl, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.4);
+          const hl = bEl.querySelector(".hl");
+          if (hl) tl.fromTo(hl, { backgroundColor: "rgba(255,138,61,0)" }, { backgroundColor: "rgba(255,138,61,0.22)", duration: 0.5, ease: "power2.out" }, 0.9);
+          window.__timelines["document-excerpt"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

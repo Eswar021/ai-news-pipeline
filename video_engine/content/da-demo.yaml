@@ -1,0 +1,21 @@
+# Data timeline + Diagrams architecture.
+scenes:
+  - component: timeline
+    duration: 5
+    params:
+      title: "How the case unfolded"
+      events:
+        - { date: "2024", label: "Authors sue Anthropic" }
+        - { date: "Jun 2025", label: "Training ruled fair use" }
+        - { date: "Sep 2025", label: "$1.5B settlement" }
+        - { date: "Jul 2026", label: "Final approval" }
+  - component: architecture
+    duration: 5
+    transition: dip
+    params:
+      title: "Where Model Armor sits"
+      layers:
+        - { label: "AI agents", note: "protected" }
+        - { label: "Model Armor", note: "inspects every prompt" }
+        - { label: "Untrusted input", note: "users, documents, tools" }
+      highlight: 1

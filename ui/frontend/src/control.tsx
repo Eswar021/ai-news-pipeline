@@ -77,8 +77,6 @@ type Capabilities = {
   stages: ControlStage[];
   config_modes: string[];
   synthesis_modes: string[];
-  render_modes: string[];
-  render_backends: string[];
   runtime: { ready: boolean; python: string; reason: string };
 };
 
@@ -89,18 +87,14 @@ type RunPlan = {
   environment?: string;
   target_stage: "collect" | "content" | "voiceover" | "visuals";
   config_mode: "live" | "frozen";
-  script_source: "auto" | "app" | "native" | "chatgpt";
   synthesis_mode: "preview" | "final";
   voiceover_variant?: string;
-  plan_source: "generate" | "chatgpt";
-  render_mode: "preview" | "final";
-  render_backend?: "remotion" | "hyperframes";
+  deterministic: boolean;
+  units?: number | null;
+  skip_render: boolean;
   from_module?: string;
   stop_after?: string;
-  selected_scene_ids: string[];
-  selected_story_ids: string[];
   skip_metadata_finalization: boolean;
-  skip_publish_handoff: boolean;
   confirm_provider_costs: boolean;
   confirm_final_media: boolean;
 };
@@ -118,14 +112,11 @@ const DEFAULT_PLAN: RunPlan = {
   operation: "new",
   target_stage: "content",
   config_mode: "live",
-  script_source: "app",
   synthesis_mode: "preview",
-  plan_source: "generate",
-  render_mode: "preview",
-  selected_scene_ids: [],
-  selected_story_ids: [],
+  deterministic: false,
+  units: null,
+  skip_render: false,
   skip_metadata_finalization: false,
-  skip_publish_handoff: false,
   confirm_provider_costs: false,
   confirm_final_media: false,
 };
@@ -180,8 +171,6 @@ export function NewRunView({
   const [jobId, setJobId] = useState(controller.activeJob?.id || "");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [sceneText, setSceneText] = useState("");
-  const [storyText, setStoryText] = useState("");
 
   useEffect(() => {
     controlFetch<Capabilities>("/control/capabilities")
@@ -256,8 +245,6 @@ export function NewRunView({
       target_stage,
       from_module: undefined,
       stop_after: undefined,
-      selected_scene_ids: target_stage === "visuals" ? current.selected_scene_ids : [],
-      selected_story_ids: target_stage === "visuals" ? current.selected_story_ids : [],
       confirm_provider_costs: false,
       confirm_final_media: false,
     }));
@@ -352,17 +339,20 @@ export function NewRunView({
           <BuilderSection number="03" title="Execution policy">
             <div className="formGrid three">
               <ControlSelect label="Config mode" value={plan.config_mode} onChange={(config_mode) => setPlan((current) => ({ ...current, config_mode: config_mode as RunPlan["config_mode"] }))} options={["live", "frozen"]} />
-              {(plan.target_stage === "voiceover" || plan.target_stage === "visuals") && (
+              {plan.target_stage === "voiceover" && (
                 <ControlSelect label="Voice mode" value={plan.synthesis_mode} onChange={(synthesis_mode) => setPlan((current) => ({ ...current, synthesis_mode: synthesis_mode as RunPlan["synthesis_mode"], confirm_final_media: false }))} options={["preview", "final"]} />
               )}
               {plan.target_stage === "visuals" && (
-                <ControlSelect label="Render mode" value={plan.render_mode} onChange={(render_mode) => setPlan((current) => ({ ...current, render_mode: render_mode as RunPlan["render_mode"], confirm_final_media: false }))} options={["preview", "final"]} />
+                <ControlSelect label="Art director" value={plan.deterministic ? "bridge" : "llm"} onChange={(mode) => setPlan((current) => ({ ...current, deterministic: mode === "bridge", confirm_provider_costs: false }))} options={["llm", "bridge"]} labels={{ llm: "LLM art director", bridge: "Deterministic bridge" }} />
               )}
               {plan.target_stage === "visuals" && (
-                <ControlSelect label="Renderer" value={plan.render_backend || ""} onChange={(render_backend) => setPlan((current) => ({ ...current, render_backend: (render_backend || undefined) as RunPlan["render_backend"] }))} options={["", "remotion", "hyperframes"]} labels={{ "": "Profile default" }} />
+                <ControlSelect label="Render" value={plan.skip_render ? "build" : "render"} onChange={(mode) => setPlan((current) => ({ ...current, skip_render: mode === "build", confirm_final_media: false }))} options={["render", "build"]} labels={{ render: "Full episode render", build: "Build only (no MP4)" }} />
               )}
               {plan.target_stage === "visuals" && (
-                <ControlSelect label="Plan source" value={plan.plan_source} onChange={(plan_source) => setPlan((current) => ({ ...current, plan_source: plan_source as RunPlan["plan_source"], confirm_provider_costs: false }))} options={["generate", "chatgpt"]} />
+                <ControlText label="Unit slice (optional)" value={plan.units == null ? "" : String(plan.units)} placeholder="all units" onChange={(value) => {
+                  const parsed = parseInt(value, 10);
+                  setPlan((current) => ({ ...current, units: Number.isFinite(parsed) && parsed > 0 ? parsed : null }));
+                }} />
               )}
             </div>
 
@@ -371,19 +361,6 @@ export function NewRunView({
                 <ControlSelect label="Rerun from module" value={plan.from_module || ""} onChange={(from_module) => setPlan((current) => ({ ...current, from_module: from_module || undefined }))} options={["", ...(stage.modules || [])]} labels={{ "": "Automatic reuse boundary" }} />
                 <ArrowRight size={18} />
                 <ControlSelect label="Stop after module" value={plan.stop_after || ""} onChange={(stop_after) => setPlan((current) => ({ ...current, stop_after: stop_after || undefined }))} options={["", ...(stage.modules || [])]} labels={{ "": "Complete the stage" }} />
-              </div>
-            )}
-
-            {plan.operation !== "new" && plan.target_stage === "visuals" && (
-              <div className="formGrid two">
-                <ControlText label="Scene IDs" value={sceneText} placeholder="scene_003, scene_004" onChange={(value) => {
-                  setSceneText(value);
-                  setPlan((current) => ({ ...current, selected_scene_ids: identifierList(value) }));
-                }} />
-                <ControlText label="Story IDs" value={storyText} placeholder="story_..." onChange={(value) => {
-                  setStoryText(value);
-                  setPlan((current) => ({ ...current, selected_story_ids: identifierList(value) }));
-                }} />
               </div>
             )}
           </BuilderSection>
@@ -967,10 +944,6 @@ async function apiFetch<T = Json>(url: string): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${await response.text()}`);
   return response.json() as Promise<T>;
-}
-
-function identifierList(value: string) {
-  return Array.from(new Set(value.split(",").map((item) => item.trim()).filter(Boolean)));
 }
 
 function message(error: unknown) {

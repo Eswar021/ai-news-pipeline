@@ -1,0 +1,89 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"eyebrow","type":"string","label":"Eyebrow","default":"SETTLEMENT · ANTHROPIC v. AUTHORS"},
+  {"id":"value","type":"string","label":"Value (counts up automatically)","default":"$1.5B"},
+  {"id":"caption","type":"string","label":"Caption","default":"the largest copyright recovery on record in the U.S."}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute; inset: 0; overflow: hidden;
+          --bg:#0B0E14; --text:#E6EDF3; --text-dim:#8B94A3;
+          --accent:#FF8A3D; --accent-2:#3DD6D0;
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(120% 100% at 50% 42%, #17212F 0%, var(--bg) 52%, #06090E 100%); }
+        .glow { position:absolute; width:1200px; height:1200px; left:50%; top:50%;
+          transform:translate(-50%,-50%); pointer-events:none;
+          background:radial-gradient(circle, rgba(255,138,61,0.14), transparent 60%); }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column;
+          align-items:center; justify-content:center; padding:0 120px; }
+        .eyebrow { font-family:var(--fm); font-size:28px; letter-spacing:0.2em;
+          color:var(--accent-2); margin-bottom:22px; font-weight:700; text-align:center; }
+        .value { font-size:320px; font-weight:900; letter-spacing:-0.03em; line-height:0.9;
+          font-variant-numeric:tabular-nums; }
+        .caption { margin-top:30px; font-size:44px; font-weight:400; color:var(--text-dim);
+          max-width:1200px; text-align:center; line-height:1.25; }
+      </style>
+
+      <div id="root" data-composition-id="stat-punch" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="glow" data-layout-allow-overflow></div>
+        <div class="stage">
+          <div class="eyebrow"></div>
+          <div class="value"></div>
+          <div class="caption"></div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="stat-punch"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const eyebrow = get("eyebrow", "SETTLEMENT · ANTHROPIC v. AUTHORS");
+          const value = String(get("value", "$1.5B"));
+          const caption = get("caption", "the largest copyright recovery on record in the U.S.");
+
+          R.querySelector(".eyebrow").textContent = eyebrow;
+          const capEl = R.querySelector(".caption");
+          capEl.textContent = caption;
+          if (!caption) capEl.style.display = "none";
+          const eyeEl = R.querySelector(".eyebrow");
+          if (!eyebrow) eyeEl.style.display = "none";
+
+          // Auto-parse the value into prefix / number / suffix so it counts up.
+          const valEl = R.querySelector(".value");
+          const m = value.match(/^([^\d-]*)(-?[\d,]*\.?\d+)(.*)$/);
+          let render = () => { valEl.textContent = value; };
+          let counter = null, target = 0;
+          if (m) {
+            const prefix = m[1], numStr = m[2].replace(/,/g, ""), suffix = m[3];
+            target = parseFloat(numStr);
+            const decimals = numStr.includes(".") ? numStr.split(".")[1].length : 0;
+            const fmt = (v) => decimals === 0
+              ? Math.round(v).toLocaleString("en-US")
+              : v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+            counter = { v: 0 };
+            render = () => { valEl.textContent = prefix + fmt(counter.v) + suffix; };
+          }
+          render();
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          if (eyebrow) tl.fromTo(eyeEl, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0);
+          tl.fromTo(valEl, { opacity: 0, scale: 0.72 }, { opacity: 1, scale: 1, duration: 0.7, ease: "back.out(1.7)" }, 0.2);
+          if (counter) tl.fromTo(counter, { v: 0 }, { v: target, duration: 0.85, ease: "power2.out", onUpdate: render }, 0.2);
+          if (caption) tl.fromTo(capEl, { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 0.95);
+          window.__timelines["stat-punch"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"src","type":"string","label":"Image path (local)","default":"assets/images/placeholder-3.png"},
+  {"id":"direction","type":"enum","label":"Reveal direction","default":"right","options":[
+    {"value":"right","label":"Left to right"},
+    {"value":"left","label":"Right to left"},
+    {"value":"down","label":"Top to bottom"},
+    {"value":"up","label":"Bottom to top"}
+  ]}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root { position:absolute; inset:0; overflow:hidden; background:transparent; }
+        .img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; will-change:transform; }
+        .cover { position:absolute; inset:0; background:#0B0E14; will-change:transform; }
+      </style>
+
+      <div id="root" data-composition-id="image-reveal" data-width="1920" data-height="1080">
+        <img class="img" src="assets/images/placeholder-3.png" alt="" />
+        <div class="cover"></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="image-reveal"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const src = get("src", "assets/images/placeholder-3.png");
+          const direction = get("direction", "right");
+
+          const img = R.querySelector(".img");
+          const cover = R.querySelector(".cover");
+          img.src = src;
+
+          const D = {
+            right: { prop: "scaleX", origin: "right center" },
+            left:  { prop: "scaleX", origin: "left center" },
+            down:  { prop: "scaleY", origin: "bottom center" },
+            up:    { prop: "scaleY", origin: "top center" }
+          };
+          const d = D[direction] || D.right;
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(img, { scale: 1.05 }, { scale: 1.13, duration: 10, ease: "none" }, 0);
+          tl.fromTo(cover, { [d.prop]: 1 }, { [d.prop]: 0, duration: 0.7, ease: "power3.inOut", transformOrigin: d.origin }, 0.15);
+          window.__timelines["image-reveal"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

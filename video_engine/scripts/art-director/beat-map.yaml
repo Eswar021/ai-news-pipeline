@@ -1,0 +1,37 @@
+# Config-driven beat -> scene mapping for the DETERMINISTIC art-director bridge.
+#
+# The bridge (bridge.mjs) reads a voiceover_package.json, walks its
+# audio_units[].aligned_beats, and applies these rules to emit our scene YAML.
+# We deliberately IGNORE any upstream visual_goal/visual_brief (per the pipeline
+# principle: script-gen/voiceover don't decide visuals). We map only from what we
+# legitimately consume: beat_type, beat_function, narration text, emphasis
+# phrases, story identity, and authoritative timing.
+#
+# This is v1 — a deterministic proof of the chain. The LLM art-director will
+# supersede it (smarter component choice, on-screen copy, splitting long beats
+# into 2-4 shot sequences). Tuning the mapping = edit THIS file, not the code.
+
+defaults:
+  transition: crossfade # between beats inside the same story
+  story_transition: dip # entering a new story / section
+  first_story_transition: push # entering the first story from the intro
+
+# beat_type -> component. `fallback` is used when the primary needs data the beat
+# lacks (e.g. stat-punch needs a number).
+beats:
+  hook: { component: kinetic-sentence }
+  intro: { component: title-card }
+  transition: { component: section-marker }
+  what_changed: { component: stat-punch, fallback: kinetic-sentence }
+  explanation: { component: kinetic-sentence }
+  example: { component: kinetic-sentence }
+  why_it_matters: { component: kinetic-sentence }
+  caveat: { component: kinetic-sentence }
+  takeaway: { component: quote-card }
+  conclusion: { component: title-card }
+
+# beat_function overrides (win over beat_type when the function is listed here).
+functions:
+  episode_hook: { component: title-card }
+  episode_setup: { component: kinetic-sentence }
+  episode_payoff: { component: quote-card }

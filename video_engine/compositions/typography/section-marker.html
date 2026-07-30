@@ -1,0 +1,84 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"index","type":"string","label":"Index (e.g. 01)","default":"01"},
+  {"id":"total","type":"string","label":"Total (e.g. 05)","default":"05"},
+  {"id":"label","type":"string","label":"Label","default":"Made in Fort Worth"},
+  {"id":"sublabel","type":"string","label":"Sublabel","default":"NVIDIA'"'"'s first U.S. superchip factory"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute; inset: 0; overflow: hidden;
+          --bg:#0B0E14; --text:#E6EDF3; --text-dim:#8B94A3; --text-mut:#586274;
+          --accent:#FF8A3D; --accent-2:#3DD6D0;
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 100% at 20% 80%, #16202F 0%, var(--bg) 52%, #06090E 100%); }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column;
+          justify-content:center; padding:0 150px; }
+        .counter { display:flex; align-items:baseline; gap:10px; font-family:var(--fm); margin-bottom:8px; }
+        .counter .idx { font-size:140px; font-weight:700; color:var(--accent); line-height:1; letter-spacing:-0.02em; }
+        .counter .tot { font-size:58px; font-weight:400; color:var(--text-mut); }
+        .segs { display:flex; gap:14px; margin:40px 0 46px; }
+        .segs .seg { width:118px; height:10px; border-radius:5px; background:rgba(230,237,243,0.12); transform-origin:left; }
+        .segs .seg.on { background:var(--accent); }
+        .label { font-size:100px; font-weight:900; letter-spacing:-0.02em; line-height:1.02; margin:0; }
+        .sublabel { margin-top:22px; font-size:42px; font-weight:400; color:var(--text-dim); }
+      </style>
+
+      <div id="root" data-composition-id="section-marker" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="stage">
+          <div class="counter"><span class="idx"></span><span class="tot"></span></div>
+          <div class="segs"></div>
+          <h2 class="label"></h2>
+          <div class="sublabel"></div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="section-marker"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const index = String(get("index", "01"));
+          const total = String(get("total", "05"));
+          const label = get("label", "Made in Fort Worth");
+          const sublabel = get("sublabel", "NVIDIA's first U.S. superchip factory");
+
+          R.querySelector(".idx").textContent = index;
+          R.querySelector(".tot").textContent = "/ " + total;
+          R.querySelector(".label").textContent = label;
+          const subEl = R.querySelector(".sublabel");
+          subEl.textContent = sublabel;
+          if (!sublabel) subEl.style.display = "none";
+
+          // Derive segment count + active segment from total / index.
+          const count = Math.max(1, parseInt(total, 10) || 1);
+          const active = Math.max(1, parseInt(index, 10) || 1);
+          const segsEl = R.querySelector(".segs");
+          segsEl.textContent = "";
+          for (let i = 1; i <= count; i++) {
+            const s = document.createElement("span");
+            s.className = i === active ? "seg on" : "seg";
+            segsEl.appendChild(s);
+          }
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".counter"), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 0);
+          tl.fromTo(R.querySelectorAll(".segs .seg"), { scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power2.out", stagger: 0.08 }, 0.35);
+          tl.fromTo(R.querySelector(".label"), { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 0.7);
+          if (sublabel) tl.fromTo(subEl, { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 0.9);
+          window.__timelines["section-marker"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,86 @@
+# EP.47 vertical slice — built from the REAL news script (news_collection →
+# script_generation output). Intro + lead story (Wistron / NVIDIA Fort Worth).
+#
+# This is exactly the shape the LLM "art-director" pass will emit: for each beat
+# of the script it picks a component and fills its params. Done by hand here once
+# as the reference mapping. Images are placeholders (the real pipeline swaps in
+# the scraped source-article photos).
+
+scenes:
+  # --- INTRO ---
+  - component: title-card
+    duration: 4
+    params:
+      kicker: "THE AI DUNGEON · EP.47"
+      title: "An AI Escaped Its Own Test"
+      subtitle: "…and four more stories that mattered this week."
+
+  - component: kinetic-sentence
+    duration: 4
+    params:
+      text: "It *escaped its own test*, hacked a real company, and *stole the answers*."
+
+  - component: list-build
+    duration: 5
+    params:
+      title: "This week"
+      marker: number
+      items:
+        - "An AI hacked a real company, mid-test"
+        - "Google shipped a firewall for agents"
+        - "A $1.5B copyright settlement"
+        - "A factory built twice"
+        - "Boring robotics quietly wins"
+
+  # --- STORY 1: Made in Fort Worth ---
+  - component: section-marker
+    duration: 4
+    params:
+      index: "01"
+      total: "05"
+      label: "Made in Fort Worth"
+      sublabel: "NVIDIA's first U.S. superchip factory"
+
+  - duration: 5
+    layers:
+      - component: photo
+        params: { src: "assets/images/placeholder-1.png", motion: ken-burns-in }
+      - component: lower-third
+        params: { primary: "Jensen Huang", secondary: "Founder & CEO · NVIDIA" }
+
+  - duration: 5
+    layers:
+      - component: photo
+        params: { src: "assets/images/placeholder-2.png", motion: pan-left }
+      - component: callout
+        params: { label: "The first GB300, signed on-site", x: 33, y: 55 }
+
+  - component: stat-punch
+    duration: 4
+    params:
+      eyebrow: "WISTRON · FORT WORTH, TEXAS"
+      value: "$700M"
+      caption: "invested in U.S. AI manufacturing"
+
+  - component: stat-punch
+    duration: 4
+    params:
+      eyebrow: "LOCAL JOBS"
+      value: "1,000"
+      caption: "planned by year-end — plumbers and electricians, not just engineers"
+
+  - component: quote-card
+    duration: 5
+    params:
+      quote: "AI factories will be a fundamental infrastructure of society."
+      author: "Jensen Huang"
+      role: "Founder & CEO, NVIDIA"
+
+  # --- transition into story 2 ---
+  - component: section-marker
+    duration: 3
+    params:
+      index: "02"
+      total: "05"
+      label: "A Bouncer for AI Agents"
+      sublabel: "Google's Model Armor"

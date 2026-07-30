@@ -1,0 +1,60 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"label","type":"string","label":"Label","default":"In partnership with"},
+  {"id":"entity","type":"string","label":"Entity","default":"Hugging Face"},
+  {"id":"logo","type":"string","label":"Logo (asset resolver)","default":""}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --chip:#F4F5F7;
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 50% 40%, #141D2B 0%, var(--bg) 58%, #06090E 100%); }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:44px; }
+        .label { font-family:var(--fm); font-size:32px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-dim); }
+        .chip { width:260px; height:260px; border-radius:36px; background:var(--chip); display:flex; align-items:center;
+          justify-content:center; padding:48px; box-shadow:0 26px 60px rgba(0,0,0,0.5); will-change:transform; }
+        .chip img { width:100%; height:100%; object-fit:contain; }
+        .name { font-size:72px; font-weight:800; letter-spacing:-0.01em; }
+        .stage.nologo .chip { display:none; }
+      </style>
+
+      <div id="root" data-composition-id="attribution" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="stage">
+          <div class="label ltext"></div>
+          <div class="chip"><img class="limg" alt="" /></div>
+          <div class="name ntext"></div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="attribution"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const label = get("label", "In partnership with");
+          const lEl = R.querySelector(".ltext"); lEl.textContent = label; if (!label) lEl.style.display = "none";
+          R.querySelector(".ntext").textContent = get("entity", "Hugging Face");
+          const logo = get("logo", "");
+          if (logo) R.querySelector(".limg").setAttribute("src", logo); else R.querySelector(".stage").classList.add("nologo");
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(lEl, { opacity: 0, y: -12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.1);
+          if (logo) tl.fromTo(R.querySelector(".chip"), { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.55, ease: "back.out(1.5)" }, 0.3);
+          tl.fromTo(R.querySelector(".name"), { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.5);
+          window.__timelines["attribution"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

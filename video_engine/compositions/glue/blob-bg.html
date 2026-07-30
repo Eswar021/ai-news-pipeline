@@ -1,0 +1,52 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"tint","type":"string","label":"Blob tint (warm|cool|duo)","default":"duo"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --deep:#06090E;
+          --warm:rgba(255,138,61,0.30); --cool:rgba(61,214,208,0.26);
+        }
+        .base { position:absolute; inset:0;
+          background:radial-gradient(135% 115% at 50% 30%, #121826 0%, var(--bg) 56%, var(--deep) 100%); }
+        .blob { position:absolute; width:1000px; height:1000px; filter:blur(60px); will-change:transform; }
+        .b1 { left:120px; top:-160px; border-radius:62% 38% 55% 45% / 58% 42% 58% 42%; }
+        .b2 { right:60px; bottom:-220px; border-radius:44% 56% 38% 62% / 50% 60% 40% 50%; }
+        .vig { position:absolute; inset:0; pointer-events:none;
+          background:radial-gradient(120% 100% at 50% 45%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.58) 100%); }
+      </style>
+
+      <div id="root" data-composition-id="blob-bg" data-width="1920" data-height="1080">
+        <div class="base"></div>
+        <div class="blob b1"></div>
+        <div class="blob b2"></div>
+        <div class="vig"></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="blob-bg"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const tint = get("tint", "duo");
+          const c1 = tint === "cool" ? "var(--cool)" : "var(--warm)";
+          const c2 = tint === "warm" ? "var(--warm)" : "var(--cool)";
+          R.querySelector(".b1").style.background = "radial-gradient(circle at 50% 50%, " + c1 + " 0%, rgba(0,0,0,0) 70%)";
+          R.querySelector(".b2").style.background = "radial-gradient(circle at 50% 50%, " + c2 + " 0%, rgba(0,0,0,0) 70%)";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          // rotate + drift + breathe the asymmetric blobs → organic morphing feel (transform-only, seek-safe)
+          tl.fromTo(R.querySelector(".b1"), { rotation: 0, x: -40, y: -20, scale: 1.0 }, { rotation: 40, x: 60, y: 40, scale: 1.12, duration: 16, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+          tl.fromTo(R.querySelector(".b2"), { rotation: 0, x: 40, y: 20, scale: 1.08 }, { rotation: -36, x: -50, y: -30, scale: 1.0, duration: 16, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+          window.__timelines["blob-bg"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

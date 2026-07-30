@@ -1,0 +1,73 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"Where Model Armor sits"},
+  {"id":"layers","type":"string","label":"Layers (JSON array of {label,note}, top→bottom)","default":"[{\"label\":\"AI agents\",\"note\":\"protected\"},{\"label\":\"Model Armor\",\"note\":\"inspects every prompt\"},{\"label\":\"Untrusted input\",\"note\":\"users, documents, tools\"}]"},
+  {"id":"highlight","type":"number","label":"Highlight layer index","default":1}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --surface:#161C26; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.14);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 50% 14%, #16202F 0%, var(--bg) 55%, #06090E 100%); }
+        .title { position:absolute; top:120px; width:100%; text-align:center; font-family:var(--fm);
+          font-size:32px; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); font-weight:700; }
+        .stack { position:absolute; left:50%; top:52%; transform:translate(-50%,-50%); display:flex; flex-direction:column; gap:20px; width:980px; }
+        .layer { background:var(--surface); border:1.5px solid var(--border); border-radius:18px; padding:38px 48px;
+          display:flex; align-items:center; justify-content:space-between; gap:30px; will-change:transform; }
+        .layer .lab { font-size:46px; font-weight:800; letter-spacing:-0.01em; }
+        .layer .note { font-family:var(--fm); font-size:26px; color:var(--text-dim); letter-spacing:0.03em; text-align:right; }
+        .layer.hl { border-color:var(--accent); background:radial-gradient(120% 160% at 50% 0%, rgba(255,138,61,0.16), var(--surface) 70%);
+          box-shadow:0 0 46px rgba(255,138,61,0.24); }
+        .layer.hl .note { color:var(--accent); }
+        .conn { position:absolute; left:50%; width:3px; background:var(--border); transform:translateX(-50%); }
+      </style>
+
+      <div id="root" data-composition-id="architecture" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="title ttext"></div>
+        <div class="stack"></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="architecture"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const title = get("title", "Where Model Armor sits");
+          const tEl = R.querySelector(".ttext"); tEl.textContent = title; if (!title) tEl.style.display = "none";
+          const hi = parseInt(get("highlight", -1), 10);
+          let layers = [];
+          try { const v = get("layers", "[]"); layers = Array.isArray(v) ? v : JSON.parse(v); } catch { layers = []; }
+
+          const stack = R.querySelector(".stack");
+          layers.forEach((L, i) => {
+            const el = document.createElement("div");
+            el.className = "layer" + (i === hi ? " hl" : "");
+            el.innerHTML = '<div class="lab"></div><div class="note"></div>';
+            el.querySelector(".lab").textContent = L.label || "";
+            const noteEl = el.querySelector(".note");
+            noteEl.textContent = L.note || "";
+            if (!L.note) noteEl.style.display = "none";
+            stack.appendChild(el);
+          });
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(tEl, { opacity: 0, y: -14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 0);
+          tl.fromTo(stack.querySelectorAll(".layer"), { opacity: 0, y: 30, scale: 0.96 },
+            { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power3.out", stagger: 0.16 }, 0.25);
+          window.__timelines["architecture"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"tint","type":"string","label":"Particle tint (warm|cool|neutral)","default":"cool"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --deep:#06090E;
+          --warm:255,138,61; --cool:61,214,208; --neutral:150,170,200;
+        }
+        .base { position:absolute; inset:0;
+          background:radial-gradient(135% 115% at 50% 25%, #101623 0%, var(--bg) 56%, var(--deep) 100%); }
+        .field { position:absolute; inset:0; }
+        .p { position:absolute; border-radius:50%; will-change:transform, opacity; filter:blur(0.5px); }
+        .vig { position:absolute; inset:0; pointer-events:none;
+          background:radial-gradient(120% 100% at 50% 45%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.55) 100%); }
+      </style>
+
+      <div id="root" data-composition-id="particle-bg" data-width="1920" data-height="1080">
+        <div class="base"></div>
+        <div class="field"></div>
+        <div class="vig"></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="particle-bg"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const tint = get("tint", "cool");
+          const rgb = tint === "warm" ? "var(--warm)" : tint === "neutral" ? "var(--neutral)" : "var(--cool)";
+          const field = R.querySelector(".field");
+
+          // Deterministic pseudo-random layout (seeded LCG — no Math.random / no clocks).
+          let seed = 20260724;
+          const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+          const N = 26;
+          const nodes = [];
+          for (let i = 0; i < N; i++) {
+            const x = rnd() * 1920, y = rnd() * 1080;
+            const r = 3 + rnd() * 9;
+            const op = 0.12 + rnd() * 0.34;
+            const el = document.createElement("div");
+            el.className = "p";
+            el.style.left = x + "px"; el.style.top = y + "px";
+            el.style.width = r + "px"; el.style.height = r + "px";
+            el.style.background = "radial-gradient(circle at 50% 50%, rgba(" + rgb + "," + op + ") 0%, rgba(" + rgb + ",0) 72%)";
+            field.appendChild(el);
+            nodes.push({ el, rise: 60 + rnd() * 120, dur: 8 + rnd() * 8, ph: rnd(), op });
+          }
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          nodes.forEach((n) => {
+            // Slow upward drift + gentle twinkle. Finite yoyo, seek-safe.
+            tl.fromTo(n.el, { y: n.rise, opacity: n.op * 0.4 }, { y: -n.rise, opacity: n.op, duration: n.dur, ease: "sine.inOut", yoyo: true, repeat: 1 }, -n.ph * n.dur);
+          });
+          window.__timelines["particle-bg"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

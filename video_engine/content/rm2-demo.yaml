@@ -1,0 +1,16 @@
+# Real-media round 2 — image-grid (mosaic) + image-compare (temporal before/after).
+scenes:
+  - component: image-grid
+    duration: 5
+    params:
+      title: "The AI landscape"
+      queries: ["semiconductor chip macro", "data center servers", "robotic arm factory", "circuit board closeup"]
+  - component: image-compare
+    duration: 6
+    transition: crossfade
+    params:
+      beforeLabel: "Digital twin"
+      afterLabel: "Real factory"
+      caption: "Built in simulation, then for real"
+      beforeQuery: "3d factory simulation render"
+      afterQuery: "semiconductor factory floor"

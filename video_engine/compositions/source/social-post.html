@@ -1,0 +1,68 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"author","type":"string","label":"Author","default":"Sam Altman"},
+  {"id":"handle","type":"string","label":"Handle","default":"@sama"},
+  {"id":"text","type":"string","label":"Post text","default":"we did not expect the models to get this creative during an eval."},
+  {"id":"meta","type":"string","label":"Meta (date / platform)","default":"on X"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --surface:#161C26; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.14);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 70% 20%, #141D2B 0%, var(--bg) 55%, #06090E 100%); }
+        .stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:0 200px; }
+        .card { width:100%; max-width:1380px; background:var(--surface); border:1.5px solid var(--border); border-radius:26px;
+          padding:60px 66px; box-shadow:0 34px 80px rgba(0,0,0,0.5); will-change:transform; }
+        .head { display:flex; align-items:center; gap:26px; }
+        .av { width:96px; height:96px; border-radius:50%; background:linear-gradient(135deg, var(--accent), var(--accent-2));
+          display:flex; align-items:center; justify-content:center; font-size:46px; font-weight:800; color:#0B0E14; }
+        .who .name { font-size:42px; font-weight:800; letter-spacing:-0.01em; }
+        .who .handle { font-family:var(--fm); font-size:30px; color:var(--text-dim); margin-top:2px; }
+        .post { font-size:54px; font-weight:500; line-height:1.35; margin-top:38px; }
+        .meta { font-family:var(--fm); font-size:26px; color:var(--text-dim); margin-top:34px; letter-spacing:0.04em; }
+      </style>
+
+      <div id="root" data-composition-id="social-post" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="stage">
+          <div class="card">
+            <div class="head"><div class="av avtext"></div><div class="who"><div class="name ntext"></div><div class="handle htext"></div></div></div>
+            <div class="post ptext"></div>
+            <div class="meta mtext"></div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="social-post"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const author = get("author", "Sam Altman");
+          R.querySelector(".ntext").textContent = author;
+          R.querySelector(".avtext").textContent = (author.trim()[0] || "?").toUpperCase();
+          R.querySelector(".htext").textContent = get("handle", "@sama");
+          R.querySelector(".ptext").textContent = get("text", "");
+          const meta = get("meta", ""); const mEl = R.querySelector(".mtext"); mEl.textContent = meta; if (!meta) mEl.style.display = "none";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".card"), { opacity: 0, y: 30, scale: 0.98 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out" }, 0);
+          tl.fromTo(R.querySelector(".head"), { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.5, ease: "power2.out" }, 0.25);
+          tl.fromTo(R.querySelector(".post"), { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.45);
+          tl.fromTo(mEl, { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 0.7);
+          window.__timelines["social-post"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+# Dependencies (regenerate with `npm install`)
+node_modules/
+
+# Generated render + build artifacts
+index.html
+renders/
+snapshots/
+*.mp4
+
+# Pipeline working area (staged inputs per episode) + resolver/media caches
+.work/
+.media/
+reference/
+gallery/
+
+# Generated art-director plans (source demos are kept; run/episode plans are not)
+content/*-resolved.yaml
+content/*-ad*.yaml
+content/run*.yaml
+
+# OS
+.DS_Store

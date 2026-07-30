@@ -1,0 +1,57 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"tint","type":"string","label":"Glow tint (warm|cool|neutral)","default":"warm"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --deep:#06090E;
+          --warm:rgba(255,138,61,0.22); --cool:rgba(61,214,208,0.20); --neutral:rgba(120,140,170,0.16);
+        }
+        .base { position:absolute; inset:0;
+          background:radial-gradient(140% 120% at 50% 20%, #121826 0%, var(--bg) 55%, var(--deep) 100%); }
+        .glow { position:absolute; width:1500px; height:1500px; left:210px; top:-260px; border-radius:50%;
+          filter:blur(30px); will-change:transform; }
+        .glow.g2 { left:auto; right:120px; top:auto; bottom:-360px; width:1200px; height:1200px; opacity:0.8; }
+        .grain { position:absolute; inset:0; opacity:0.05;
+          background-image:radial-gradient(rgba(255,255,255,0.5) 1px, transparent 1px);
+          background-size:4px 4px; }
+        .vig { position:absolute; inset:0; pointer-events:none;
+          background:radial-gradient(120% 100% at 50% 45%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%); }
+      </style>
+
+      <div id="root" data-composition-id="gradient-bg" data-width="1920" data-height="1080">
+        <div class="base"></div>
+        <div class="glow g1"></div>
+        <div class="glow g2"></div>
+        <div class="grain"></div>
+        <div class="vig"></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="gradient-bg"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const tint = get("tint", "warm");
+          const hue = tint === "cool" ? "var(--cool)" : tint === "neutral" ? "var(--neutral)" : "var(--warm)";
+          const alt = tint === "cool" ? "var(--warm)" : "var(--cool)";
+          const g1 = R.querySelector(".g1"), g2 = R.querySelector(".g2");
+          g1.style.background = "radial-gradient(circle at 50% 50%, " + hue + " 0%, rgba(0,0,0,0) 68%)";
+          g2.style.background = "radial-gradient(circle at 50% 50%, " + alt + " 0%, rgba(0,0,0,0) 70%)";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          // Slow ambient drift — finite, seek-safe, no infinite repeat.
+          tl.fromTo(g1, { x: -70, y: -30, scale: 1.0 }, { x: 60, y: 40, scale: 1.12, duration: 12, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+          tl.fromTo(g2, { x: 60, y: 40, scale: 1.08 }, { x: -50, y: -30, scale: 1.0, duration: 12, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+          window.__timelines["gradient-bg"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

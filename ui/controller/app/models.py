@@ -30,18 +30,15 @@ class RunPlan(BaseModel):
     environment: str | None = None
     target_stage: StageName = "content"
     config_mode: Literal["live", "frozen"] = "live"
-    script_source: Literal["auto", "app", "native", "chatgpt"] = "app"
     synthesis_mode: Literal["preview", "final"] = "preview"
     voiceover_variant: str | None = None
-    plan_source: Literal["generate", "chatgpt"] = "generate"
-    render_mode: Literal["preview", "final"] = "preview"
-    render_backend: Literal["remotion", "hyperframes"] | None = None
+    # Visuals stage (motion-graphics engine) controls.
+    deterministic: bool = False
+    units: int | None = Field(default=None, ge=1, le=50)
+    skip_render: bool = False
     from_module: str | None = None
     stop_after: str | None = None
-    selected_scene_ids: list[str] = Field(default_factory=list, max_length=100)
-    selected_story_ids: list[str] = Field(default_factory=list, max_length=100)
     skip_metadata_finalization: bool = False
-    skip_publish_handoff: bool = False
     confirm_provider_costs: bool = False
     confirm_final_media: bool = False
 
@@ -56,16 +53,6 @@ class RunPlan(BaseModel):
     @classmethod
     def slugs_must_be_safe(cls, value: str | None, info) -> str | None:
         return _slug(value, info.field_name)
-
-    @field_validator("selected_scene_ids", "selected_story_ids")
-    @classmethod
-    def identifiers_must_be_safe(cls, values: list[str], info) -> list[str]:
-        normalized: list[str] = []
-        for value in values:
-            item = _slug(value, info.field_name)
-            if item and item not in normalized:
-                normalized.append(item)
-        return normalized
 
 
 class JobCreate(BaseModel):

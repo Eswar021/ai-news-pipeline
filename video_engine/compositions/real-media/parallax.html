@@ -1,0 +1,50 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"caption","type":"string","label":"Caption","default":""},
+  {"id":"query","type":"string","label":"Image description","default":""},
+  {"id":"src","type":"string","label":"Image file (resolver)","default":"assets/images/placeholder-1.png"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root { position:absolute; inset:0; overflow:hidden; background:#06090E;
+          --text:#E6EDF3; --accent:#FF8A3D; }
+        .img { position:absolute; inset:-8%; width:116%; height:116%; object-fit:cover; will-change:transform; }
+        .depth { position:absolute; inset:0; will-change:transform;
+          background:radial-gradient(60% 60% at 30% 40%, rgba(255,138,61,0.18), rgba(0,0,0,0) 70%); mix-blend-mode:screen; }
+        .scrim { position:absolute; inset:0; background:linear-gradient(0deg, rgba(6,9,14,0.7) 0%, rgba(6,9,14,0) 40%); }
+        .cap { position:absolute; left:110px; bottom:120px; max-width:1200px; }
+        .cap span { display:inline-block; background:rgba(6,9,14,0.6); padding:16px 30px; border-radius:14px;
+          font-family:"Montserrat",sans-serif; font-size:44px; font-weight:700; color:var(--text); }
+      </style>
+
+      <div id="root" data-composition-id="parallax" data-width="1920" data-height="1080">
+        <img class="img" alt="" />
+        <div class="depth"></div>
+        <div class="scrim"></div>
+        <div class="cap"><span class="ctext"></span></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="parallax"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          R.querySelector(".img").src = get("src", "assets/images/placeholder-1.png");
+          const cap = get("caption", ""); const cWrap = R.querySelector(".cap"); R.querySelector(".ctext").textContent = cap;
+          if (!cap) cWrap.style.display = "none";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          // foreground and background drift at different rates → parallax depth (transform-only, seek-safe)
+          tl.fromTo(R.querySelector(".img"), { x: -50, y: -20, scale: 1.06 }, { x: 50, y: 20, scale: 1.14, duration: 10, ease: "sine.inOut" }, 0);
+          tl.fromTo(R.querySelector(".depth"), { x: 60, y: 30 }, { x: -60, y: -30, duration: 10, ease: "sine.inOut" }, 0);
+          if (cap) tl.fromTo(cWrap, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 0.4);
+          window.__timelines["parallax"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

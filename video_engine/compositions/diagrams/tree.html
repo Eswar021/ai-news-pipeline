@@ -1,0 +1,89 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"NVIDIA's U.S. buildout"},
+  {"id":"root","type":"string","label":"Root node","default":"NVIDIA"},
+  {"id":"children","type":"string","label":"Children (JSON array)","default":"[\"Wistron · Fort Worth\",\"Foxconn · Houston\",\"$500B commitment\"]"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --surface:#161C26; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.14);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 50% 14%, #16202F 0%, var(--bg) 55%, #06090E 100%); }
+        .title { position:absolute; top:130px; width:100%; text-align:center; font-family:var(--fm);
+          font-size:32px; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); font-weight:700; }
+        svg { position:absolute; inset:0; width:1920px; height:1080px; }
+        .link { fill:none; stroke:var(--accent); stroke-width:3; opacity:0.7; }
+        .node { position:absolute; transform:translate(-50%,-50%); background:var(--surface); border:1.5px solid var(--border);
+          border-radius:16px; padding:26px 40px; font-size:38px; font-weight:700; white-space:nowrap; will-change:transform; }
+        .node.root { background:radial-gradient(120% 160% at 50% 0%, rgba(255,138,61,0.18), var(--surface) 70%);
+          border-color:var(--accent); font-size:52px; font-weight:800; box-shadow:0 0 40px rgba(255,138,61,0.22); }
+        .node.child { font-size:34px; }
+      </style>
+
+      <div id="root" data-composition-id="tree" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="title ttext"></div>
+        <svg viewBox="0 0 1920 1080"><g class="links"></g></svg>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="tree"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const parseArr = (v) => { try { const a = typeof v === "string" ? JSON.parse(v) : v; return Array.isArray(a) ? a : []; } catch { return []; } };
+          const title = get("title", ""); const tEl = R.querySelector(".ttext"); tEl.textContent = title; if (!title) tEl.style.display = "none";
+          const rootLabel = get("root", "NVIDIA");
+          const children = parseArr(get("children", "[]"));
+
+          const rootX = 960, rootY = 400, childY = 720;
+          const n = children.length;
+          const L = 280, span = 1920 - 2 * L, step = n > 1 ? span / (n - 1) : 0;
+          const childX = (i) => n === 1 ? 960 : L + step * i;
+
+          const rootEl = document.createElement("div");
+          rootEl.className = "node root"; rootEl.textContent = rootLabel;
+          rootEl.style.left = rootX + "px"; rootEl.style.top = rootY + "px";
+          R.appendChild(rootEl);
+
+          const links = R.querySelector(".links");
+          const childEls = children.map((c, i) => {
+            const x = childX(i);
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            const my = (rootY + childY) / 2;
+            path.setAttribute("d", `M ${rootX} ${rootY + 46} C ${rootX} ${my}, ${x} ${my}, ${x} ${childY - 46}`);
+            path.setAttribute("class", "link");
+            links.appendChild(path);
+            const el = document.createElement("div");
+            el.className = "node child"; el.textContent = c;
+            el.style.left = x + "px"; el.style.top = childY + "px";
+            R.appendChild(el);
+            return { el, path };
+          });
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(tEl, { opacity: 0, y: -14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 0);
+          tl.fromTo(rootEl, { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.6)" }, 0.2);
+          childEls.forEach((c, i) => {
+            const at = 0.5 + i * 0.18;
+            const len = c.path.getTotalLength();
+            c.path.style.strokeDasharray = len;
+            tl.fromTo(c.path, { strokeDashoffset: len }, { strokeDashoffset: 0, duration: 0.4, ease: "power2.out" }, at);
+            tl.fromTo(c.el, { opacity: 0, scale: 0.7, y: 10 }, { opacity: 1, scale: 1, y: 0, duration: 0.4, ease: "back.out(1.6)" }, at + 0.2);
+          });
+          window.__timelines["tree"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

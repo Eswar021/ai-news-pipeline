@@ -1,0 +1,23 @@
+# LLM art-director config (config-driven — edit here, not code).
+#
+# Uses the same proven DeepSeek reasoning setup the upstream pipeline used:
+# DeepSeek V4 Pro, thinking enabled, reasoning_effort max, temperature omitted.
+# DeepSeek is OpenAI-compatible, so we call /chat/completions directly.
+
+provider: deepseek
+model: deepseek-v4-pro # reasoning workhorse. Fallbacks if unavailable: deepseek-reasoner, deepseek-chat
+base_url: https://api.deepseek.com
+api_key_env: DEEPSEEK_API_KEY
+
+# If the key isn't already in the environment, source it from this .env
+# (path relative to the video_engine root). Secrets are NEVER copied into our repo.
+env_file: ../../AI_Content_Creation/.env
+
+reasoning:
+  thinking: enabled # DeepSeek extra_body.thinking.type
+  reasoning_effort: max
+  omit_temperature: true # DeepSeek rejects an explicit temperature when thinking is enabled
+
+request_timeout_seconds: 600
+max_attempts: 2 # one retry on a bad/unparseable response
+max_shots_per_beat: 3 # a long beat may split into up to this many shots

@@ -397,7 +397,7 @@ function RunDesk({
             <Metric label="Last module" value={humanize(currentRun.last_completed_module || "None")} helpKey="last_module" />
             <Metric label="Script" value={currentRun.metrics?.script_word_count ? `${formatNumber(currentRun.metrics.script_word_count)} words` : "Not available"} helpKey="script_metric" />
             <Metric label="Voice" value={formatDuration(currentRun.metrics?.audio_duration_seconds)} helpKey="voice_metric" />
-            <Metric label="Video" value={currentRun.metrics?.final_video_available ? "Final ready" : currentRun.metrics?.preview_video_available ? "Preview ready" : "Not available"} helpKey="video_metric" />
+            <Metric label="Video" value={currentRun.metrics?.final_video_available ? "Episode ready" : "Not available"} helpKey="video_metric" />
           </dl>
           <div className="deskCommands">
             <button className="secondaryButton" onClick={() => onOpen(currentRun.run_id, "overview")}><Newspaper size={16} /> Overview</button>
@@ -473,7 +473,7 @@ function HistoryView({ runs, loading, onOpen }: { runs: RunIndex[]; loading: boo
                   <td><StatusChip status={run.overall_status} /></td>
                   <td><strong>{runTitle(run)}</strong><small>{run.run_id}</small></td>
                   <td><strong>{humanize(run.last_completed_module || "No completed module")}</strong><small>{run.environment || "Unknown environment"}</small></td>
-                  <td><span>{run.metrics?.final_video_available ? "Final video" : run.metrics?.preview_video_available ? "Preview video" : run.metrics?.script_word_count ? "Script" : "Artifacts only"}</span></td>
+                  <td><span>{run.metrics?.final_video_available ? "Episode video" : run.metrics?.script_word_count ? "Script" : "Artifacts only"}</span></td>
                   <td><time>{formatDate(run.created_at)}</time></td>
                   <td><button className="iconButton" title="Open run" onClick={() => onOpen(run.run_id)}><ChevronRight size={17} /></button></td>
                 </tr>
@@ -600,8 +600,7 @@ function RunMasthead({ run }: { run: RunIndex }) {
       <dl className="headlineMetrics">
         <Metric label="Script" value={metrics.script_word_count ? `${formatNumber(metrics.script_word_count)} words` : "Not available"} helpKey="script_metric" />
         <Metric label="Voice" value={formatDuration(metrics.audio_duration_seconds)} helpKey="voice_metric" />
-        <Metric label="Scenes" value={metrics.scene_count ?? "Not available"} helpKey="scene_metric" />
-        <Metric label="Video" value={metrics.final_video_available ? "Final ready" : metrics.preview_video_available ? "Preview ready" : "Not available"} helpKey="video_metric" />
+        <Metric label="Video" value={metrics.final_video_available ? "Episode ready" : "Not available"} helpKey="video_metric" />
       </dl>
     </header>
   );
@@ -768,11 +767,7 @@ function ModuleDataReader({ runId, module, data }: { runId: string; module: stri
     return <div className="metadataLayout"><TitleOptions options={metadata.title_options || []} /><ThumbnailConcepts concepts={metadata.thumbnail_concepts || []} textOptions={metadata.thumbnail_text_options || []} blocked={metadata.blocked_title_angles || []} /><DescriptionReader metadata={metadata} /></div>;
   }
   if (module === "voiceover") return <VoiceVariantsData runId={runId} variants={data.variants || []} />;
-  if (module === "visual_research") return <ResearchView research={data.research || {}} />;
-  if (module === "asset_catalog") return <AssetCatalog assets={data.assets || []} />;
-  if (module === "visual_planner" || module === "visual_render") return <SceneTimeline scenes={data.scenes || []} />;
-  if (module === "video_assembly") return <ModuleVideoData data={data} />;
-  if (module === "visual_review") return <ReviewView data={{ contact_sheets: data.contact_sheets || {} }} report={data.review_report || ""} />;
+  if (module === "visuals") return <ModuleVideoData data={data} />;
   return <ReadableObject value={data} />;
 }
 
@@ -796,8 +791,7 @@ function VoiceVariantsData({ runId, variants }: { runId: string; variants: Json[
 function ModuleVideoData({ data }: { data: Json }) {
   return (
     <div className="moduleVideoData">
-      {data.final_video && <section><SectionTitle label="Final assembly" title="Final video" /><video controls preload="metadata" src={mediaUrl(data.final_video)} /></section>}
-      {data.preview_video && <section><SectionTitle label="Preview assembly" title="Preview video" /><video controls preload="metadata" src={mediaUrl(data.preview_video)} /></section>}
+      {data.final_video ? <section><SectionTitle label="Rendered episode" title="Episode video" /><video controls preload="metadata" src={mediaUrl(data.final_video)} /></section> : <EmptyState label="No rendered episode for this run" />}
       <ReadableObject value={data.summary || {}} />
     </div>
   );
@@ -917,10 +911,6 @@ function OverviewView({ detail }: { detail: RunDetail }) {
                   <div><strong>{humanize(stage)}</strong><small>{humanize(detail.index.stage_status?.[stage] || "missing")}</small></div>
                 </div>
               ))}
-              <div className="stageStep">
-                <span className={`stageDot ${statusClass(moduleStatus(detail.modules, "publish_handoff"))}`}>5</span>
-                <div><strong>Publish review</strong><small>{humanize(moduleStatus(detail.modules, "publish_handoff"))}</small></div>
-              </div>
             </div>
           </section>
 
@@ -1064,7 +1054,7 @@ function LineageDetail({ data, runId }: { data: Json; runId: string }) {
     setMode("read");
   }, [data.record?.record_ref]);
   const step = (data.stages || []).find((item: Json) => item.key === selectedStep) || data.stages?.[0];
-  const groups = ["ingestion", "content", "voiceover", "visuals", "publish"].map((stage) => {
+  const groups = ["ingestion", "content", "voiceover", "visuals"].map((stage) => {
     const steps = (data.stages || []).filter((item: Json) => item.stage === stage);
     return { stage, reached: steps.filter((item: Json) => item.status !== "not_reached").length, total: steps.length };
   }).filter((group) => group.total);
@@ -1678,144 +1668,45 @@ function VoiceSetup({ detail, selected }: { detail: Json; selected: Json }) {
 
 function VisualsView({ runId }: { runId: string }) {
   const [mode, setMode] = useState<ViewMode>("read");
-  const [section, setSection] = useState("watch");
   const [data, setData] = useState<Json>(null);
-  const [report, setReport] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     fetchJson(`/api/runs/${encodeURIComponent(runId)}/visual-scenes`).then(setData).catch((err) => setError(errorMessage(err)));
   }, [runId]);
 
-  useEffect(() => {
-    if (section !== "review" || !data?.review_report || report) return;
-    const prefix = `output/runs/${runId}/`;
-    const path = String(data.review_report).startsWith(prefix) ? String(data.review_report).slice(prefix.length) : data.review_report;
-    fetchJson(`/api/runs/${encodeURIComponent(runId)}/artifacts?path=${encodeURIComponent(path)}`)
-      .then((artifact: Json) => setReport(htmlToPlainText(artifact.text || "")))
-      .catch(() => setReport("Review report unavailable."));
-  }, [section, data?.review_report, report, runId]);
+  const artDirector = data?.summary?.art_director === "bridge"
+    ? "Deterministic bridge"
+    : data?.summary?.art_director === "llm"
+      ? "LLM art director"
+      : "Not available";
 
   return (
     <>
-      <ViewHeading eyebrow="Visual desk" title="Picture and final review" summary="The assembled episode, scene timeline, research plan, trusted assets, and review evidence." mode={mode} onMode={setMode} />
-      <SubNav value={section} onChange={setSection} items={[
-        { key: "watch", label: "Watch" },
-        { key: "timeline", label: `Timeline ${data?.scenes?.length || 0}` },
-        { key: "research", label: "Research" },
-        { key: "assets", label: `Assets ${data?.assets?.length || 0}` },
-        { key: "review", label: "Review" },
-      ]} />
+      <ViewHeading eyebrow="Visual desk" title="Rendered episode" summary="The motion-graphics episode rendered from the finished voiceover, and how it was produced." mode={mode} onMode={setMode} />
       {error && <ErrorBanner message={error} />}
       {mode === "raw" ? <RawArtifactReader runId={runId} sources={[
-        { label: "Visual research", path: "visuals/research/visual_research_package.json" },
-        { label: "Scene plan", path: "visuals/planning/generate/visual_scene_plan.json" },
-        { label: "Asset catalog", path: "visuals/asset_catalog/visual_asset_catalog.json" },
-        { label: "Resolved assets", path: "visuals/asset_resolution/visual_asset_manifest.json" },
-        { label: "Review result", path: "visuals/review/visual_review_result.json" },
-      ]} /> : !data ? <Loading label="Opening visual production" /> : (
+        { label: "Visuals stage result", path: "orchestration/visuals_stage_result.json" },
+      ]} /> : !data ? <Loading label="Opening the rendered episode" /> : (
         <div className="visualLayout">
-          {section === "watch" && <WatchView data={data} />}
-          {section === "timeline" && <SceneTimeline scenes={data.scenes || []} />}
-          {section === "research" && <ResearchView research={data.research || {}} />}
-          {section === "assets" && <AssetCatalog assets={data.assets || []} />}
-          {section === "review" && <ReviewView data={data} report={report} />}
+          <section className="screeningRoom">
+            <div className="screeningHeader"><div><span className="sectionLabel">Episode screening</span><h3>Rendered episode</h3></div></div>
+            {data.final_video ? (
+              <video controls preload="metadata" src={mediaUrl(data.final_video)} />
+            ) : (
+              <EmptyState label={data.summary?.rendered ? "Rendered video not found on disk" : "No episode has been rendered for this run"} />
+            )}
+          </section>
+          <MetricBand items={[
+            ["Status", humanize(data.status || "missing")],
+            ["Art director", artDirector],
+            ["Unit slice", data.summary?.units == null ? "All units" : String(data.summary?.units)],
+            ["Rendered", data.summary?.rendered ? "Yes" : "No"],
+          ]} />
+          {data.failure_reason && <ErrorBanner message={data.failure_reason} />}
         </div>
       )}
     </>
-  );
-}
-
-function WatchView({ data }: { data: Json }) {
-  const [cut, setCut] = useState(data.final_video ? "final" : "preview");
-  const path = cut === "final" ? data.final_video : data.preview_video;
-  return (
-    <div className="watchLayout">
-      <section className="screeningRoom">
-        <div className="screeningHeader"><div><span className="sectionLabel">Episode screening</span><h3>{cut === "final" ? "Final assembly" : "Preview assembly"}</h3></div><SubNav value={cut} onChange={setCut} compact items={[{ key: "final", label: "Final" }, { key: "preview", label: "Preview" }]} /></div>
-        {path ? <video controls preload="metadata" src={mediaUrl(path)} /> : <EmptyState label={`No ${cut} video available`} />}
-      </section>
-      <MetricBand items={[
-        ["Scenes", data.summary?.scene_count],
-        ["Assets", data.summary?.asset_count],
-        ["Coverage", data.summary?.coverage?.gap_count === 0 ? "No gaps" : `${data.summary?.coverage?.gap_count || 0} gaps`],
-        ["Duration", formatDuration(data.summary?.coverage?.total_duration_seconds)],
-      ]} />
-    </div>
-  );
-}
-
-function SceneTimeline({ scenes }: { scenes: Json[] }) {
-  return (
-    <section className="sceneTimeline">
-      <SectionTitle label="Audio synchronized" title={`${scenes.length} scene timeline`} />
-      {scenes.map((scene: Json) => <SceneRow key={scene.scene_id} scene={scene} />)}
-    </section>
-  );
-}
-
-function SceneRow({ scene }: { scene: Json }) {
-  const [open, setOpen] = useState(false);
-  const payload = scene.payload || {};
-  return (
-    <details className="sceneRow" onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary>
-        <time>{formatDuration(scene.start_seconds)}<span>{formatDuration(scene.end_seconds)}</span></time>
-        <div><span>{scene.story_title || humanize(scene.section_type)}</span><strong>{scene.script_excerpt}</strong></div>
-        <small>{humanize(scene.render_kind)}</small>
-        <StatusChip status={scene.render_status} />
-      </summary>
-      <div className="sceneBody">
-        <div className="sceneNotes"><p>{scene.reason}</p><dl className="inlineFacts"><Fact label="Visual intent" value={humanize(scene.visual_intent)} /><Fact label="Selected asset" value={payload.asset_id || payload.selected_asset_id || "None"} /><Fact label="On screen" value={payload.companion_text || payload.headline || payload.on_screen_text || "None"} /></dl></div>
-        {open && (scene.final_video_path || scene.preview_video_path) && <video controls preload="metadata" src={mediaUrl(scene.final_video_path || scene.preview_video_path)} />}
-      </div>
-    </details>
-  );
-}
-
-function ResearchView({ research }: { research: Json }) {
-  return (
-    <div className="researchLayout">
-      <section className="slateBrief"><span className="sectionLabel">Research policy</span><h3>{humanize(research.strategy || "not available")}</h3><p>{research.source_policy?.external_search_enabled === false ? "Selected source material only. External search was disabled." : "External research was available for this run."}</p></section>
-      {(research.stories || []).map((story: Json, index: number) => (
-        <article className="researchStory" key={story.story_id}>
-          <div className="storyNumber">{String(index + 1).padStart(2, "0")}</div>
-          <div><span className="sectionLabel">Visual thesis</span><h3>{story.visual_thesis}</h3><div className="researchColumns"><div><strong>Sequence arc</strong>{(story.sequences || []).map((sequence: Json) => <div className="researchNote" key={sequence.sequence_label}><b>{sequence.sequence_label}</b><p>{sequence.visual_arc}</p><small>{(sequence.preferred_shot_progression || []).join(" -> ")}</small></div>)}</div><div><strong>Asset needs</strong>{(story.asset_needs || []).map((need: Json) => <div className="researchNeed" key={need.asset_need_id}><b>{need.subject}</b><p>{need.editorial_purpose}</p><small>{humanize(need.availability_strategy)} / {(need.preferred_asset_types || []).map(humanize).join(", ")}</small></div>)}</div></div></div>
-        </article>
-      ))}
-      {!research.stories?.length && <EmptyState label="No visual research package available" />}
-    </div>
-  );
-}
-
-function AssetCatalog({ assets }: { assets: Json[] }) {
-  const [query, setQuery] = useState("");
-  const [kind, setKind] = useState("all");
-  const kinds = Array.from(new Set(assets.map((asset) => asset.asset_type).filter(Boolean)));
-  const visible = assets.filter((asset) => (kind === "all" || asset.asset_type === kind) && `${asset.title} ${asset.source_name} ${asset.asset_type}`.toLowerCase().includes(query.toLowerCase()));
-  return (
-    <section className="assetCatalog">
-      <div className="assetToolbar"><FilterBar value={query} onChange={setQuery} placeholder="Filter assets" /><select value={kind} onChange={(event) => setKind(event.target.value)}><option value="all">All asset types</option>{kinds.map((item) => <option key={item} value={item}>{humanize(item)}</option>)}</select></div>
-      <div className="assetGrid">
-        {visible.map((asset) => (
-          <article className="assetItem" key={asset.asset_id}>
-            <div className="assetImage">{asset.local_path || asset.capture_preflight_preview_path ? <img loading="lazy" src={mediaUrl(asset.local_path || asset.capture_preflight_preview_path)} alt="" /> : <ImageIcon size={22} />}</div>
-            <div><span>{humanize(asset.asset_type)}</span><h3>{asset.title || asset.asset_id}</h3><p>{asset.source_name || humanize(asset.provenance_class)}</p><StatusChip status={asset.status || asset.review_status} /></div>
-          </article>
-        ))}
-      </div>
-      {!visible.length && <EmptyState label="No matching assets" />}
-    </section>
-  );
-}
-
-function ReviewView({ data, report }: { data: Json; report: string }) {
-  return (
-    <div className="reviewLayout">
-      <section className="productionLedger"><SectionTitle label="Production handoff" title="Visual pipeline" />{(data.production || []).map((step: Json, index: number) => <div key={step.label}><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{step.label}</strong><small>{step.failure_reason || summarySentence(step.summary)}</small></div><StatusChip status={step.status} /></div>)}</section>
-      <section className="contactSheetSection"><SectionTitle label="Sampled frames" title="Contact sheets" /><div className="contactSheets">{Object.entries(data.contact_sheets || {}).map(([label, path]) => path ? <figure key={label}><img loading="lazy" src={mediaUrl(path as string)} alt={`${humanize(label)} contact sheet`} /><figcaption>{humanize(label)}</figcaption></figure> : null)}</div></section>
-      <section className="reviewReport"><SectionTitle label="Human review" title="Story review report" />{report ? <div className="reportText">{report.split("\n").filter(Boolean).map((line, index) => <p key={index}>{line}</p>)}</div> : <Loading label="Opening review report" />}</section>
-    </div>
   );
 }
 

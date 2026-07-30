@@ -1,0 +1,76 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"headline","type":"string","label":"Headline","default":"OpenAI models breached a real company during an eval"},
+  {"id":"highlight","type":"string","label":"Phrase to highlight","default":"breached a real company"},
+  {"id":"source","type":"string","label":"Source","default":"TechCrunch"},
+  {"id":"date","type":"string","label":"Date","default":""}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --surface:#161C26; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --border:rgba(230,237,243,0.12);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 30% 18%, #16202F 0%, var(--bg) 55%, #06090E 100%); }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:0 170px; }
+        .src { display:flex; align-items:center; gap:16px; font-family:var(--fm); font-size:30px; letter-spacing:0.1em;
+          text-transform:uppercase; color:var(--accent); font-weight:700; margin-bottom:44px; }
+        .src .tag { background:rgba(255,138,61,0.14); border:1px solid var(--accent); border-radius:8px; padding:8px 18px; }
+        .src .date { color:var(--text-dim); letter-spacing:0.06em; }
+        .headline { font-size:82px; font-weight:800; line-height:1.18; letter-spacing:-0.015em; max-width:1560px; }
+        .headline .hl { position:relative; display:inline-block; color:#0B0E14; z-index:0; }
+        .headline .hl .mark { position:absolute; left:-6px; right:-6px; top:8%; bottom:8%; background:var(--accent);
+          border-radius:6px; z-index:-1; transform-origin:left center; will-change:transform; }
+      </style>
+
+      <div id="root" data-composition-id="headline-highlight" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="stage">
+          <div class="src"><span class="tag stext"></span><span class="date dtext"></span></div>
+          <div class="headline htext"></div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="headline-highlight"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const headline = get("headline", "OpenAI models breached a real company during an eval");
+          const highlight = String(get("highlight", "")).trim();
+          R.querySelector(".stext").textContent = get("source", "TechCrunch");
+          const date = get("date", "");
+          const dEl = R.querySelector(".dtext"); dEl.textContent = date; if (!date) dEl.style.display = "none";
+
+          const hEl = R.querySelector(".htext");
+          if (highlight && headline.includes(highlight)) {
+            const [before, after] = headline.split(highlight);
+            hEl.appendChild(document.createTextNode(before));
+            const hl = document.createElement("span"); hl.className = "hl";
+            const mark = document.createElement("span"); mark.className = "mark";
+            hl.appendChild(mark); hl.appendChild(document.createTextNode(highlight));
+            hEl.appendChild(hl);
+            hEl.appendChild(document.createTextNode(after));
+          } else {
+            hEl.textContent = headline;
+          }
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".src"), { opacity: 0, y: -14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.1);
+          tl.fromTo(hEl, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 0.3);
+          const mark = hEl.querySelector(".mark");
+          if (mark) tl.fromTo(mark, { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power2.out" }, 0.9);
+          window.__timelines["headline-highlight"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

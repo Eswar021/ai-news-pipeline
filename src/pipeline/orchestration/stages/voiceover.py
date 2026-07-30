@@ -40,7 +40,6 @@ class VoiceoverOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     config_mode: Literal["live", "frozen"] = "live"
-    script_source: str = "auto"
     synthesis_mode: Literal["preview", "final"] = "final"
     variant: str | None = None
     voiceover_python: str = ".venv-voiceover/bin/python"
@@ -107,7 +106,6 @@ def _run_stage(
     script_path, script_result = resolve_script_result(
         run_dir=run_dir,
         run_id=run_id,
-        source=options.script_source,
     )
     script_package = script_result["data"]["script_package"]
     script_provenance = script_package["provenance"]
@@ -301,7 +299,7 @@ def _voiceover_variant(
         text = str(value).strip().lower().replace(".", "p")
         return "_".join(part for part in "".join(ch if ch.isalnum() else "_" for ch in text).split("_") if part)
 
-    source = "chatgpt" if script_package.get("generation_source") == "chatgpt_handoff" else "app"
+    source = "app"
     provider = str(config.get("provider", "provider"))
     provider_config = config.get(provider) if isinstance(config.get(provider), dict) else {}
     configured_voice = (

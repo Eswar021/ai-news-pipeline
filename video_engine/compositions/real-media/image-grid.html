@@ -1,0 +1,74 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"title","type":"string","label":"Title (optional)","default":""},
+  {"id":"queries","type":"string","label":"Image descriptions (JSON array)","default":"[]"},
+  {"id":"srcs","type":"string","label":"Image files (JSON array, asset resolver)","default":"[]"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden; background:#06090E;
+          --accent:#FF8A3D; --text:#E6EDF3;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+        }
+        .grid { position:absolute; inset:0; display:grid; gap:10px; }
+        .cell { position:relative; overflow:hidden; background:#161C26; }
+        .cell img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; will-change:transform, opacity; }
+        .title { position:absolute; left:0; right:0; bottom:70px; text-align:center; z-index:5;
+          font-family:var(--fm); font-size:32px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text);
+          font-weight:700; text-shadow:0 4px 24px rgba(0,0,0,0.8); }
+        .title .bar { display:inline-block; width:44px; height:5px; background:var(--accent); border-radius:3px; vertical-align:middle; margin-right:18px; }
+        .scrim { position:absolute; inset:0; z-index:4; pointer-events:none;
+          background:linear-gradient(0deg, rgba(6,9,14,0.6) 0%, rgba(6,9,14,0) 30%); }
+      </style>
+
+      <div id="root" data-composition-id="image-grid" data-width="1920" data-height="1080">
+        <div class="grid"></div>
+        <div class="scrim"></div>
+        <div class="title"><span class="bar"></span><span class="ttext"></span></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="image-grid"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const parseArr = (v) => { try { const a = typeof v === "string" ? JSON.parse(v) : v; return Array.isArray(a) ? a : []; } catch { return []; } };
+          const srcs = parseArr(get("srcs", "[]"));
+          const queries = parseArr(get("queries", "[]"));
+          const imgs = (srcs.length ? srcs : queries.map(() => "")); // one cell per requested image
+          const n = Math.max(1, imgs.length);
+
+          const grid = R.querySelector(".grid");
+          // layout: 1→1x1, 2→2 cols, 3→3 cols, 4→2x2, 5-6→3 cols x2 rows
+          const cols = n === 1 ? 1 : n === 2 ? 2 : n === 4 ? 2 : 3;
+          const rows = Math.ceil(n / cols);
+          grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+          grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+          imgs.forEach((src) => {
+            const cell = document.createElement("div"); cell.className = "cell";
+            const img = document.createElement("img");
+            img.src = src || "assets/images/placeholder-1.png";
+            cell.appendChild(img); grid.appendChild(cell);
+          });
+
+          const title = get("title", "");
+          const tWrap = R.querySelector(".title");
+          R.querySelector(".ttext").textContent = title;
+          if (!title) tWrap.style.display = "none";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(grid.querySelectorAll(".cell"), { opacity: 0, scale: 1.08 }, { opacity: 1, scale: 1, duration: 0.55, ease: "power2.out", stagger: 0.12 }, 0);
+          // slow shared drift so the mosaic isn't static
+          tl.fromTo(grid.querySelectorAll(".cell img"), { scale: 1.0 }, { scale: 1.08, duration: 9, ease: "none" }, 0);
+          if (title) tl.fromTo(tWrap, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.5);
+          window.__timelines["image-grid"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

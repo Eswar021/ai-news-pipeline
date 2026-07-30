@@ -7,12 +7,17 @@ Run from the project root with the main project Python, not `.venv-voiceover`::
     python3 -m src.pipeline.orchestration.runner content \
       --run-id current
     python3 -m src.pipeline.orchestration.runner voiceover \
-      --run-id current --script-source app --synthesis-mode final
+      --run-id current --synthesis-mode final
     python3 -m src.pipeline.orchestration.runner voiceover \
-      --run-id current --script-source app --synthesis-mode preview
+      --run-id current --synthesis-mode preview
+    python3 -m src.pipeline.orchestration.runner visuals \
+      --run-id current
 
-The visuals stage was removed from this pipeline; visual generation is handled by
-a separate downstream project that consumes the script + voiceover outputs.
+The visuals stage is a thin trigger for the self-contained ``video_engine/`` tool:
+it resolves the run's selected voiceover package and invokes the engine's portable
+``render-episode.mjs`` over a subprocess boundary. The engine has no dependency on
+the pipeline (and vice versa), so it is reusable by any project that emits the same
+voiceover-package contract.
 
 Module configs are reloaded from their stage YAML immediately before execution
 by default. Use ``--config-mode frozen`` only when reproducing the exact config
@@ -76,9 +81,8 @@ def _build_parser() -> argparse.ArgumentParser:
     content.add_argument("--stop-after")
     content.add_argument("--no-resume", action="store_true")
 
-    voiceover = subparsers.add_parser("voiceover", help="Synthesize the selected script and finalize metadata.")
+    voiceover = subparsers.add_parser("voiceover", help="Synthesize the native script and finalize metadata.")
     _add_common_arguments(voiceover, default_run_id="current")
-    voiceover.add_argument("--script-source", choices=("auto", "app", "native", "chatgpt"), default="auto")
     voiceover.add_argument(
         "--synthesis-mode",
         choices=("preview", "final"),
@@ -93,6 +97,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--config-overrides-json",
         help="Optional JSON object merged into the effective voiceover config for this invocation.",
     )
+
+    visuals = subparsers.add_parser("visuals", help="Render the episode video from the run's voiceover via video_engine.")
+    _add_common_arguments(visuals, default_run_id="current")
+    visuals.add_argument("--video-engine-dir", default="video_engine", help="Path (relative to project root) to the video_engine tool.")
+    visuals.add_argument("--node-bin", default="node", help="Node executable used to launch the visual engine.")
+    visuals.add_argument("--deterministic", action="store_true", help="Use the no-LLM bridge instead of the LLM art-director.")
+    visuals.add_argument("--units", type=int, help="Dev slice: only plan the first N audio units.")
+    visuals.add_argument("--skip-render", action="store_true", help="Stop after building index.html — no MP4.")
 
     return parser
 
@@ -152,7 +164,6 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
     elif args.stage == "voiceover":
         request["config"] = {
             "config_mode": args.config_mode,
-            "script_source": args.script_source,
             "synthesis_mode": args.synthesis_mode,
             "variant": args.variant,
             "voiceover_python": args.voiceover_python,
@@ -164,6 +175,15 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
             if not isinstance(overrides, dict):
                 raise ValueError("--config-overrides-json must decode to a JSON object")
             request["input"]["voiceover_config_overrides"] = overrides
+    elif args.stage == "visuals":
+        request["config"] = {
+            "config_mode": args.config_mode,
+            "video_engine_dir": args.video_engine_dir,
+            "node_bin": args.node_bin,
+            "deterministic": args.deterministic,
+            "units": args.units,
+            "skip_render": args.skip_render,
+        }
     return request
 
 
@@ -179,6 +199,10 @@ def _stage_function(stage: str) -> StageFunction:
         return run
     if stage == "voiceover":
         from .stages.voiceover import run
+
+        return run
+    if stage == "visuals":
+        from .stages.visuals import run
 
         return run
     raise ValueError(f"Unknown stage: {stage}")

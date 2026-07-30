@@ -1,0 +1,81 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"How the models reached Hugging Face"},
+  {"id":"steps","type":"string","label":"Steps (array of strings)","default":""},
+  {"id":"highlight","type":"number","label":"Highlight step index","default":-1}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --surface:#161C26; --text:#E6EDF3; --text-dim:#8B94A3;
+          --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.12);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 100% at 50% 12%, #16202F 0%, var(--bg) 52%, #06090E 100%); }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column;
+          align-items:center; justify-content:center; padding:0 120px; }
+        .title { font-family:var(--fm); font-size:30px; letter-spacing:0.10em; text-transform:uppercase;
+          color:var(--accent); font-weight:700; margin-bottom:74px; text-align:center; }
+        .flow { display:flex; align-items:center; justify-content:center; gap:20px; }
+        .step { position:relative; background:var(--surface); border:1.5px solid var(--border);
+          border-radius:16px; padding:30px 30px; width:300px; min-height:150px; display:flex;
+          align-items:center; justify-content:center; text-align:center; will-change:transform; }
+        .step .num { position:absolute; top:-20px; left:-20px; width:48px; height:48px; border-radius:50%;
+          background:var(--accent); color:#0B0E14; font-family:var(--fm); font-weight:700; font-size:24px;
+          display:flex; align-items:center; justify-content:center; }
+        .step .lbl { font-size:33px; font-weight:700; line-height:1.16; }
+        .step.on { border-color:var(--accent); box-shadow:0 0 34px rgba(255,138,61,0.28); }
+        .arrow { flex:none; will-change:transform; transform-origin:left center; }
+        .arrow svg { width:74px; height:26px; display:block; }
+      </style>
+
+      <div id="root" data-composition-id="flow-sequence" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="stage">
+          <div class="title ttext"></div>
+          <div class="flow"></div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="flow-sequence"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const title = get("title", "How the models reached Hugging Face");
+          let steps = V.steps;
+          if (!Array.isArray(steps)) steps = ["Sandbox: installs only", "Zero-day in the proxy", "Escalate + hop machines", "RCE → production DB"];
+          const hlRaw = (V.highlight !== undefined && V.highlight !== null && V.highlight !== "") ? parseInt(V.highlight, 10) : -1;
+          const highlight = hlRaw >= 0 ? hlRaw : steps.length - 1; // default: emphasize the outcome
+
+          R.querySelector(".ttext").textContent = title;
+          if (!title) R.querySelector(".title").style.display = "none";
+
+          const flow = R.querySelector(".flow");
+          const ARROW = '<svg viewBox="0 0 74 26"><line x1="3" y1="13" x2="58" y2="13" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/><path d="M52 5 L67 13 L52 21" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+          steps.forEach((s, i) => {
+            if (i > 0) { const a = document.createElement("div"); a.className = "arrow"; a.innerHTML = ARROW; flow.appendChild(a); }
+            const st = document.createElement("div"); st.className = "step" + (i === highlight ? " on" : "");
+            const num = document.createElement("div"); num.className = "num"; num.textContent = i + 1;
+            const lbl = document.createElement("div"); lbl.className = "lbl"; lbl.textContent = s;
+            st.appendChild(num); st.appendChild(lbl); flow.appendChild(st);
+          });
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".title"), { opacity: 0, y: -16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0);
+          tl.fromTo(R.querySelectorAll(".step"), { opacity: 0, y: 26, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.6)", stagger: 0.5 }, 0.2);
+          tl.fromTo(R.querySelectorAll(".arrow"), { opacity: 0, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 0.35, ease: "power2.out", stagger: 0.5 }, 0.55);
+          window.__timelines["flow-sequence"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

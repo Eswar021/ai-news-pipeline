@@ -71,9 +71,20 @@ def make_project(tmp_path: Path) -> Path:
         "parsing_diagnostics": {"ok": True},
     }) + "\n")
     write_text(good / "orchestration" / "logs" / "content.log", "INFO start\nWARNING partial\nERROR none\n")
-    final_video = good / "visuals" / "assembly" / "final_video.mp4"
+    final_video = good / "visuals" / "run_good-ad.mp4"
     final_video.parent.mkdir(parents=True, exist_ok=True)
     final_video.write_bytes(b"fixture-mp4-data")
+    write_json(good / "orchestration" / "visuals_stage_result.json", {
+        "status": "ok",
+        "data": {
+            "run_id": "run_good",
+            "stage": "visuals",
+            "episode_path": "output/runs/run_good/visuals/run_good-ad.mp4",
+            "visuals_dir": "output/runs/run_good/visuals",
+        },
+        "summary": {"engine": "video_engine/scripts/pipeline/render-episode.mjs", "art_director": "llm", "units": None, "rendered": True},
+        "handoff": {"episode_rendered": True},
+    })
 
     for variant in ["variant_a", "variant_b"]:
         base = good / "voiceover" / variant
@@ -247,9 +258,8 @@ def test_catalog_centralizes_workflow_help_and_generation_provenance(tmp_path: P
         "content",
         "voiceover",
         "visuals",
-        "publish",
     ]
-    assert len(catalog["modules"]) == 19
+    assert len(catalog["modules"]) == 11
     assert catalog["help"]["raw_mode"].startswith("The exact persisted")
     assert catalog["origins"]["llm"]["label"] == "LLM-generated"
     assert "Stable evidence identity" in catalog["glossary"]["record key"]
@@ -330,7 +340,7 @@ def test_jsonl_payload_expansion_and_range_streaming(tmp_path: Path) -> None:
 
     video = client.get(
         "/api/media",
-        params={"path": "output/runs/run_good/visuals/assembly/final_video.mp4"},
+        params={"path": "output/runs/run_good/visuals/run_good-ad.mp4"},
         headers={"Range": "bytes=8-10"},
     )
     assert video.status_code == 206
@@ -353,7 +363,7 @@ def test_workflow_and_record_lineage_use_deterministic_artifacts(tmp_path: Path)
     workflow = client.get("/api/runs/run_good/workflow")
     assert workflow.status_code == 200
     stages = workflow.json()["stages"]
-    assert [stage["key"] for stage in stages] == ["ingestion", "content", "voiceover", "visuals", "publish"]
+    assert [stage["key"] for stage in stages] == ["ingestion", "content", "voiceover", "visuals"]
     assert [module["name"] for module in stages[1]["modules"]] == [
         "evidence_prep",
         "editorial_triage",
@@ -375,7 +385,7 @@ def test_workflow_and_record_lineage_use_deterministic_artifacts(tmp_path: Path)
     selected = client.get("/api/runs/run_good/records/record_1")
     assert selected.status_code == 200
     selected_steps = selected.json()["stages"]
-    assert len(selected_steps) == 19
+    assert len(selected_steps) == 11
     metadata_step = next(step for step in selected_steps if step["key"] == "metadata_creator")
     assert metadata_step["status"] == "episode_level"
     assert metadata_step["data"]["article_tags_created"] is False

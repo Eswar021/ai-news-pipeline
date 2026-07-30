@@ -1,0 +1,25 @@
+# Brand family (round 2) — episode-open, logo-reveal, logo-wall, outro.
+scenes:
+  - component: episode-open
+    duration: 4
+    params:
+      kicker: "THE AI ROUNDUP"
+      title: "Five stories that moved AI this week"
+      subtitle: "Week of July 21"
+  - component: logo-reveal
+    duration: 3.5
+    transition: zoom
+    params: { entity: NVIDIA }
+  - component: logo-wall
+    duration: 4
+    transition: dip
+    params:
+      title: "This week's players"
+      entities: ["OpenAI", "NVIDIA", "Google Cloud", "Anthropic", "Hugging Face", "Meta"]
+  - component: outro
+    duration: 4
+    transition: crossfade
+    params:
+      title: "That's the week."
+      subtitle: "Back soon with whatever breaks next"
+      handle: "@theairoundup"

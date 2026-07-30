@@ -1,0 +1,102 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"Anatomy of the attack"},
+  {"id":"subject","type":"string","label":"Center subject","default":"AI agent"},
+  {"id":"annotations","type":"string","label":"Annotations (JSON array of {label,note})","default":"[{\"label\":\"Zero-day\",\"note\":\"found in the proxy\"},{\"label\":\"Privilege escalation\",\"note\":\"hopped machines\"},{\"label\":\"Exfiltration\",\"note\":\"pulled the answers\"},{\"label\":\"RCE\",\"note\":\"on production\"}]"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --surface:#161C26; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.14);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(120% 110% at 50% 45%, #16202F 0%, var(--bg) 52%, #06090E 100%); }
+        .title { position:absolute; top:120px; width:100%; text-align:center; font-family:var(--fm);
+          font-size:32px; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); font-weight:700; }
+        svg { position:absolute; inset:0; width:1920px; height:1080px; }
+        .lead { stroke:var(--accent-2); stroke-width:2.5; fill:none; opacity:0.65; }
+        .subject { position:absolute; left:960px; top:540px; transform:translate(-50%,-50%);
+          background:radial-gradient(120% 160% at 50% 0%, rgba(255,138,61,0.18), var(--surface) 70%);
+          border:2px solid var(--accent); border-radius:22px; padding:44px 64px; font-size:56px; font-weight:800;
+          box-shadow:0 0 46px rgba(255,138,61,0.24); white-space:nowrap; will-change:transform; }
+        .ann { position:absolute; transform:translate(-50%,-50%); background:var(--surface); border:1.5px solid var(--border);
+          border-left:5px solid var(--accent-2); border-radius:14px; padding:22px 30px; max-width:420px; will-change:transform; }
+        .ann .l { font-size:36px; font-weight:800; letter-spacing:-0.01em; }
+        .ann .n { font-family:var(--fm); font-size:24px; color:var(--text-dim); margin-top:6px; }
+        .ann .dot { position:absolute; width:16px; height:16px; border-radius:50%; background:var(--accent-2); box-shadow:0 0 14px var(--accent-2); }
+      </style>
+
+      <div id="root" data-composition-id="schematic" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="title ttext"></div>
+        <svg viewBox="0 0 1920 1080"><g class="leads"></g></svg>
+        <div class="subject stext"></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="schematic"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const parseArr = (v) => { try { const a = typeof v === "string" ? JSON.parse(v) : v; return Array.isArray(a) ? a : []; } catch { return []; } };
+          const title = get("title", ""); const tEl = R.querySelector(".ttext"); tEl.textContent = title; if (!title) tEl.style.display = "none";
+          R.querySelector(".stext").textContent = get("subject", "AI agent");
+          const anns = parseArr(get("annotations", "[]")).slice(0, 4);
+
+          const cx = 960, cy = 540;
+          const slotsByN = {
+            1: [[430, 540]],
+            2: [[360, 540], [1560, 540]],
+            3: [[360, 400], [1560, 400], [960, 900]],
+            4: [[360, 350], [1560, 350], [360, 770], [1560, 770]],
+          };
+          const slots = slotsByN[anns.length] || slotsByN[4];
+          // connect from a box's EDGE (not centre) so lines never cross the cards or subject
+          const boxHalf = { w: 205, h: 84 };   // centre subject
+          const cardHalf = { w: 220, h: 68 };  // annotation card
+          const edge = (px, py, tx, ty, h) => {
+            const dx = tx - px, dy = ty - py;
+            const t = Math.min(h.w / (Math.abs(dx) || 1e-6), h.h / (Math.abs(dy) || 1e-6));
+            return [px + dx * t, py + dy * t];
+          };
+          const leads = R.querySelector(".leads");
+          const els = anns.map((a, i) => {
+            const [x, y] = slots[i];
+            const [x1, y1] = edge(x, y, cx, cy, cardHalf); // card edge toward centre
+            const [x2, y2] = edge(cx, cy, x, y, boxHalf);  // subject edge toward card
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", x1); line.setAttribute("y1", y1); line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+            line.setAttribute("class", "lead"); leads.appendChild(line);
+            const el = document.createElement("div"); el.className = "ann";
+            el.style.left = x + "px"; el.style.top = y + "px";
+            el.innerHTML = '<div class="l"></div><div class="n"></div>';
+            el.querySelector(".l").textContent = a.label || "";
+            const nEl = el.querySelector(".n"); nEl.textContent = a.note || ""; if (!a.note) nEl.style.display = "none";
+            R.appendChild(el);
+            return { el, line };
+          });
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(tEl, { opacity: 0, y: -14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 0);
+          tl.fromTo(R.querySelector(".subject"), { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.55, ease: "back.out(1.6)" }, 0.2);
+          els.forEach((e, i) => {
+            const at = 0.55 + i * 0.16;
+            const len = e.line.getTotalLength();
+            e.line.style.strokeDasharray = len;
+            tl.fromTo(e.line, { strokeDashoffset: len }, { strokeDashoffset: 0, duration: 0.4, ease: "power2.out" }, at);
+            tl.fromTo(e.el, { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(1.5)" }, at + 0.15);
+          });
+          window.__timelines["schematic"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

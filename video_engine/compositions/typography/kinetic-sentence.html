@@ -1,0 +1,68 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"text","type":"string","label":"Sentence (wrap emphasis in *asterisks*)","default":"OpenAI'"'"'s own models *broke into* Hugging Face — *mid-test.*"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute; inset: 0; overflow: hidden;
+          --bg:#0B0E14; --text:#E6EDF3; --text-dim:#8B94A3;
+          --accent:#FF8A3D; --accent-2:#3DD6D0;
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 110% at 50% 50%, #131B28 0%, var(--bg) 55%, #06090E 100%); }
+        .grid { position:absolute; inset:0;
+          background-image:radial-gradient(rgba(230,237,243,0.07) 1px, transparent 1.4px);
+          background-size:46px 46px;
+          -webkit-mask:radial-gradient(70% 60% at 50% 50%, #000 20%, transparent 100%);
+          mask:radial-gradient(70% 60% at 50% 50%, #000 20%, transparent 100%); }
+        .stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:0 190px; }
+        .line { font-size:90px; font-weight:700; line-height:1.2; letter-spacing:-0.015em;
+          text-align:center; max-width:1560px; margin:0; }
+        .line .w { display:inline-block; }
+        .line .em { color:var(--accent); font-weight:900; }
+      </style>
+
+      <div id="root" data-composition-id="kinetic-sentence" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="grid"></div>
+        <div class="stage"><p class="line"></p></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="kinetic-sentence"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const text = (V.text !== undefined && V.text !== null && V.text !== "")
+            ? V.text : "OpenAI's own models *broke into* Hugging Face — *mid-test.*";
+
+          // Parse *emphasis* markers into per-word tokens.
+          const lineEl = R.querySelector(".line");
+          lineEl.textContent = "";
+          String(text).split("*").forEach((seg, i) => {
+            const em = (i % 2 === 1);
+            seg.split(/\s+/).filter(Boolean).forEach((w) => {
+              const s = document.createElement("span");
+              s.className = em ? "w em" : "w"; s.textContent = w;
+              lineEl.appendChild(s);
+              lineEl.appendChild(document.createTextNode(" "));
+            });
+          });
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelectorAll(".line .w"), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.34, ease: "power2.out", stagger: 0.1 }, 0.1);
+          const em = R.querySelectorAll(".line .em");
+          if (em.length) tl.fromTo(em, { scale: 1.3 }, { scale: 1, duration: 0.42, ease: "back.out(2.2)", stagger: 0.1 }, 0.45);
+          window.__timelines["kinetic-sentence"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

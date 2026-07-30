@@ -1,0 +1,81 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"Wistron built it twice"},
+  {"id":"before","type":"string","label":"Before","default":"Digital twin"},
+  {"id":"after","type":"string","label":"After","default":"Real factory"},
+  {"id":"caption","type":"string","label":"Transform caption","default":"then built for real"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --surface:#161C26; --text:#E6EDF3; --text-dim:#8B94A3;
+          --accent:#FF8A3D; --accent-2:#3DD6D0; --border:rgba(230,237,243,0.12);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(130% 100% at 50% 12%, #16202F 0%, var(--bg) 52%, #06090E 100%); }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column;
+          align-items:center; justify-content:center; padding:0 120px; }
+        .title { font-family:var(--fm); font-size:30px; letter-spacing:0.10em; text-transform:uppercase;
+          color:var(--accent); font-weight:700; margin-bottom:70px; text-align:center; }
+        .ba { display:flex; align-items:center; justify-content:center; gap:56px; }
+        .card { width:560px; min-height:300px; border-radius:22px; padding:50px; display:flex;
+          align-items:center; justify-content:center; text-align:center; will-change:transform; }
+        .card.before { background:var(--surface); border:1.5px solid var(--border); }
+        .card.after { background:radial-gradient(120% 120% at 50% 0%, rgba(255,138,61,0.14), var(--surface) 70%);
+          border:1.5px solid var(--accent); box-shadow:0 0 46px rgba(255,138,61,0.22); }
+        .card .big { font-size:58px; font-weight:800; letter-spacing:-0.01em; line-height:1.1; }
+        .card.before .big { color:var(--text-dim); }
+        .transform { display:flex; flex-direction:column; align-items:center; gap:18px; flex:none; }
+        .transform .cap { font-family:var(--fm); font-size:24px; letter-spacing:0.1em; text-transform:uppercase;
+          color:var(--accent-2); max-width:230px; text-align:center; line-height:1.3; }
+        .transform svg { width:96px; height:34px; display:block; }
+      </style>
+
+      <div id="root" data-composition-id="before-after" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="stage">
+          <div class="title ttext"></div>
+          <div class="ba">
+            <div class="card before"><div class="big btext"></div></div>
+            <div class="transform">
+              <div class="cap ctext"></div>
+              <svg viewBox="0 0 96 34"><line x1="4" y1="17" x2="76" y2="17" stroke="var(--accent)" stroke-width="5" stroke-linecap="round"/><path d="M68 6 L88 17 L68 28" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="card after"><div class="big atext"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="before-after"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          R.querySelector(".ttext").textContent = get("title", "Wistron built it twice");
+          if (!get("title", "x")) R.querySelector(".title").style.display = "none";
+          R.querySelector(".btext").textContent = get("before", "Digital twin");
+          R.querySelector(".atext").textContent = get("after", "Real factory");
+          const cap = get("caption", "then built for real");
+          R.querySelector(".ctext").textContent = cap;
+          if (!cap) R.querySelector(".cap").style.display = "none";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".title"), { opacity: 0, y: -16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0);
+          tl.fromTo(R.querySelector(".card.before"), { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 0.2);
+          tl.fromTo(R.querySelector(".transform svg"), { opacity: 0, scaleX: 0, transformOrigin: "left center" }, { opacity: 1, scaleX: 1, duration: 0.45, ease: "power2.out" }, 0.6);
+          tl.fromTo(R.querySelector(".transform .cap"), { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }, 0.7);
+          tl.fromTo(R.querySelector(".card.after"), { opacity: 0, x: 40, scale: 0.94 }, { opacity: 1, x: 0, scale: 1, duration: 0.65, ease: "back.out(1.5)" }, 0.85);
+          window.__timelines["before-after"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,76 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"left","type":"string","label":"Left image (local)","default":"assets/images/placeholder-1.png"},
+  {"id":"right","type":"string","label":"Right image (local)","default":"assets/images/placeholder-2.png"},
+  {"id":"leftLabel","type":"string","label":"Left label","default":"Build it yourself"},
+  {"id":"rightLabel","type":"string","label":"Right label","default":"Rent off-the-shelf"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root { position:absolute; inset:0; overflow:hidden; background:#06090E;
+          --accent:#FF8A3D; --text:#E6EDF3;
+          --fm:"JetBrains Mono",ui-monospace,monospace; }
+        .split { position:absolute; inset:0; display:flex; }
+        .panel { flex:1; position:relative; overflow:hidden; }
+        .panel .img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; will-change:transform; }
+        .panel .scrim { position:absolute; left:0; right:0; bottom:0; height:220px;
+          background:linear-gradient(to top, rgba(5,8,12,0.9), transparent); }
+        .panel .label { position:absolute; bottom:54px; left:54px; font-family:var(--fm);
+          font-size:30px; font-weight:700; color:var(--text); letter-spacing:0.02em;
+          display:flex; align-items:center; gap:14px; }
+        .panel .label .dot { width:12px; height:12px; border-radius:3px; background:var(--accent); flex:none; }
+        .divider { position:absolute; left:50%; top:0; bottom:0; width:5px; background:var(--accent);
+          transform:translateX(-50%); transform-origin:top center; box-shadow:0 0 24px rgba(255,138,61,0.5); }
+      </style>
+
+      <div id="root" data-composition-id="side-by-side" data-width="1920" data-height="1080">
+        <div class="split">
+          <div class="panel left">
+            <img class="img" src="assets/images/placeholder-1.png" alt="" />
+            <div class="scrim"></div>
+            <div class="label"><span class="dot"></span><span class="ltext"></span></div>
+          </div>
+          <div class="panel right">
+            <img class="img" src="assets/images/placeholder-2.png" alt="" />
+            <div class="scrim"></div>
+            <div class="label"><span class="dot"></span><span class="rtext"></span></div>
+          </div>
+        </div>
+        <div class="divider"></div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="side-by-side"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const left = get("left", "assets/images/placeholder-1.png");
+          const right = get("right", "assets/images/placeholder-2.png");
+          const leftLabel = get("leftLabel", "");
+          const rightLabel = get("rightLabel", "");
+
+          const lp = R.querySelector(".panel.left");
+          const rp = R.querySelector(".panel.right");
+          lp.querySelector(".img").src = left;
+          rp.querySelector(".img").src = right;
+          R.querySelector(".ltext").textContent = leftLabel;
+          R.querySelector(".rtext").textContent = rightLabel;
+          if (!leftLabel) lp.querySelector(".label").style.display = "none";
+          if (!rightLabel) rp.querySelector(".label").style.display = "none";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(lp.querySelector(".img"), { opacity: 0, scale: 1.1 }, { opacity: 1, scale: 1.0, duration: 0.7, ease: "power3.out", overwrite: "auto" }, 0);
+          tl.fromTo(rp.querySelector(".img"), { opacity: 0, scale: 1.1 }, { opacity: 1, scale: 1.0, duration: 0.7, ease: "power3.out", overwrite: "auto" }, 0.15);
+          tl.fromTo(R.querySelector(".divider"), { scaleY: 0 }, { scaleY: 1, duration: 0.55, ease: "power3.out" }, 0.4);
+          if (leftLabel) tl.fromTo(lp.querySelector(".label"), { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out", overwrite: "auto" }, 0.55);
+          if (rightLabel) tl.fromTo(rp.querySelector(".label"), { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out", overwrite: "auto" }, 0.65);
+          window.__timelines["side-by-side"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

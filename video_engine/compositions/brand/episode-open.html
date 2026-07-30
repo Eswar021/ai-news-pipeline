@@ -1,0 +1,77 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"kicker","type":"string","label":"Show / brand line","default":"THE AI ROUNDUP"},
+  {"id":"title","type":"string","label":"Episode promise","default":"Five stories that moved AI this week"},
+  {"id":"subtitle","type":"string","label":"Date / episode label","default":""}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --text:#E6EDF3; --text-dim:#8B94A3; --accent:#FF8A3D; --accent-2:#3DD6D0;
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0;
+          background:radial-gradient(140% 120% at 50% 14%, #16202F 0%, var(--bg) 52%, #06090E 100%); }
+        .grid { position:absolute; left:-100px; top:-100px; width:2120px; height:1280px; opacity:0.5;
+          background-image:radial-gradient(rgba(230,237,243,0.09) 1.4px, transparent 1.4px); background-size:56px 56px;
+          will-change:transform; }
+        .vig { position:absolute; inset:0; background:radial-gradient(115% 95% at 50% 42%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.6) 100%); }
+        .stage { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 150px; }
+        .kick { display:flex; align-items:center; gap:18px; font-family:var(--fm); font-size:32px; letter-spacing:0.22em;
+          text-transform:uppercase; color:var(--accent); font-weight:700; margin-bottom:44px; }
+        .kick .dot { width:12px; height:12px; border-radius:50%; background:var(--accent); }
+        .title { font-size:104px; font-weight:800; letter-spacing:-0.02em; line-height:1.04; text-align:center; max-width:1500px; }
+        .title .w { display:inline-block; }
+        .rule { width:0; height:6px; background:var(--accent); border-radius:3px; margin-top:52px; }
+        .sub { font-family:var(--fm); font-size:30px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); margin-top:38px; }
+      </style>
+
+      <div id="root" data-composition-id="episode-open" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="grid"></div>
+        <div class="vig"></div>
+        <div class="stage">
+          <div class="kick"><span class="dot"></span><span class="ktext"></span></div>
+          <div class="title ttext"></div>
+          <div class="rule"></div>
+          <div class="sub stext"></div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="episode-open"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          R.querySelector(".ktext").textContent = get("kicker", "THE AI ROUNDUP");
+          const title = get("title", "Five stories that moved AI this week");
+          const sub = get("subtitle", "");
+          const tEl = R.querySelector(".ttext");
+          tEl.textContent = "";
+          String(title).split(/\s+/).filter(Boolean).forEach((w) => {
+            const s = document.createElement("span"); s.className = "w"; s.textContent = w;
+            tEl.appendChild(s); tEl.appendChild(document.createTextNode(" "));
+          });
+          const sEl = R.querySelector(".stext");
+          sEl.textContent = sub;
+          if (!sub) sEl.style.display = "none";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".grid"), { x: 0, y: 0 }, { x: -40, y: -24, duration: 8, ease: "none" }, 0);
+          tl.fromTo(R.querySelector(".kick"), { opacity: 0, y: -16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.1);
+          tl.fromTo(tEl.querySelectorAll(".w"), { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out", stagger: 0.06 }, 0.3);
+          tl.fromTo(R.querySelector(".rule"), { width: 0 }, { width: 220, duration: 0.6, ease: "power2.out" }, 0.9);
+          tl.fromTo(sEl, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 1.1);
+          window.__timelines["episode-open"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

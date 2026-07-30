@@ -1,0 +1,67 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"primary","type":"string","label":"Primary (name)","default":"Jensen Huang"},
+  {"id":"secondary","type":"string","label":"Secondary (role)","default":"Founder & CEO · NVIDIA"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute; inset: 0; overflow: hidden;
+          --bg:#0B0E14; --text:#E6EDF3; --text-dim:#8B94A3;
+          --accent:#FF8A3D; --accent-2:#3DD6D0;
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif;
+          --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        /* Transparent overlay: composites over a media layer below (or the
+           composition bg when standalone). Only the scrim + strip paint. */
+        .scrim { position:absolute; left:0; right:0; bottom:0; height:460px;
+          background:linear-gradient(to top, rgba(5,8,12,0.94) 8%, rgba(5,8,12,0.5) 45%, transparent 100%); }
+        .lt { position:absolute; left:120px; bottom:150px; display:flex; align-items:stretch; gap:26px; }
+        .lt .accentbar { width:8px; background:var(--accent); border-radius:4px; transform-origin:bottom; }
+        .lt .body { display:flex; flex-direction:column; justify-content:center; }
+        .lt .primary { font-size:76px; font-weight:900; letter-spacing:-0.02em; line-height:1.0; }
+        .lt .secondary { margin-top:16px; font-family:var(--fm); font-size:30px; color:var(--text-dim);
+          letter-spacing:0.02em; font-weight:400; display:flex; align-items:center; gap:14px; }
+        .lt .secondary .dot { width:8px; height:8px; border-radius:50%; background:var(--accent-2); flex:none; }
+      </style>
+
+      <div id="root" data-composition-id="lower-third" data-width="1920" data-height="1080">
+        <div class="scrim"></div>
+        <div class="lt">
+          <div class="accentbar"></div>
+          <div class="body">
+            <div class="primary"></div>
+            <div class="secondary"><span class="dot"></span><span class="stext"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="lower-third"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
+          const primary = get("primary", "Jensen Huang");
+          const secondary = get("secondary", "Founder & CEO · NVIDIA");
+
+          R.querySelector(".primary").textContent = primary;
+          const secEl = R.querySelector(".secondary");
+          R.querySelector(".stext").textContent = secondary;
+          if (!secondary) secEl.style.display = "none";
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(R.querySelector(".scrim"), { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power1.out" }, 0);
+          tl.fromTo(R.querySelector(".accentbar"), { scaleY: 0 }, { scaleY: 1, duration: 0.5, ease: "power3.out" }, 0.25);
+          tl.fromTo(R.querySelector(".primary"), { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 0.35);
+          if (secondary) tl.fromTo(secEl, { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 0.5);
+          window.__timelines["lower-third"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>
