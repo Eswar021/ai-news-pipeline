@@ -112,15 +112,6 @@ def _normalize_story_beats(
                 "support_truth_ids": [],
                 "creative_device": "none",
                 "delivery_direction": dict(transition_delivery or _neutral_delivery_direction()),
-                "visual_goal": "Orient the viewer to the next story without interrupting narration flow.",
-                "visual_brief": {
-                    "purpose": "Introduce the next story while its title appears and narration continues.",
-                    "visual_intent": "story_title",
-                    "preferred_asset_types": ["logo", "source_page", "kinetic_text"],
-                    "must_show": [],
-                    "on_screen_text": "",
-                    "avoid": ["silent title slide", "paragraph text"],
-                },
             }
         )
     raw.extend(drafts)
@@ -148,8 +139,6 @@ def _normalize_bookend_beats(
             "support_truth_ids": [],
             "creative_device": "none",
             "beat_function": _bookend_beat_function(section_type, draft.get("beat_type", "")),
-            "visual_goal": clean_text((draft.get("visual_brief") or {}).get("purpose"))
-            or "Support the episode bookend without adding production language to narration.",
         }
         for draft in drafts
     ]
@@ -173,7 +162,6 @@ def _normalize_beats(
         narration = clean_text(draft.get("narration_text"))
         if not narration:
             raise ValueError(f"{section_id} beat {order} has empty narration")
-        visual_brief = dict(draft.get("visual_brief") or {})
         beats.append(
             {
                 "beat_id": f"{section_id}_beat_{order:02d}",
@@ -188,10 +176,6 @@ def _normalize_beats(
                 "support_truth_ids": dedupe(list(draft.get("support_truth_ids") or [])),
                 "creative_device": clean_text(draft.get("creative_device")) or "none",
                 "delivery_direction": dict(draft.get("delivery_direction") or _neutral_delivery_direction()),
-                "visual_goal": clean_text(draft.get("visual_goal"))
-                or clean_text(visual_brief.get("purpose"))
-                or "Visually reinforce the active narration beat.",
-                "visual_brief": visual_brief,
             }
         )
     return beats

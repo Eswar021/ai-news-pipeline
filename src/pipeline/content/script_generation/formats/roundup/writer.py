@@ -8,7 +8,6 @@ from typing import Any
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, ValidationError as PydanticValidationError
 
-from .asset_hints import build_story_asset_hints
 from .llm_logging import build_llm_call_log
 from .models import (
     BookendOutput,
@@ -103,10 +102,6 @@ def generate_roundup_script(
         "story_truth_indexes": truth_indexes,
         "story_context_packets": context_packets,
         "story_source_briefs": source_briefs,
-        "story_asset_hints": [
-            build_story_asset_hints(story, truth_indexes[index])
-            for index, story in enumerate(_ordered_stories(video_packet))
-        ],
         "bookends": bookends,
         "review": {
             "enabled": bool(script_cfg.get("review", {}).get("enabled", True)),
@@ -359,9 +354,8 @@ def _write_one_story(
     sid = story_id(story)
     truth_index = dict(context_packet.get("story_truth_index") or {})
     context_telemetry = dict(context_packet.get("telemetry") or {})
-    story_asset_hints = build_story_asset_hints(story, truth_index)
     payload = {
-        "task": "Write only this story's body as useful audiovisual narration beats.",
+        "task": "Write only this story's body as spoken narration beats.",
         "required_story_id": sid,
         "story_role": plan.get("role", ""),
         "writing_guidance": plan.get("writing_guidance", {}),
@@ -370,7 +364,6 @@ def _write_one_story(
         "storytelling_policy": script_cfg["storytelling"],
         "director_brief": brief,
         "story_context_packet": context_packet,
-        "available_story_assets": story_asset_hints,
         "allowed_source_record_keys": source_record_keys(story),
         "previous_story_preview": _story_preview(previous_story),
         "next_story_preview": _story_preview(next_story),
@@ -378,9 +371,9 @@ def _write_one_story(
             "Do not write the episode intro, conclusion, or transition into this story.",
             "Treat suggested_words as soft guidance, never as a quota.",
             "Finish when the story is clear; do not add repetition, filler, or generic commentary to make it longer.",
-            "Each beat must be a coherent spoken unit that can anchor one or more visuals.",
-            "Prefer one visual thought per beat. A beat is usually one or two spoken sentences and roughly 8-12 seconds, but this is creative guidance rather than a quota.",
-            "Split a beat when the visual job changes, such as moving from source proof to mechanism, comparison, reaction, or payoff.",
+            "Each beat must be a coherent spoken unit.",
+            "A beat is usually one or two spoken sentences and roughly 8-12 seconds, but this is creative guidance rather than a quota.",
+            "Split a beat when the editorial job changes, such as moving from setup to mechanism, comparison, reaction, or payoff.",
             "Use only source_record_keys from this assigned story.",
             "Do not put camera directions inside narration_text.",
             "Use support_truth_ids and source_record_keys as invisible production metadata; never speak those IDs aloud.",
@@ -429,7 +422,6 @@ def _write_one_story(
             "director_brief": brief,
             "story_context_packet": context_packet,
             "beat_support_context": _beat_support_context(current, truth_index),
-            "available_story_assets": story_asset_hints,
             "allowed_source_record_keys": source_record_keys(story),
             "current_segment": current,
         }
@@ -532,7 +524,6 @@ def write_bookends(
             "The conclusion should leave one useful thought or a clean signoff, not introduce a new reported fact.",
             "Treat suggested word counts as soft guidance, never as quotas.",
             "Finish each bookend when it has done its editorial job; never pad it with filler or repetition.",
-            "Visual briefs are directions for downstream planning, never spoken narration.",
             "Vary connector shapes; do not march through First, Next, Now, Then, and Finally.",
             "Avoid generic technology-collides, AI-is-reshaping-everything, and whirlwind-tour language.",
             "Do not place a paraphrase inside quotation marks. Use quotation marks only for exact wording already present in the completed story bodies.",

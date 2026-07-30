@@ -10,19 +10,9 @@ Run from the project root with the main project Python, not `.venv-voiceover`::
       --run-id current --script-source app --synthesis-mode final
     python3 -m src.pipeline.orchestration.runner voiceover \
       --run-id current --script-source app --synthesis-mode preview
-    python3 -m src.pipeline.orchestration.runner visuals \
-      --run-id current --plan-source generate --render-mode preview
 
-Fast visual code iteration reuses the saved plan and assets, renders only the
-named scenes, and stops before assembly::
-
-    python3 -m src.pipeline.orchestration.runner visuals \
-      --run-id current --plan-source generate \
-      --render-mode preview --from-module visual_render \
-      --stop-after visual_render --scene-id scene_003
-
-Use ``--render-backend hyperframes`` for the optional HyperFrames renderer;
-omit it to use the profile's configured backend.
+The visuals stage was removed from this pipeline; visual generation is handled by
+a separate downstream project that consumes the script + voiceover outputs.
 
 Module configs are reloaded from their stage YAML immediately before execution
 by default. Use ``--config-mode frozen`` only when reproducing the exact config
@@ -104,19 +94,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional JSON object merged into the effective voiceover config for this invocation.",
     )
 
-    visuals = subparsers.add_parser("visuals", help="Plan, resolve, render, assemble, and review visuals.")
-    _add_common_arguments(visuals, default_run_id="current")
-    visuals.add_argument("--script-source", choices=("auto", "app", "native", "chatgpt"), default="auto")
-    visuals.add_argument("--voiceover-variant")
-    visuals.add_argument("--plan-source", choices=("generate", "chatgpt"), default="generate")
-    visuals.add_argument("--render-mode", choices=("preview", "final"), default="preview")
-    visuals.add_argument("--render-backend", choices=("remotion", "hyperframes"))
-    visuals.add_argument("--scene-id", action="append", default=[], dest="selected_scene_ids")
-    visuals.add_argument("--story-id", action="append", default=[], dest="selected_story_ids")
-    visuals.add_argument("--from-module")
-    visuals.add_argument("--stop-after")
-    visuals.add_argument("--no-resume", action="store_true")
-    visuals.add_argument("--skip-publish-handoff", action="store_true")
     return parser
 
 
@@ -187,21 +164,6 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
             if not isinstance(overrides, dict):
                 raise ValueError("--config-overrides-json must decode to a JSON object")
             request["input"]["voiceover_config_overrides"] = overrides
-    else:
-        request["config"] = {
-            "config_mode": args.config_mode,
-            "script_source": args.script_source,
-            "voiceover_variant": args.voiceover_variant,
-            "plan_source": args.plan_source,
-            "render_mode": args.render_mode,
-            "render_backend": args.render_backend,
-            "selected_scene_ids": args.selected_scene_ids,
-            "selected_story_ids": args.selected_story_ids,
-            "resume_completed": not args.no_resume,
-            "from_module": args.from_module,
-            "stop_after": args.stop_after,
-            "create_publish_handoff": not args.skip_publish_handoff,
-        }
     return request
 
 
@@ -219,9 +181,7 @@ def _stage_function(stage: str) -> StageFunction:
         from .stages.voiceover import run
 
         return run
-    from .stages.visuals import run
-
-    return run
+    raise ValueError(f"Unknown stage: {stage}")
 
 
 def _validate_host_runtime(stage: str) -> None:

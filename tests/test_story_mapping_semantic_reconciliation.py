@@ -764,6 +764,151 @@ def test_final_slate_review_replaces_duplicate_story(monkeypatch) -> None:
     assert result["summary"]["focused_duplicate_group_count"] == 1
 
 
+def test_focused_duplicate_audit_repairs_unresolved_review(monkeypatch) -> None:
+    stories = [
+        {
+            "story_id": f"story_{index}",
+            "story_title": title,
+            "records": [
+                {
+                    "record_key": f"record_{index}",
+                    "title": title,
+                    "url": f"https://example.com/{index}",
+                    "content": f"Complete source context for {title}.",
+                }
+            ],
+        }
+        for index, title in enumerate(
+            ("Kimi K3 launch", "Kimi K3 preview", "GPT-Red", "New hardware"),
+            start=1,
+        )
+    ]
+    selector_draft = RoundupSlateDraft.model_validate(
+        {
+            "episode_shape": "mixed_news_roundup",
+            "episode_thesis": "",
+            "ordering_rationale": "Initial slate.",
+            "selected": [
+                {"story_id": "candidate_001", "role": "lead", "selection_reason": "Lead.", "viewer_payoff": "Kimi.", "confidence": 0.9},
+                {"story_id": "candidate_002", "role": "major", "selection_reason": "Second Kimi.", "viewer_payoff": "More Kimi.", "confidence": 0.8},
+                {"story_id": "candidate_003", "role": "brief", "selection_reason": "Security.", "viewer_payoff": "Useful.", "confidence": 0.8},
+            ],
+            "non_selected": [
+                {"story_id": "candidate_004", "action": "reserve", "reason": "Alternate.", "confidence": 0.7}
+            ],
+            "human_review_warning": "",
+        }
+    )
+    duplicate_audit = RoundupDuplicateAudit.model_validate(
+        {
+            "assessments": [
+                {
+                    "story_id": "candidate_001",
+                    "event_summary": "Moonshot releases Kimi K3.",
+                    "duplicate_group_id": "duplicate_1",
+                    "reason": "Named coverage of the Kimi K3 launch.",
+                },
+                {
+                    "story_id": "candidate_002",
+                    "event_summary": "A digest previews the same Kimi K3 launch.",
+                    "duplicate_group_id": "duplicate_1",
+                    "reason": "Indirect coverage of the same release cycle.",
+                },
+                {
+                    "story_id": "candidate_003",
+                    "event_summary": "A distinct GPT-Red story.",
+                    "duplicate_group_id": "",
+                    "reason": "Different event and product.",
+                },
+            ],
+            "duplicate_story_groups": [
+                {
+                    "group_id": "duplicate_1",
+                    "story_ids": ["candidate_001", "candidate_002"],
+                    "relationship": "same_editorial_story",
+                    "preferred_story_id": "candidate_001",
+                    "reason": "Both stories cover the Kimi K3 launch.",
+                }
+            ],
+            "audit_summary": "One duplicate group was found.",
+        }
+    )
+    reviewer_draft = RoundupSlateReviewDraft.model_validate(
+        {
+            "episode_shape": "mixed_news_roundup",
+            "episode_thesis": "",
+            "ordering_rationale": "Still unresolved.",
+            "selected": [
+                {"story_id": "candidate_001", "role": "lead", "selection_reason": "Stronger Kimi context.", "viewer_payoff": "Kimi.", "confidence": 0.95},
+                {"story_id": "candidate_002", "role": "major", "selection_reason": "Second Kimi.", "viewer_payoff": "More Kimi.", "confidence": 0.8},
+                {"story_id": "candidate_003", "role": "brief", "selection_reason": "Security.", "viewer_payoff": "Useful.", "confidence": 0.85},
+            ],
+            "non_selected": [
+                {"story_id": "candidate_004", "action": "reserve", "reason": "Distinct hardware story.", "confidence": 0.8}
+            ],
+            "human_review_warning": "",
+            "review_changed": True,
+            "review_reason": "Tried to resolve duplicate coverage.",
+            "duplicate_story_groups": [],
+        }
+    )
+
+    class FakeLLM:
+        def with_structured_output(self, output_model, include_raw):
+            assert include_raw is True
+            if output_model is RoundupSlateDraft:
+                parsed = selector_draft
+            elif output_model is RoundupDuplicateAudit:
+                parsed = duplicate_audit
+            else:
+                parsed = reviewer_draft
+            return RunnableLambda(
+                lambda _prompt: {"parsed": parsed, "raw": None, "parsing_error": None}
+            )
+
+    monkeypatch.setattr(selection_app, "make_llm", lambda **_kwargs: FakeLLM())
+    result = selection_app.run(
+        {
+            "run": {"run_id": "slate_review_repair_fixture"},
+            "config": {
+                "provider": "openai",
+                "model": "fixture",
+                "prompt_version": "v1",
+                "min_stories": 3,
+                "max_stories": 3,
+                "max_candidate_stories": 10,
+                "screening_shortlist_per_batch": 5,
+                "max_attempts": 2,
+                "channel": {"channel_name": "Fixture AI"},
+                "slate_review": {
+                    "enabled": True,
+                    "prompt_version": "v1",
+                    "max_attempts": 2,
+                    "duplicate_audit_enabled": True,
+                    "duplicate_audit_prompt_version": "v1",
+                },
+            },
+            "input": {
+                "story_mapping": {
+                    "status": "ok",
+                    "data": {
+                        "run_id": "slate_review_repair_fixture",
+                        "stories": stories,
+                    },
+                }
+            },
+        }
+    )
+
+    slate = result["data"]["editorial_slate"]
+    assert result["status"] == "ok"
+    assert slate["selected_story_ids"] == ["story_1", "story_3", "story_4"]
+    assert {item["story_id"] for item in slate["reserve"]} == {"story_2"}
+    assert result["summary"]["focused_duplicate_repaired"] is True
+    assert result["summary"]["focused_duplicate_group_count"] == 1
+    assert len(slate["decision_ledger"]) == len(stories)
+
+
 def test_editorial_screening_preserves_wide_finalist_target() -> None:
     stories = [{"story_id": f"story_{index}"} for index in range(18)]
 

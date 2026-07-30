@@ -416,6 +416,8 @@ def test_editorial_triage_uses_bounded_unresolved_fallback(monkeypatch) -> None:
     assert result["status"] == "partial"
     assert attempts["count"] == 6
     assert result["summary"]["unresolved_count"] == 7
+    assert "fixture provider failure" in result["summary"]["failure_reason"]
+    assert result["summary"]["failed_batch_errors"][0]["error"] == "fixture provider failure"
     assert result["handoff"]["ready_for_story_mapping"] is False
     assert all(item["recommended_action"] == "reserve" for item in result["data"]["decisions"])
 

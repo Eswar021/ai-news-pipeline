@@ -13,7 +13,6 @@ from src.pipeline.orchestration.stages.ingestion import (
     _run_collection,
     _validate_news_collection_credentials,
 )
-from src.pipeline.orchestration.stages.visuals import VisualsOptions, _focused_render_scope
 from src.pipeline.orchestration.stages.content import ContentOptions, _write_outputs
 from src.pipeline.orchestration.stages.common import (
     StageConfigResolver,
@@ -266,62 +265,6 @@ def test_fixture_scenario_seeds_canonical_artifacts(tmp_path: Path) -> None:
     assert result["status"] == "ok"
     assert (run_dir / "video_packaging" / "video_packaging_result.json").is_file()
     assert (run_dir / "script_generation" / "script_generation_result.json").is_file()
-    assert (run_dir / "fixtures" / "media_roundup_reference" / "visual_scene_planning_result_template.json").is_file()
-
-
-def test_runner_builds_explicit_visual_backend_override(monkeypatch, capsys) -> None:
-    captured: dict = {}
-
-    def fake_stage(request: dict) -> dict:
-        captured.update(request)
-        return {
-            "status": "ok",
-            "data": {"run_id": request["run"]["run_id"]},
-            "summary": {},
-            "handoff": {"ready_for_manual_review": True},
-        }
-
-    monkeypatch.setattr(runner, "_stage_function", lambda _stage: fake_stage)
-    exit_code = runner.main(
-        [
-            "visuals",
-            "--run-id",
-            "run_test",
-            "--render-backend",
-            "hyperframes",
-            "--environment",
-            "dev",
-            "--stop-after",
-            "visual_render",
-            "--scene-id",
-            "scene_003",
-        ]
-    )
-
-    assert exit_code == 0
-    assert captured["config"]["render_backend"] == "hyperframes"
-    assert captured["config"]["stop_after"] == "visual_render"
-    assert captured["config"]["selected_scene_ids"] == ["scene_003"]
-    assert captured["run"]["config_environment"] == "dev"
-
-
-def test_focused_visual_render_uses_stable_isolated_scope() -> None:
-    first = _focused_render_scope(
-        VisualsOptions(selected_scene_ids=["scene_003", "scene_001"])
-    )
-    second = _focused_render_scope(
-        VisualsOptions(selected_scene_ids=["scene_001", "scene_003"])
-    )
-
-    assert first == second
-    assert first.startswith("backend_profile_mode_preview_scene_scene_001")
-    assert first != _focused_render_scope(
-        VisualsOptions(
-            render_backend="hyperframes",
-            selected_scene_ids=["scene_001", "scene_003"],
-        )
-    )
-    assert _focused_render_scope(VisualsOptions()) == ""
 
 
 def test_runner_returns_a_structured_cli_failure(monkeypatch, capsys) -> None:

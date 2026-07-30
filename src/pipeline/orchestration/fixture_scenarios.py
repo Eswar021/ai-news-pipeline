@@ -17,10 +17,8 @@ from typing import Any
 
 import yaml
 
-from src.pipeline.orchestration.artifact_selection import resolve_voiceover_package
 from src.pipeline.orchestration.io import load_json, write_json
-from src.pipeline.orchestration.run_context import create_run_context, load_run_context
-from src.pipeline.visuals.planner.retime import bind_visual_plan_result, retime_visual_plan_result
+from src.pipeline.orchestration.run_context import create_run_context
 
 
 SCHEMA_VERSION = "pipeline_fixture_scenario_v1"
@@ -30,20 +28,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
     try:
-        if args.command == "seed":
-            result = seed_scenario(
-                project_root=Path(args.project_root),
-                output_root=Path(args.output_root),
-                scenario=args.scenario,
-                fixture_root=Path(args.fixture_root),
-            )
-        else:
-            result = bind_visual_plan(
-                project_root=Path(args.project_root),
-                output_root=Path(args.output_root),
-                run_id=args.run_id,
-                voiceover_variant=args.voiceover_variant,
-            )
+        result = seed_scenario(
+            project_root=Path(args.project_root),
+            output_root=Path(args.output_root),
+            scenario=args.scenario,
+            fixture_root=Path(args.fixture_root),
+        )
     except Exception as exc:
         result = {
             "status": "failed",
@@ -100,16 +90,11 @@ def seed_scenario(
     (script_dir / "full_script.txt").write_text(full_script, encoding="utf-8")
 
     fixture_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(
-        scenario_dir / artifacts["visual_plan_template"],
-        fixture_dir / "visual_scene_planning_result_template.json",
-    )
     write_json(
         run_dir / "fixture_scenario.json",
         {
             **deepcopy(spec),
             "scenario_source": str(scenario_dir),
-            "visual_plan_template": str(fixture_dir / "visual_scene_planning_result_template.json"),
         },
     )
     return {
@@ -122,57 +107,6 @@ def seed_scenario(
         },
         "summary": {"seeded_artifact_count": 3},
         "handoff": {"ready_for_preview_voiceover": True},
-    }
-
-
-def bind_visual_plan(
-    *,
-    project_root: Path,
-    output_root: Path,
-    run_id: str,
-    voiceover_variant: str | None,
-) -> dict[str, Any]:
-    root = project_root.expanduser().resolve()
-    output = output_root if output_root.is_absolute() else root / output_root
-    context = load_run_context(output_root=output, run_id=run_id)
-    run_dir = Path(context["run_dir"])
-    fixture_spec = load_json(run_dir / "fixture_scenario.json")
-    script_result = load_json(run_dir / "script_generation" / "script_generation_result.json")
-    script_provenance = script_result["data"]["script_package"]["provenance"]
-    _, voiceover_package = resolve_voiceover_package(
-        run_dir=run_dir,
-        run_id=str(context["run_id"]),
-        script_fingerprint=script_provenance["script_fingerprint"],
-        variant=voiceover_variant,
-    )
-    voiceover_provenance = voiceover_package["provenance"]
-    duration = float((voiceover_package.get("audio") or {}).get("duration_seconds") or 0)
-    if duration <= 0:
-        raise ValueError("selected fixture voiceover has no positive duration")
-    template = load_json(Path(fixture_spec["visual_plan_template"]))
-    retimed = retime_visual_plan_result(template, duration)
-    bound = bind_visual_plan_result(
-        retimed,
-        run_id=str(context["run_id"]),
-        script_provenance=script_provenance,
-        voiceover_provenance=voiceover_provenance,
-    )
-    planning_dir = run_dir / "visuals" / "planning" / "chatgpt"
-    write_json(planning_dir / "visual_scene_planning_result.json", bound)
-    write_json(planning_dir / "visual_scene_plan.json", bound["data"]["visual_scene_plan"])
-    write_json(planning_dir / "summary.json", bound.get("summary", {}))
-    return {
-        "status": "ok",
-        "data": {
-            "run_id": context["run_id"],
-            "visual_plan_path": str(planning_dir / "visual_scene_planning_result.json"),
-            "voiceover_variant": voiceover_variant or "auto",
-        },
-        "summary": {
-            "scene_count": len(bound["data"]["visual_scene_plan"]["scene_timeline"]),
-            "duration_seconds": duration,
-        },
-        "handoff": {"ready_for_fixture_visuals": True},
     }
 
 
@@ -206,11 +140,6 @@ def _parser() -> argparse.ArgumentParser:
     seed.add_argument("--fixture-root", default="tests/fixtures")
     seed.add_argument("--project-root", default=".")
     seed.add_argument("--output-root", default="output/tests")
-    bind = subparsers.add_parser("bind-visual-plan", help="Bind the curated plan to a generated preview voiceover.")
-    bind.add_argument("--run-id", default="fixture_media_roundup_reference")
-    bind.add_argument("--voiceover-variant")
-    bind.add_argument("--project-root", default=".")
-    bind.add_argument("--output-root", default="output/tests")
     return parser
 
 

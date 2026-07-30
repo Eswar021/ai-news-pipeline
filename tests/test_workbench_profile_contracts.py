@@ -12,12 +12,6 @@ from src.pipeline.content.metadata_creator.contract import MetadataConfig
 from src.pipeline.content.script_generation.formats.roundup.contract import RoundupScriptConfig
 from src.pipeline.content.story_mapping.contract import StoryMappingConfig
 from src.pipeline.content.video_packaging.contract import VideoPackagingConfig
-from src.pipeline.visuals.assembly.contract import VideoAssemblyConfig
-from src.pipeline.visuals.asset_resolver.contract import AssetResolverConfig
-from src.pipeline.visuals.media_discovery.contract import VisualMediaConfig
-from src.pipeline.visuals.planner.contract import VisualPlannerConfig
-from src.pipeline.visuals.render.contract import VisualRenderConfig
-from src.pipeline.visuals.review.contract import VisualReviewConfig
 from src.pipeline.voiceover.contract import VoiceoverConfig
 
 
@@ -58,21 +52,7 @@ def test_default_workbench_profile_composes_into_public_configs() -> None:
     RoundupScriptConfig.model_validate(profile["script_generation"])
     MetadataConfig.model_validate({**profile["metadata_creator"], "channel": channel})
 
-    visuals = profile["visuals"]
-    VisualPlannerConfig.model_validate(visuals["planner"])
-    VisualMediaConfig.model_validate(
-        _with_output_dir(visuals["media_discovery"], "media_discovery")
-    )
-    AssetResolverConfig.model_validate(
-        _with_output_dir(visuals["asset_resolver"], "asset_resolver")
-    )
-    assert visuals["asset_resolver"]["source_screenshots"]["target_miss_policy"] == "partial"
-    assert visuals["asset_resolver"]["logos"]["favicon_fallback_enabled"] is False
-    VisualRenderConfig.model_validate(_with_output_dir(visuals["render"], "render"))
-    VideoAssemblyConfig.model_validate(
-        _with_output_dir(visuals["assembly"], "assembly")
-    )
-    VisualReviewConfig.model_validate(_with_output_dir(visuals["review"], "review"))
+    assert "visuals" not in profile
     VoiceoverConfig.model_validate(_with_output_dir(profile["voiceover"], "voiceover"))
     preview_voiceover = deepcopy(profile["voiceover"])
     preview_voiceover.update(profile["voiceover_preview"])
@@ -105,24 +85,16 @@ def test_environment_overlays_change_only_declared_module_behavior() -> None:
     staging = ConfigRepository(WORKBENCH_PATH, environment="staging")
     profile_name = production.default_profile
 
-    production_planner = production.module(profile_name, "visuals", "planner")
-    development_planner = development.module(profile_name, "visuals", "planner")
-    production_render = production.module(profile_name, "visuals", "render")
-    development_render = development.module(profile_name, "visuals", "render")
     production_script = production.module(profile_name, "content", "script_generation")
     development_script = development.module(profile_name, "content", "script_generation")
     staging_script = staging.module(profile_name, "content", "script_generation")
 
-    assert production_planner.value["llm_roles"]["story_visual_planner"]["provider"] == "deepseek"
-    assert development_planner.value["llm_roles"]["story_visual_planner"]["provider"] == "openai"
-    assert production_render.value["backend"] == "hyperframes"
-    assert development_render.value["backend"] == "remotion"
     assert production_script.value["llm_roles"]["story_writer"]["model"] == "deepseek-v4-pro"
     assert staging_script.value["llm_roles"]["story_writer"]["model"] == "deepseek-v4-pro"
     assert development_script.value["llm_roles"]["story_writer"]["model"] == "gpt-4o-mini"
-    assert production_planner.sha256 != development_planner.sha256
-    assert production_planner.source_paths[-1].endswith("visuals/planner.yaml")
-    assert "environments/dev.yaml" in development_planner.source_paths
+    assert production_script.sha256 != development_script.sha256
+    assert production_script.source_paths[-1].endswith("content/script_generation.yaml")
+    assert "environments/dev.yaml" in development_script.source_paths
 
 
 def test_manifest_exposes_stage_ownership_and_default_dev_environment() -> None:

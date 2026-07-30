@@ -28,17 +28,6 @@ ClaimFrame = Literal[
     "allegation",
     "planned_or_proposed",
 ]
-VisualRole = Literal[
-    "none",
-    "source_proof",
-    "quote",
-    "counter",
-    "comparison",
-    "trend",
-    "process",
-    "example",
-    "context_media",
-]
 
 class TruthItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -56,8 +45,6 @@ class TruthItem(BaseModel):
     value_text: str = ""
     claim_frame: ClaimFrame
     editorial_use: str
-    visual_role: VisualRole
-    visual_opportunity: str = ""
     classification_basis: Literal["llm_semantic_brief"] = "llm_semantic_brief"
 
 
@@ -133,8 +120,6 @@ def build_story_truth_index(
                 value_text=value_text,
                 claim_frame=detail.claim_frame,
                 editorial_use=clean_text(detail.editorial_use),
-                visual_role=detail.visual_role,
-                visual_opportunity=clean_text(detail.visual_opportunity),
             )
         )
 

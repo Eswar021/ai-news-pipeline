@@ -58,8 +58,8 @@ Each section object must contain:
 - `section_id`
 - `narration_text`, equal to the spoken beat texts joined in order
 - `beats`, a list of objects with `beat_type`, `beat_function`,
-  `narration_text`, `source_record_keys`, `creative_device`,
-  `delivery_direction`, `visual_goal`, and `visual_brief`
+  `narration_text`, `source_record_keys`, `creative_device`, and
+  `delivery_direction`
 
 Use `beat_function` values from `story_hook`, `setup`, `reveal`, `explanation`,
 `example`, `reaction`, `comic_release`, `consequence`, `caveat`, `payoff`, and
@@ -79,17 +79,6 @@ Each `delivery_direction` is silent performance metadata and must contain:
 
 Do not put bracketed acting tags in `narration_text`. Vary performance across
 beats rather than making the whole episode fast or enthusiastic.
-
-Each `visual_brief` must contain:
-- `purpose`
-- `visual_intent`: one of `story_title`, `source_proof`, `entity_intro`,
-  `product_demo`, `metric_explainer`, `process_explainer`, `comparison`,
-  `context_media`, `transition`, or `takeaway`
-- `preferred_asset_types`: values chosen from `source_page`, `product_ui`,
-  `logo`, `photo`, `video`, `chart`, `diagram`, or `kinetic_text`
-- `must_show`
-- `on_screen_text`
-- `avoid`
 
 Use only source record keys contained in the assigned story. Intro and closing
 beats use an empty source-record list. The role-based suggested words in

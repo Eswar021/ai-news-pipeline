@@ -87,6 +87,7 @@ def run(input_json: dict) -> dict:
         max_batch_context_chars=int(config["max_batch_context_chars"]),
     )
     failed_batch_count = 0
+    failed_batch_errors: list[dict[str, Any]] = []
 
     for batch_index, batch in enumerate(batches, start=1):
         batch_decisions: list[dict[str, Any]] | None = None
@@ -107,6 +108,13 @@ def run(input_json: dict) -> dict:
                 last_error = str(exc)
         if batch_decisions is None:
             failed_batch_count += 1
+            failed_batch_errors.append(
+                {
+                    "batch_index": batch_index,
+                    "record_count": len(batch),
+                    "error": clean_text(last_error),
+                }
+            )
             batch_decisions = [
                 _unresolved_decision(record, batch_index, last_error)
                 for record in batch
@@ -115,7 +123,10 @@ def run(input_json: dict) -> dict:
 
     failure_reason = ""
     if failed_batch_count:
+        first_error = clean_text(failed_batch_errors[0].get("error")) if failed_batch_errors else ""
         failure_reason = f"{failed_batch_count} of {len(batches)} triage batches were unresolved"
+        if first_error:
+            failure_reason = f"{failure_reason}; first_error={first_error}"
     return _response(
         run_id=run_id,
         generated_at=generated_at,
@@ -127,6 +138,7 @@ def run(input_json: dict) -> dict:
         mode=config["mode"],
         story_mapping_actions=config["story_mapping_actions"],
         context_telemetry=context_telemetry,
+        failed_batch_errors=failed_batch_errors,
     )
 
 
@@ -405,6 +417,7 @@ def _response(
     mode: str,
     story_mapping_actions: list[str],
     context_telemetry: dict[str, Any] | None = None,
+    failed_batch_errors: list[dict[str, Any]] | None = None,
 ) -> dict:
     unresolved_count = sum(1 for item in decisions if item.get("decision_source") == "unresolved")
     action_counts = dict(Counter(item.get("recommended_action", "unknown") for item in decisions))
@@ -456,6 +469,7 @@ def _response(
             "failed_batch_count": failed_batch_count,
             "llm_call_count": len(llm_calls),
             "failure_reason": failure_reason,
+            "failed_batch_errors": failed_batch_errors or [],
             "source_context": context_telemetry or {},
         },
         handoff={

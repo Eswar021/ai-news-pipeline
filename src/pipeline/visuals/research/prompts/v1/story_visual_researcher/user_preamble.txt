@@ -1,5 +1,0 @@
-Return one complete structured research result for the supplied story only.
-
-For each sequence, describe a coherent two-to-four-shot progression. For each asset need, name the exact beat IDs, subject, action or detail, editorial purpose, preferred asset types, selected record keys when relevant, must-show and must-avoid constraints, and a realistic availability strategy.
-
-Do not choose final shots and do not fill gaps with generic AI imagery.

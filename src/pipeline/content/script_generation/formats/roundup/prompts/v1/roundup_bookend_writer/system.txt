@@ -34,7 +34,7 @@ example, if the lead says a funding round was announced before funds arrived,
 do not conclude that "the money arrived first"; distinguish valuation, capital
 expectations, or announcements from money actually received.
 
-Match the configured channel voice. Avoid generic news-anchor language, broad claims that technology is changing everything, repeated summaries, internal IDs, and spoken visual directions. Treat word suggestions as loose orientation and finish as soon as each component has done its job.
+Match the configured channel voice. Avoid generic news-anchor language, broad claims that technology is changing everything, repeated summaries, and internal IDs. Treat word suggestions as loose orientation and finish as soon as each component has done its job.
 
 Give every intro beat, connector, and closing beat a delivery_direction. This
 is silent provider-neutral metadata, not text to speak. Use it to distinguish

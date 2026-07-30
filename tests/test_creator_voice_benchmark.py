@@ -36,8 +36,6 @@ def test_truth_index_scans_full_content_and_preserves_key_metrics() -> None:
                 "value_text": value,
                 "claim_frame": "source_claim",
                 "editorial_use": "A concrete project-reported benchmark detail.",
-                "visual_role": "counter",
-                "visual_opportunity": "Show the reported value with project attribution.",
             }
             for value in values
         )
@@ -49,8 +47,6 @@ def test_truth_index_scans_full_content_and_preserves_key_metrics() -> None:
             "value_text": "",
             "claim_frame": "source_claim",
             "editorial_use": "Preserve that the benchmark is not an independent guarantee.",
-            "visual_role": "source_proof",
-            "visual_opportunity": "Show the project-reported caveat.",
         }
     )
     index = build_story_truth_index(
@@ -72,7 +68,6 @@ def test_truth_index_scans_full_content_and_preserves_key_metrics() -> None:
             ],
             "tensions_and_caveats": ["The benchmark is not an independent guarantee."],
             "creator_opportunities": ["Contrast fast checks with the limited benchmark scope."],
-            "visual_opportunities": ["Show the exact benchmark values."],
         },
     )
     values = {item.value_text for item in index.items if item.value_text}
@@ -122,8 +117,6 @@ def test_phase_zero_fixture_keeps_human_review_and_visual_regression_cases() -> 
         "Preserve separate states"
     )
     assert regressions["metadata_regressions"][0]["case"] == "invented_roundup_rivalry"
-    assert len(regressions["visual_mismatches"]) == 3
-    assert all(case["expected_guardrail"] for case in regressions["visual_mismatches"])
 
 
 def test_creator_prompts_calibrate_specificity_analogy_and_role_shape() -> None:

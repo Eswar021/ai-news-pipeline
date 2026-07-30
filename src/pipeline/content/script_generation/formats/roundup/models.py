@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
 
@@ -52,28 +52,6 @@ StoryEngine = Literal[
     "cautionary_failure",
 ]
 EpisodeShape = Literal["shared_tension", "curated_roundup"]
-VisualIntent = Literal[
-    "story_title",
-    "source_proof",
-    "entity_intro",
-    "product_demo",
-    "metric_explainer",
-    "process_explainer",
-    "comparison",
-    "context_media",
-    "transition",
-    "takeaway",
-]
-AssetType = Literal[
-    "source_page",
-    "product_ui",
-    "logo",
-    "photo",
-    "video",
-    "chart",
-    "diagram",
-    "kinetic_text",
-]
 TruthType = Literal[
     "event",
     "metric",
@@ -92,17 +70,6 @@ ClaimFrame = Literal[
     "forecast",
     "allegation",
     "planned_or_proposed",
-]
-VisualRole = Literal[
-    "none",
-    "source_proof",
-    "quote",
-    "counter",
-    "comparison",
-    "trend",
-    "process",
-    "example",
-    "context_media",
 ]
 DeliveryPace = Literal["deliberate", "measured", "conversational", "brisk", "rapid"]
 DeliveryEnergy = Literal["restrained", "warm", "engaged", "animated", "punchy"]
@@ -124,10 +91,6 @@ class SourceDetailDraft(BaseModel):
     )
     claim_frame: ClaimFrame
     editorial_use: str
-    visual_role: VisualRole
-    visual_opportunity: str = Field(
-        description="A source-specific visual opportunity, or an empty string when no useful visual follows from this detail."
-    )
 
     @field_validator("record_key", "source_note", "editorial_use")
     @classmethod
@@ -192,7 +155,6 @@ class StorySourceBriefOutput(BaseModel):
     )
     tensions_and_caveats: list[str]
     creator_opportunities: list[str]
-    visual_opportunities: list[str]
 
     @field_validator("story_id", "source_synopsis", "central_event", "source_relationship_summary")
     @classmethod
@@ -256,26 +218,6 @@ def story_source_brief_output_model(
     )
 
 
-class VisualBriefDraft(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    purpose: str = Field(description="What the viewer should understand from the visual while this beat is spoken.")
-    visual_intent: VisualIntent
-    preferred_asset_types: list[AssetType] = Field(
-        description="Ordered asset families that can communicate this beat; return an empty list when none apply."
-    )
-    must_show: list[str] = Field(description="Concrete visual requirements; return an empty list when none apply.")
-    on_screen_text: str = Field(description="A short optional phrase, never a narration paragraph.")
-    avoid: list[str] = Field(description="Visual mistakes to avoid; return an empty list when none apply.")
-
-    @field_validator("purpose")
-    @classmethod
-    def purpose_must_not_be_empty(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("visual brief purpose must not be empty")
-        return value.strip()
-
-
 class DeliveryDirectionDraft(BaseModel):
     """Provider-neutral performance intent kept outside spoken narration."""
 
@@ -312,25 +254,16 @@ class StoryBeatDraft(BaseModel):
         description="Truth IDs supporting externally verifiable claims; empty is valid for pure opinion or creative language."
     )
     creative_device: CreativeDevice
-    visual_goal: str = Field(description="What the viewer should understand or feel while this beat is spoken.")
     source_record_keys: list[str] = Field(
         description="Assigned source record keys grounding the beat; use an empty list only for non-factual transitions."
     )
     delivery_direction: DeliveryDirectionDraft
-    visual_brief: VisualBriefDraft
 
     @field_validator("narration_text")
     @classmethod
     def narration_must_not_be_empty(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("beat narration_text must not be empty")
-        return value.strip()
-
-    @field_validator("visual_goal")
-    @classmethod
-    def visual_goal_must_not_be_empty(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("beat visual_goal must not be empty")
         return value.strip()
 
 
@@ -376,7 +309,6 @@ class StoryDirectionBrief(BaseModel):
         description="Why humor should be restrained for this story, or null when normal channel restraint is sufficient."
     )
     transition_relationship: str
-    visual_payoffs: list[str] = Field(description="Concrete moments worth showing or explaining visually.")
     avoid: list[str] = Field(description="Story-specific pitfalls; return an empty list only when none apply.")
 
     @field_validator(
@@ -434,7 +366,6 @@ ReviewIssueCode = Literal[
     "repetition",
     "unsupported_claim",
     "source_meaning_distortion",
-    "visual_mismatch",
     "fabricated_or_inexact_quote",
     "missing_attribution",
     "connector_target_mismatch",
@@ -489,7 +420,6 @@ class BookendBeatDraft(BaseModel):
     beat_type: Literal["hook", "intro", "conclusion", "takeaway"]
     narration_text: str
     delivery_direction: DeliveryDirectionDraft
-    visual_brief: VisualBriefDraft
 
 
 class StoryConnectorDraft(BaseModel):

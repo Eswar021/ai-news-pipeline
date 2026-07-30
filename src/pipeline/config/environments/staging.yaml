@@ -7,7 +7,3 @@ modules:
   voiceover:
     voiceover_preview:
       provider: kokoro_local
-  visuals:
-    render:
-      backend: remotion
-      active_mode: preview

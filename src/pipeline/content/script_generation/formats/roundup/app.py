@@ -120,7 +120,6 @@ def run(input_json: dict) -> dict:
         handoff={
             "ready_for_metadata_creation": status == "ok",
             "ready_for_voiceover": status == "ok",
-            "ready_for_visual_planning": status == "ok",
         },
         llm_calls=llm_calls,
     )
@@ -163,7 +162,6 @@ def _build_script_package(
         "story_segments": generated["story_segments"],
         "story_truth_indexes": generated["story_truth_indexes"],
         "story_context_packets": generated["story_context_packets"],
-        "story_asset_hints": generated["story_asset_hints"],
         "bookends": generated["bookends"],
         "review": generated["review"],
         "sections": assembled["sections"],
@@ -212,7 +210,6 @@ def _failed_response(
         "story_segments": [],
         "story_truth_indexes": [],
         "story_context_packets": [],
-        "story_asset_hints": [],
         "bookends": {},
         "review": {
             "enabled": bool(config.get("review", {}).get("enabled", True)),
@@ -260,7 +257,6 @@ def _failed_response(
         handoff={
             "ready_for_metadata_creation": False,
             "ready_for_voiceover": False,
-            "ready_for_visual_planning": False,
         },
         llm_calls=llm_calls,
     )

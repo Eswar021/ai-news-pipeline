@@ -22,16 +22,6 @@ from src.pipeline.content.story_mapping.cluster_reconciler import (
 )
 from src.pipeline.content.story_mapping.event_identity import EventIdentityOutput
 from src.pipeline.content.story_mapping.story_label import StoryLabelOutput
-from src.pipeline.visuals.media_discovery.semantic_verifier import (
-    MediaCandidateVerificationBatch,
-)
-from src.pipeline.visuals.media_discovery.clip_selector import VideoClipSelection
-from src.pipeline.visuals.planner.app import (
-    EpisodeDirectorDraft,
-    StoryVisualPlanDraft,
-    _story_visual_plan_output_model,
-    _story_visual_edit_output_model,
-)
 
 
 def _strict_schema_failures(schema: dict, path: str = "root") -> list[str]:
@@ -57,16 +47,6 @@ def _strict_schema_failures(schema: dict, path: str = "root") -> list[str]:
 
 
 def test_all_active_llm_output_models_are_openai_strict_schema_compatible() -> None:
-    active_story_plan = _story_visual_plan_output_model(
-        [
-            "source_article_scene",
-            "context_image_scene",
-            "logo_reveal_scene",
-            "editorial_text_scene",
-            "simple_explainer_scene",
-            "story_transition_scene",
-        ]
-    )
     models = (
         TriageBatchOutput,
         PairDecisionBatch,
@@ -82,12 +62,6 @@ def test_all_active_llm_output_models_are_openai_strict_schema_compatible() -> N
         EpisodeDirectorOutput,
         StoryReviewOutput,
         BookendReviewOutput,
-        EpisodeDirectorDraft,
-        StoryVisualPlanDraft,
-        active_story_plan,
-        _story_visual_edit_output_model(active_story_plan),
-        MediaCandidateVerificationBatch,
-        VideoClipSelection,
     )
 
     for model in models:

@@ -22,15 +22,6 @@ profiles:
       voiceover:
         voiceover: profiles/daily_48h_all_sources/voiceover/voiceover.yaml
         voiceover_preview: profiles/daily_48h_all_sources/voiceover/voiceover_preview.yaml
-      visuals:
-        research: profiles/daily_48h_all_sources/visuals/research.yaml
-        asset_catalog: profiles/daily_48h_all_sources/visuals/asset_catalog.yaml
-        planner: profiles/daily_48h_all_sources/visuals/planner.yaml
-        media_discovery: profiles/daily_48h_all_sources/visuals/media_discovery.yaml
-        asset_resolver: profiles/daily_48h_all_sources/visuals/asset_resolver.yaml
-        render: profiles/daily_48h_all_sources/visuals/render.yaml
-        assembly: profiles/daily_48h_all_sources/visuals/assembly.yaml
-        review: profiles/daily_48h_all_sources/visuals/review.yaml
       publishing:
         metadata_finalizer: profiles/daily_48h_all_sources/publishing/metadata_finalizer.yaml
         publish_handoff: profiles/daily_48h_all_sources/publishing/publish_handoff.yaml

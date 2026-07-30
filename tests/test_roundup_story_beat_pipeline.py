@@ -33,18 +33,9 @@ from src.pipeline.content.video_packaging.formats.roundup import build_roundup_p
 from src.pipeline.contracts import (
     build_artifact_provenance,
     validate_artifact_provenance,
-    visual_plan_artifact_payload,
     voiceover_artifact_payload,
 )
 from src.pipeline.handoffs.chatgpt_script_parser import run as parse_chatgpt_script
-from src.pipeline.handoffs.chatgpt_visual_plan_parser import run as parse_chatgpt_visual_plan
-from src.pipeline.visuals.common import voiceover_chunks
-from src.pipeline.visuals.planner.app import (
-    _build_script_units,
-    _compact_scene_timeline,
-    _sections_from_script_generation_sections,
-    _unit_time_slices,
-)
 from src.pipeline.voiceover.contract import VoiceoverRequest
 from src.pipeline.voiceover import script_units as voice_script_units
 from src.pipeline.voiceover import app as voice_app
@@ -131,8 +122,6 @@ def test_source_research_schema_binds_story_and_record_identifiers() -> None:
                 "value_text": "",
                 "claim_frame": "reported_fact",
                 "editorial_use": "Explain what happened.",
-                "visual_role": "source_proof",
-                "visual_opportunity": "Show the source page.",
             }
         ],
         "meaning_boundaries": [
@@ -146,7 +135,6 @@ def test_source_research_schema_binds_story_and_record_identifiers() -> None:
         ],
         "tensions_and_caveats": [],
         "creator_opportunities": [],
-        "visual_opportunities": [],
     }
     assert model.model_validate(valid_payload).story_id == "story_kimi"
 
@@ -194,8 +182,6 @@ def test_truth_compaction_preserves_semantic_source_notes_and_values() -> None:
                     "value_text": value,
                     "claim_frame": "source_claim",
                     "editorial_use": "A concrete project-reported benchmark detail.",
-                    "visual_role": "counter",
-                    "visual_opportunity": "Show the exact reported value.",
                 }
                 for value in ("0.1 ms", "2,568 queries", "zero false alarms", "8×", "10/10")
             ]
@@ -207,14 +193,11 @@ def test_truth_compaction_preserves_semantic_source_notes_and_values() -> None:
                     "value_text": "surprisingly practical in production.",
                     "claim_frame": "opinion",
                     "editorial_use": "Memorable source wording.",
-                    "visual_role": "quote",
-                    "visual_opportunity": "Show the exact phrase.",
                 }
             ],
             "meaning_boundaries": [],
             "tensions_and_caveats": ["The results are project-reported."],
             "creator_opportunities": ["Contrast speed with the small test scope."],
-            "visual_opportunities": ["Animate the reported values."],
         },
     )
 
@@ -267,14 +250,11 @@ def test_truth_index_does_not_compare_semantic_notes_with_article_wording() -> N
                     "value_text": "A million lines of code",
                     "claim_frame": "source_claim",
                     "editorial_use": "Use the scale and speed as the concrete story anchor.",
-                    "visual_role": "counter",
-                    "visual_opportunity": "Show the source-reported scale.",
                 }
             ],
             "meaning_boundaries": [],
             "tensions_and_caveats": [],
             "creator_opportunities": ["Contrast the old migration timeline with this source claim."],
-            "visual_opportunities": ["Show the source passage."],
         },
     )
 
@@ -318,14 +298,11 @@ def test_truth_index_preserves_llm_selected_quote_without_punctuation_matching()
                     ),
                     "claim_frame": "opinion",
                     "editorial_use": "Use the speaker's framing as memorable source wording.",
-                    "visual_role": "quote",
-                    "visual_opportunity": "Show the source-owned quote.",
                 }
             ],
             "meaning_boundaries": [],
             "tensions_and_caveats": [],
             "creator_opportunities": ["Explain why infrastructure ownership matters."],
-            "visual_opportunities": ["Show the article quote."],
         },
     )
 
@@ -362,14 +339,11 @@ def test_truth_index_does_not_apply_metric_text_matching() -> None:
                     "value_text": "80 percent",
                     "claim_frame": "source_claim",
                     "editorial_use": "Explain the project-reported benchmark.",
-                    "visual_role": "counter",
-                    "visual_opportunity": "Show a value only when source-owned.",
                 }
             ],
             "meaning_boundaries": [],
             "tensions_and_caveats": [],
             "creator_opportunities": ["Explain the benchmark scope."],
-            "visual_opportunities": [],
         },
     )
 
@@ -404,8 +378,6 @@ def test_truth_index_does_not_filter_semantic_details_by_article_text() -> None:
                     "value_text": "",
                     "claim_frame": "reported_fact",
                     "editorial_use": "Anchor the story in the prototype release.",
-                    "visual_role": "source_proof",
-                    "visual_opportunity": "Show the release source.",
                 },
                 {
                     "record_key": "record_partial_brief",
@@ -414,14 +386,11 @@ def test_truth_index_does_not_filter_semantic_details_by_article_text() -> None:
                     "value_text": "one million users",
                     "claim_frame": "source_claim",
                     "editorial_use": "This unsupported detail must not reach the writer.",
-                    "visual_role": "counter",
-                    "visual_opportunity": "",
                 },
             ],
             "meaning_boundaries": [],
             "tensions_and_caveats": [],
             "creator_opportunities": ["Explain what the prototype does."],
-            "visual_opportunities": ["Show the source page."],
         },
     )
 
@@ -514,7 +483,6 @@ def test_llm_call_retries_a_transient_rate_limit(monkeypatch) -> None:
                             "humor_opportunities": [],
                             "humor_restraint_reason": None,
                             "transition_relationship": "Begin clearly.",
-                            "visual_payoffs": [],
                             "avoid": [],
                         }
                     ],
@@ -600,7 +568,6 @@ def test_content_filter_rejection_uses_explicit_provider_fallback() -> None:
                             "humor_opportunities": [],
                             "humor_restraint_reason": None,
                             "transition_relationship": "Begin clearly.",
-                            "visual_payoffs": [],
                             "avoid": [],
                         }
                     ],
@@ -790,8 +757,6 @@ def test_manual_chatgpt_script_normalizes_to_canonical_beats() -> None:
     assert len(package["sections"]) == 5
     assert package["full_script_stats"]["beat_count"] == 12
     assert len(package["audio_plan"]["units"]) == 5
-    assert len(package["story_asset_hints"]) == 3
-    assert all(item["source_pages"] for item in package["story_asset_hints"])
     for section in package["sections"]:
         assert section["narration_text"] == " ".join(beat["narration_text"] for beat in section["beats"])
         assert [beat["beat_order"] for beat in section["beats"]] == list(range(1, len(section["beats"]) + 1))
@@ -803,7 +768,6 @@ def test_manual_chatgpt_script_normalizes_to_canonical_beats() -> None:
     assert result["handoff"] == {
         "ready_for_metadata_creation": True,
         "ready_for_voiceover": True,
-        "ready_for_visual_planning": True,
     }
 
 
@@ -843,14 +807,11 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                                 "value_text": "",
                                 "claim_frame": "reported_fact",
                                 "editorial_use": "Use the exact fixture event as the story anchor.",
-                                "visual_role": "source_proof",
-                                "visual_opportunity": "Show the assigned source title.",
                             }
                         ],
                         "meaning_boundaries": [],
                         "tensions_and_caveats": [],
                         "creator_opportunities": ["Explain the handoff as a relay."],
-                        "visual_opportunities": ["Show context moving between stages."],
                     }
                 elif model is EpisodeDirectorOutput:
                     task_payload = json.loads(prompt_text.split("Task payload:\n", 1)[1])
@@ -887,7 +848,6 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                                 "humor_opportunities": [],
                                 "humor_restraint_reason": None,
                                 "transition_relationship": "Advance the shared production chain.",
-                                "visual_payoffs": ["Show context moving between stages."],
                                 "avoid": ["hype"],
                             }
                             for story_id in story_ids
@@ -926,17 +886,8 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                             "narration_text": narration,
                             "support_truth_ids": [truth_id],
                             "creative_device": "contrast" if beat_type == "takeaway" else "none",
-                            "visual_goal": "Make the concrete workflow relationship visible.",
                             "source_record_keys": [source_keys[story_id]],
                             "delivery_direction": delivery,
-                            "visual_brief": {
-                                "purpose": "Show the concrete mechanism.",
-                                "visual_intent": "source_proof",
-                                "preferred_asset_types": ["source_page", "diagram"],
-                                "must_show": ["evidence"],
-                                "on_screen_text": "",
-                                "avoid": ["paragraph text"],
-                            },
                         }
 
                     payload = {
@@ -990,28 +941,16 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                         "emphasis_phrases": [],
                         "pause_after": "short",
                     }
-                    visual = {
-                        "purpose": "Keep the episode moving.",
-                        "visual_intent": "transition",
-                        "preferred_asset_types": ["kinetic_text"],
-                        "must_show": ["connected stages"],
-                        "on_screen_text": "SOURCE TO SCREEN",
-                        "avoid": ["paragraph text"],
-                    }
                     payload = {
                         "intro_beats": [
                             {
                                 "beat_type": "hook",
                                 "narration_text": "Automated video falls apart when writing, audio, and visuals disagree about the story playing right now.",
-                                "delivery_direction": delivery,
-                                "visual_brief": visual,
-                            },
+                                "delivery_direction": delivery,                            },
                             {
                                 "beat_type": "intro",
                                 "narration_text": "Here is how one evidence-first workflow keeps those moving parts connected from source material to the final screen.",
-                                "delivery_direction": delivery,
-                                "visual_brief": visual,
-                            },
+                                "delivery_direction": delivery,                            },
                         ],
                         "story_connectors": [
                             {
@@ -1027,9 +966,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
                             {
                                 "beat_type": "conclusion",
                                 "narration_text": "The real advantage is not any single model or renderer; it is the shared beat contract that lets every stage improve without losing the story.",
-                                "delivery_direction": delivery,
-                                "visual_brief": visual,
-                            }
+                                "delivery_direction": delivery,                            }
                         ],
                         "continuity_notes": ["Keep narration moving under story titles."],
                     }
@@ -1088,7 +1025,7 @@ def test_native_script_generation_uses_director_story_writers_and_bookends(monke
     assert "The reviewer makes this first concrete handoff" in package["full_script"]
     assert all(index["items"] for index in package["story_truth_indexes"])
     assert all(
-        beat["beat_function"] and "support_truth_ids" in beat and beat["visual_goal"]
+        beat["beat_function"] and "support_truth_ids" in beat
         for section in package["sections"]
         for beat in section["beats"]
     )
@@ -1161,7 +1098,7 @@ def test_voiceover_preserves_script_beat_identity(monkeypatch, tmp_path: Path) -
     assert len({chunk["audio_unit_id"] for chunk in resolved["chunks"]}) == 5
     assert len({chunk["beat_id"] for chunk in resolved["chunks"]}) == 12
     assert all(chunk["beat_function"] for chunk in resolved["chunks"])
-    assert all("creative_device" in chunk and "visual_goal" in chunk for chunk in resolved["chunks"])
+    assert all("creative_device" in chunk for chunk in resolved["chunks"])
 
     cursor = 0.0
     synthesized = []
@@ -1275,253 +1212,3 @@ def test_voiceover_app_writes_section_audio_units(monkeypatch, tmp_path: Path) -
     assert result["summary"]["delivery_direction_coverage"]["direction_applied_chunk_count"] == 0
 
 
-def test_visual_planner_prefers_aligned_beats_and_exact_sections() -> None:
-    script = _canonical_manual_script()
-    sections = script["data"]["script_package"]["sections"]
-    aligned_beats = []
-    cursor = 0.0
-    for section in sections:
-        for beat in section["beats"]:
-            duration = max(1.0, beat["estimated_seconds"])
-            aligned_beats.append(
-                {
-                    "beat_id": beat["beat_id"],
-                    "beat_order": beat["beat_order"],
-                    "beat_type": beat["beat_type"],
-                    "section_id": section["section_id"],
-                    "story_id": section["story_id"],
-                    "text": beat["narration_text"],
-                    "word_count": beat["word_count"],
-                    "start_seconds": cursor,
-                    "end_seconds": cursor + duration,
-                }
-            )
-            cursor += duration
-    audio_units = []
-    for unit_order, section in enumerate(sections, start=1):
-        section_beats = [beat for beat in aligned_beats if beat["section_id"] == section["section_id"]]
-        audio_units.append(
-            {
-                "audio_unit_id": f"audio_{section['section_id']}",
-                "unit_order": unit_order,
-                "section_id": section["section_id"],
-                "section_type": section["section_type"],
-                "story_id": section["story_id"],
-                "story_title": section["story_title"],
-                "aligned_beats": section_beats,
-            }
-        )
-    package = {"package_type": "voiceover_package", "audio_units": audio_units, "chunks": []}
-    units = voiceover_chunks(package)
-
-    assert len(units) == len(aligned_beats)
-    assert all(unit["timing_source"] == "voiceover_aligned_beat" for unit in units)
-    stories = _json("video_packaging_result.json")["data"]["video_packet"]["stories"]
-    mapped = _sections_from_script_generation_sections(sections, units, stories)
-    assert [section["section_id"] for section in mapped] == [section["section_id"] for section in sections]
-    assert all(
-        section["assignment_method"] == "canonical_script_beats_with_voiceover_alignment"
-        for section in mapped
-    )
-
-
-def test_visual_preview_preserves_canonical_beats_without_voiceover() -> None:
-    script = _json("script_generation_result.json")
-    package = script["data"]["script_package"]
-
-    units = _build_script_units(
-        script_text=package["full_script"],
-        voiceover_package=None,
-        script_sections=package["sections"],
-        words_per_minute=150,
-    )
-
-    expected_beats = [beat for section in package["sections"] for beat in section["beats"]]
-    assert len(units) == len(expected_beats)
-    assert [unit["beat_id"] for unit in units] == [beat["beat_id"] for beat in expected_beats]
-    assert all(unit["timing_source"] == "script_beat_estimate" for unit in units)
-    assert all(unit["section_id"] for unit in units)
-
-
-def test_visual_slicer_bounds_long_beats_and_preserves_section_titles() -> None:
-    policy = {
-        "compact_per_chunk_scenes": True,
-        "max_scene_seconds": 14,
-        "min_scene_seconds": 3,
-        "semantic_min_scene_seconds": 5,
-        "semantic_target_scene_seconds": 9,
-        "semantic_max_units_per_scene": 4,
-        "max_scenes": 64,
-    }
-    slices = _unit_time_slices(
-        1,
-        2,
-        [
-            {"order": 1, "start_seconds": 0.0, "end_seconds": 7.2, "text": "First aligned beat."},
-            {"order": 2, "start_seconds": 7.2, "end_seconds": 14.8, "text": "Second aligned beat."},
-        ],
-        policy,
-    )
-    assert len(slices) == 2
-    assert all(item["end_seconds"] - item["start_seconds"] <= 14 for item in slices)
-
-    scenes = [
-        {
-            "story_id": "",
-            "section_type": "intro",
-            "start_seconds": 0.0,
-            "end_seconds": 1.0,
-            "duration_seconds": 1.0,
-            "render_kind": "editorial_text_scene",
-            "covered_unit_orders": [1],
-            "payload": {},
-        },
-        {
-            "story_id": "story_evidence",
-            "section_type": "story",
-            "start_seconds": 1.0,
-            "end_seconds": 3.8,
-            "duration_seconds": 2.8,
-            "render_kind": "story_transition_scene",
-            "covered_unit_orders": [2],
-            "payload": {"voice_behavior": "continue"},
-        },
-    ]
-    assert len(_compact_scene_timeline(scenes, policy)) == 2
-
-
-def test_chatgpt_visual_parser_uses_aligned_units_and_inserts_story_titles() -> None:
-    script = _json("script_generation_result.json")
-    video = _json("video_packaging_result.json")
-    sections = script["data"]["script_package"]["sections"]
-    cursor = 0.0
-    audio_units = []
-    scene_timeline = []
-    global_order = 0
-    for unit_order, section in enumerate(sections, start=1):
-        aligned_beats = []
-        section_orders = []
-        for beat in section["beats"]:
-            global_order += 1
-            duration = max(1.0, float(beat["estimated_seconds"]))
-            aligned_beats.append(
-                {
-                    "beat_id": beat["beat_id"],
-                    "beat_order": beat["beat_order"],
-                    "beat_type": beat["beat_type"],
-                    "section_id": section["section_id"],
-                    "story_id": section["story_id"],
-                    "text": beat["narration_text"],
-                    "word_count": beat["word_count"],
-                    "start_seconds": cursor,
-                    "end_seconds": cursor + duration,
-                }
-            )
-            section_orders.append(global_order)
-            cursor += duration
-        audio_units.append(
-            {
-                "unit_order": unit_order,
-                "section_id": section["section_id"],
-                "section_type": section["section_type"],
-                "story_id": section["story_id"],
-                "story_title": section["story_title"],
-                "aligned_beats": aligned_beats,
-            }
-        )
-        scene_timeline.append(
-            {
-                "scene_id": f"draft_{unit_order}",
-                "scene_order": unit_order,
-                "story_id": section["story_id"],
-                "section_type": section["section_type"],
-                "start_seconds": 900 + unit_order,
-                "end_seconds": 901 + unit_order,
-                "render_kind": "editorial_text_scene",
-                "script_excerpt": section["narration_text"],
-                "visual_intent": "Explain the active section.",
-                "payload": {
-                    "recipe_id": "editorial_hook",
-                    "headline": section["story_title"] or section["section_type"],
-                    "accent_words": [],
-                    "supporting_text": "",
-                    "composition": "editorial_center",
-                    "motion_style": "word_reveal",
-                },
-                "evidence_record_keys": [],
-                "evidence_text": "",
-                "grounding_basis": "script_beat",
-                "covered_unit_orders": section_orders,
-            }
-        )
-    voiceover = {
-        "run_id": "fixture_media_roundup_reference",
-        "package_type": "voiceover_package",
-        "audio": {"duration_seconds": cursor, "full_audio_path": "fixture.wav"},
-        "audio_units": audio_units,
-        "chunks": [],
-    }
-    script_fingerprint = script["data"]["script_package"]["provenance"]["script_fingerprint"]
-    audio_sha256 = f"sha256:{'0' * 64}"
-    voiceover["provenance"] = {"audio_sha256": audio_sha256}
-    voiceover["provenance"] = build_artifact_provenance(
-        artifact_type="voiceover",
-        run_id="fixture_media_roundup_reference",
-        parents={"script": script_fingerprint},
-        payload=voiceover_artifact_payload(voiceover),
-    )
-    voiceover["provenance"]["audio_sha256"] = audio_sha256
-    response_text = "\n".join(
-        [
-            "CHATGPT_VISUAL_PLAN_RESPONSE_V1",
-            "[NOTES]",
-            "Fixture plan",
-            "[VISUAL_SCENE_PLAN_JSON]",
-            json.dumps({"episode_style": {}, "story_sections": [], "scene_timeline": scene_timeline}),
-        ]
-    )
-    result = parse_chatgpt_visual_plan(
-        {
-            "run": {"run_id": "fixture_media_roundup_reference"},
-            "config": {
-                "scene_policy": {
-                    "allowed_render_kinds": ["editorial_text_scene", "story_transition_scene"],
-                    "max_scene_seconds": 14,
-                    "min_scene_seconds": 3,
-                    "semantic_min_scene_seconds": 5,
-                    "semantic_target_scene_seconds": 9,
-                    "compact_per_chunk_scenes": True,
-                },
-                "visual_capabilities": {},
-                "require_complete_timeline": True,
-                "gap_tolerance_seconds": 0.5,
-            },
-                "input": {
-                    "response_text": response_text,
-                    "video_packaging": video,
-                    "script_generation": script,
-                    "script_source": "fixture",
-                    "voiceover": voiceover,
-            },
-        }
-    )
-
-    plan = result["data"]["visual_scene_plan"]
-    validate_artifact_provenance(
-        plan["provenance"],
-        artifact_type="visual_plan",
-        run_id="fixture_media_roundup_reference",
-        payload=visual_plan_artifact_payload(plan),
-        label="visual_scene_plan",
-    )
-    assert result["status"] == "ok"
-    assert plan["scene_timeline"][0]["start_seconds"] == 0
-    assert plan["scene_timeline"][-1]["end_seconds"] == round(cursor, 2)
-    assert all(scene["duration_seconds"] <= 14 for scene in plan["scene_timeline"])
-    title_scenes = [
-        scene
-        for scene in plan["scene_timeline"]
-        if scene["render_kind"] == "story_transition_scene" and scene["payload"].get("voice_behavior") == "continue"
-    ]
-    assert len(title_scenes) == 3
-    assert "Retimed" in " ".join(plan["checks"]["warnings"])

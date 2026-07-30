@@ -289,7 +289,6 @@ class ReviewConfig(BaseModel):
             "natural YouTube pacing",
             "no repetition or filler",
             "no hype or fake certainty",
-            "visualizable story beats",
         ]
     )
     @field_validator("max_revision_passes")
@@ -494,30 +493,6 @@ class ScriptGenerationRequest(BaseModel):
     input: ScriptGenerationInput
 
 
-class VisualBriefContract(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    purpose: str
-    visual_intent: Literal[
-        "story_title",
-        "source_proof",
-        "entity_intro",
-        "product_demo",
-        "metric_explainer",
-        "process_explainer",
-        "comparison",
-        "context_media",
-        "transition",
-        "takeaway",
-    ]
-    preferred_asset_types: list[
-        Literal["source_page", "product_ui", "logo", "photo", "video", "chart", "diagram", "kinetic_text"]
-    ] = Field(default_factory=list)
-    must_show: list[str] = Field(default_factory=list)
-    on_screen_text: str = ""
-    avoid: list[str] = Field(default_factory=list)
-
-
 class DeliveryDirectionContract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -580,8 +555,6 @@ class ScriptBeatContract(BaseModel):
         "callback",
     ] = "none"
     delivery_direction: DeliveryDirectionContract = Field(default_factory=DeliveryDirectionContract)
-    visual_goal: str = "Visually reinforce the active narration beat."
-    visual_brief: VisualBriefContract
 
     @field_validator("beat_id", "narration_text")
     @classmethod
@@ -684,7 +657,6 @@ class RoundupScriptPackage(BaseModel):
     section_plan: list[dict[str, Any]] = Field(default_factory=list)
     story_truth_indexes: list[dict[str, Any]] = Field(default_factory=list)
     story_context_packets: list[dict[str, Any]] = Field(default_factory=list)
-    story_asset_hints: list[dict[str, Any]] = Field(default_factory=list)
     sections: list[ScriptSectionContract]
     full_script: str
     full_script_stats: FullScriptStatsContract
@@ -713,7 +685,6 @@ class ScriptGenerationSummary(BaseModel):
 class ScriptGenerationHandoff(BaseModel):
     ready_for_metadata_creation: bool
     ready_for_voiceover: bool
-    ready_for_visual_planning: bool
 
 
 class ScriptGenerationResponse(BaseModel):

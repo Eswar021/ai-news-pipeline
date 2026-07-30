@@ -47,12 +47,11 @@ Use the creator take to interpret the concrete anchor, not to replace it with a 
 
 Creative-device labels describe an actual craft choice, not decoration for metadata. Mark observational_humor, self_aware_humor, analogy, or callback only when the narration visibly performs that device. A normal explanatory sentence should use none. Do not force humor, but when the director identifies a strong opportunity, execute it as a short observation or tag rather than merely labeling the beat as humorous.
 
-Make each beat one visual thought. A beat is usually one or two spoken
+Keep each beat one clear idea. A beat is usually one or two spoken
 sentences and roughly 8-12 seconds, but this is pacing guidance, not a quota or
-approval rule. Start a new beat when the viewer should see a different job:
-source proof, mechanism, comparison, reaction, consequence, or payoff. Do not
-pack a source fact, a technical explanation, and a conclusion into one long
-beat that downstream visuals would have to split blindly.
+approval rule. Start a new beat when the editorial job changes: source proof,
+mechanism, comparison, reaction, consequence, or payoff. Do not pack a source
+fact, a technical explanation, and a conclusion into one long beat.
 
 support_truth_ids and source_record_keys are invisible production metadata for downstream traceability. Attach the most relevant available IDs to factual beats and use only IDs from the assigned story. Opinion, humor, analogy, and transitions may have no truth IDs. Never speak IDs, citations, or production labels.
 
@@ -72,31 +71,18 @@ narration.
   energy from restrained, warm, engaged, animated, or punchy; list only exact
   narration phrases that deserve emphasis; and choose pause_after from none,
   micro, short, or full_beat.
-- visual_brief.visual_intent: story_title, source_proof, entity_intro,
-  product_demo, metric_explainer, process_explainer, comparison, context_media,
-  transition, or takeaway.
-- visual_brief.preferred_asset_types may contain only source_page, product_ui,
-  logo, photo, video, chart, diagram, or kinetic_text.
 
 Put reaction and reveal in beat_function, not beat_type. Put example in
-beat_type or beat_function, not visual_intent. Do not invent category labels;
-choose the closest allowed production label while keeping the narration itself
-natural.
+beat_type or beat_function. Do not invent category labels; choose the closest
+allowed production label while keeping the narration itself natural.
 
-Each beat must be a coherent spoken unit and include a useful visual goal and concise visual brief. Put visual directions in visual_goal and visual_brief, never in narration_text. Do not write the episode intro, closing, title-card instruction, or transition into the next story. Stop when the mini-story has delivered its payoff.
+Each beat must be a coherent spoken unit. Never put production directions or bracket tags in narration_text. Do not write the episode intro, closing, title-card instruction, or transition into the next story. Stop when the mini-story has delivered its payoff.
 
 Direct the performance rather than inserting bracket tags such as
 "[enthusiastic]" into narration_text. Let hooks feel curious or punchy,
 technical explanations breathe, humorous observations land lightly, and
 consequences carry appropriate weight. Avoid assigning maximum energy to every
 beat; contrast between beats is what creates an expressive performance.
-
-Make visual briefs concrete enough for asset collection. When a beat introduces
-a named company, product, paper, interface, or source, put the exact visible
-identity in must_show and prefer the matching logo, product UI, source page,
-photo, video, chart, or diagram asset family. Use kinetic_text only when text is
-genuinely the clearest visual, not as a default for an unspecified idea. Never
-request a generic "AI image" or an asset unrelated to the active narration.
 
 Treat story_role as a real editorial instruction:
 

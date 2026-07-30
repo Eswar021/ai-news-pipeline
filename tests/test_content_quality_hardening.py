@@ -157,14 +157,11 @@ def test_truth_context_prioritizes_body_and_removes_repeated_chrome() -> None:
                         "value_text": "",
                         "claim_frame": "reported_fact",
                         "editorial_use": "Anchor the story in the actual hiring action.",
-                        "visual_role": "source_proof",
-                        "visual_opportunity": "Show the source sentence.",
                     }
                 ],
                 "meaning_boundaries": [],
                 "tensions_and_caveats": [],
                 "creator_opportunities": ["Explain what the role signals."],
-                "visual_opportunities": ["Show the job-posting source."],
             },
         )
     )

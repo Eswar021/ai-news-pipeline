@@ -82,6 +82,8 @@ def run(input_json: dict) -> dict:
     slate_diversity_assessment = ""
     slate_diversity_reason = ""
     duplicate_story_groups: list[dict[str, Any]] = []
+    focused_duplicate_repaired = False
+    focused_duplicate_repair_notes: list[str] = []
     focused_duplicate_audit: RoundupDuplicateAudit | None = None
     slate_review_config = dict(config.get("slate_review") or {})
     slate_review_prompt_bundle = None
@@ -178,10 +180,23 @@ def run(input_json: dict) -> dict:
                     focused_duplicate_audit=focused_duplicate_audit,
                 )
                 _validate_slate(reviewed_draft, review_pool, config)
+                (
+                    reviewed_draft,
+                    repaired_duplicate_audit,
+                    duplicate_repair_notes,
+                ) = _repair_slate_duplicate_audit(
+                    reviewed_draft,
+                    focused_duplicate_audit,
+                    config,
+                )
+                if repaired_duplicate_audit:
+                    _validate_slate(reviewed_draft, review_pool, config)
                 _validate_slate_resolves_duplicate_audit(
                     reviewed_draft,
                     focused_duplicate_audit,
                 )
+                focused_duplicate_repaired = repaired_duplicate_audit
+                focused_duplicate_repair_notes = list(duplicate_repair_notes)
                 draft = reviewed_draft
                 materialization_pool = review_pool
                 slate_review_changed = bool(reviewed_draft.review_changed)
@@ -254,6 +269,8 @@ def run(input_json: dict) -> dict:
                 if focused_duplicate_audit is not None
                 else []
             ),
+            "focused_duplicate_repaired": focused_duplicate_repaired,
+            "focused_duplicate_repair_notes": focused_duplicate_repair_notes,
             "slate_review_provider": slate_review_config.get("effective_provider", ""),
             "slate_review_model": slate_review_config.get("effective_model", ""),
             "slate_review_changed": slate_review_changed,
@@ -1400,8 +1417,20 @@ def _validate_slate_resolves_duplicate_audit(
 ) -> None:
     if audit is None:
         return
+    unresolved = _unresolved_duplicate_audit_groups(slate, audit)
+    if unresolved:
+        raise ValueError(
+            "final slate did not resolve focused semantic duplicate groups: "
+            f"{unresolved}"
+        )
+
+
+def _unresolved_duplicate_audit_groups(
+    slate: RoundupSlateReviewDraft,
+    audit: RoundupDuplicateAudit,
+) -> list[dict[str, Any]]:
     selected_ids = {decision.story_id for decision in slate.selected}
-    unresolved = [
+    return [
         {
             "group_id": group.group_id,
             "selected_story_ids": sorted(selected_ids & set(group.story_ids)),
@@ -1409,11 +1438,138 @@ def _validate_slate_resolves_duplicate_audit(
         for group in audit.duplicate_story_groups
         if len(selected_ids & set(group.story_ids)) > 1
     ]
-    if unresolved:
-        raise ValueError(
-            "final slate did not resolve focused semantic duplicate groups: "
-            f"{unresolved}"
+
+
+def _repair_slate_duplicate_audit(
+    slate: RoundupSlateReviewDraft,
+    audit: RoundupDuplicateAudit | None,
+    config: dict[str, Any],
+) -> tuple[RoundupSlateReviewDraft, bool, list[str]]:
+    if audit is None or not _unresolved_duplicate_audit_groups(slate, audit):
+        return slate, False, []
+
+    payload = slate.model_dump(mode="json")
+    selected = list(payload["selected"])
+    non_selected = list(payload["non_selected"])
+    selected_ids = [clean_text(item.get("story_id")) for item in selected]
+    selected_id_set = set(selected_ids)
+    remove_ids: set[str] = set()
+    notes: list[str] = []
+
+    for group in audit.duplicate_story_groups:
+        group_ids = {clean_text(story_id) for story_id in group.story_ids}
+        selected_group_ids = [
+            story_id for story_id in selected_ids if story_id in group_ids
+        ]
+        if len(selected_group_ids) <= 1:
+            continue
+        preferred_id = clean_text(group.preferred_story_id)
+        if preferred_id not in selected_id_set:
+            preferred_id = selected_group_ids[0]
+        for story_id in selected_group_ids:
+            if story_id == preferred_id:
+                continue
+            remove_ids.add(story_id)
+        notes.append(
+            "Resolved focused duplicate audit group "
+            f"{group.group_id} by retaining {preferred_id} and reserving "
+            f"{sorted(set(selected_group_ids) - {preferred_id})}."
         )
+
+    if not remove_ids:
+        return slate, False, []
+
+    selected_after = [
+        item
+        for item in selected
+        if clean_text(item.get("story_id")) not in remove_ids
+    ]
+    selected_after_ids = {clean_text(item.get("story_id")) for item in selected_after}
+    promoted_ids: set[str] = set()
+    target_selected_count = min(len(selected), int(config["max_stories"]))
+    promotion_candidates = [
+        item
+        for item in non_selected
+        if clean_text(item.get("story_id")) not in remove_ids
+        and clean_text(item.get("story_id")) not in selected_after_ids
+        and item.get("action") == "reserve"
+    ]
+    if len(selected_after) < int(config["min_stories"]):
+        promotion_candidates.extend(
+            item
+            for item in non_selected
+            if clean_text(item.get("story_id")) not in remove_ids
+            and clean_text(item.get("story_id")) not in selected_after_ids
+            and item.get("action") != "reserve"
+        )
+    for candidate in promotion_candidates:
+        if len(selected_after) >= target_selected_count:
+            break
+        story_id = clean_text(candidate.get("story_id"))
+        if story_id in promoted_ids:
+            continue
+        reason = clean_text(candidate.get("reason"))
+        selected_after.append(
+            {
+                "story_id": story_id,
+                "role": "brief",
+                "selection_reason": (
+                    "Promoted from review reserve after focused duplicate-audit "
+                    f"repair. {reason}"
+                ).strip(),
+                "viewer_payoff": reason
+                or "Adds a distinct reserve story to keep the roundup complete.",
+                "confidence": float(candidate.get("confidence") or 0.5),
+            }
+        )
+        promoted_ids.add(story_id)
+
+    non_selected_after = [
+        item
+        for item in non_selected
+        if clean_text(item.get("story_id")) not in promoted_ids
+    ]
+    existing_non_selected_ids = {
+        clean_text(item.get("story_id")) for item in non_selected_after
+    }
+    for story_id in selected_ids:
+        if story_id not in remove_ids or story_id in existing_non_selected_ids:
+            continue
+        non_selected_after.append(
+            {
+                "story_id": story_id,
+                "action": "reserve",
+                "reason": (
+                    "Removed from selected slate by focused duplicate-audit repair; "
+                    "the audit preferred another member of the same semantic story group."
+                ),
+                "confidence": 0.9,
+            }
+        )
+
+    payload["selected"] = _normalize_selected_roles(selected_after)
+    payload["non_selected"] = non_selected_after
+    payload["review_changed"] = True
+    repair_reason = "Focused duplicate-audit repair removed duplicate selected coverage."
+    existing_reason = clean_text(payload.get("review_reason"))
+    payload["review_reason"] = (
+        f"{existing_reason} {repair_reason}".strip()
+        if existing_reason
+        else repair_reason
+    )
+    return RoundupSlateReviewDraft.model_validate(payload), True, notes
+
+
+def _normalize_selected_roles(selected: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for index, item in enumerate(selected):
+        next_item = dict(item)
+        if index == 0:
+            next_item["role"] = "lead"
+        elif next_item.get("role") == "lead":
+            next_item["role"] = "major"
+        normalized.append(next_item)
+    return normalized
 
 
 def _validate_call_context(

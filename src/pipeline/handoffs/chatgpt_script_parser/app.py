@@ -20,11 +20,6 @@ ALLOWED_BEAT_TYPES = {
     "hook", "transition", "what_changed", "explanation", "example",
     "why_it_matters", "caveat", "takeaway", "intro", "conclusion",
 }
-ALLOWED_VISUAL_INTENTS = {
-    "story_title", "source_proof", "entity_intro", "product_demo",
-    "metric_explainer", "process_explainer", "comparison", "context_media",
-    "transition", "takeaway",
-}
 ALLOWED_BEAT_FUNCTIONS = {
     "episode_hook", "episode_setup", "story_hook", "setup", "reveal",
     "explanation", "example", "reaction", "comic_release", "consequence",
@@ -107,7 +102,6 @@ def run(input_json: dict) -> dict:
         },
         "story_segments": [_manual_story_segment(section) for section in sections if section["section_type"] == "story"],
         "story_truth_indexes": [],
-        "story_asset_hints": [_story_asset_hints(story) for story in packet.get("stories", [])],
         "bookends": {
             "source": "manual_chatgpt_handoff",
             "intro_section_id": "section_00_intro",
@@ -173,7 +167,6 @@ def run(input_json: dict) -> dict:
         "handoff": {
             "ready_for_metadata_creation": status == "ok",
             "ready_for_voiceover": status == "ok" and production_media_ready,
-            "ready_for_visual_planning": status == "ok" and production_media_ready,
         },
         "llm_calls": [],
     }
@@ -424,7 +417,6 @@ def _build_beats(
         creative_device = clean_text(draft.get("creative_device")) or "none"
         if creative_device not in ALLOWED_CREATIVE_DEVICES:
             raise ValueError(f"{plan['section_id']} returned unsupported creative_device: {creative_device}")
-        visual_brief = draft.get("visual_brief") if isinstance(draft.get("visual_brief"), dict) else {}
         output.append(
             {
                 "beat_id": f"{plan['section_id']}_beat_{order:02d}",
@@ -444,10 +436,6 @@ def _build_beats(
                 ),
                 "creative_device": creative_device,
                 "delivery_direction": _normalize_delivery_direction(draft.get("delivery_direction")),
-                "visual_goal": clean_text(draft.get("visual_goal"))
-                or clean_text(visual_brief.get("purpose"))
-                or "Visually reinforce this exact narration beat.",
-                "visual_brief": _normalize_visual_brief(visual_brief, plan, order),
             }
         )
     if not output:
@@ -516,28 +504,6 @@ def _default_beat_function(section_type: str, beat_type: str) -> str:
     }.get(beat_type, "explanation")
 
 
-def _normalize_visual_brief(raw: dict[str, Any], plan: dict[str, Any], order: int) -> dict[str, Any]:
-    story = plan["section_type"] == "story"
-    default_intent = "story_title" if story and order == 1 else ("source_proof" if story else "transition")
-    preferred = raw.get("preferred_asset_types") if isinstance(raw.get("preferred_asset_types"), list) else []
-    if not preferred:
-        preferred = ["source_page", "logo"] if story else ["kinetic_text"]
-    visual_intent = clean_text(raw.get("visual_intent")) or default_intent
-    if visual_intent not in ALLOWED_VISUAL_INTENTS:
-        raise ValueError(f"{plan['section_id']} returned unsupported visual_intent: {visual_intent}")
-    return {
-        "purpose": clean_text(raw.get("purpose")) or "Visually reinforce this exact narration beat.",
-        "visual_intent": visual_intent,
-        "preferred_asset_types": _dedupe(preferred),
-        "must_show": _dedupe(raw.get("must_show", []) if isinstance(raw.get("must_show"), list) else []),
-        # Preserve authored meaning at the canonical boundary. The visual planner
-        # can choose a shorter treatment for a specific renderer without losing
-        # the original brief supplied by the writer or operator.
-        "on_screen_text": clean_text(raw.get("on_screen_text")),
-        "avoid": _dedupe(raw.get("avoid", []) if isinstance(raw.get("avoid"), list) else []),
-    }
-
-
 def _normalize_delivery_direction(raw: Any) -> dict[str, Any]:
     if raw is None:
         return {
@@ -593,56 +559,6 @@ def _manual_story_segment(section: dict[str, Any]) -> dict[str, Any]:
         "story_thesis": "",
         "viewer_takeaway": "",
         "beats": section.get("beats", []),
-    }
-
-
-def _story_asset_hints(story: dict[str, Any]) -> dict[str, Any]:
-    identity = story.get("story_identity") if isinstance(story.get("story_identity"), dict) else {}
-    source_pages = []
-    for record in story.get("records", []):
-        if not isinstance(record, dict):
-            continue
-        url = next(
-            (
-                clean_text(record.get(key))
-                for key in ("url", "source_url", "canonical_url", "resolved_url")
-                if clean_text(record.get(key)).startswith(("http://", "https://"))
-            ),
-            "",
-        )
-        record_key = clean_text(record.get("record_key"))
-        if url and record_key:
-            source_pages.append(
-                {
-                    "record_key": record_key,
-                    "url": url,
-                    "title": clean_text(record.get("title")),
-                    "source": clean_text(record.get("source_name") or record.get("source")),
-                }
-            )
-    entities = _dedupe(
-        [
-            identity.get("primary_entity", ""),
-            identity.get("owning_org", ""),
-            identity.get("product_or_project", ""),
-        ]
-    )
-    return {
-        "story_id": _story_id(story),
-        "source_pages": source_pages,
-        "logo_entities": entities,
-        "product_surfaces": [clean_text(identity.get("product_or_project"))] if clean_text(identity.get("product_or_project")) else [],
-        "metric_candidates": [],
-        "available_asset_types": _dedupe(
-            [
-                *("source_page" for _ in source_pages[:1]),
-                *("logo" for _ in entities[:1]),
-                "diagram",
-                "photo",
-                "video",
-                "kinetic_text",
-            ]
-        ),
     }
 
 
