@@ -48,6 +48,24 @@ def synthesize_in_parallel(
     return [result for result in results if result is not None]
 
 
+def _is_non_retryable(exc: Exception) -> bool:
+    """Daily-quota and billing exhaustion do not recover within a retry window,
+    so retrying just wastes minutes. Fail fast on those and surface the reason."""
+    text = str(exc).lower()
+    return any(
+        token in text
+        for token in (
+            "per_day",
+            "perday",
+            "requests_per_day",
+            "generaterequestsperday",
+            "insufficient_quota",
+            "exceeded your current quota",
+            "billing",
+        )
+    )
+
+
 def run_with_retries(
     operation: Callable[[], T],
     *,
@@ -63,7 +81,7 @@ def run_with_retries(
         try:
             return operation()
         except Exception as exc:
-            if attempt >= max_retries:
+            if attempt >= max_retries or _is_non_retryable(exc):
                 raise RuntimeError(f"{label} failed after {attempt + 1} attempt(s): {exc}") from exc
             delay = min(max_delay_seconds, initial_delay_seconds * (2**attempt))
             time.sleep(delay)
