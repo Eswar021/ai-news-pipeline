@@ -92,6 +92,13 @@ def create_app(
         except (OSError, PlanError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.get("/control/runs/{run_id}/status")
+    def run_status(run_id: str) -> dict[str, Any]:
+        try:
+            return planner.run_status(run_id)
+        except (OSError, PlanError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @app.get("/control/jobs")
     def jobs(limit: int = Query(50, ge=1, le=200)) -> dict[str, Any]:
         return {

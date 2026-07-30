@@ -168,9 +168,15 @@ class RunPlanner:
         else:
             if not requested.run_id:
                 raise PlanError("A persisted run is required for resume or retry")
-            context = self._run_context(requested.run_id)
-            data["profile"] = str(context.get("run_profile") or "")
-            data["environment"] = str(context.get("config_environment") or "prod")
+            status = self.run_status(requested.run_id)
+            data["profile"] = status["profile"]
+            data["environment"] = status["environment"]
+            runnable = {stage["key"]: stage["runnable"] for stage in status["stages"]}
+            if not runnable.get(data["target_stage"], False):
+                raise PlanError(
+                    f"Cannot start at '{data['target_stage']}': an earlier stage has not "
+                    f"completed for this run. Resume from '{status['next_stage']}' instead."
+                )
 
         stage = data["target_stage"]
         # A new run always executes collect -> target; run_to_stage only applies to
@@ -285,6 +291,49 @@ class RunPlanner:
         if "visuals" in stages and not plan.deterministic:
             return True
         return False
+
+    def run_status(self, run_id: str) -> dict[str, Any]:
+        """Per-stage execution status for a persisted run, so the desk can offer
+        only the stages whose upstream inputs actually exist. A stage is runnable
+        when every earlier stage has completed (status ok); ``next_stage`` is the
+        first stage that is not yet complete."""
+        context = self._run_context(run_id)
+        state = self._run_state(run_id)
+        state_stages = state.get("stages") if isinstance(state.get("stages"), dict) else {}
+        stages: list[dict[str, Any]] = []
+        next_stage: str | None = None
+        upstream_complete = True
+        for key in STAGE_ORDER:
+            # The runner's first stage is "collect"; run_state records it as "ingestion".
+            state_key = "ingestion" if key == "collect" else key
+            raw = state_stages.get(state_key) if isinstance(state_stages, dict) else {}
+            status = str((raw or {}).get("status") or "not_started")
+            stages.append({"key": key, "status": status, "runnable": upstream_complete})
+            if status != "ok" and next_stage is None:
+                next_stage = key
+            upstream_complete = upstream_complete and status == "ok"
+        return {
+            "run_id": run_id,
+            "exists": True,
+            "profile": str(context.get("run_profile") or ""),
+            "environment": str(context.get("config_environment") or "prod"),
+            "stages": stages,
+            "next_stage": next_stage or STAGE_ORDER[-1],
+        }
+
+    def _run_state(self, run_id: str) -> dict[str, Any]:
+        path = (self.runs_root / run_id / "orchestration" / "run_state.json").resolve()
+        try:
+            path.relative_to(self.runs_root)
+        except ValueError:
+            return {}
+        if not path.is_file():
+            return {}
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return value if isinstance(value, dict) else {}
 
     def suggest_run_id(self, profile: str) -> str:
         timestamp = datetime.now().astimezone().strftime("%Y_%m_%d_%H%M%S")

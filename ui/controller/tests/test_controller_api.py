@@ -116,7 +116,7 @@ def wait_for_job(client: TestClient, job_id: str, timeout: float = 8) -> dict[st
     raise AssertionError("job did not finish")
 
 
-def seed_run(root: Path, run_id: str = "run_existing") -> None:
+def seed_run(root: Path, run_id: str = "run_existing", *, stage_status: dict | None = None) -> None:
     run = root / "output" / "runs" / run_id
     write(
         run / "run_context.json",
@@ -124,6 +124,14 @@ def seed_run(root: Path, run_id: str = "run_existing") -> None:
             "run_id": run_id,
             "run_profile": "fixture",
             "config_environment": "dev",
+        }),
+    )
+    status = stage_status or {"ingestion": "ok", "content": "ok", "voiceover": "ok", "visuals": "ok"}
+    write(
+        run / "orchestration" / "run_state.json",
+        json.dumps({
+            "run_id": run_id,
+            "stages": {name: {"status": value} for name, value in status.items()},
         }),
     )
 
@@ -312,6 +320,37 @@ def test_resume_can_run_through_a_later_stage(tmp_path: Path) -> None:
             },
         )
         assert backwards.status_code == 400
+
+
+def test_resume_is_gated_by_persisted_run_state(tmp_path: Path) -> None:
+    root = make_project(tmp_path)
+    # Content complete, voiceover failed, visuals untouched: visuals is not runnable.
+    seed_run(root, stage_status={"ingestion": "ok", "content": "ok", "voiceover": "failed"})
+    with client_for(root) as client:
+        status = client.get("/control/runs/run_existing/status")
+        assert status.status_code == 200
+        payload = status.json()
+        assert payload["next_stage"] == "voiceover"
+        runnable = {stage["key"]: stage["runnable"] for stage in payload["stages"]}
+        assert runnable == {"collect": True, "content": True, "voiceover": True, "visuals": False}
+
+        # Voiceover can be resumed (its content input exists).
+        ok = client.post(
+            "/control/plans/preview",
+            json={"operation": "resume", "run_id": "run_existing", "target_stage": "voiceover"},
+        )
+        assert ok.status_code == 200
+
+        # Visuals cannot: voiceover has not completed, so its input is missing.
+        blocked = client.post(
+            "/control/plans/preview",
+            json={"operation": "resume", "run_id": "run_existing", "target_stage": "visuals"},
+        )
+        assert blocked.status_code == 400
+        assert "voiceover" in blocked.json()["detail"]
+
+        missing = client.get("/control/runs/run_missing/status")
+        assert missing.status_code == 404
 
 
 def test_running_job_can_be_cancelled_and_blocks_another_writer(tmp_path: Path) -> None:

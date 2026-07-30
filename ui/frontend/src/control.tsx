@@ -109,6 +109,15 @@ type PlanPreview = {
   requires_final_confirmation: boolean;
 };
 
+type RunStatus = {
+  run_id: string;
+  exists: boolean;
+  profile: string;
+  environment: string;
+  stages: Array<{ key: string; status: string; runnable: boolean }>;
+  next_stage: "collect" | "content" | "voiceover" | "visuals";
+};
+
 const DEFAULT_PLAN: RunPlan = {
   operation: "new",
   target_stage: "content",
@@ -172,6 +181,7 @@ export function NewRunView({
   const [jobId, setJobId] = useState(controller.activeJob?.id || "");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [runState, setRunState] = useState<RunStatus | null>(null);
 
   useEffect(() => {
     controlFetch<Capabilities>("/control/capabilities")
@@ -211,6 +221,24 @@ export function NewRunView({
       setPlan((current) => ({ ...current, run_id: runs[0].run_id }));
     }
   }, [plan.operation, plan.run_id, runs]);
+
+  // State-aware resume: load the selected run's per-stage status and default the
+  // target to its next incomplete stage. Refetches only when the run changes.
+  useEffect(() => {
+    if (plan.operation === "new" || !plan.run_id || !runs.some((run) => run.run_id === plan.run_id)) {
+      setRunState(null);
+      return;
+    }
+    let cancelled = false;
+    controlFetch<RunStatus>(`/control/runs/${encodeURIComponent(plan.run_id)}/status`)
+      .then((value) => {
+        if (cancelled) return;
+        setRunState(value);
+        setPlan((current) => ({ ...current, target_stage: value.next_stage, run_to_stage: undefined }));
+      })
+      .catch(() => { if (!cancelled) setRunState(null); });
+    return () => { cancelled = true; };
+  }, [plan.operation, plan.run_id]);
 
   useEffect(() => {
     if (!capabilities) return;
@@ -353,13 +381,25 @@ export function NewRunView({
 
           <BuilderSection number="02" title={plan.operation === "new" ? "Run through" : "Stage to execute"}>
             <div className="stageChoice">
-              {(capabilities?.stages || []).map((item, index) => (
-                <button key={item.key} aria-pressed={plan.target_stage === item.key} className={plan.target_stage === item.key ? "active" : ""} onClick={() => setTargetStage(item.key)}>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <strong>{item.label}</strong>
-                  <small>{item.description}</small>
-                </button>
-              ))}
+              {(capabilities?.stages || []).map((item, index) => {
+                const stageState = runState?.stages.find((entry) => entry.key === item.key);
+                const gated = plan.operation !== "new" && !!runState;
+                const runnable = !gated || (stageState?.runnable ?? true);
+                return (
+                  <button
+                    key={item.key}
+                    aria-pressed={plan.target_stage === item.key}
+                    className={plan.target_stage === item.key ? "active" : ""}
+                    disabled={!runnable}
+                    title={runnable ? undefined : "An earlier stage has not completed for this run"}
+                    onClick={() => runnable && setTargetStage(item.key)}
+                  >
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <strong>{item.label}</strong>
+                    <small>{gated && stageState ? titleCase(stageState.status) : item.description}</small>
+                  </button>
+                );
+              })}
             </div>
             {plan.operation !== "new" && runThroughOptions.length > 0 && (
               <ControlSelect
