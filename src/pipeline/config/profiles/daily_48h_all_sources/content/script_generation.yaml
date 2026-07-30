@@ -117,7 +117,7 @@ llm_roles:
         method: json_schema
         strict: true
 diagnostic_words_per_minute: 140
-worker_count: 2
+worker_count: 6  # parallel story writers (raised from 2 — 5 stories now write concurrently)
 title_card_seconds: 2.8
 llm_retry:
   enabled: true

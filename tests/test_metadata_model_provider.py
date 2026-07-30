@@ -121,7 +121,7 @@ def test_production_routes_deepseek_to_viewer_facing_creative_roles() -> None:
         "method": "json_mode",
         "strict": False,
     }
-    assert profile["script_generation"]["worker_count"] == 2
+    assert profile["script_generation"]["worker_count"] == 6
     assert metadata.provider == "deepseek"
     assert metadata.model == "deepseek-v4-pro"
     assert metadata.provider_options.reasoning_effort == "max"

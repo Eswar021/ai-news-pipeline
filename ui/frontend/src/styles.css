@@ -6490,3 +6490,32 @@ video {
 .overviewEpisode .sectionHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .overviewVideo { width: 100%; max-width: 720px; border-radius: 12px; background: #000; border: 1px solid var(--hairline, rgba(255,255,255,0.1)); }
 .runMasthead .stageMiniMap { margin-top: 10px; }
+
+/* ── Publish kit (overview: media + copy-paste metadata) ─────────────── */
+.publishKit { display: flex; flex-direction: column; gap: 16px; padding: 18px; border-radius: 16px;
+  border: 1px solid var(--hairline, rgba(255,255,255,0.1)); background: var(--surface-2, rgba(255,255,255,0.02)); }
+.publishKit > .sectionHeading { display: flex; align-items: baseline; gap: 10px; }
+.publishKit > .sectionHeading small { color: var(--ink-3, #6b7280); font-size: 12px; }
+.publishMedia { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .publishMedia { grid-template-columns: 1fr; } }
+.publishMedia figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.publishMedia figcaption { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3, #6b7280); }
+.publishMedia video { width: 100%; border-radius: 12px; background: #000; border: 1px solid var(--hairline, rgba(255,255,255,0.1)); }
+.publishMedia audio { width: 100%; }
+.publishMeta { display: flex; flex-direction: column; gap: 12px; }
+.copyField { display: flex; flex-direction: column; gap: 6px; }
+.copyFieldHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.copyFieldHead .textButton { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.copyFieldBody { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--code-bg, rgba(0,0,0,0.28));
+  border: 1px solid var(--hairline, rgba(255,255,255,0.08)); color: var(--ink-1, #e9edf4); font-size: 13px;
+  line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; }
+.copyFieldBody.single { white-space: normal; }
+.copyFieldEmpty { padding: 10px 12px; border-radius: 10px; border: 1px dashed rgba(251,191,36,0.4);
+  background: rgba(251,191,36,0.06); color: #fbbf24; font-size: 13px; }
+.titleAlternates, .thumbConcepts { display: flex; flex-direction: column; gap: 10px; }
+.thumbConceptGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.thumbConcept { padding: 12px; border-radius: 10px; border: 1px solid var(--hairline, rgba(255,255,255,0.08));
+  background: var(--surface-2, rgba(255,255,255,0.02)); }
+.thumbConcept strong { display: block; font-size: 13px; margin-bottom: 4px; }
+.thumbConcept p { margin: 0; font-size: 12px; color: var(--ink-2, #9aa4b2); }

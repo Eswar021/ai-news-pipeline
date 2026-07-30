@@ -9,11 +9,13 @@ import {
   BookOpen,
   Braces,
   Captions,
+  Check,
   ChevronDown,
   ChevronRight,
   CircleAlert,
   ClipboardList,
   Clock3,
+  Copy,
   ExternalLink,
   FileJson,
   FileText,
@@ -1004,14 +1006,91 @@ function DiagnosticsView({ runId, modules }: { runId: string; modules: ModuleInf
   );
 }
 
+function CopyField({ label, value, empty, multiline = false }: { label: string; value: string; empty?: string; multiline?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const has = value.trim().length > 0;
+  return (
+    <div className="copyField">
+      <div className="copyFieldHead">
+        <span className="sectionLabel">{label}</span>
+        <button className="textButton" disabled={!has} onClick={() => {
+          navigator.clipboard?.writeText(value).catch(() => {});
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1200);
+        }}>{copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}</button>
+      </div>
+      {has
+        ? <pre className={`copyFieldBody ${multiline ? "" : "single"}`}>{value}</pre>
+        : <div className="copyFieldEmpty">{empty || "Not generated"}</div>}
+    </div>
+  );
+}
+
+function PublishKit({ detail }: { detail: RunDetail }) {
+  const runId = detail.index.run_id;
+  const final = useModule(runId, "metadata_finalizer");
+  const draft = useModule(runId, "metadata_creator");
+  const visuals = useModule(runId, "visuals");
+  const voiceover = useModule(runId, "voiceover");
+  const meta = (final.data?.youtube_metadata && Object.keys(final.data.youtube_metadata).length ? final.data.youtube_metadata : draft.data?.youtube_metadata) || {};
+  const video = visuals.data?.final_video;
+  const audio = voiceover.data?.variants?.[0]?.audio_path;
+  const titleOptions: Json[] = meta.title_options || [];
+  const title = titleOptions.map((option: Json) => typeof option === "string" ? option : option?.title).find(Boolean) || "";
+  const description = String(meta.description || "");
+  const tags = (meta.tags || []).join(", ");
+  const chapters = (meta.chapters || [])
+    .map((chapter: Json) => `${formatDuration(chapter.start_seconds ?? chapter.start ?? 0)} ${chapter.label || chapter.title || chapter.name || ""}`.trim())
+    .join("\n");
+  const thumbs: Json[] = meta.thumbnail_concepts || [];
+  return (
+    <section className="publishKit">
+      <div className="sectionHeading"><span className="sectionLabel">Publish kit</span><small>Everything for upload — media plus copy-paste metadata</small></div>
+      <div className="publishMedia">
+        <figure>
+          <figcaption><Film size={13} /> Episode video</figcaption>
+          {video ? <video controls preload="metadata" src={mediaUrl(video)} /> : <EmptyState label={detail.index.metrics?.final_video_available ? "Rendered video not found" : "No episode rendered yet"} />}
+        </figure>
+        {audio && <figure><figcaption><AudioLines size={13} /> Voiceover audio</figcaption><audio controls preload="metadata" src={mediaUrl(audio)} /></figure>}
+      </div>
+      <div className="publishMeta">
+        <CopyField label="Title" value={title} empty="No title options were generated." />
+        <CopyField label="Description" value={description} empty="No description was generated for this run." multiline />
+        <CopyField label="Tags" value={tags} empty="No tags were generated." />
+        <CopyField label="Chapters" value={chapters} empty="No chapters were generated." multiline />
+      </div>
+      {titleOptions.length > 1 && (
+        <div className="titleAlternates">
+          <span className="sectionLabel">Alternate titles</span>
+          {titleOptions.slice(1).map((option: Json, index: number) => {
+            const text = typeof option === "string" ? option : option?.title;
+            return text ? <CopyField key={index} label={`Option ${index + 2}`} value={String(text)} /> : null;
+          })}
+        </div>
+      )}
+      {thumbs.length > 0 && (
+        <div className="thumbConcepts">
+          <span className="sectionLabel">Thumbnail concepts</span>
+          <div className="thumbConceptGrid">
+            {thumbs.map((thumb: Json, index: number) => (
+              <div key={index} className="thumbConcept">
+                <strong>{thumb.headline || thumb.text || thumb.overlay_text || thumb.concept || `Concept ${index + 1}`}</strong>
+                <p>{thumb.description || thumb.visual || thumb.visual_description || thumb.rationale || ""}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function OverviewView({ detail, onView }: { detail: RunDetail; onView: (view: RunViewKey) => void }) {
   const [mode, setMode] = useState<ViewMode>("read");
   const script = useModule(detail.index.run_id, "script_generation");
   const selection = useModule(detail.index.run_id, "editorial_selection");
-  const visuals = useModule(detail.index.run_id, "visuals");
   const direction = script.data?.curated?.episode_direction || {};
   const stories = selection.data?.curated?.selected_stories || [];
-  const video = visuals.data?.final_video;
   const stages = ["ingestion", "content", "voiceover", "visuals"];
 
   return (
@@ -1033,6 +1112,8 @@ function OverviewView({ detail, onView }: { detail: RunDetail; onView: (view: Ru
         ]} />
       ) : (
         <div className="overviewLayout">
+          <PublishKit detail={detail} />
+
           <section className="editorialBrief">
             <span className="sectionLabel">Episode promise</span>
             <h3>{direction.viewer_promise || direction.episode_thesis || "No episode direction was persisted."}</h3>
@@ -1049,12 +1130,7 @@ function OverviewView({ detail, onView }: { detail: RunDetail; onView: (view: Ru
             )}
           </section>
 
-          <section className="overviewEpisode">
-            <div className="sectionHeading"><span className="sectionLabel">Rendered episode</span><button className="secondaryButton" onClick={() => onView("workflow")}><Workflow size={16} /> Inspect workflow</button></div>
-            {video
-              ? <video className="overviewVideo" controls preload="metadata" src={mediaUrl(video)} />
-              : <EmptyState label={detail.index.metrics?.final_video_available ? "Rendered video not found on disk" : "No episode has been rendered for this run yet"} />}
-          </section>
+          <div className="overviewCommand"><button className="secondaryButton" onClick={() => onView("workflow")}><Workflow size={16} /> Inspect stage workflow</button></div>
 
           {(detail.index.failure_reason || detail.index.problems?.length > 0) && (
             <section className="attentionBand">
