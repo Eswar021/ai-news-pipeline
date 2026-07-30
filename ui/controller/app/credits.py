@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import time
 from typing import Any, Callable
@@ -21,6 +22,7 @@ import urllib.request
 _DASHBOARDS = {
     "deepseek": "https://platform.deepseek.com/usage",
     "moonshot": "https://platform.moonshot.ai/console/account",
+    "openai": "https://platform.openai.com/settings/organization/billing/overview",
     "gemini": "https://console.cloud.google.com/billing",
 }
 
@@ -75,11 +77,16 @@ class CreditsReader:
         now = time.time()
         if not force and self._cache is not None and (now - self._fetched_at) < self.ttl:
             return self._cache
-        env = _read_env(self.project_root)
+        # Keys may live in the project .env or be exported in the controller's
+        # environment (e.g. OPENAI_API_KEY_A_C_C); check both, env wins.
+        env = {**_read_env(self.project_root), **os.environ}
+        openai_key = env.get("OPENAI_API_KEY") or env.get("OPENAI_API_KEY_A_C_C")
+        gemini_key = env.get("GEMINI_TTS_API_KEY") or env.get("GOOGLE_API_KEY") or env.get("GEMINI_API_KEY")
         providers = [
             self._deepseek(env),
             self._moonshot(env),
-            self._unavailable("gemini", "Gemini", env.get("GEMINI_TTS_API_KEY"), "Billed via Google Cloud; no balance API."),
+            self._unavailable("openai", "OpenAI", openai_key, "No API-key balance endpoint; check the billing dashboard."),
+            self._unavailable("gemini", "Gemini", gemini_key, "Billed via Google Cloud; no balance API."),
         ]
         result = {
             "providers": [provider for provider in providers if provider],

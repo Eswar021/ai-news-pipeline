@@ -466,7 +466,7 @@ def test_provider_credits_report_balances_and_unavailable(tmp_path: Path, monkey
     from ui.controller.app import credits as credits_module
 
     root = make_project(tmp_path)
-    write(root / ".env", "DEEPSEEK_API_KEY=sk-deepseek\nMOONSHOT_API_KEY=sk-moonshot\nGEMINI_TTS_API_KEY=g-key\n")
+    write(root / ".env", "DEEPSEEK_API_KEY=sk-deepseek\nMOONSHOT_API_KEY=sk-moonshot\nOPENAI_API_KEY_A_C_C = \"sk-openai\"\nGEMINI_TTS_API_KEY=g-key\n")
 
     def fake_fetch(url: str, api_key: str) -> dict:
         if "deepseek" in url:
@@ -482,6 +482,7 @@ def test_provider_credits_report_balances_and_unavailable(tmp_path: Path, monkey
         providers = {item["key"]: item for item in response.json()["providers"]}
         assert providers["deepseek"]["status"] == "ok" and providers["deepseek"]["balance"] == 2.97
         assert providers["moonshot"]["status"] == "ok" and providers["moonshot"]["balance"] == 0.93
+        assert providers["openai"]["status"] == "unavailable"  # used, but no balance API
         assert providers["gemini"]["status"] == "unavailable"
 
 
