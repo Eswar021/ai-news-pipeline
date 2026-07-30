@@ -6467,3 +6467,26 @@ video {
 .capabilityDetails > summary::before { content: "▸ "; }
 .capabilityDetails[open] > summary::before { content: "▾ "; }
 .capabilityDetails .capabilityFlow { margin-top: 14px; }
+
+/* ── Master-detail run layout (Phase 2) ──────────────────────────────── */
+.runLayout { display: flex; align-items: flex-start; gap: 0; }
+.runRail.embedded { flex: 0 0 288px; max-width: 288px; height: calc(100vh - 0px); padding-top: 18px; }
+.runLayout > .runWorkspace { flex: 1 1 auto; min-width: 0; padding: 20px 26px 40px; }
+@media (max-width: 900px) {
+  .runLayout { flex-direction: column; }
+  .runRail.embedded { flex: none; width: 100%; max-width: none; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--line-strong); }
+  .runRail.embedded .runList { max-height: 240px; }
+}
+
+/* ── Breadcrumbs ─────────────────────────────────────────────────────── */
+.breadcrumbs { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 13px; color: var(--ink-3, #6b7280); }
+.breadcrumbs button { background: none; border: none; color: var(--ink-2, #9aa4b2); cursor: pointer; padding: 2px 4px; border-radius: 6px; font: inherit; }
+.breadcrumbs button:hover { color: var(--ink-1, #e9edf4); background: rgba(255,255,255,0.05); }
+.breadcrumbs > span { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.breadcrumbs > strong { color: var(--ink-1, #e9edf4); font-weight: 600; }
+
+/* ── Overview episode panel (Phase 3) ────────────────────────────────── */
+.overviewEpisode { display: flex; flex-direction: column; gap: 12px; }
+.overviewEpisode .sectionHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.overviewVideo { width: 100%; max-width: 720px; border-radius: 12px; background: #000; border: 1px solid var(--hairline, rgba(255,255,255,0.1)); }
+.runMasthead .stageMiniMap { margin-top: 10px; }

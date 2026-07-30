@@ -67,6 +67,19 @@ export const runs = [
   },
 ];
 
+export const runDetail = {
+  index: runs[0],
+  context: {},
+  state: {},
+  modules: [
+    { name: "news_collection", stage: "ingestion", status: "ok", path: "news_collection", summary: {}, artifacts: [] },
+    { name: "script_generation", stage: "content", status: "ok", path: "script_generation", summary: {}, artifacts: [] },
+    { name: "voiceover", stage: "voiceover", status: "ok", path: "voiceover", summary: {}, artifacts: [] },
+    { name: "visuals", stage: "visuals", status: "ok", path: "visuals", summary: {}, artifacts: [] },
+  ],
+  errors: {},
+};
+
 export const capabilities = {
   local_only: true,
   profiles: ["fixture_daily"],

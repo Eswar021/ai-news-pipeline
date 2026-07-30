@@ -305,6 +305,11 @@ function App() {
             activeView={runView}
             onView={setRunView}
             onBack={() => returnToArea(originArea)}
+            backLabel={originArea === "history" ? "Runs" : "Run desk"}
+            runs={runs}
+            loading={loadingRuns}
+            onSelectRun={(id) => openRun(id, runView, originArea)}
+            onRefresh={() => void loadRuns()}
           />
         )}
       </main>
@@ -612,11 +617,21 @@ function RunWorkspace({
   activeView,
   onView,
   onBack,
+  backLabel,
+  runs,
+  loading,
+  onSelectRun,
+  onRefresh,
 }: {
   detail: RunDetail;
   activeView: RunViewKey;
   onView: (view: RunViewKey) => void;
   onBack: () => void;
+  backLabel: string;
+  runs: RunIndex[];
+  loading: boolean;
+  onSelectRun: (id: string) => void;
+  onRefresh: () => void;
 }) {
   const catalog = useInspectorCatalog();
   const views: Array<{ key: RunViewKey; label: string; icon: React.ElementType; helpKey: string }> = [
@@ -625,25 +640,30 @@ function RunWorkspace({
     { key: "lineage", label: "Record lineage", icon: GitBranch, helpKey: "record_lineage" },
     { key: "diagnostics", label: "Run diagnostics", icon: Terminal, helpKey: "run_diagnostics" },
   ];
+  const activeLabel = views.find((view) => view.key === activeView)?.label || "";
   return (
-    <div className="runWorkspace">
-      <button className="backButton" onClick={onBack}><ArrowLeft size={16} /> Back</button>
-      <RunMasthead run={detail.index} />
-      <nav className="runNav" aria-label="Selected run navigation">
-        {views.map(({ key, label, icon: Icon, helpKey }) => (
-          <button key={key} className={activeView === key ? "active" : ""} title={catalog?.help?.[helpKey]} onClick={() => onView(key)}><Icon size={16} />{label}</button>
-        ))}
-      </nav>
-      <div className="runViewCanvas" key={`${detail.index.run_id}-${activeView}`}>
-        {activeView === "overview" && (
-          <>
-            <div className="overviewCommand"><button className="primaryButton" onClick={() => onView("workflow")}><Workflow size={16} /> Inspect stage workflow</button></div>
-            <OverviewView detail={detail} />
-          </>
-        )}
-        {activeView === "workflow" && <WorkflowView runId={detail.index.run_id} />}
-        {activeView === "lineage" && <RecordLineageView runId={detail.index.run_id} />}
-        {activeView === "diagnostics" && <DiagnosticsView runId={detail.index.run_id} modules={detail.modules} />}
+    <div className="runLayout">
+      <RunRail embedded runs={runs} selected={detail.index.run_id} loading={loading} onSelect={onSelectRun} onRefresh={onRefresh} />
+      <div className="runWorkspace">
+        <nav className="breadcrumbs" aria-label="Breadcrumb">
+          <button onClick={onBack}>{backLabel}</button>
+          <ChevronRight size={14} />
+          <span title={detail.index.run_id}>{runTitle(detail.index)}</span>
+          <ChevronRight size={14} />
+          <strong>{activeLabel}</strong>
+        </nav>
+        <RunMasthead run={detail.index} />
+        <nav className="runNav" aria-label="Selected run navigation">
+          {views.map(({ key, label, icon: Icon, helpKey }) => (
+            <button key={key} className={activeView === key ? "active" : ""} title={catalog?.help?.[helpKey]} onClick={() => onView(key)}><Icon size={16} />{label}</button>
+          ))}
+        </nav>
+        <div className="runViewCanvas" key={`${detail.index.run_id}-${activeView}`}>
+          {activeView === "overview" && <OverviewView detail={detail} onView={onView} />}
+          {activeView === "workflow" && <WorkflowView runId={detail.index.run_id} />}
+          {activeView === "lineage" && <RecordLineageView runId={detail.index.run_id} />}
+          {activeView === "diagnostics" && <DiagnosticsView runId={detail.index.run_id} modules={detail.modules} />}
+        </div>
       </div>
     </div>
   );
@@ -655,24 +675,28 @@ function RunRail({
   loading,
   onSelect,
   onRefresh,
+  embedded = false,
 }: {
   runs: RunIndex[];
   selected: string;
   loading: boolean;
   onSelect: (id: string) => void;
-  onRefresh: () => Promise<void>;
+  onRefresh: () => Promise<void> | void;
+  embedded?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const visible = runs.filter((run) => `${run.run_id} ${run.profile} ${run.overall_status}`.toLowerCase().includes(query.toLowerCase()));
   return (
-    <aside className="runRail">
-      <header className="brandMark">
-        <span className="brandRule" />
-        <div>
-          <span className="eyebrow">Production desk</span>
-          <h1>Run Inspector</h1>
-        </div>
-      </header>
+    <aside className={`runRail ${embedded ? "embedded" : ""}`}>
+      {!embedded && (
+        <header className="brandMark">
+          <span className="brandRule" />
+          <div>
+            <span className="eyebrow">Production desk</span>
+            <h1>Run Inspector</h1>
+          </div>
+        </header>
+      )}
       <div className="railToolbar">
         <label className="searchField">
           <Search size={15} />
@@ -693,13 +717,13 @@ function RunRail({
               </div>
               <strong>{humanize(run.profile || "Unprofiled run")}</strong>
               <span>{shortRunId(run.run_id)}</span>
-              <small>{humanize(run.last_completed_module || "No completed module")}</small>
+              <StageMiniMap stageStatus={run.stage_status} compact />
             </button>
           ))}
           {!visible.length && <EmptyState label="No matching runs" />}
         </div>
       )}
-      <footer className="railFooter"><span />Read only / local</footer>
+      {!embedded && <footer className="railFooter"><span />Read only / local</footer>}
     </aside>
   );
 }
@@ -716,6 +740,7 @@ function RunMasthead({ run }: { run: RunIndex }) {
         </div>
         <h2>{runTitle(run)}</h2>
         <p>{run.run_id}</p>
+        <StageMiniMap stageStatus={run.stage_status} />
       </div>
       <dl className="headlineMetrics">
         <Metric label="Script" value={metrics.script_word_count ? `${formatNumber(metrics.script_word_count)} words` : "Not available"} helpKey="script_metric" />
@@ -979,12 +1004,14 @@ function DiagnosticsView({ runId, modules }: { runId: string; modules: ModuleInf
   );
 }
 
-function OverviewView({ detail }: { detail: RunDetail }) {
+function OverviewView({ detail, onView }: { detail: RunDetail; onView: (view: RunViewKey) => void }) {
   const [mode, setMode] = useState<ViewMode>("read");
   const script = useModule(detail.index.run_id, "script_generation");
   const selection = useModule(detail.index.run_id, "editorial_selection");
+  const visuals = useModule(detail.index.run_id, "visuals");
   const direction = script.data?.curated?.episode_direction || {};
   const stories = selection.data?.curated?.selected_stories || [];
+  const video = visuals.data?.final_video;
   const stages = ["ingestion", "content", "voiceover", "visuals"];
 
   return (
@@ -1022,16 +1049,11 @@ function OverviewView({ detail }: { detail: RunDetail }) {
             )}
           </section>
 
-          <section className="stageSection">
-            <div className="sectionHeading"><span className="sectionLabel">Pipeline</span><h3>Stage progress</h3></div>
-            <div className="stageTrack">
-              {stages.map((stage, index) => (
-                <div className="stageStep" key={stage}>
-                  <span className={`stageDot ${statusClass(detail.index.stage_status?.[stage] || "missing")}`}>{index + 1}</span>
-                  <div><strong>{humanize(stage)}</strong><small>{humanize(detail.index.stage_status?.[stage] || "missing")}</small></div>
-                </div>
-              ))}
-            </div>
+          <section className="overviewEpisode">
+            <div className="sectionHeading"><span className="sectionLabel">Rendered episode</span><button className="secondaryButton" onClick={() => onView("workflow")}><Workflow size={16} /> Inspect workflow</button></div>
+            {video
+              ? <video className="overviewVideo" controls preload="metadata" src={mediaUrl(video)} />
+              : <EmptyState label={detail.index.metrics?.final_video_available ? "Rendered video not found on disk" : "No episode has been rendered for this run yet"} />}
           </section>
 
           {(detail.index.failure_reason || detail.index.problems?.length > 0) && (

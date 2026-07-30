@@ -10,6 +10,7 @@ import {
   catalog,
   comparison,
   configFiles,
+  runDetail,
   runs,
 } from "./fixtures/browser-data.mjs";
 
@@ -49,6 +50,9 @@ function json(route, value, status = 200) {
 async function installRoutes(page) {
   await page.route("**/api/catalog", (route) => json(route, catalog));
   await page.route("**/api/runs", (route) => json(route, { runs }));
+  await page.route("**/api/runs/*/modules/**", (route) => json(route, { curated: {}, definition: {}, generation_evidence: {}, activity: {}, sources: [], summary: {} }));
+  await page.route("**/api/runs/*/workflow", (route) => json(route, { run_id: "run_fixture_left", updated_at: "", read_only: true, state_error: null, stages: [] }));
+  await page.route("**/api/runs/run_fixture_left", (route) => json(route, runDetail));
   await page.route("**/api/compare/runs?*", (route) => json(route, comparison));
   await page.route("**/control/jobs", async (route) => {
     if (route.request().method() === "GET") return json(route, { active_job: null, jobs: [] });
@@ -105,6 +109,16 @@ try {
   await assertPageFits(page, "desktop Run Desk");
   await assertVisible(page, "h2", "Run desk");
   await assertVisible(page, ".currentRunLead h3", "Fixture Daily");
+  await assertVisible(page, ".stageMiniMap .miniLabel", "Voice");
+
+  // Open a run into the master-detail workspace (rail + breadcrumbs + masthead).
+  await page.locator(".recentRunRows button").first().click();
+  await page.waitForSelector(".runLayout .breadcrumbs");
+  await assertVisible(page, ".runMasthead h2", "Fixture Daily");
+  await page.waitForSelector(".runRail.embedded .runItem.selected");
+  await assertPageFits(page, "desktop run workspace");
+  await page.locator(".breadcrumbs button").first().click();
+  await assertVisible(page, "h2", "Run desk");
   await page.locator("nav.globalNav").getByRole("button", { name: "New run" }).click();
   await assertVisible(page, "h2", "New run");
   await page.waitForSelector(".commandSequence code");
