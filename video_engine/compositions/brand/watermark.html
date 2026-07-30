@@ -1,6 +1,6 @@
 <!doctype html>
 <html data-composition-variables='[
-  {"id":"text","type":"string","label":"Handle / bug text","default":"@theairoundup"},
+  {"id":"text","type":"string","label":"Handle / bug text","default":"@TheAIDungeon"},
   {"id":"corner","type":"string","label":"Corner (tr|br|tl|bl)","default":"br"}
 ]'>
   <head><meta charset="UTF-8" /></head>
@@ -33,7 +33,7 @@
           const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
           const bug = R.querySelector(".bug");
           bug.classList.add(["tr", "br", "tl", "bl"].includes(get("corner", "br")) ? get("corner", "br") : "br");
-          R.querySelector(".btext").textContent = get("text", "@theairoundup");
+          R.querySelector(".btext").textContent = get("text", "@TheAIDungeon");
 
           window.__timelines = window.__timelines || {};
           const tl = gsap.timeline({ paused: true });

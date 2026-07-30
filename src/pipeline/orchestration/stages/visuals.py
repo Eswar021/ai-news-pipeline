@@ -131,6 +131,9 @@ def _run_stage(
         command += ["--units", str(options.units)]
     if options.skip_render:
         command.append("--skip-render")
+    channel_name = _channel_name(project_root, run_context)
+    if channel_name:
+        command += ["--channel-name", channel_name]
 
     logger.logger.info("VISUALS launching engine: %s", " ".join(command))
     _run_subprocess(command, cwd=engine_dir, logger=logger)
@@ -156,6 +159,26 @@ def _run_stage(
         },
         "handoff": {"episode_rendered": episode_rendered},
     }
+
+
+def _channel_name(project_root: Path, run_context: dict[str, Any]) -> str:
+    """The pipeline profile owns the channel identity; pass channel_name to the
+    engine so branding has a single source of truth. Best-effort — the engine
+    falls back to its own configured default if this is unavailable."""
+    profile = str(run_context.get("run_profile") or "").strip()
+    if not profile:
+        return ""
+    profile_path = project_root / "src" / "pipeline" / "config" / "profiles" / profile / "profile.yaml"
+    if not profile_path.exists():
+        return ""
+    try:
+        import yaml
+
+        data = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return ""
+    channel = data.get("channel") if isinstance(data.get("channel"), dict) else {}
+    return str(channel.get("channel_name") or "").strip()
 
 
 def _run_subprocess(command: list[str], *, cwd: Path, logger) -> None:

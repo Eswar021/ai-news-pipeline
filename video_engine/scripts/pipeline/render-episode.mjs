@@ -84,6 +84,8 @@ if (has("--deterministic")) {
 } else {
   const llmArgs = ["scripts/art-director/llm.mjs", workPkg, "--out", planYaml];
   if (opt("--units")) llmArgs.push("--units", opt("--units"));
+  if (opt("--channel-name")) llmArgs.push("--channel-name", opt("--channel-name"));
+  if (opt("--channel-handle")) llmArgs.push("--channel-handle", opt("--channel-handle"));
   sh("node", llmArgs);
 }
 

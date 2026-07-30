@@ -51,6 +51,17 @@ const componentParams = Object.fromEntries(Object.entries(menu.components || {})
 // HIDES it (with key-present-wins get()) instead of showing a stale default.
 const BLANKABLE = new Set(["subtitle", "kicker", "caption", "eyebrow", "sublabel", "author", "role", "secondary", "center", "title", "label", "tagline"]);
 
+// Channel identity is a FACT, not an LLM choice — inject the real values into
+// brand components so the model can never invent a handle. Config default, with
+// per-run overrides from the pipeline's channel_name.
+const brandCfg = cfg.brand || {};
+const channel = {
+  name: opt("--channel-name") || brandCfg.name || "The AI Dungeon",
+  handle: opt("--channel-handle") || brandCfg.handle || "@TheAIDungeon",
+};
+channel.kicker = (brandCfg.kicker || channel.name).toUpperCase();
+const CHANNEL_PARAM = { outro: ["handle", channel.handle], watermark: ["text", channel.handle], "episode-open": ["kicker", channel.kicker] };
+
 function loadApiKey() {
   const name = cfg.api_key_env || "DEEPSEEK_API_KEY";
   if (process.env[name]) return process.env[name];
@@ -107,7 +118,7 @@ function menuText() {
 function systemPrompt() {
   const m = menuText();
   return `You are the ART DIRECTOR for a fast, editorial AI-news explainer video.
-Theme: clean near-black, one amber + one cyan accent, bold sans + mono labels (Fireship-like).
+Theme: clean near-black, one amber + one cyan accent, bold sans + mono labels — a modern, fast tech-explainer look.
 You turn each spoken beat into a sequence of on-screen SHOTS using ONLY the component menu.
 You do NOT write narration and you do NOT compute timing — you choose components and author concise on-screen copy.
 
@@ -175,6 +186,9 @@ function scenesForUnit(unit, shots, isFirstUnit) {
       if (s.params[k] !== undefined) params[k] = s.params[k];
       else if (BLANKABLE.has(k)) params[k] = ""; // hide, don't fall back to a stale default
     }
+    // Overwrite any model-authored channel handle/kicker with the real identity.
+    const brand = CHANNEL_PARAM[s.component];
+    if (brand && allowed.includes(brand[0])) params[brand[0]] = brand[1];
     const transition = validTransitions.has(s.transition) ? s.transition : undefined;
     byBeat.get(s.beat_id).push({ component: s.component, params, weight: Math.max(1, Number(s.weight) || 1), transition });
   }

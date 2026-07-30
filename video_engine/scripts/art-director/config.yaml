@@ -21,3 +21,12 @@ reasoning:
 request_timeout_seconds: 600
 max_attempts: 2 # one retry on a bad/unparseable response
 max_shots_per_beat: 3 # a long beat may split into up to this many shots
+
+# Channel identity — CODE-INJECTED into brand components (outro handle, watermark
+# bug, episode-open kicker) so the model never invents a handle. Edit here for a
+# standalone project; the pipeline passes its own channel via --channel-name /
+# --channel-handle, which override these.
+brand:
+  name: The AI Dungeon
+  handle: "@TheAIDungeon"
+  kicker: "" # blank = channel name uppercased

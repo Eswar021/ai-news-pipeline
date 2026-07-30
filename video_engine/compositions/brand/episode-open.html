@@ -1,6 +1,6 @@
 <!doctype html>
 <html data-composition-variables='[
-  {"id":"kicker","type":"string","label":"Show / brand line","default":"THE AI ROUNDUP"},
+  {"id":"kicker","type":"string","label":"Show / brand line","default":"THE AI DUNGEON"},
   {"id":"title","type":"string","label":"Episode promise","default":"Five stories that moved AI this week"},
   {"id":"subtitle","type":"string","label":"Date / episode label","default":""}
 ]'>
@@ -49,7 +49,7 @@
           const HF = window.__hyperframes;
           const V = (HF && HF.getVariables) ? HF.getVariables() : {};
           const get = (k, d) => (V[k] !== undefined && V[k] !== null) ? V[k] : d;
-          R.querySelector(".ktext").textContent = get("kicker", "THE AI ROUNDUP");
+          R.querySelector(".ktext").textContent = get("kicker", "THE AI DUNGEON");
           const title = get("title", "Five stories that moved AI this week");
           const sub = get("subtitle", "");
           const tEl = R.querySelector(".ttext");
