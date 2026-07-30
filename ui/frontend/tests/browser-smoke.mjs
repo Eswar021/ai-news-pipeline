@@ -55,6 +55,14 @@ async function installRoutes(page) {
     return json(route, { job: { id: "job_fixture", status: "queued", run_id: "run_fixture_new" } });
   });
   await page.route("**/control/capabilities", (route) => json(route, capabilities));
+  await page.route("**/control/credits**", (route) => json(route, {
+    providers: [
+      { key: "deepseek", label: "DeepSeek", status: "ok", balance: 2.97, currency: "USD", dashboard: "https://example.test" },
+      { key: "moonshot", label: "Kimi (Moonshot)", status: "ok", balance: 0.93, currency: "USD", dashboard: "https://example.test" },
+      { key: "gemini", label: "Gemini", status: "unavailable", reason: "No balance API", dashboard: "https://example.test" },
+    ],
+    fetched_at: "2026-07-30T00:00:00Z",
+  }));
   await page.route("**/control/plans/preview", async (route) => {
     const requested = JSON.parse(route.request().postData() || "{}");
     const runId = requested.run_id || "run_fixture_new";

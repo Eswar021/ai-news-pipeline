@@ -361,6 +361,74 @@ function GlobalHeader({
   );
 }
 
+type CreditProvider = { key: string; label: string; status: string; balance?: number; currency?: string; available?: boolean; reason?: string; dashboard?: string };
+type CreditsData = { providers: CreditProvider[]; fetched_at: string };
+
+function useCredits() {
+  const [data, setData] = useState<CreditsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const refresh = async (force = false) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/control/credits${force ? "?refresh=true" : ""}`);
+      if (!res.ok) throw new Error();
+      setData(await res.json());
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void refresh(); }, []);
+  return { data, loading, refresh };
+}
+
+function creditTone(provider: CreditProvider): string {
+  if (provider.status !== "ok" || typeof provider.balance !== "number") return "muted";
+  if (provider.balance < 1) return "critical";
+  if (provider.balance < 3) return "low";
+  return "ok";
+}
+
+function formatMoney(value: number | undefined, currency: string | undefined): string {
+  if (typeof value !== "number") return "—";
+  const symbol = currency === "USD" ? "$" : currency === "CNY" ? "¥" : "";
+  return `${symbol}${value.toFixed(2)}${symbol ? "" : ` ${currency || ""}`}`.trim();
+}
+
+function CreditsPanel({ credits }: { credits: ReturnType<typeof useCredits> }) {
+  const providers = credits.data?.providers || [];
+  if (credits.loading && !credits.data) return null;
+  if (!providers.length) return null;
+  const low = providers.some((provider) => ["low", "critical"].includes(creditTone(provider)));
+  return (
+    <section className="creditsPanel">
+      <div className="creditsHead">
+        <SectionTitle label="Provider balances" title="AI credits" />
+        {low && <span className="creditsFlag">Low balance</span>}
+        <button className="iconButton" title="Refresh balances" onClick={() => void credits.refresh(true)}><RefreshCw size={14} /></button>
+      </div>
+      <div className="creditsRow">
+        {providers.map((provider) => (
+          <a
+            key={provider.key}
+            className={`creditCard tone-${creditTone(provider)}`}
+            href={provider.dashboard || "#"}
+            target="_blank"
+            rel="noreferrer"
+            title={provider.status === "ok" ? "Open provider dashboard" : provider.reason || "Unavailable"}
+          >
+            <strong>{provider.label}</strong>
+            {provider.status === "ok"
+              ? <span className="creditAmount">{formatMoney(provider.balance, provider.currency)}</span>
+              : <span className="creditNa">{provider.status === "unavailable" ? "No balance API" : "Unavailable"}</span>}
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function RunDesk({
   runs,
   currentRun,
@@ -382,9 +450,11 @@ function RunDesk({
 }) {
   const catalog = useInspectorCatalog();
   const stages = catalog?.stages || [];
+  const credits = useCredits();
   return (
     <div className="deskPage">
       <ViewHeading eyebrow="Local production" title="Run desk" summary="Current pipeline state and the persisted production path." helpKey="run_desk" />
+      {controllerConnected && <CreditsPanel credits={credits} />}
       {loading && !currentRun ? <Loading label="Scanning output" /> : currentRun ? (
         <section className="currentRunBand">
           <div className="currentRunLead">

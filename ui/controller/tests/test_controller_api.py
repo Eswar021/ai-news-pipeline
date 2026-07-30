@@ -462,6 +462,29 @@ def test_config_edit_is_atomic_validated_and_conflict_aware(tmp_path: Path) -> N
         assert "Credentials must remain" in secret.json()["detail"]
 
 
+def test_provider_credits_report_balances_and_unavailable(tmp_path: Path, monkeypatch) -> None:
+    from ui.controller.app import credits as credits_module
+
+    root = make_project(tmp_path)
+    write(root / ".env", "DEEPSEEK_API_KEY=sk-deepseek\nMOONSHOT_API_KEY=sk-moonshot\nGEMINI_TTS_API_KEY=g-key\n")
+
+    def fake_fetch(url: str, api_key: str) -> dict:
+        if "deepseek" in url:
+            return {"is_available": True, "balance_infos": [{"currency": "USD", "total_balance": "2.97"}]}
+        if "moonshot" in url:
+            return {"status": True, "data": {"available_balance": 0.93}}
+        raise AssertionError(url)
+
+    monkeypatch.setattr(credits_module, "_get_json", fake_fetch)
+    with client_for(root) as client:
+        response = client.get("/control/credits")
+        assert response.status_code == 200
+        providers = {item["key"]: item for item in response.json()["providers"]}
+        assert providers["deepseek"]["status"] == "ok" and providers["deepseek"]["balance"] == 2.97
+        assert providers["moonshot"]["status"] == "ok" and providers["moonshot"]["balance"] == 0.93
+        assert providers["gemini"]["status"] == "unavailable"
+
+
 def test_review_notes_are_ui_owned_and_run_scoped(tmp_path: Path) -> None:
     root = make_project(tmp_path)
     seed_run(root)

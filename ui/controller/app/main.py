@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config_store import ConfigConflict, ConfigError, ConfigStore
+from .credits import CreditsReader
 from .job_manager import ConfirmationRequired, JobConflict, JobManager
 from .models import ConfigUpdate, JobCreate, ReviewNoteUpdate, RunPlan, SLUG_RE
 from .planner import PlanError, RunPlanner
@@ -39,6 +40,7 @@ def create_app(
         runner_module=runner_module,
     )
     manager = JobManager(planner, store)
+    credits = CreditsReader(root)
     configs = ConfigStore(
         root,
         store,
@@ -98,6 +100,10 @@ def create_app(
             return planner.run_status(run_id)
         except (OSError, PlanError, ValueError) as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/control/credits")
+    def provider_credits(refresh: bool = Query(False)) -> dict[str, Any]:
+        return credits.credits(force=refresh)
 
     @app.get("/control/jobs")
     def jobs(limit: int = Query(50, ge=1, le=200)) -> dict[str, Any]:

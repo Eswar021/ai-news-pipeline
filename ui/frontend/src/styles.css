@@ -6411,3 +6411,24 @@ video {
     font-size: 9px;
   }
 }
+
+/* ── Provider credits panel (run desk) ───────────────────────────────── */
+.creditsPanel { margin: 18px 0 6px; }
+.creditsHead { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.creditsHead .iconButton { margin-left: auto; }
+.creditsFlag { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: #d98b00; background: rgba(217, 139, 0, 0.12); border: 1px solid rgba(217, 139, 0, 0.35);
+  padding: 3px 9px; border-radius: 999px; }
+.creditsRow { display: flex; flex-wrap: wrap; gap: 12px; }
+.creditCard { display: flex; flex-direction: column; gap: 4px; min-width: 150px; text-decoration: none;
+  padding: 12px 14px; border-radius: 12px; border: 1px solid var(--hairline, rgba(255,255,255,0.1));
+  background: var(--surface-2, rgba(255,255,255,0.03)); transition: border-color 0.15s, transform 0.15s; }
+.creditCard:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.25); }
+.creditCard strong { font-size: 12px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-2, #9aa4b2); }
+.creditCard .creditAmount { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-1, #e9edf4); }
+.creditCard .creditNa { font-size: 13px; color: var(--ink-3, #6b7280); }
+.creditCard.tone-ok .creditAmount { color: #34d399; }
+.creditCard.tone-low .creditAmount { color: #fbbf24; }
+.creditCard.tone-low { border-color: rgba(251, 191, 36, 0.4); }
+.creditCard.tone-critical .creditAmount { color: #f87171; }
+.creditCard.tone-critical { border-color: rgba(248, 113, 113, 0.5); background: rgba(248, 113, 113, 0.06); }
