@@ -277,6 +277,7 @@ function App() {
             runs={runs}
             currentRun={currentRun}
             loading={loadingRuns}
+            activeJob={controller.activeJob}
             onOpen={(id, view) => openRun(id, view, "desk")}
             onHistory={() => returnToArea("history")}
             onNew={() => openRunBuilder("new")}
@@ -429,10 +430,55 @@ function CreditsPanel({ credits }: { credits: ReturnType<typeof useCredits> }) {
   );
 }
 
+const MINIMAP_STAGES: Array<[string, string]> = [
+  ["ingestion", "Ingest"],
+  ["content", "Content"],
+  ["voiceover", "Voice"],
+  ["visuals", "Visuals"],
+];
+
+function StageMiniMap({ stageStatus, compact = false }: { stageStatus?: Record<string, string>; compact?: boolean }) {
+  const status = stageStatus || {};
+  return (
+    <div className={`stageMiniMap ${compact ? "compact" : ""}`} role="img" aria-label="Stage progress">
+      {MINIMAP_STAGES.map(([key, label]) => {
+        const state = status[key] || "missing";
+        return (
+          <span key={key} className={`miniStage ${statusClass(state)}`} title={`${label}: ${humanize(state)}`}>
+            <span className="miniDot" />
+            {!compact && <span className="miniLabel">{label}</span>}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+type ActiveJob = { id: string; run_id: string; status: string; current_stage: string; current_step: number; step_count: number };
+
+function ActiveJobPanel({ job, onOpen }: { job: ActiveJob; onOpen: () => void }) {
+  const pct = job.step_count ? Math.max(6, Math.round((job.current_step / job.step_count) * 100)) : 0;
+  return (
+    <section className="activeJobPanel">
+      <div className="activeJobHead">
+        <span className="liveDot working" />
+        <div className="activeJobIdent">
+          <strong>{humanize(job.current_stage || job.status)}</strong>
+          <small>{job.run_id} · step {Math.max(job.current_step, 1)} of {job.step_count || 1}</small>
+        </div>
+        <span className={`controlStatus status-${job.status}`}><i />{humanize(job.status)}</span>
+        <button className="secondaryButton" onClick={onOpen}><Terminal size={15} /> Console</button>
+      </div>
+      <div className="activeJobBar"><span style={{ width: `${pct}%` }} /></div>
+    </section>
+  );
+}
+
 function RunDesk({
   runs,
   currentRun,
   loading,
+  activeJob,
   onOpen,
   onHistory,
   onNew,
@@ -442,6 +488,7 @@ function RunDesk({
   runs: RunIndex[];
   currentRun?: RunIndex;
   loading: boolean;
+  activeJob?: ActiveJob | null;
   onOpen: (id: string, view: RunViewKey) => void;
   onHistory: () => void;
   onNew: () => void;
@@ -453,14 +500,16 @@ function RunDesk({
   const credits = useCredits();
   return (
     <div className="deskPage">
-      <ViewHeading eyebrow="Local production" title="Run desk" summary="Current pipeline state and the persisted production path." helpKey="run_desk" />
+      <ViewHeading eyebrow="Local production" title="Run desk" summary="What's running now, the current run's stage progress, and provider balances." helpKey="run_desk" />
       {controllerConnected && <CreditsPanel credits={credits} />}
+      {activeJob && ["queued", "running", "cancelling", "orphaned"].includes(activeJob.status) && <ActiveJobPanel job={activeJob} onOpen={onNew} />}
       {loading && !currentRun ? <Loading label="Scanning output" /> : currentRun ? (
         <section className="currentRunBand">
           <div className="currentRunLead">
             <div className="runStatusLine"><StatusChip status={currentRun.overall_status} /><span>{currentRun.is_current ? "Current run" : "Latest discovered run"}</span></div>
             <h3>{runTitle(currentRun)}</h3>
             <p>{currentRun.run_id}</p>
+            <StageMiniMap stageStatus={currentRun.stage_status} />
             {currentRun.failure_reason && <div className="inlineWarning">{currentRun.failure_reason}</div>}
           </div>
           <dl className="deskMetrics">
@@ -477,8 +526,31 @@ function RunDesk({
         </section>
       ) : <EmptyState label="No runs found under output/runs" />}
 
-      <section className="capabilitySection">
-        <SectionTitle label="Pipeline capability" title="Production path" />
+      <div className={`controllerState ${controllerConnected ? "connected" : ""}`}>
+        <ShieldCheck size={16} />
+        <span>Execution boundary <HelpTip text="Run commands are owned by the separate local controller; artifact inspection remains isolated and path-restricted." /></span>
+        <strong>{controllerConnected ? "Controller ready" : "Inspector only"}</strong>
+        <small>{controllerConnected ? "One supervised writer" : "Execution controller not connected"}</small>
+        <button className="textButton" disabled={!controllerConnected} onClick={onNew}>New run <ChevronRight size={14} /></button>
+      </div>
+
+      <section className="recentRunsSection">
+        <div className="sectionHeadingRow"><SectionTitle label="Recently discovered" title="Run activity" /><button className="textButton" onClick={onHistory}>View all runs <ChevronRight size={15} /></button></div>
+        <div className="recentRunRows">
+          {runs.slice(0, 5).map((run) => (
+            <button key={run.run_id} onClick={() => onOpen(run.run_id, "overview")}>
+              <StatusChip status={run.overall_status} />
+              <div><strong>{runTitle(run)}</strong><small>{run.run_id}</small></div>
+              <StageMiniMap stageStatus={run.stage_status} compact />
+              <time>{shortDate(run.created_at)}</time>
+              <ChevronRight size={16} />
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <details className="capabilityDetails">
+        <summary>Pipeline reference — the production path</summary>
         <div className="capabilityFlow">
           {stages.map((stage, index) => (
             <div className="capabilityStep" key={stage.key} title={stage.purpose}>
@@ -489,29 +561,7 @@ function RunDesk({
             </div>
           ))}
         </div>
-        <div className={`controllerState ${controllerConnected ? "connected" : ""}`}>
-          <ShieldCheck size={16} />
-          <span>Execution boundary <HelpTip text="Run commands are owned by the separate local controller; artifact inspection remains isolated and path-restricted." /></span>
-          <strong>{controllerConnected ? "Controller ready" : "Inspector only"}</strong>
-          <small>{controllerConnected ? "One supervised writer" : "Execution controller not connected"}</small>
-          <button className="textButton" disabled={!controllerConnected} onClick={onNew}>New run <ChevronRight size={14} /></button>
-        </div>
-      </section>
-
-      <section className="recentRunsSection">
-        <div className="sectionHeadingRow"><SectionTitle label="Recently discovered" title="Run activity" /><button className="textButton" onClick={onHistory}>View all runs <ChevronRight size={15} /></button></div>
-        <div className="recentRunRows">
-          {runs.slice(0, 5).map((run) => (
-            <button key={run.run_id} onClick={() => onOpen(run.run_id, "overview")}>
-              <StatusChip status={run.overall_status} />
-              <div><strong>{runTitle(run)}</strong><small>{run.run_id}</small></div>
-              <span>{humanize(run.last_completed_module || "No module")}</span>
-              <time>{shortDate(run.created_at)}</time>
-              <ChevronRight size={16} />
-            </button>
-          ))}
-        </div>
-      </section>
+      </details>
     </div>
   );
 }
@@ -542,7 +592,7 @@ function HistoryView({ runs, loading, onOpen }: { runs: RunIndex[]; loading: boo
                 <tr key={run.run_id}>
                   <td><StatusChip status={run.overall_status} /></td>
                   <td><strong>{runTitle(run)}</strong><small>{run.run_id}</small></td>
-                  <td><strong>{humanize(run.last_completed_module || "No completed module")}</strong><small>{run.environment || "Unknown environment"}</small></td>
+                  <td><StageMiniMap stageStatus={run.stage_status} compact /><small>{humanize(run.last_completed_module || "No completed module")}</small></td>
                   <td><span>{run.metrics?.final_video_available ? "Episode video" : run.metrics?.script_word_count ? "Script" : "Artifacts only"}</span></td>
                   <td><time>{formatDate(run.created_at)}</time></td>
                   <td><button className="iconButton" title="Open run" onClick={() => onOpen(run.run_id)}><ChevronRight size={17} /></button></td>

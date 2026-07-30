@@ -6432,3 +6432,38 @@ video {
 .creditCard.tone-low { border-color: rgba(251, 191, 36, 0.4); }
 .creditCard.tone-critical .creditAmount { color: #f87171; }
 .creditCard.tone-critical { border-color: rgba(248, 113, 113, 0.5); background: rgba(248, 113, 113, 0.06); }
+
+/* ── Stage mini-map (reusable: desk, history, rows) ──────────────────── */
+.stageMiniMap { display: inline-flex; align-items: center; gap: 0; margin: 8px 0 2px; }
+.stageMiniMap .miniStage { display: inline-flex; align-items: center; gap: 7px; position: relative; padding-right: 18px; }
+.stageMiniMap .miniStage:not(:last-child)::after { content: ""; position: absolute; right: 6px; top: 50%; width: 12px; height: 2px;
+  transform: translateY(-50%); background: var(--hairline, rgba(255,255,255,0.14)); }
+.stageMiniMap .miniStage:last-child { padding-right: 0; }
+.stageMiniMap .miniDot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3, #6b7280); box-shadow: 0 0 0 3px rgba(255,255,255,0.03); flex: none; }
+.stageMiniMap .miniLabel { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-2, #9aa4b2); }
+.stageMiniMap .miniStage.success .miniDot { background: #34d399; }
+.stageMiniMap .miniStage.danger .miniDot { background: #f87171; }
+.stageMiniMap .miniStage.warning .miniDot { background: #fbbf24; }
+.stageMiniMap .miniStage.neutral .miniDot { background: #4b5563; }
+.stageMiniMap.compact .miniStage { padding-right: 14px; }
+.stageMiniMap.compact .miniStage:not(:last-child)::after { width: 8px; right: 4px; }
+.stageMiniMap.compact .miniDot { width: 8px; height: 8px; }
+
+/* ── Active controller job panel (desk cockpit) ──────────────────────── */
+.activeJobPanel { margin: 14px 0; padding: 14px 16px; border-radius: 14px;
+  border: 1px solid rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.06); }
+.activeJobHead { display: flex; align-items: center; gap: 12px; }
+.activeJobHead .activeJobIdent { display: flex; flex-direction: column; gap: 2px; margin-right: auto; }
+.activeJobHead .activeJobIdent strong { font-size: 15px; }
+.activeJobHead .activeJobIdent small { font-size: 12px; color: var(--ink-2, #9aa4b2); font-variant-numeric: tabular-nums; }
+.activeJobBar { margin-top: 12px; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.activeJobBar span { display: block; height: 100%; border-radius: 999px; background: #34d399; transition: width 0.4s ease; }
+
+/* ── Demoted capability reference (collapsible) ──────────────────────── */
+.capabilityDetails { margin-top: 22px; border-top: 1px solid var(--hairline, rgba(255,255,255,0.08)); padding-top: 14px; }
+.capabilityDetails > summary { cursor: pointer; font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--ink-3, #6b7280); list-style: none; }
+.capabilityDetails > summary::-webkit-details-marker { display: none; }
+.capabilityDetails > summary::before { content: "▸ "; }
+.capabilityDetails[open] > summary::before { content: "▾ "; }
+.capabilityDetails .capabilityFlow { margin-top: 14px; }
