@@ -122,7 +122,7 @@ const DEFAULT_PLAN: RunPlan = {
   operation: "new",
   target_stage: "content",
   config_mode: "live",
-  synthesis_mode: "preview",
+  synthesis_mode: "final", // UI runs are production; final = Gemini. Preview (Kokoro) is dev-only.
   deterministic: false,
   units: null,
   skip_render: false,

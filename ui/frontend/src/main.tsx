@@ -1038,7 +1038,7 @@ function PublishKit({ detail }: { detail: RunDetail }) {
   const audio = voiceover.data?.curated?.variants?.[0]?.audio_path;
   const titleOptions: Json[] = meta.title_options || [];
   const title = titleOptions.map((option: Json) => typeof option === "string" ? option : option?.title).find(Boolean) || "";
-  const description = String(meta.description || "");
+  const description = String(meta.description_draft || meta.description || "");
   const tags = (meta.tags || []).join(", ");
   const chapters = (meta.chapters || [])
     .map((chapter: Json) => `${formatDuration(chapter.start_seconds ?? chapter.start ?? 0)} ${chapter.label || chapter.title || chapter.name || ""}`.trim())
