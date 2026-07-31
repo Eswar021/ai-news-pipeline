@@ -26,6 +26,16 @@ _DASHBOARDS = {
     "gemini": "https://console.cloud.google.com/billing",
 }
 
+# Each provider's billing/usage link is overridable from the environment, so you
+# can point (e.g.) the Gemini card at your exact project's billing page without
+# hardcoding project IDs in the repo. Set DEEPSEEK_BILLING_URL / MOONSHOT_BILLING_URL
+# / OPENAI_BILLING_URL / GEMINI_BILLING_URL in .env to override.
+_DASHBOARD_ENV = {key: f"{key.upper()}_BILLING_URL" for key in _DASHBOARDS}
+
+
+def _dashboard(key: str, env: dict[str, str]) -> str:
+    return env.get(_DASHBOARD_ENV.get(key, "")) or _DASHBOARDS.get(key, "")
+
 
 def _read_env(project_root: Path) -> dict[str, str]:
     env: dict[str, str] = {}
@@ -85,8 +95,8 @@ class CreditsReader:
         providers = [
             self._deepseek(env),
             self._moonshot(env),
-            self._unavailable("openai", "OpenAI", openai_key, "No API-key balance endpoint; check the billing dashboard."),
-            self._unavailable("gemini", "Gemini", gemini_key, "Billed via Google Cloud; no balance API."),
+            self._unavailable("openai", "OpenAI", openai_key, "No API-key balance endpoint; check the billing dashboard.", env),
+            self._unavailable("gemini", "Gemini", gemini_key, "Billed via Google Cloud; no balance API.", env),
         ]
         result = {
             "providers": [provider for provider in providers if provider],
@@ -112,10 +122,10 @@ class CreditsReader:
                 "balance": float(info.get("total_balance") or 0),
                 "currency": info.get("currency") or "USD",
                 "available": bool(data.get("is_available")),
-                "dashboard": _DASHBOARDS["deepseek"],
+                "dashboard": _dashboard("deepseek", env),
             }
         except Exception as exc:  # noqa: BLE001 - any failure degrades to a link
-            return {"key": "deepseek", "label": "DeepSeek", "status": "error", "reason": _reason(exc), "dashboard": _DASHBOARDS["deepseek"]}
+            return {"key": "deepseek", "label": "DeepSeek", "status": "error", "reason": _reason(exc), "dashboard": _dashboard("deepseek", env)}
 
     def _moonshot(self, env: dict[str, str]) -> dict[str, Any] | None:
         api_key = env.get("MOONSHOT_API_KEY")
@@ -132,12 +142,12 @@ class CreditsReader:
                 "balance": float(balance.get("available_balance") or 0),
                 "currency": "USD" if "moonshot.ai" in base else "CNY",
                 "available": bool(data.get("status", True)),
-                "dashboard": _DASHBOARDS["moonshot"],
+                "dashboard": _dashboard("moonshot", env),
             }
         except Exception as exc:  # noqa: BLE001
-            return {"key": "moonshot", "label": "Kimi (Moonshot)", "status": "error", "reason": _reason(exc), "dashboard": _DASHBOARDS["moonshot"]}
+            return {"key": "moonshot", "label": "Kimi (Moonshot)", "status": "error", "reason": _reason(exc), "dashboard": _dashboard("moonshot", env)}
 
-    def _unavailable(self, key: str, label: str, present: str | None, reason: str) -> dict[str, Any] | None:
+    def _unavailable(self, key: str, label: str, present: str | None, reason: str, env: dict[str, str]) -> dict[str, Any] | None:
         if not present:
             return None
-        return {"key": key, "label": label, "status": "unavailable", "reason": reason, "dashboard": _DASHBOARDS.get(key, "")}
+        return {"key": key, "label": label, "status": "unavailable", "reason": reason, "dashboard": _dashboard(key, env)}
