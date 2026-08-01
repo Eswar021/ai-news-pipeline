@@ -51,16 +51,41 @@ class RoundupConfig(BaseModel):
         return self
 
 
+class DeepDiveConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    # deep_dive expands a single story into angle sections, so exactly one story
+    # is required. story_selection chooses which story from the upstream slate.
+    min_stories: int = 1
+    story_selection: Literal["lead"] = "lead"
+    duration_mode: Literal["content_driven"] = "content_driven"
+    duration_ceiling_seconds: int | None = None
+
+    @field_validator("duration_ceiling_seconds")
+    @classmethod
+    def optional_ceiling_must_be_positive(cls, value: int | None) -> int | None:
+        if value is not None and value < 1:
+            raise ValueError("deep_dive.duration_ceiling_seconds must be positive when provided")
+        return value
+
+
 class VideoPackagingConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     target_format: TargetFormat
-    roundup: RoundupConfig
+    # Per-format config is optional in the model; the active format's block is
+    # required, enforced below. This keeps each format's config self-contained.
+    roundup: RoundupConfig | None = None
+    deep_dive: DeepDiveConfig | None = None
 
     @model_validator(mode="after")
-    def known_but_unsupported_formats_are_allowed_to_route(self) -> "VideoPackagingConfig":
+    def active_format_config_is_present_and_known(self) -> "VideoPackagingConfig":
         if self.target_format not in SUPPORTED_FORMATS and self.target_format not in KNOWN_FUTURE_FORMATS:
             raise ValueError(f"Unsupported target_format: {self.target_format}")
+        if self.target_format == "roundup" and self.roundup is None:
+            raise ValueError("video_packaging.roundup config is required when target_format is 'roundup'")
+        if self.target_format == "deep_dive" and self.deep_dive is None:
+            raise ValueError("video_packaging.deep_dive config is required when target_format is 'deep_dive'")
         return self
 
 

@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Any, Callable
 from .config import KNOWN_FUTURE_FORMATS, SCRIPT_APP_BY_FORMAT, SUPPORTED_FORMATS
 from .contract import VideoPackagingRequest, VideoPackagingResponse
+from .formats.deep_dive import build_deep_dive_packet
 from .formats.roundup import build_roundup_packet
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
+
+# Each format supplies a deterministic packet builder with the same (slate,
+# config) -> {packet, selection_stats, role_counts} contract. Adding a format is
+# a registry entry, not a change to the router.
+PACKET_BUILDERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
+    "roundup": build_roundup_packet,
+    "deep_dive": build_deep_dive_packet,
+}
 
 
 def run(input_json: dict) -> dict:
@@ -17,8 +27,7 @@ def run(input_json: dict) -> dict:
     if target_format not in SUPPORTED_FORMATS:
         if target_format in KNOWN_FUTURE_FORMATS:
             raise NotImplementedError(
-                f"video_packaging target_format '{target_format}' is not implemented yet. "
-                "Only 'roundup' is active in the current app."
+                f"video_packaging target_format '{target_format}' is not implemented yet."
             )
         raise ValueError(f"Unsupported target_format: {target_format}")
 
@@ -29,15 +38,15 @@ def run(input_json: dict) -> dict:
         raise ValueError("input.editorial_selection is not ready for video packaging")
     slate = selection.data.editorial_slate
     generated_at = _iso_now()
-    roundup_cfg = request.config.roundup.model_dump(mode="json")
-    built = build_roundup_packet(slate, roundup_cfg)
+    format_config = getattr(request.config, target_format).model_dump(mode="json")
+    built = PACKET_BUILDERS[target_format](slate, format_config)
     packet = built["packet"]
     selection_stats = built["selection_stats"]
     selected_count = int(selection_stats["selected_story_count"])
-    min_stories = int(roundup_cfg["min_stories"])
+    min_stories = int(format_config.get("min_stories", 1))
     status = "ok" if selected_count >= min_stories else "failed"
     failure_reason = "" if status == "ok" else (
-        f"Editorial slate contains {selected_count} selected story/stories; at least {min_stories} are required."
+        f"Editorial slate contains {selected_count} usable story/stories; at least {min_stories} are required."
     )
 
     response = VideoPackagingResponse(
