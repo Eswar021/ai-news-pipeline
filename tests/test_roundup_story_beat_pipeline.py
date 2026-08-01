@@ -10,6 +10,7 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from src.pipeline.content.script_generation.formats.roundup import app as script_app
 from src.pipeline.content.script_generation.formats.roundup import writer as script_writer
+from src.pipeline.content.script_generation.shared import invocation
 from src.pipeline.content.script_generation.formats.roundup.checks import check_script_package
 from src.pipeline.content.script_generation.formats.roundup.contract import (
     ReviewConfig,
@@ -474,11 +475,11 @@ def test_llm_call_retries_a_transient_rate_limit(monkeypatch) -> None:
             return RunnableLambda(invoke)
 
     delays: list[float] = []
-    monkeypatch.setattr(script_writer.time, "sleep", delays.append)
+    monkeypatch.setattr(invocation.time, "sleep", delays.append)
     llm = FakeLLM()
     calls: list[dict] = []
 
-    output = script_writer._invoke_chain(
+    output = invocation._invoke_chain(
         module_name="roundup_director",
         output_model=EpisodeDirectorOutput,
         llm=llm,
@@ -559,7 +560,7 @@ def test_content_filter_rejection_uses_explicit_provider_fallback() -> None:
             return RunnableLambda(invoke)
 
     calls: list[dict] = []
-    output = script_writer._invoke_runtime_chain(
+    output = invocation.invoke_runtime_chain(
         module_name="roundup_director",
         output_model=EpisodeDirectorOutput,
         llm_runtime={

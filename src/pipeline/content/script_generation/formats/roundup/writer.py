@@ -1,42 +1,19 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import re
-import time
 from typing import Any
 
-from langchain_core.prompts import ChatPromptTemplate
-from pydantic import BaseModel, ValidationError as PydanticValidationError
-
-from ...shared.llm_logging import build_llm_call_log
+from ...shared.invocation import invoke_runtime_chain
+from ...shared.research import beat_support_context, research_story_sources, validate_story_segment
+from ...shared.review_acceptance import bookend_review_beat_ids, story_review_beat_ids
+from ...shared.source_truth import truth_item_map
+from ...shared.utils import clean_text, dedupe, json_dumps, source_record_keys, story_id, story_title
 from .models import (
     BookendOutput,
     BookendReviewOutput,
     EpisodeDirectorOutput,
     StoryReviewOutput,
     StorySegmentOutput,
-    StorySourceBriefOutput,
-    story_source_brief_output_model,
-)
-from ...shared.review_acceptance import (
-    bookend_review_beat_ids,
-    story_review_beat_ids,
-)
-from ...shared.source_context import (
-    build_source_research_context,
-    build_story_context_packet,
-    story_context_telemetry,
-    validate_context_resource_limits,
-)
-from ...shared.source_truth import build_story_truth_index, compact_truth_index, truth_item_map
-from ...shared.utils import clean_text, dedupe, json_dumps, source_record_keys, story_id, story_title
-
-
-TASK_PROMPT = ChatPromptTemplate.from_messages(
-    [
-        ("system", "{system_prompt}"),
-        ("human", "{user_preamble}\n\nTask payload:\n{task_payload}"),
-    ]
 )
 
 
@@ -56,6 +33,7 @@ def generate_roundup_script(
         prompt_bundle=prompt_bundles["source_researcher"],
         llm_runtime=llm_runtimes["source_researcher"],
         llm_calls=llm_calls,
+        module_name="roundup_source_researcher",
     )
     director = direct_episode(
         video_packet=video_packet,
@@ -114,92 +92,6 @@ def generate_roundup_script(
     }
 
 
-def research_story_sources(
-    *,
-    stories: list[dict[str, Any]],
-    script_cfg: dict[str, Any],
-    prompt_bundle: dict[str, str],
-    llm_runtime: dict[str, Any],
-    llm_calls: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-    source_config = dict(script_cfg.get("source_context") or {})
-    worker_count = min(max(1, int(script_cfg.get("worker_count", 1))), len(stories))
-
-    call_logs_by_index: list[list[dict[str, Any]]] = [[] for _ in stories]
-
-    def research(index: int, story: dict[str, Any]):
-        local_calls = call_logs_by_index[index]
-        source_context = build_source_research_context(story)
-        allowed_record_keys = source_record_keys(story)
-        output_model = story_source_brief_output_model(
-            required_story_id=story_id(story),
-            allowed_record_keys=allowed_record_keys,
-        )
-        payload = {
-            "task": "Read the complete assigned records and build one semantic source brief without writing narration.",
-            "required_story_id": story_id(story),
-            "allowed_source_record_keys": allowed_record_keys,
-            "complete_story_context": source_context,
-            "identity_rule": (
-                "Copy required_story_id and record_key values exactly from this payload; never shorten, "
-                "rewrite, or invent an identifier."
-            ),
-        }
-        response = _invoke_runtime_chain(
-            module_name="roundup_source_researcher",
-            output_model=output_model,
-            llm_runtime=llm_runtime,
-            prompt_bundle=prompt_bundle,
-            task_payload=json_dumps(payload),
-            metadata={
-                "story_id": story_id(story),
-                "source_context_mode": "complete_records_plus_semantic_brief",
-                **story_context_telemetry(source_context),
-            },
-            llm_calls=local_calls,
-        )
-        brief = response.model_dump(mode="json")
-        truth_index_model = build_story_truth_index(story, response)
-        truth_index = compact_truth_index(truth_index_model)
-        packet = build_story_context_packet(story, truth_index_model)
-        return index, brief, truth_index, packet
-
-    ordered: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]] | None] = [None] * len(stories)
-    try:
-        if worker_count == 1:
-            for index, story in enumerate(stories):
-                _, brief, truth_index, packet = research(index, story)
-                ordered[index] = (brief, truth_index, packet)
-        else:
-            with ThreadPoolExecutor(max_workers=worker_count) as executor:
-                futures = {executor.submit(research, index, story): index for index, story in enumerate(stories)}
-                for future in as_completed(futures):
-                    index, brief, truth_index, packet = future.result()
-                    ordered[index] = (brief, truth_index, packet)
-    finally:
-        for calls in call_logs_by_index:
-            llm_calls.extend(calls)
-
-    if any(item is None for item in ordered):
-        raise RuntimeError("Source research completed with missing story packets")
-    briefs: list[dict[str, Any]] = []
-    truth_indexes: list[dict[str, Any]] = []
-    packets: list[dict[str, Any]] = []
-    for item in ordered:
-        if item is None:
-            continue
-        brief, truth_index, packet = item
-        briefs.append(brief)
-        truth_indexes.append(truth_index)
-        packets.append(packet)
-    validate_context_resource_limits(
-        packets,
-        max_story_context_chars=int(source_config.get("max_story_context_chars", 500_000)),
-        max_episode_context_chars=int(source_config.get("max_episode_context_chars", 1_500_000)),
-    )
-    return briefs, truth_indexes, packets
-
-
 def direct_episode(
     *,
     video_packet: dict[str, Any],
@@ -221,7 +113,7 @@ def direct_episode(
         "story_context_packets": context_packets,
         "section_guidance": _compact_section_plan(section_plan),
     }
-    response = _invoke_runtime_chain(
+    response = invoke_runtime_chain(
         module_name="roundup_director",
         output_model=EpisodeDirectorOutput,
         llm_runtime=llm_runtime,
@@ -381,7 +273,7 @@ def _write_one_story(
             "Build the mini-story around tension, explanation, and payoff instead of reading the records in source order.",
         ],
     }
-    response = _invoke_runtime_chain(
+    response = invoke_runtime_chain(
         module_name="roundup_story_writer",
         output_model=StorySegmentOutput,
         llm_runtime=writer_llm_runtime,
@@ -398,7 +290,7 @@ def _write_one_story(
         },
         llm_calls=llm_calls,
     )
-    current = _validate_story_segment(
+    current = validate_story_segment(
         response.model_dump(mode="json"),
         story=story,
         truth_index=truth_index,
@@ -421,11 +313,11 @@ def _write_one_story(
             "storytelling_policy": script_cfg["storytelling"],
             "director_brief": brief,
             "story_context_packet": context_packet,
-            "beat_support_context": _beat_support_context(current, truth_index),
+            "beat_support_context": beat_support_context(current, truth_index),
             "allowed_source_record_keys": source_record_keys(story),
             "current_segment": current,
         }
-        review_response = _invoke_runtime_chain(
+        review_response = invoke_runtime_chain(
             module_name="roundup_story_reviewer",
             output_model=StoryReviewOutput,
             llm_runtime=reviewer_llm_runtime,
@@ -458,7 +350,7 @@ def _write_one_story(
         revision: dict[str, Any] | None = None
         contract_errors: list[str] = []
         try:
-            revision = _validate_story_segment(
+            revision = validate_story_segment(
                 review_response["revised_segment"],
                 story=story,
                 truth_index=truth_index,
@@ -531,7 +423,7 @@ def write_bookends(
             "Follow channel_voice.language.profanity_mode.",
         ],
     }
-    response = _invoke_runtime_chain(
+    response = invoke_runtime_chain(
         module_name="roundup_bookend_writer",
         output_model=BookendOutput,
         llm_runtime=writer_llm_runtime,
@@ -574,7 +466,7 @@ def write_bookends(
                 "Reject invented or inexact quotations and verbatim intro repetition from a story body.",
             ],
         }
-        review_response = _invoke_runtime_chain(
+        review_response = invoke_runtime_chain(
             module_name="roundup_bookend_reviewer",
             output_model=BookendReviewOutput,
             llm_runtime=reviewer_llm_runtime,
@@ -621,383 +513,6 @@ def write_bookends(
         if not applied:
             break
     return current, passes
-
-
-def _invoke_runtime_chain(
-    *,
-    module_name: str,
-    output_model,
-    llm_runtime: dict[str, Any],
-    prompt_bundle: dict[str, str],
-    task_payload: str,
-    metadata: dict[str, Any],
-    llm_calls: list[dict[str, Any]],
-):
-    primary_config = llm_runtime["config"]
-    fallback_runtime = llm_runtime.get("content_filter_fallback")
-    primary_metadata = {
-        **metadata,
-        "route_attempt": "primary",
-        "content_filter_fallback_configured": fallback_runtime is not None,
-    }
-    try:
-        return _invoke_chain(
-            module_name=module_name,
-            output_model=output_model,
-            llm=llm_runtime["llm"],
-            prompt_bundle=prompt_bundle,
-            task_payload=task_payload,
-            script_cfg=primary_config,
-            metadata=primary_metadata,
-            llm_calls=llm_calls,
-        )
-    except Exception as exc:
-        if fallback_runtime is None or not _is_content_filter_error(exc):
-            raise
-
-    fallback_config = fallback_runtime["config"]
-    return _invoke_chain(
-        module_name=module_name,
-        output_model=output_model,
-        llm=fallback_runtime["llm"],
-        prompt_bundle=prompt_bundle,
-        task_payload=task_payload,
-        script_cfg=fallback_config,
-        metadata={
-            **metadata,
-            "route_attempt": "content_filter_fallback",
-            "fallback_trigger": "content_filter",
-            "fallback_from_provider": primary_config.get("provider", ""),
-            "fallback_from_model": primary_config.get("model", ""),
-        },
-        llm_calls=llm_calls,
-    )
-
-
-def _invoke_chain(
-    *,
-    module_name: str,
-    output_model,
-    llm,
-    prompt_bundle: dict[str, str],
-    task_payload: str,
-    script_cfg: dict[str, Any],
-    metadata: dict[str, Any],
-    llm_calls: list[dict[str, Any]],
-):
-    structured_config = dict(script_cfg.get("structured_output") or {})
-    structured_options = _structured_output_options(structured_config)
-    task_payload = _task_payload_for_structured_output(
-        task_payload,
-        output_model=output_model,
-        method=structured_options["method"],
-    )
-    structured_llm = llm.with_structured_output(output_model, **structured_options)
-    chain = TASK_PROMPT | structured_llm
-    prompt_inputs = {
-        "system_prompt": prompt_bundle["system"],
-        "user_preamble": prompt_bundle["user_preamble"],
-        "task_payload": task_payload,
-    }
-    rendered_messages = [
-        {
-            "role": "system" if message.type == "system" else "user",
-            "content": str(message.content),
-        }
-        for message in TASK_PROMPT.format_messages(**prompt_inputs)
-    ]
-    started = time.time()
-    retry_config = script_cfg.get("llm_retry", {})
-    retry_enabled = bool(retry_config.get("enabled", True))
-    max_transient_attempts = int(retry_config.get("max_attempts", 5)) if retry_enabled else 1
-    max_structured_attempts = (
-        int(retry_config.get("max_structured_output_attempts", 2)) if retry_enabled else 1
-    )
-    retry_errors: list[dict[str, Any]] = []
-    attempt_count = 0
-    transient_failure_count = 0
-    structured_failure_count = 0
-    while True:
-        attempt_count += 1
-        attempt_started = time.time()
-        try:
-            result = chain.invoke(prompt_inputs)
-        except Exception as exc:
-            status_code = _exception_status_code(exc)
-            structured_failure = _is_structured_output_error(exc)
-            retryable = _is_retryable_llm_error(exc, status_code=status_code)
-            retry_entry = {
-                "attempt": attempt_count,
-                "status_code": status_code,
-                "error_type": type(exc).__name__,
-                "error": str(exc),
-            }
-            if structured_failure:
-                structured_failure_count += 1
-                can_retry = retry_enabled and structured_failure_count < max_structured_attempts
-            else:
-                transient_failure_count += 1
-                can_retry = retry_enabled and retryable and transient_failure_count < max_transient_attempts
-            if not can_retry:
-                retry_errors.append(retry_entry)
-                call_metadata = {
-                    **metadata,
-                    "attempt_count": attempt_count,
-                    "retry_count": max(0, attempt_count - 1),
-                    "retry_errors": retry_errors,
-                }
-                llm_calls.append(
-                        build_llm_call_log(
-                        module_name=module_name,
-                            provider=str(script_cfg.get("provider", "")),
-                            model=str(script_cfg.get("model", "")),
-                            messages=rendered_messages,
-                        raw_response=None,
-                        parsed_output=None,
-                        metadata=call_metadata,
-                        duration_seconds=time.time() - started,
-                        parse_error=str(exc),
-                    )
-                )
-                raise
-            delay_seconds = _retry_delay_seconds(
-                exc,
-                attempt=attempt_count,
-                retry_config=retry_config,
-            )
-            retry_entry["delay_seconds"] = round(delay_seconds, 3)
-            retry_errors.append(retry_entry)
-            time.sleep(delay_seconds)
-            continue
-
-        raw = result.get("raw") if isinstance(result, dict) else None
-        parsed = result.get("parsed") if isinstance(result, dict) else result
-        parsing_error = result.get("parsing_error") if isinstance(result, dict) else None
-        parsed_model = None
-        if parsing_error is None and parsed is not None:
-            try:
-                parsed_model = parsed if isinstance(parsed, output_model) else output_model.model_validate(parsed)
-            except PydanticValidationError as exc:
-                parsing_error = exc
-
-        call_metadata = {
-            **metadata,
-            "attempt_count": attempt_count,
-            "retry_count": max(0, attempt_count - 1),
-        }
-        if retry_errors:
-            call_metadata["retry_errors"] = list(retry_errors)
-
-        if parsing_error is not None or parsed_model is None:
-            structured_failure_count += 1
-            parse_error_text = str(parsing_error or "missing parsed output")
-            llm_calls.append(
-                build_llm_call_log(
-                    module_name=module_name,
-                    provider=str(script_cfg.get("provider", "")),
-                    model=str(script_cfg.get("model", "")),
-                    messages=rendered_messages,
-                    raw_response=raw,
-                    parsed_output=None,
-                    metadata=call_metadata,
-                    duration_seconds=time.time() - attempt_started,
-                    parse_error=parse_error_text,
-                )
-            )
-            if retry_enabled and structured_failure_count < max_structured_attempts:
-                retry_error = ValueError(parse_error_text)
-                delay_seconds = _retry_delay_seconds(
-                    retry_error,
-                    attempt=structured_failure_count,
-                    retry_config=retry_config,
-                )
-                retry_errors.append(
-                    {
-                        "attempt": attempt_count,
-                        "status_code": None,
-                        "error_type": "StructuredOutputError",
-                        "error": parse_error_text,
-                        "delay_seconds": round(delay_seconds, 3),
-                    }
-                )
-                time.sleep(delay_seconds)
-                continue
-            error = ValueError(f"LLM structured output failed for {module_name}: {parse_error_text}")
-            if isinstance(parsing_error, BaseException):
-                raise error from parsing_error
-            raise error
-
-        parsed_output = parsed_model.model_dump(mode="json")
-        llm_calls.append(
-            build_llm_call_log(
-                module_name=module_name,
-                provider=str(script_cfg.get("provider", "")),
-                model=str(script_cfg.get("model", "")),
-                messages=rendered_messages,
-                raw_response=raw,
-                parsed_output=parsed_output,
-                metadata=call_metadata,
-                duration_seconds=time.time() - attempt_started,
-            )
-        )
-        return parsed_model
-
-
-def _structured_output_options(structured_config: dict[str, Any]) -> dict[str, Any]:
-    method = str(structured_config.get("method") or "json_schema")
-    options: dict[str, Any] = {
-        "include_raw": True,
-        "method": method,
-    }
-    if method != "json_mode":
-        options["strict"] = bool(structured_config.get("strict", True))
-    return options
-
-
-def _task_payload_for_structured_output(
-    task_payload: str,
-    *,
-    output_model,
-    method: str,
-) -> str:
-    if method != "json_mode":
-        return task_payload
-    schema = json_dumps(output_model.model_json_schema())
-    return (
-        f"{task_payload}\n\n"
-        "Return only one JSON object matching the following JSON Schema exactly. "
-        "Use only enum values defined by the schema, use null only where allowed, "
-        "and do not wrap the object in Markdown.\n"
-        f"JSON Schema:\n{schema}"
-    )
-
-
-def _exception_status_code(exc: Exception) -> int | None:
-    status_code = getattr(exc, "status_code", None)
-    if isinstance(status_code, int):
-        return status_code
-    response = getattr(exc, "response", None)
-    response_status = getattr(response, "status_code", None)
-    return response_status if isinstance(response_status, int) else None
-
-
-def _is_retryable_llm_error(exc: Exception, *, status_code: int | None) -> bool:
-    if status_code in {429, 500, 502, 503, 504}:
-        return True
-    return type(exc).__name__ in {
-        "APIConnectionError",
-        "APITimeoutError",
-        "InternalServerError",
-        "RateLimitError",
-        "ServiceUnavailableError",
-    }
-
-
-def _is_content_filter_error(exc: Exception) -> bool:
-    status_code = _exception_status_code(exc)
-    text = str(exc).casefold().replace("_", " ")
-    markers = ("content filter", "high risk", "highrisk")
-    return status_code in {400, 403} and any(marker in text for marker in markers)
-
-
-def _is_structured_output_error(exc: Exception) -> bool:
-    return isinstance(exc, PydanticValidationError) or type(exc).__name__ in {
-        "OutputParserException",
-        "ValidationError",
-    }
-
-
-def _retry_delay_seconds(
-    exc: Exception,
-    *,
-    attempt: int,
-    retry_config: dict[str, Any],
-) -> float:
-    initial_delay = float(retry_config.get("initial_delay_seconds", 1.0))
-    maximum_delay = float(retry_config.get("max_delay_seconds", 30.0))
-    exponential_delay = initial_delay * (2 ** max(0, attempt - 1))
-    server_delay = _server_retry_delay_seconds(exc)
-    if server_delay is not None:
-        exponential_delay = max(exponential_delay, server_delay + 0.25)
-    return min(maximum_delay, exponential_delay)
-
-
-def _server_retry_delay_seconds(exc: Exception) -> float | None:
-    response = getattr(exc, "response", None)
-    headers = getattr(response, "headers", {}) or {}
-    for key, milliseconds in (
-        ("retry-after-ms", True),
-        ("retry-after", False),
-        ("x-ratelimit-reset-tokens", False),
-        ("x-ratelimit-reset-requests", False),
-    ):
-        value = headers.get(key) if hasattr(headers, "get") else None
-        parsed = _parse_retry_delay(value, milliseconds=milliseconds)
-        if parsed is not None:
-            return parsed
-    match = re.search(
-        r"try again in\s+([0-9]+(?:\.[0-9]+)?)\s*(ms|milliseconds?|s|seconds?)",
-        str(exc),
-        flags=re.IGNORECASE,
-    )
-    if not match:
-        return None
-    value = float(match.group(1))
-    return value / 1000 if match.group(2).lower().startswith("m") else value
-
-
-def _parse_retry_delay(value: Any, *, milliseconds: bool) -> float | None:
-    if value is None:
-        return None
-    text = str(value).strip().lower()
-    if not text:
-        return None
-    if milliseconds:
-        try:
-            return float(text) / 1000
-        except ValueError:
-            return None
-    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*(ms|s)?", text)
-    if not match:
-        return None
-    delay = float(match.group(1))
-    return delay / 1000 if match.group(2) == "ms" else delay
-
-
-def _validate_story_segment(
-    segment: dict[str, Any],
-    *,
-    story: dict[str, Any],
-    truth_index: dict[str, Any],
-) -> dict[str, Any]:
-    raw = StorySegmentOutput.model_validate(segment).model_dump(mode="json")
-    sid = story_id(story)
-    if clean_text(raw.get("story_id")) != sid:
-        raise ValueError(f"Story writer returned story_id {raw.get('story_id')!r}; expected {sid!r}")
-    allowed_keys = set(source_record_keys(story))
-    available_truth = truth_item_map(truth_index)
-    used_keys: list[str] = []
-    for beat in raw["beats"]:
-        beat["narration_text"] = clean_text(beat["narration_text"])
-        beat["support_truth_ids"] = dedupe(list(beat.get("support_truth_ids") or []))
-        unknown_truth = sorted(set(beat["support_truth_ids"]) - set(available_truth))
-        if unknown_truth:
-            raise ValueError(f"Story writer used truth IDs outside {sid}: {unknown_truth}")
-        supported_record_keys = [
-            clean_text(available_truth[truth_id].get("record_key"))
-            for truth_id in beat["support_truth_ids"]
-            if truth_id in available_truth
-        ]
-        beat["source_record_keys"] = dedupe(list(beat.get("source_record_keys") or []))
-        beat["source_record_keys"] = dedupe([*beat["source_record_keys"], *supported_record_keys])
-        unknown = sorted(set(beat["source_record_keys"]) - allowed_keys)
-        if unknown:
-            raise ValueError(f"Story writer used source keys outside {sid}: {unknown}")
-        used_keys.extend(beat["source_record_keys"])
-    if allowed_keys and not used_keys:
-        raise ValueError(f"Story writer did not ground {sid} in any assigned source record")
-    raw["display_title"] = clean_text(raw.get("display_title")) or story_title(story)
-    return raw
 
 
 def _validate_bookends(bookends: dict[str, Any], video_packet: dict[str, Any]) -> dict[str, Any]:
@@ -1068,25 +583,6 @@ def _director_story(story: dict[str, Any]) -> dict[str, Any]:
 
 def _story_preview(story: dict[str, Any] | None) -> dict[str, Any]:
     return _director_story(story) if story else {}
-
-
-def _beat_support_context(segment: dict[str, Any], truth_index: dict[str, Any]) -> list[dict[str, Any]]:
-    available = truth_item_map(truth_index)
-    context: list[dict[str, Any]] = []
-    for beat_order, beat in enumerate(segment.get("beats", []), start=1):
-        support_items = [
-            available[truth_id]
-            for truth_id in beat.get("support_truth_ids", [])
-            if truth_id in available
-        ]
-        context.append(
-            {
-                "beat_id": f"beat_{beat_order:02d}",
-                "narration_text": clean_text(beat.get("narration_text")),
-                "support_items": support_items,
-            }
-        )
-    return context
 
 
 def _segments_for_bookends(video_packet: dict[str, Any], segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
