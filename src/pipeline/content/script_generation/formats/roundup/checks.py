@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .utils import dedupe, estimated_seconds, story_id, word_count
+from ...shared.utils import dedupe, estimated_seconds, story_id, word_count
 
 
 INTERNAL_ID_RE = re.compile(

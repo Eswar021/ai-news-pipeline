@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .utils import clean_text, safe_int, source_record_keys, story_id, story_title
+from ...shared.utils import clean_text, safe_int, source_record_keys, story_id, story_title
 
 
 def build_roundup_section_inputs(video_packet: dict[str, Any], config: dict[str, Any]) -> list[dict[str, Any]]:

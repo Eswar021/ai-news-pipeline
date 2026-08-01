@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .utils import clean_text, dedupe, estimated_seconds, word_count
+from ...shared.utils import clean_text, dedupe, estimated_seconds, word_count
 
 
 def assemble_script(

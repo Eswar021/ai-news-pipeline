@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, ValidationError as PydanticValidationError
 
-from .llm_logging import build_llm_call_log
+from ...shared.llm_logging import build_llm_call_log
 from .models import (
     BookendOutput,
     BookendReviewOutput,
@@ -29,7 +29,7 @@ from .source_context import (
     validate_context_resource_limits,
 )
 from .source_truth import build_story_truth_index, compact_truth_index, truth_item_map
-from .utils import clean_text, dedupe, json_dumps, source_record_keys, story_id, story_title
+from ...shared.utils import clean_text, dedupe, json_dumps, source_record_keys, story_id, story_title
 
 
 TASK_PROMPT = ChatPromptTemplate.from_messages(
