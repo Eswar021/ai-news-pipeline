@@ -7,7 +7,7 @@ import yaml
 
 from src.pipeline.config import ConfigRepository
 
-from src.pipeline.content.script_generation.formats.roundup.source_truth import build_story_truth_index
+from src.pipeline.content.script_generation.shared.source_truth import build_story_truth_index
 
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "creator_voice_benchmark"

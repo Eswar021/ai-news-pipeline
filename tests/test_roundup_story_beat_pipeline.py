@@ -24,7 +24,7 @@ from src.pipeline.content.script_generation.formats.roundup.models import (
     StorySourceBriefOutput,
     story_source_brief_output_model,
 )
-from src.pipeline.content.script_generation.formats.roundup.source_truth import (
+from src.pipeline.content.script_generation.shared.source_truth import (
     build_story_truth_index,
     compact_truth_index,
 )

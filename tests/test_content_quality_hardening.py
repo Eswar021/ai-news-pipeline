@@ -16,7 +16,7 @@ from src.pipeline.content.metadata_creator.app import (
     _source_meaning_boundaries_for_prompt,
 )
 from src.pipeline.publishing.metadata_finalizer.app import _chapter_title as finalized_chapter_title
-from src.pipeline.content.script_generation.formats.roundup.source_truth import (
+from src.pipeline.content.script_generation.shared.source_truth import (
     build_story_truth_index,
     compact_truth_index,
 )

@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 from .source_truth import StoryTruthIndex
-from ...shared.utils import clean_text, json_dumps, story_id, story_title
+from .utils import clean_text, json_dumps, story_id, story_title
 
 
 STORY_CONTEXT_PACKET_VERSION = "story_context_v1"

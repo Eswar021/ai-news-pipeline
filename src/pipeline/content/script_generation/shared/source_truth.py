@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .models import StorySourceBriefOutput
-from ...shared.utils import clean_text, story_id
+from .utils import clean_text, story_id
 
 
 TruthType = Literal[
