@@ -1,0 +1,5 @@
+target_format: deep_dive
+deep_dive:
+  story_selection: lead
+  min_stories: 1
+  duration_mode: content_driven

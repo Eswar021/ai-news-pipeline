@@ -355,7 +355,10 @@ class BaseScriptConfig(BaseModel):
     base_url: str | None = None
     provider_options: ProviderOptions = Field(default_factory=ProviderOptions)
     structured_output: StructuredOutputConfig = Field(default_factory=StructuredOutputConfig)
-    llm_roles: dict[ScriptLLMRole, RoleLLMConfig] = Field(default_factory=dict)
+    # Role keys are format-specific (roundup: story_writer/…; deep_dive:
+    # section_writer/…). Each format's SCRIPT_LLM_ROLES tuple is the source of
+    # truth at resolution, so the key type stays a generic string here.
+    llm_roles: dict[str, RoleLLMConfig] = Field(default_factory=dict)
     prompt_version: str
     temperature: float
     diagnostic_words_per_minute: int = DEFAULT_DIAGNOSTIC_WORDS_PER_MINUTE

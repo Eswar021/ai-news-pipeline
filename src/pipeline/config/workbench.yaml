@@ -25,6 +25,27 @@ profiles:
       publishing:
         metadata_finalizer: profiles/daily_48h_all_sources/publishing/metadata_finalizer.yaml
         publish_handoff: profiles/daily_48h_all_sources/publishing/publish_handoff.yaml
+  daily_deep_dive:
+    # Single-topic deep-dive. Reuses daily_48h_all_sources for the whole Phase-1
+    # corpus (collection → selection); overrides only Phase-2 packaging + script.
+    profile_file: profiles/daily_deep_dive/profile.yaml
+    stages:
+      ingestion:
+        news_collection: profiles/daily_48h_all_sources/ingestion/news_collection.yaml
+      content:
+        evidence_prep: profiles/daily_48h_all_sources/content/evidence_prep.yaml
+        editorial_triage: profiles/daily_48h_all_sources/content/editorial_triage.yaml
+        story_mapping: profiles/daily_48h_all_sources/content/story_mapping.yaml
+        editorial_selection: profiles/daily_48h_all_sources/content/editorial_selection.yaml
+        video_packaging: profiles/daily_deep_dive/content/video_packaging.yaml
+        script_generation: profiles/daily_deep_dive/content/script_generation.yaml
+        metadata_creator: profiles/daily_48h_all_sources/content/metadata_creator.yaml
+      voiceover:
+        voiceover: profiles/daily_48h_all_sources/voiceover/voiceover.yaml
+        voiceover_preview: profiles/daily_48h_all_sources/voiceover/voiceover_preview.yaml
+      publishing:
+        metadata_finalizer: profiles/daily_48h_all_sources/publishing/metadata_finalizer.yaml
+        publish_handoff: profiles/daily_48h_all_sources/publishing/publish_handoff.yaml
 experiments:
   voiceover_delivery_comparison:
     section_type: intro

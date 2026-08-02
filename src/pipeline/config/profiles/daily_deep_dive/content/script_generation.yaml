@@ -1,0 +1,222 @@
+provider: openai
+model: gpt-4o
+prompt_version: v1
+temperature: 0.4
+structured_output:
+  method: json_schema
+  strict: true
+provider_options:
+  request_timeout_seconds: 300
+llm_roles:
+  section_writer:
+    provider: deepseek
+    model: deepseek-v4-pro
+    temperature: 1.0
+    provider_options:
+      thinking: enabled
+      omit_temperature: true
+      reasoning_effort: max
+      request_timeout_seconds: 600
+    structured_output:
+      method: json_mode
+      strict: false
+    llm_retry:
+      enabled: true
+      max_attempts: 2
+      max_structured_output_attempts: 2
+      initial_delay_seconds: 1.0
+      max_delay_seconds: 10.0
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      provider_options:
+        request_timeout_seconds: 300
+      structured_output:
+        method: json_schema
+        strict: true
+  section_reviewer:
+    provider: deepseek
+    model: deepseek-v4-pro
+    temperature: 1.0
+    provider_options:
+      thinking: enabled
+      omit_temperature: true
+      reasoning_effort: max
+      request_timeout_seconds: 600
+    structured_output:
+      method: json_mode
+      strict: false
+    llm_retry:
+      enabled: true
+      max_attempts: 2
+      max_structured_output_attempts: 2
+      initial_delay_seconds: 1.0
+      max_delay_seconds: 10.0
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      provider_options:
+        request_timeout_seconds: 300
+      structured_output:
+        method: json_schema
+        strict: true
+  bookend_writer:
+    provider: deepseek
+    model: deepseek-v4-pro
+    temperature: 1.0
+    provider_options:
+      thinking: enabled
+      omit_temperature: true
+      reasoning_effort: max
+      request_timeout_seconds: 600
+    structured_output:
+      method: json_mode
+      strict: false
+    llm_retry:
+      enabled: true
+      max_attempts: 2
+      max_structured_output_attempts: 2
+      initial_delay_seconds: 1.0
+      max_delay_seconds: 10.0
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      provider_options:
+        request_timeout_seconds: 300
+      structured_output:
+        method: json_schema
+        strict: true
+  bookend_reviewer:
+    provider: deepseek
+    model: deepseek-v4-pro
+    temperature: 1.0
+    provider_options:
+      thinking: enabled
+      omit_temperature: true
+      reasoning_effort: max
+      request_timeout_seconds: 600
+    structured_output:
+      method: json_mode
+      strict: false
+    llm_retry:
+      enabled: true
+      max_attempts: 2
+      max_structured_output_attempts: 2
+      initial_delay_seconds: 1.0
+      max_delay_seconds: 10.0
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      provider_options:
+        request_timeout_seconds: 300
+      structured_output:
+        method: json_schema
+        strict: true
+diagnostic_words_per_minute: 140
+worker_count: 4  # parallel angle writers
+title_card_seconds: 2.8
+min_angle_sections: 3
+max_angle_sections: 6
+llm_retry:
+  enabled: true
+  max_attempts: 5
+  max_structured_output_attempts: 2
+  initial_delay_seconds: 1.0
+  max_delay_seconds: 30.0
+writing_guidance:
+  intro:
+    suggested_words: 60
+    beat_guidance: Use two or three purposeful beats.
+    editorial_goal: Hook on the topic's single most striking concrete detail and promise the payoff without listing the angles.
+  angle:
+    suggested_words: 200
+    beat_guidance: Open with a natural bridge from the previous angle, then use as many distinct beats as this facet needs.
+    editorial_goal: Advance one facet with a concrete anchor, a plain-language model, and a reason it matters — no article read-out.
+  closing:
+    suggested_words: 60
+    beat_guidance: Use one or two concise beats.
+    editorial_goal: Land the single honest takeaway the video earned and end on a short natural signoff.
+script_style:
+  audience: AI-curious professionals
+  tone: creator-led, clear, energetic, curious, and grounded
+  avoid:
+  - dry technical reporting
+  - overhype
+  - fake certainty
+  - source-by-source summaries
+  - stock hype phrases used instead of a concrete idea
+  - generic universal conclusions about AI changing everything
+channel_voice:
+  persona: curious technical friend with a skeptical eyebrow
+  worldview:
+  - optimistic about useful progress
+  - skeptical of marketing
+  - practical consequences over abstract importance
+  energy: energetic but not frantic
+  opinion:
+    allow_first_person_editorial_opinion: true
+    forbid_fabricated_personal_experience: true
+  humor:
+    enabled: true
+    modes:
+    - observational
+    - dry
+    - self_aware
+    - absurd_analogy
+    density: restrained
+    allow_callbacks: true
+    avoid:
+    - forced meme references
+    - cruelty
+    - unsupported accusations
+  language:
+    prefer:
+    - concrete verbs
+    - varied sentence length
+    - plain-language mental models
+    avoid:
+    - corporate press-release language
+    - generic importance claims
+    - article-summary transitions
+    profanity_mode: avoid
+    profanity_terms:
+    - fuck
+    - fucking
+    - shit
+    - bullshit
+storytelling:
+  require_story_engine: true
+  require_viewer_payoff: true
+  allow_optional_truth_details: true
+  forbid_source_order_summary: true
+  max_must_communicate_truth_items: 4
+  max_optional_truth_items: 10
+source_context:
+  max_story_context_chars: 500000
+  max_episode_context_chars: 1500000
+source_policy:
+  use_selected_stories_only: true
+  include_full_records: true
+review:
+  enabled: true
+  max_revision_passes: 1
+  quality_criteria:
+  - a non-generic opening for each angle
+  - a concrete explanation a smart non-specialist can follow
+  - a memorable creator viewpoint or reaction
+  - natural spoken rhythm with varied sentence length
+  - a satisfying payoff for each angle without filler
+  - materially faithful use of the topic's source records
+  - a concrete anchor per angle rather than a reusable category summary
+  - preservation of source meaning, including combined versus individual evidence and measured versus claimed results
+  - preservation of current versus planned state and source terminology such as open-weight versus open-source
+  - exact quotations and preserved attribution for source opinions, forecasts, allegations, and marketing claims
+  - angles that build one coherent explanation rather than repeating each other
+  - a cold open that hooks on one concrete detail instead of listing the angles
+  - creative-device labels that are actually expressed in the narration
+  - analogies whose scale and mechanism remain materially truthful
+  - clean spoken beats that each do one editorial job
