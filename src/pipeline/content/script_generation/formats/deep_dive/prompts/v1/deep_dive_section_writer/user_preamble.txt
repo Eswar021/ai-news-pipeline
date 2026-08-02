@@ -1,0 +1,1 @@
+Write one angle section. Use the assigned angle_brief, the assigned_story records, and the truth_index for grounding. Return a StorySegmentOutput whose story_id is the required_story_id and whose beats advance this one angle with a natural opening bridge. Ground factual beats in allowed_source_record_keys and support_truth_ids.

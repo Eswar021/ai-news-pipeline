@@ -1,0 +1,1 @@
+Plan the deep-dive. Read the complete source brief and truth index for the single topic, then return the episode thesis, viewer promise, topic arc, and the ordered angle briefs. Assign each angle a unique angle_id (angle_01, angle_02, ...) and make ordered_angle_ids match the briefs exactly. Stay within the supplied angle_count_range.

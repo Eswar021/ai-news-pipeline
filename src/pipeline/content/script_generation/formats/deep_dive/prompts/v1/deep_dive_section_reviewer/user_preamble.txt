@@ -1,0 +1,1 @@
+Review the angle segment against the quality criteria and its beat_support_context. Keep it, or return a full rewrite in revised_segment. Judge spoken quality and source fidelity only.
