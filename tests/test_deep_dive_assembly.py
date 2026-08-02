@@ -73,6 +73,14 @@ def test_deep_dive_sections_and_assembly_produce_a_valid_package() -> None:
     assert [s["section_type"] for s in section_plan] == ["intro", "story", "story", "closing"]
     assert [s.get("angle_id") for s in section_plan] == [None, "angle_01", "angle_02", None]
 
+    # each angle writer must see its siblings (and not itself) so it can avoid
+    # restating a point another angle owns.
+    angle_sections = [s for s in section_plan if s["section_type"] == "story"]
+    all_angle_ids = {s["angle_id"] for s in angle_sections}
+    for section in angle_sections:
+        siblings = {e["angle_id"] for e in section["prompt_payload"]["other_angles"]}
+        assert siblings == all_angle_ids - {section["angle_id"]}
+
     angle_segments = [_segment("angle_01", "What happened", "Here is what happened."),
                       _segment("angle_02", "How it works", "Here is how it works.")]
     bookends = {

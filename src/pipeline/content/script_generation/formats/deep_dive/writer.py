@@ -226,6 +226,7 @@ def _write_one_angle(
         "required_story_id": story_id(story),
         "quality_criteria": review_config.get("quality_criteria", []),
         "beat_support_context": beat_support_context(segment, truth_index),
+        "other_angles": plan["prompt_payload"].get("other_angles", []),
         "segment": segment,
     }
     review = invoke_runtime_chain(

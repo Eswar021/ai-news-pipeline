@@ -16,12 +16,24 @@ def build_deep_dive_section_inputs(
     if not ordered:
         raise ValueError("deep-dive director returned no ordered angles")
 
+    # Compact directory of every angle so each writer/reviewer can see what the
+    # sibling angles own and avoid restating them (each writer otherwise sees
+    # only its own brief, which is why angles echoed the same stakes line).
+    angle_directory = [
+        {
+            "angle_id": angle_id,
+            "angle_label": clean_text((briefs_by_id.get(angle_id) or {}).get("angle_label")),
+            "angle_promise": clean_text((briefs_by_id.get(angle_id) or {}).get("angle_promise")),
+        }
+        for angle_id in ordered
+    ]
+
     sections = [_intro_section(story, director, config)]
     for order, angle_id in enumerate(ordered, start=1):
         brief = briefs_by_id.get(angle_id)
         if brief is None:
             raise ValueError(f"deep-dive director ordered angle {angle_id} without a matching brief")
-        sections.append(_angle_section(story, brief, order, len(ordered), config))
+        sections.append(_angle_section(story, brief, order, len(ordered), config, angle_directory))
     sections.append(_closing_section(story, director, config))
     return sections
 
@@ -57,8 +69,10 @@ def _angle_section(
     order: int,
     angle_total: int,
     config: dict[str, Any],
+    angle_directory: list[dict[str, Any]],
 ) -> dict[str, Any]:
     angle_id = clean_text(brief.get("angle_id"))
+    other_angles = [entry for entry in angle_directory if entry["angle_id"] != angle_id]
     return {
         "section_id": f"section_{order:02d}_{angle_id}",
         "section_type": "story",
@@ -76,6 +90,7 @@ def _angle_section(
             "section_goal": clean_text(brief.get("angle_promise")) or "Advance one facet of the topic clearly.",
             "angle_position": {"index": order, "of": angle_total, "is_first_angle": order == 1},
             "angle_brief": brief,
+            "other_angles": other_angles,
             "writing_guidance": _writing_guidance(config, "angle"),
             "script_style": config["script_style"],
             "assigned_story": story,
