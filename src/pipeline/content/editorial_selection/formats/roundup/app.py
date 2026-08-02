@@ -1343,6 +1343,8 @@ def _restore_duplicate_audit_story_ids(
                 f"{selection_ref}"
             )
         assessment["story_id"] = selection_ref_to_story_id[selection_ref]
+    kept_groups: list[dict[str, Any]] = []
+    dropped_group_ids: set[str] = set()
     for group in payload["duplicate_story_groups"]:
         restored_ids: list[str] = []
         for selection_ref in group["story_ids"]:
@@ -1351,15 +1353,33 @@ def _restore_duplicate_audit_story_ids(
                     "focused duplicate audit group returned unknown selection reference: "
                     f"{selection_ref}"
                 )
-            restored_ids.append(selection_ref_to_story_id[selection_ref])
+            story_id = selection_ref_to_story_id[selection_ref]
+            # A member listed more than once (or two refs resolving to the same
+            # story) is a benign model quirk inside a "these are the same story"
+            # group — keep the first occurrence instead of failing the whole
+            # editorial selection after bounded retries.
+            if story_id not in restored_ids:
+                restored_ids.append(story_id)
         preferred_ref = clean_text(group.get("preferred_story_id"))
         if preferred_ref not in selection_ref_to_story_id:
             raise ValueError(
                 "focused duplicate audit returned unknown preferred selection reference: "
                 f"{preferred_ref}"
             )
+        # A duplicate group needs at least two distinct stories; if it collapses
+        # below that after de-duping, it is not a real group. Drop it and let its
+        # lone member fall back to a normal, ungrouped assessment.
+        if len(restored_ids) < 2:
+            dropped_group_ids.add(clean_text(group.get("group_id")))
+            continue
         group["story_ids"] = restored_ids
         group["preferred_story_id"] = selection_ref_to_story_id[preferred_ref]
+        kept_groups.append(group)
+    payload["duplicate_story_groups"] = kept_groups
+    if dropped_group_ids:
+        for assessment in payload["assessments"]:
+            if clean_text(assessment.get("duplicate_group_id")) in dropped_group_ids:
+                assessment["duplicate_group_id"] = ""
     return RoundupDuplicateAudit.model_validate(payload)
 
 
