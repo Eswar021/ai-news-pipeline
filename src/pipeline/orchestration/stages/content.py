@@ -29,6 +29,9 @@ from .common import (
 
 
 STAGE = "content"
+# Phase-1 (shared corpus, minus ingestion's news_collection) then Phase-2. The
+# shared-corpus boundary is defined in content_phases so the derive primitive and
+# this stage agree on which modules are reusable across formats.
 MODULES = [
     "evidence_prep",
     "editorial_triage",

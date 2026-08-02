@@ -101,6 +101,13 @@ def create_app(
         except (OSError, PlanError, ValueError) as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    @app.get("/control/runs/{run_id}/derive-targets")
+    def derive_targets(run_id: str) -> dict[str, Any]:
+        try:
+            return {"run_id": run_id, "targets": planner.derive_targets(run_id)}
+        except (OSError, PlanError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @app.get("/control/credits")
     def provider_credits(refresh: bool = Query(False)) -> dict[str, Any]:
         return credits.credits(force=refresh)

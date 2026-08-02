@@ -136,6 +136,94 @@ def seed_run(root: Path, run_id: str = "run_existing", *, stage_status: dict | N
     )
 
 
+def make_derive_project(tmp_path: Path) -> Path:
+    """Two profiles ('base', 'deep') that share identical Phase-1 stage paths, so
+    'deep' can be derived from a 'base' run's corpus."""
+    root = tmp_path / "project"
+    config = root / "src" / "pipeline" / "config"
+    phase1 = (
+        "      ingestion:\n"
+        "        news_collection: shared/news.yaml\n"
+        "      content:\n"
+        "        evidence_prep: shared/ev.yaml\n"
+        "        editorial_triage: shared/tri.yaml\n"
+        "        story_mapping: shared/map.yaml\n"
+        "        editorial_selection: shared/sel.yaml\n"
+    )
+    write(
+        config / "workbench.yaml",
+        "config_schema_version: pipeline_modular_config_v1\n"
+        "default_run_profile: base\n"
+        "default_environment: dev\n"
+        "environments:\n  dev: environments/dev.yaml\n"
+        "profiles:\n"
+        "  base:\n    profile_file: profiles/base/profile.yaml\n    stages:\n"
+        + phase1
+        + "        video_packaging: profiles/base/vp.yaml\n"
+        "  deep:\n    profile_file: profiles/deep/profile.yaml\n    stages:\n"
+        + phase1
+        + "        video_packaging: profiles/deep/vp.yaml\n",
+    )
+    write(config / "environments" / "dev.yaml", "shared: {}\nmodules: {}\n")
+    write(root / "fake_runner.py", FAKE_RUNNER)
+    (root / "output" / "runs").mkdir(parents=True)
+    return root
+
+
+def seed_corpus_run(root: Path, run_id: str = "run_corpus_base", *, complete: bool = True) -> None:
+    run = root / "output" / "runs" / run_id
+    write(
+        run / "run_context.json",
+        json.dumps({
+            "schema_version": "pipeline_run_context_v1",
+            "run_id": run_id,
+            "run_profile": "base",
+            "config_environment": "dev",
+            "run_dir": str(run),
+            "output_root": str(root / "output"),
+        }),
+    )
+    if complete:
+        write(run / "editorial_selection" / "editorial_selection_result.json", json.dumps({"status": "ok"}))
+
+
+def test_derive_targets_lists_lineage_compatible_profiles(tmp_path: Path) -> None:
+    root = make_derive_project(tmp_path)
+    seed_corpus_run(root)
+    with client_for(root) as client:
+        response = client.get("/control/runs/run_corpus_base/derive-targets")
+        assert response.status_code == 200
+        assert sorted(response.json()["targets"]) == ["base", "deep"]
+
+        # a run without a completed corpus offers no targets
+        seed_corpus_run(root, run_id="run_incomplete", complete=False)
+        empty = client.get("/control/runs/run_incomplete/derive-targets")
+        assert empty.json()["targets"] == []
+
+
+def test_derive_preview_prepends_derive_then_runs_phase2(tmp_path: Path) -> None:
+    root = make_derive_project(tmp_path)
+    seed_corpus_run(root)
+    with client_for(root) as client:
+        preview = client.post(
+            "/control/plans/preview",
+            json={
+                "operation": "derive",
+                "base_run_id": "run_corpus_base",
+                "profile": "deep",
+                "run_to_stage": "content",
+            },
+        )
+        assert preview.status_code == 200, preview.text
+        data = preview.json()
+        stages = [command["stage"] for command in data["commands"]]
+        assert stages == ["derive", "content"]
+        assert data["run_id"].endswith("_deep")
+        derive_cmd = data["commands"][0]["display"]
+        assert "derive --from-run run_corpus_base --profile deep" in derive_cmd
+        assert "--from-module video_packaging" in data["commands"][1]["display"]
+
+
 def test_capabilities_and_preview_use_only_canonical_arguments(tmp_path: Path) -> None:
     root = make_project(tmp_path)
     with client_for(root) as client:

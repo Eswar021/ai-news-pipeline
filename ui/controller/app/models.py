@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 SLUG_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 STAGE_NAMES = ("collect", "content", "voiceover", "visuals")
-Operation = Literal["new", "resume", "retry"]
+Operation = Literal["new", "resume", "retry", "derive"]
 StageName = Literal["collect", "content", "voiceover", "visuals"]
 
 
@@ -26,6 +26,8 @@ class RunPlan(BaseModel):
 
     operation: Operation = "new"
     run_id: str | None = None
+    # Derive only: the existing run whose Phase-1 corpus is reused.
+    base_run_id: str | None = None
     profile: str | None = None
     environment: str | None = None
     target_stage: StageName = "content"
@@ -47,6 +49,7 @@ class RunPlan(BaseModel):
 
     @field_validator(
         "run_id",
+        "base_run_id",
         "profile",
         "environment",
         "voiceover_variant",

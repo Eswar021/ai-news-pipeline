@@ -30,6 +30,7 @@ export type RunOption = {
   overall_status: string;
   created_at: string;
   last_completed_module?: string;
+  derived_from?: string | null;
   metrics?: Record<string, Json>;
 };
 
@@ -81,8 +82,9 @@ type Capabilities = {
 };
 
 type RunPlan = {
-  operation: "new" | "resume" | "retry";
+  operation: "new" | "resume" | "retry" | "derive";
   run_id?: string;
+  base_run_id?: string;
   profile?: string;
   environment?: string;
   target_stage: "collect" | "content" | "voiceover" | "visuals";
@@ -114,6 +116,7 @@ type RunStatus = {
   exists: boolean;
   profile: string;
   environment: string;
+  derived_from?: string | null;
   stages: Array<{ key: string; status: string; runnable: boolean }>;
   next_stage: "collect" | "content" | "voiceover" | "visuals";
 };
@@ -182,6 +185,7 @@ export function NewRunView({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [runState, setRunState] = useState<RunStatus | null>(null);
+  const [deriveTargets, setDeriveTargets] = useState<string[]>([]);
 
   useEffect(() => {
     controlFetch<Capabilities>("/control/capabilities")
@@ -213,10 +217,13 @@ export function NewRunView({
     if (controller.activeJob?.id) setJobId(controller.activeJob.id);
   }, [controller.activeJob?.id]);
 
+  const isRunOp = plan.operation === "resume" || plan.operation === "retry";
+
   // Keep resume/retry pinned to an actually-persisted run so the picker value and
-  // the previewed run id can never drift onto a non-existent run.
+  // the previewed run id can never drift onto a non-existent run. (Derive's run_id
+  // is a freshly generated id, so it is exempt.)
   useEffect(() => {
-    if (plan.operation === "new" || !runs.length) return;
+    if (!isRunOp || !runs.length) return;
     if (!runs.some((run) => run.run_id === plan.run_id)) {
       setPlan((current) => ({ ...current, run_id: runs[0].run_id }));
     }
@@ -225,7 +232,7 @@ export function NewRunView({
   // State-aware resume: load the selected run's per-stage status and default the
   // target to its next incomplete stage. Refetches only when the run changes.
   useEffect(() => {
-    if (plan.operation === "new" || !plan.run_id || !runs.some((run) => run.run_id === plan.run_id)) {
+    if (!isRunOp || !plan.run_id || !runs.some((run) => run.run_id === plan.run_id)) {
       setRunState(null);
       return;
     }
@@ -240,9 +247,33 @@ export function NewRunView({
     return () => { cancelled = true; };
   }, [plan.operation, plan.run_id]);
 
+  // Derive: load the profiles this base run can be derived to, and default the
+  // target to the first that is not the base's own profile (the new-format case).
+  useEffect(() => {
+    if (plan.operation !== "derive" || !plan.base_run_id) {
+      setDeriveTargets([]);
+      return;
+    }
+    let cancelled = false;
+    controlFetch<{ targets: string[] }>(`/control/runs/${encodeURIComponent(plan.base_run_id)}/derive-targets`)
+      .then((value) => {
+        if (cancelled) return;
+        const targets = value.targets || [];
+        setDeriveTargets(targets);
+        setPlan((current) => {
+          if (current.profile && targets.includes(current.profile)) return current;
+          const baseProfile = runs.find((run) => run.run_id === current.base_run_id)?.profile;
+          return { ...current, profile: targets.find((target) => target !== baseProfile) || targets[0] };
+        });
+      })
+      .catch(() => { if (!cancelled) setDeriveTargets([]); });
+    return () => { cancelled = true; };
+  }, [plan.operation, plan.base_run_id]);
+
   useEffect(() => {
     if (!capabilities) return;
-    if (plan.operation !== "new" && !runs.some((run) => run.run_id === plan.run_id)) return;
+    if (isRunOp && !runs.some((run) => run.run_id === plan.run_id)) return;
+    if (plan.operation === "derive" && !(plan.base_run_id && plan.profile)) return;
     const timer = window.setTimeout(() => {
       setPreviewing(true);
       setPreviewError("");
@@ -252,6 +283,9 @@ export function NewRunView({
       })
         .then((value) => {
           setPreview(value);
+          // "new" pins the generated id into the form (once) for a stable display.
+          // Derive keeps run_id out of the form and submits preview.plan directly,
+          // so re-previews cannot churn it into a loop.
           if (plan.operation === "new" && !plan.run_id && value.run_id) {
             setPlan((current) => ({ ...current, run_id: value.run_id }));
           }
@@ -281,16 +315,29 @@ export function NewRunView({
       // Resume/retry must target a PERSISTED run. Never carry over a suggested
       // new-run id (which does not exist on disk yet) or any id not in the list.
       const keepRun = runs.some((run) => run.run_id === current.run_id);
-      return {
+      const shared = {
         ...current,
         operation,
-        run_id: operation === "new" ? undefined : (keepRun ? current.run_id : runs[0]?.run_id),
         run_to_stage: undefined,
         from_module: undefined,
         stop_after: undefined,
         confirm_provider_costs: false,
         confirm_final_media: false,
       };
+      if (operation === "derive") {
+        // Derive picks a BASE run to reuse; run_id is generated fresh and the
+        // profile is chosen from the base's derivable targets. Phase-2 always
+        // starts at content.
+        const keepBase = runs.some((run) => run.run_id === current.base_run_id);
+        return {
+          ...shared,
+          run_id: undefined,
+          base_run_id: keepBase ? current.base_run_id : runs[0]?.run_id,
+          profile: undefined,
+          target_stage: "content",
+        };
+      }
+      return { ...shared, run_id: operation === "new" ? undefined : (keepRun ? current.run_id : runs[0]?.run_id) };
     });
   };
   const setTargetStage = (target_stage: RunPlan["target_stage"]) => {
@@ -352,6 +399,7 @@ export function NewRunView({
           ["new", "New pipeline"],
           ["resume", "Continue run"],
           ["retry", "Replay / retry"],
+          ["derive", "Derive format"],
         ] as const).map(([key, label]) => (
           <button key={key} role="tab" aria-selected={plan.operation === key} className={plan.operation === key ? "active" : ""} onClick={() => setOperation(key)}>
             {label}
@@ -367,48 +415,82 @@ export function NewRunView({
                 <ControlSelect label="Profile" value={plan.profile || ""} onChange={(profile) => setPlan((current) => ({ ...current, profile, run_id: undefined }))} options={capabilities?.profiles || []} />
                 <ControlSelect label="Environment" value={plan.environment || ""} onChange={(environment) => setPlan((current) => ({ ...current, environment, run_id: undefined }))} options={capabilities?.environments || []} />
               </div>
+            ) : plan.operation === "derive" ? (
+              <>
+                <div className="formGrid two">
+                  <ControlSelect
+                    label="Base run (reuse corpus)"
+                    value={plan.base_run_id || ""}
+                    onChange={(base_run_id) => setPlan((current) => ({ ...current, base_run_id, run_id: undefined, profile: undefined }))}
+                    options={runs.map((run) => run.run_id)}
+                    labels={Object.fromEntries(runs.map((run) => [run.run_id, `${titleCase(run.profile)} / ${shortRun(run.run_id)}${run.derived_from ? " · derived" : ""}`]))}
+                  />
+                  <ControlSelect
+                    label="New format"
+                    value={plan.profile || ""}
+                    onChange={(profile) => setPlan((current) => ({ ...current, profile, run_id: undefined }))}
+                    options={deriveTargets}
+                  />
+                </div>
+                {plan.base_run_id && deriveTargets.length === 0 && (
+                  <ControlError text="This run can't be derived from yet — it needs a completed shared corpus (through editorial selection)." />
+                )}
+                <p className="fieldHint">Reuses the base run's Phase-1 corpus (collection → editorial selection) and produces the chosen format from video packaging onward. The base run is left untouched.</p>
+              </>
             ) : (
               <ControlSelect
                 label="Persisted run"
                 value={plan.run_id || ""}
                 onChange={(run_id) => setPlan((current) => ({ ...current, run_id }))}
                 options={runs.map((run) => run.run_id)}
-                labels={Object.fromEntries(runs.map((run) => [run.run_id, `${titleCase(run.profile)} / ${shortRun(run.run_id)}`]))}
+                labels={Object.fromEntries(runs.map((run) => [run.run_id, `${titleCase(run.profile)} / ${shortRun(run.run_id)}${run.derived_from ? " · derived" : ""}`]))}
               />
             )}
             <div className="plannedIdentity"><span>Run ID</span><code>{preview?.run_id || plan.run_id || "Generated after profile selection"}</code></div>
           </BuilderSection>
 
-          <BuilderSection number="02" title={plan.operation === "new" ? "Run through" : "Stage to execute"}>
-            <div className="stageChoice">
-              {(capabilities?.stages || []).map((item, index) => {
-                const stageState = runState?.stages.find((entry) => entry.key === item.key);
-                const gated = plan.operation !== "new" && !!runState;
-                const runnable = !gated || (stageState?.runnable ?? true);
-                return (
-                  <button
-                    key={item.key}
-                    aria-pressed={plan.target_stage === item.key}
-                    className={plan.target_stage === item.key ? "active" : ""}
-                    disabled={!runnable}
-                    title={runnable ? undefined : "An earlier stage has not completed for this run"}
-                    onClick={() => runnable && setTargetStage(item.key)}
-                  >
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <strong>{item.label}</strong>
-                    <small>{gated && stageState ? titleCase(stageState.status) : item.description}</small>
-                  </button>
-                );
-              })}
-            </div>
-            {plan.operation !== "new" && runThroughOptions.length > 0 && (
+          <BuilderSection number="02" title={plan.operation === "new" ? "Run through" : plan.operation === "derive" ? "Produce through" : "Stage to execute"}>
+            {plan.operation === "derive" ? (
               <ControlSelect
-                label="Run through (optional)"
-                value={plan.run_to_stage || ""}
-                onChange={(run_to_stage) => setPlan((current) => ({ ...current, run_to_stage: (run_to_stage || undefined) as RunPlan["run_to_stage"], from_module: undefined, stop_after: undefined, confirm_provider_costs: false, confirm_final_media: false }))}
-                options={["", ...runThroughOptions]}
-                labels={{ "": "Only this stage" }}
+                label="Produce through"
+                value={plan.run_to_stage || "content"}
+                onChange={(run_to_stage) => setPlan((current) => ({ ...current, run_to_stage: run_to_stage as RunPlan["run_to_stage"], confirm_provider_costs: false, confirm_final_media: false }))}
+                options={["content", "voiceover", "visuals"]}
+                labels={{ content: "Script + metadata", voiceover: "+ Voiceover", visuals: "+ Video (full episode)" }}
               />
+            ) : (
+              <>
+                <div className="stageChoice">
+                  {(capabilities?.stages || []).map((item, index) => {
+                    const stageState = runState?.stages.find((entry) => entry.key === item.key);
+                    const gated = plan.operation !== "new" && !!runState;
+                    const runnable = !gated || (stageState?.runnable ?? true);
+                    return (
+                      <button
+                        key={item.key}
+                        aria-pressed={plan.target_stage === item.key}
+                        className={plan.target_stage === item.key ? "active" : ""}
+                        disabled={!runnable}
+                        title={runnable ? undefined : "An earlier stage has not completed for this run"}
+                        onClick={() => runnable && setTargetStage(item.key)}
+                      >
+                        <span>{String(index + 1).padStart(2, "0")}</span>
+                        <strong>{item.label}</strong>
+                        <small>{gated && stageState ? titleCase(stageState.status) : item.description}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+                {plan.operation !== "new" && runThroughOptions.length > 0 && (
+                  <ControlSelect
+                    label="Run through (optional)"
+                    value={plan.run_to_stage || ""}
+                    onChange={(run_to_stage) => setPlan((current) => ({ ...current, run_to_stage: (run_to_stage || undefined) as RunPlan["run_to_stage"], from_module: undefined, stop_after: undefined, confirm_provider_costs: false, confirm_final_media: false }))}
+                    options={["", ...runThroughOptions]}
+                    labels={{ "": "Only this stage" }}
+                  />
+                )}
+              </>
             )}
           </BuilderSection>
 

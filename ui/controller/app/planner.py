@@ -129,9 +129,14 @@ class RunPlanner:
         risks = [
             STAGE_CATALOG[command.stage]["provider_risk"]
             for command in commands
-            if STAGE_CATALOG[command.stage]["provider_risk"]
+            if command.stage in STAGE_CATALOG and STAGE_CATALOG[command.stage]["provider_risk"]
         ]
-        if plan.operation != "new":
+        if plan.operation == "derive":
+            risks.append(
+                f"Deriving reuses run {plan.base_run_id}'s Phase-1 corpus and creates a new run; "
+                "Phase-1 is not re-run and the base run is left untouched."
+            )
+        elif plan.operation != "new":
             risks.append("The selected stage can replace existing downstream artifacts for this run.")
         if plan.config_mode == "live":
             risks.append("Live mode reloads the current authoring YAML before each executed module.")
@@ -165,6 +170,35 @@ class RunPlanner:
                 "from_module": None,
                 "stop_after": None,
             })
+        elif requested.operation == "derive":
+            base_run_id = requested.base_run_id
+            if not base_run_id:
+                raise PlanError("A base run is required to derive a new format")
+            targets = self.derive_targets(base_run_id)
+            if not targets:
+                raise PlanError(
+                    f"Run {base_run_id!r} cannot be derived from: it has no completed shared "
+                    "corpus, or no profile shares its Phase-1 lineage."
+                )
+            profile = requested.profile or targets[0]
+            if profile not in targets:
+                raise PlanError(f"Profile {profile!r} cannot be derived from run {base_run_id!r}")
+            environment = requested.environment or self.run_status(base_run_id)["environment"]
+            run_id = requested.run_id or self.suggest_run_id(profile)
+            if (self.runs_root / run_id).exists():
+                raise PlanError(f"Run already exists: {run_id}")
+            # A derive materializes a new run from the base corpus, then runs Phase-2
+            # from video_packaging. target_stage is always content; run_to_stage
+            # (content/voiceover/visuals) is how far the production goes.
+            data.update({
+                "run_id": run_id,
+                "base_run_id": base_run_id,
+                "profile": profile,
+                "environment": environment,
+                "target_stage": "content",
+                "from_module": "video_packaging",
+                "stop_after": None,
+            })
         else:
             if not requested.run_id:
                 raise PlanError("A persisted run is required for resume or retry")
@@ -194,7 +228,12 @@ class RunPlanner:
 
         modules = list(STAGE_CATALOG[stage]["modules"])
         # Module boundaries refine a single stage; they are meaningless across a chain.
-        if not STAGE_CATALOG[stage]["supports_boundaries"] or len(planned) > 1:
+        if requested.operation == "derive":
+            # The video_packaging boundary is intrinsic to a derive (Phase-2 entry),
+            # not a user refinement, so it survives even a content→visuals chain.
+            data["from_module"] = "video_packaging"
+            data["stop_after"] = None
+        elif not STAGE_CATALOG[stage]["supports_boundaries"] or len(planned) > 1:
             if data.get("from_module") or data.get("stop_after"):
                 raise PlanError(f"{stage} does not support module boundaries in this plan")
             data["from_module"] = None
@@ -232,7 +271,43 @@ class RunPlanner:
             target_stage=plan.target_stage,
             run_to_stage=plan.run_to_stage,
         )
-        return [self._command_for(stage, plan) for stage in stages]
+        commands = [self._command_for(stage, plan) for stage in stages]
+        if plan.operation == "derive":
+            # Materialize the derived run first, then Phase-2 runs over its corpus.
+            commands.insert(0, self._derive_command(plan))
+        return commands
+
+    def _derive_command(self, plan: RunPlan) -> CommandSpec:
+        argv = [
+            self.pipeline_python,
+            "-m",
+            self.runner_module,
+            "derive",
+            "--from-run",
+            str(plan.base_run_id),
+            "--profile",
+            str(plan.profile),
+            "--run-id",
+            str(plan.run_id),
+            "--environment",
+            str(plan.environment),
+        ]
+        display = " ".join(
+            shlex.quote("python3" if index == 0 else value)
+            for index, value in enumerate(argv)
+        )
+        return CommandSpec(stage="derive", argv=tuple(argv), display=display)
+
+    def derive_targets(self, base_run_id: str) -> list[str]:
+        """Profiles this run can be derived to (shared Phase-1 lineage + Phase-2)."""
+        from src.pipeline.orchestration.derive import derivable_target_profiles
+
+        return derivable_target_profiles(
+            project_root=self.project_root,
+            base_run_id=base_run_id,
+            config_path=self.manifest_path,
+            output_root=self.output_root,
+        )
 
     def _command_for(self, stage: str, plan: RunPlan) -> CommandSpec:
         argv = [
@@ -317,6 +392,7 @@ class RunPlanner:
             "exists": True,
             "profile": str(context.get("run_profile") or ""),
             "environment": str(context.get("config_environment") or "prod"),
+            "derived_from": str(context.get("derived_from") or "") or None,
             "stages": stages,
             "next_stage": next_stage or STAGE_ORDER[-1],
         }

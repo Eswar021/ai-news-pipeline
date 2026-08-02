@@ -203,6 +203,7 @@ class SafeRepository:
             "mtime": stat.st_mtime,
             "profile": context.get("run_profile") or state.get("run_profile") or "",
             "environment": context.get("config_environment") or "",
+            "derived_from": context.get("derived_from") or None,
             "trigger": context.get("trigger") or "",
             "stage_status": stage_status,
             "overall_status": self._overall_status(stage_status, failure_reason, [context_error, state_error]),

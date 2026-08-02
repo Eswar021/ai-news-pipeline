@@ -106,6 +106,14 @@ def _build_parser() -> argparse.ArgumentParser:
     visuals.add_argument("--units", type=int, help="Dev slice: only plan the first N audio units.")
     visuals.add_argument("--skip-render", action="store_true", help="Stop after building index.html — no MP4.")
 
+    derive = subparsers.add_parser(
+        "derive",
+        help="Create a new run that reuses an existing run's Phase-1 corpus for a different format.",
+    )
+    _add_common_arguments(derive, default_run_id=None)
+    derive.add_argument("--from-run", dest="from_run", required=True, help="Base run whose shared corpus is reused.")
+    derive.add_argument("--profile", dest="run_profile", required=True, help="Target format profile for the derived run.")
+
     return parser
 
 
@@ -184,6 +192,9 @@ def _request_from_args(args: argparse.Namespace) -> dict[str, Any]:
             "units": args.units,
             "skip_render": args.skip_render,
         }
+    elif args.stage == "derive":
+        request["run"]["run_profile"] = args.run_profile
+        request["config"] = {"base_run_id": args.from_run}
     return request
 
 
@@ -203,6 +214,10 @@ def _stage_function(stage: str) -> StageFunction:
         return run
     if stage == "visuals":
         from .stages.visuals import run
+
+        return run
+    if stage == "derive":
+        from .derive import run
 
         return run
     raise ValueError(f"Unknown stage: {stage}")
