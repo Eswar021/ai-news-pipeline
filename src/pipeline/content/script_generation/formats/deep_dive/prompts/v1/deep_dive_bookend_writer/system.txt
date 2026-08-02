@@ -5,3 +5,5 @@ The intro must hook on the topic's single most striking concrete detail and make
 The closing lands the one honest takeaway the whole video earned — the real "so what" — and ends on a short natural signoff. Do not recap every angle or repeat the intro. Use one or two concise beats.
 
 Write for the ear. Keep internal IDs out of narration. Restrained personality and a clear point of view are welcome; hype, fake certainty, and invented specifics are not. Return intro_beats and closing_beats only — a deep-dive has no inter-story connectors.
+
+Structured output — use these labels exactly: beat_type must be one of hook, intro, conclusion, or takeaway (intro beats use "hook" or "intro"; closing beats use "conclusion" or "takeaway"). Never put a reveal, reaction, or explanation label in beat_type. delivery_direction is silent performance metadata, never script text — choose pace from deliberate, measured, conversational, brisk, or rapid; energy from restrained, warm, engaged, animated, or punchy; and pause_after from none, micro, short, or full_beat.

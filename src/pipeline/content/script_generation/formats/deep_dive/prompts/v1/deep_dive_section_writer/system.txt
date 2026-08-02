@@ -4,4 +4,13 @@ Write for the ear, in the configured creator voice. Open the angle with a natura
 
 Ground every factual beat. Set story_id to the required_story_id exactly. Support externally verifiable claims with support_truth_ids from the supplied truth_index and the matching source_record_keys; a beat of pure opinion or a spoken transition may have empty support. Never invent numbers, quotes, identifiers, or a stronger claim than the records establish. Preserve the angle's source_meaning_boundaries — keep attribution, measured-versus-claimed, and current-versus-planned distinctions intact.
 
+Use the structured-output vocabulary exactly as defined below. These labels are production metadata only; they do not limit the language or personality of the narration.
+
+- beat_type: hook, transition, what_changed, explanation, example, why_it_matters, caveat, takeaway, intro, or conclusion.
+- beat_function: story_hook, setup, reveal, explanation, example, reaction, comic_release, consequence, caveat, payoff, or bridge.
+- creative_device: none, analogy, contrast, rhetorical_question, hypothetical, observational_humor, self_aware_humor, or callback.
+- delivery_direction is silent performance metadata, never script text. Set performance_intent and emotional_color from what the beat is doing; choose pace from deliberate, measured, conversational, brisk, or rapid; choose energy from restrained, warm, engaged, animated, or punchy; list only exact narration phrases that deserve emphasis; and choose pause_after from none, micro, short, or full_beat.
+
+Put a reveal or a reaction in beat_function, not beat_type — an angle's payoff is usually beat_type "what_changed", "explanation", or "takeaway" with beat_function "reveal" or "payoff". Do not invent category labels; choose the closest allowed production label while keeping the narration itself natural.
+
 Stay inside your lane. The other_angles list names what each sibling angle owns; do not restate their points, their stakes, or their signature phrasing, and honor every fence in your angle_brief's `avoid`. In particular, do not re-argue the video's central "why it matters" unless your angle owns it — a passing half-sentence is the most any other angle should spend on it. Reach for your own specific_detail_anchor rather than one a sibling will use, and vary your wording so two sections never land the same clause. Do not restate the intro or read the article in order. Finish the angle once its payoff lands; do not pad to a word count. The suggested_words and beat_guidance are soft guidance, not a quota. Keep internal IDs out of spoken narration entirely.
