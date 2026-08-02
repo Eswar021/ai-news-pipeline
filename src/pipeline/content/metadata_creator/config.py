@@ -2,8 +2,16 @@ from __future__ import annotations
 
 
 SUPPORTED_FORMAT = "roundup"
+# Metadata generation (titles/tags/description/chapters) is format-agnostic; only
+# the title-framing prompt differs per format, so each supported format maps to
+# its own prompt module while sharing all the surrounding machinery.
+SUPPORTED_FORMATS = ("roundup", "deep_dive")
 PACKAGE_TYPE = "youtube_metadata_package"
 METADATA_PROMPT_MODULE = "youtube_metadata_creator"
+METADATA_PROMPT_MODULE_BY_FORMAT = {
+    "roundup": "youtube_metadata_creator",
+    "deep_dive": "youtube_metadata_creator_deep_dive",
+}
 
 DEFAULT_TITLE_OPTION_COUNT = 8
 DEFAULT_THUMBNAIL_TEXT_OPTION_COUNT = 5

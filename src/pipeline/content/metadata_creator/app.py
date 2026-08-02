@@ -14,7 +14,11 @@ from src.pipeline.contracts import (
     validate_script_provenance,
 )
 
-from .config import METADATA_PROMPT_MODULE, PACKAGE_TYPE, SUPPORTED_FORMAT
+from .config import (
+    METADATA_PROMPT_MODULE_BY_FORMAT,
+    PACKAGE_TYPE,
+    SUPPORTED_FORMATS,
+)
 from .contract import MetadataRequest, MetadataResponse
 from .llm_client import make_llm
 from .llm_logging import build_llm_call_log
@@ -117,7 +121,9 @@ def run(input_json: dict) -> dict:
         run_id=run_id,
         upstream_run_id=script_generation.data.run_id,
     )
-    _validate_supported_roundup(script_generation.data.selected_format, video_packaging.data.selected_format, video_packet)
+    selected_format = _resolve_supported_format(
+        script_generation.data.selected_format, video_packaging.data.selected_format, video_packet
+    )
 
     sections = _script_sections(script_package)
     chapters = _build_chapters(
@@ -132,7 +138,7 @@ def run(input_json: dict) -> dict:
             run_id=run_id,
             generated_at=generated_at,
             config=config,
-            selected_format=SUPPORTED_FORMAT,
+            selected_format=selected_format,
             chapters=chapters,
             source_urls=source_urls,
             reason="Upstream script_generation result is not ready for metadata creation.",
@@ -143,7 +149,7 @@ def run(input_json: dict) -> dict:
             run_id=run_id,
             generated_at=generated_at,
             config=config,
-            selected_format=SUPPORTED_FORMAT,
+            selected_format=selected_format,
             chapters=chapters,
             source_urls=source_urls,
             reason="Upstream video_packaging result is not valid for metadata creation.",
@@ -156,7 +162,7 @@ def run(input_json: dict) -> dict:
             run_id=run_id,
             generated_at=generated_at,
             config=config,
-            selected_format=SUPPORTED_FORMAT,
+            selected_format=selected_format,
             chapters=chapters,
             source_urls=source_urls,
             reason="script_generation.data.script_package.full_script is missing or empty.",
@@ -167,7 +173,7 @@ def run(input_json: dict) -> dict:
             run_id=run_id,
             generated_at=generated_at,
             config=config,
-            selected_format=SUPPORTED_FORMAT,
+            selected_format=selected_format,
             chapters=chapters,
             source_urls=source_urls,
             reason="script_generation.data.script_package.sections is missing or empty.",
@@ -178,19 +184,22 @@ def run(input_json: dict) -> dict:
             run_id=run_id,
             generated_at=generated_at,
             config=config,
-            selected_format=SUPPORTED_FORMAT,
+            selected_format=selected_format,
             chapters=chapters,
             source_urls=source_urls,
             reason="No source URLs were available from selected story records.",
             llm_calls=llm_calls,
         )
 
-    prompt_bundle = load_prompt_bundle(METADATA_PROMPT_MODULE, config["prompt_version"])
+    prompt_bundle = load_prompt_bundle(
+        METADATA_PROMPT_MODULE_BY_FORMAT[selected_format], config["prompt_version"]
+    )
     try:
         draft = _generate_metadata_draft(
             script_package=script_package,
             video_packet=video_packet,
             config=config,
+            selected_format=selected_format,
             prompt_bundle=prompt_bundle,
             llm_runtime=_build_llm_runtime(config),
             llm_calls=llm_calls,
@@ -200,7 +209,7 @@ def run(input_json: dict) -> dict:
             run_id=run_id,
             generated_at=generated_at,
             config=config,
-            selected_format=SUPPORTED_FORMAT,
+            selected_format=selected_format,
             chapters=chapters,
             source_urls=source_urls,
             reason=f"{type(exc).__name__}: {exc}",
@@ -223,7 +232,7 @@ def run(input_json: dict) -> dict:
     metadata_package = {
         "package_type": PACKAGE_TYPE,
         "package_stage": "draft",
-        "selected_format": SUPPORTED_FORMAT,
+        "selected_format": selected_format,
         "youtube_metadata": metadata,
         "checks": checks,
     }
@@ -241,7 +250,7 @@ def run(input_json: dict) -> dict:
         data={
             "run_id": run_id,
             "generated_at": generated_at,
-            "selected_format": SUPPORTED_FORMAT,
+            "selected_format": selected_format,
             "metadata_package": metadata_package,
         },
         summary=_build_summary(metadata, llm_calls, failure_reason),
@@ -260,16 +269,17 @@ def _generate_metadata_draft(
     script_package: dict[str, Any],
     video_packet: dict[str, Any],
     config: dict[str, Any],
+    selected_format: str,
     prompt_bundle: dict[str, str],
     llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
     payload = {
-        "task": "Generate YouTube metadata for the completed roundup script.",
+        "task": f"Generate YouTube metadata for the completed {selected_format} script.",
         "channel": config["channel"],
         "metadata_policy": config["metadata_policy"],
         "recent_title_angles_to_avoid": _recent_title_angles(config),
-        "video_context": _video_context(video_packet, script_package),
+        "video_context": _video_context(video_packet, script_package, selected_format),
         "script_sections": _sections_for_prompt(script_package.get("sections", [])),
         "full_script": clean_text(script_package.get("full_script", "")),
         "selected_stories_context": _stories_for_prompt(video_packet.get("stories", [])),
@@ -296,12 +306,12 @@ def _generate_metadata_draft(
         },
     }
     return _invoke_runtime_chain(
-        module_name=METADATA_PROMPT_MODULE,
+        module_name=METADATA_PROMPT_MODULE_BY_FORMAT[selected_format],
         output_model=MetadataDraftOutput,
         llm_runtime=llm_runtime,
         prompt_bundle=prompt_bundle,
         task_payload=json.dumps(payload, ensure_ascii=False, indent=2),
-        metadata={"selected_format": SUPPORTED_FORMAT, "story_count": len(video_packet.get("stories", []))},
+        metadata={"selected_format": selected_format, "story_count": len(video_packet.get("stories", []))},
         llm_calls=llm_calls,
     )
 
@@ -987,13 +997,24 @@ def _script_sections(script_package: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(sections, key=lambda section: int(section.get("section_order", 0)))
 
 
-def _validate_supported_roundup(script_format: str, packaging_format: str, video_packet: dict[str, Any]) -> None:
+def _resolve_supported_format(script_format: str, packaging_format: str, video_packet: dict[str, Any]) -> str:
+    """The single format the run is in; the three signals must agree and be
+    supported. Returned so the module tags its outputs and picks its prompt by
+    the actual format instead of assuming roundup."""
+    script_format = clean_text(script_format)
+    packaging_format = clean_text(packaging_format)
     packet_format = clean_text(video_packet.get("selected_format") or video_packet.get("packet_type"))
-    if script_format != SUPPORTED_FORMAT or packaging_format != SUPPORTED_FORMAT or packet_format != SUPPORTED_FORMAT:
-        raise NotImplementedError(
-            "metadata_creator currently supports only roundup. "
-            f"Received script_format={script_format!r}, packaging_format={packaging_format!r}, packet_format={packet_format!r}."
+    if not (script_format == packaging_format == packet_format):
+        raise ValueError(
+            "metadata_creator received mismatched formats: "
+            f"script={script_format!r}, packaging={packaging_format!r}, packet={packet_format!r}."
         )
+    if script_format not in SUPPORTED_FORMATS:
+        raise NotImplementedError(
+            f"metadata_creator does not support format {script_format!r}; "
+            f"supported: {', '.join(SUPPORTED_FORMATS)}."
+        )
+    return script_format
 
 
 def _allowed_value(value: Any, allowed: set[str], fallback: str) -> str:
@@ -1013,10 +1034,10 @@ def _recent_title_angles(config: dict[str, Any]) -> list[str]:
     return recent
 
 
-def _video_context(video_packet: dict[str, Any], script_package: dict[str, Any]) -> dict[str, Any]:
+def _video_context(video_packet: dict[str, Any], script_package: dict[str, Any], selected_format: str) -> dict[str, Any]:
     episode_direction = script_package.get("episode_direction") if isinstance(script_package.get("episode_direction"), dict) else {}
     return {
-        "selected_format": SUPPORTED_FORMAT,
+        "selected_format": selected_format,
         "duration_policy": script_package.get("duration_policy") or video_packet.get("duration_policy") or {},
         "observed_script_duration_seconds": (script_package.get("full_script_stats") or {}).get(
             "estimated_duration_seconds", 0
