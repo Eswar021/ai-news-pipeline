@@ -401,7 +401,9 @@ def _module_function(module: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
     elif module == "video_packaging":
         from src.pipeline.content.video_packaging import run
     elif module == "script_generation":
-        from src.pipeline.content.script_generation.formats.roundup import run
+        # Format-agnostic entrypoint: routes to the roundup/deep_dive/... writer
+        # based on the format the upstream video_packaging packet selected.
+        from src.pipeline.content.script_generation import run
     else:
         from src.pipeline.content.metadata_creator import run
     return run
