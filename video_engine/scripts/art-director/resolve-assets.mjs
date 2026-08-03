@@ -36,6 +36,7 @@ const RESOLVE = {
   "logo-wall": { type: "logo", arrayFields: { entities: "logos" } }, // list of entities -> list of logo paths
   "attribution": { type: "logo", fields: { entity: "logo" } },
   "photo": { type: "image", fields: { query: "src" } },
+  "browser-frame": { type: "image", fields: { query: "src" } },
   "image-reveal": { type: "image", fields: { query: "src" } },
   "spotlight": { type: "image", fields: { query: "src" } },
   "image-compare": { type: "image", fields: { beforeQuery: "beforeSrc", afterQuery: "afterSrc" } },

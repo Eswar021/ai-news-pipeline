@@ -11,6 +11,7 @@ logo-wall: { title: "This week's players", entities: ["OpenAI", "NVIDIA", "Googl
 # --- Real-media (need image descriptions so the resolver fetches photos) ---
 photo: { query: "semiconductor factory clean room", motion: ken-burns-in }
 image-reveal: { query: "data center servers glowing blue", direction: left }
+browser-frame: { query: "modern tech product website landing page", url: "openai.com/index/ten-advances", caption: "The actual announcement page" }
 spotlight: { query: "circuit board macro closeup", x: 42, y: 52 }
 side-by-side: { left: "assets/images/real-1.jpg", right: "assets/images/real-2.jpg", leftLabel: "Before", rightLabel: "After" }
 image-grid: { title: "The AI landscape", queries: ["semiconductor chip macro", "data center servers", "robotic arm factory", "circuit board closeup"] }

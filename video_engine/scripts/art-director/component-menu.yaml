@@ -59,6 +59,7 @@ components:
   social-post: { params: [author, handle, text, meta], use: "A stylized social-media post card. author/handle = poster; text = the post; meta = date/platform." }
   document-excerpt: { params: [docLabel, excerpt, highlight], use: "A document/filing excerpt with a highlighted phrase. docLabel = doc name; highlight = a substring of excerpt." }
   multi-source-montage: { params: [title, sources], use: "Several outlets covering the same story, stacked. sources = array of {source, headline} (2-4)." }
+  browser-frame: { params: [query, url, caption], use: "Show the ACTUAL source page/product as a screenshot inside a browser window. query = the image to show (a real source-image URL is frozen exactly; a description is fetched); url = the address bar (e.g. openai.com/index/...); caption optional. Best for 'here is the actual announcement/product/tweet' beats." }
 
   # --- Real media (real stock/news photos — you DESCRIBE the image; the resolver fetches it) ---
   # query = a short description of what to show. Real people and companies are fine for

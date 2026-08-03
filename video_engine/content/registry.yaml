@@ -280,6 +280,13 @@ components:
       - { cue: select, at: 0.30, volume: 0.3 } # source tag
       - { cue: swipe, at: 0.90, volume: 0.38 } # highlight marker sweep
 
+  browser-frame:
+    family: source
+    sfx:
+      - { cue: whoosh-deep, at: 0.0, volume: 0.32 } # window in
+      - { cue: click, at: 0.25, volume: 0.3 } # page load
+      - { cue: select, at: 0.8, volume: 0.28 } # load complete
+
   quote-from-source:
     family: source
     sfx:
