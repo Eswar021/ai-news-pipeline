@@ -451,8 +451,27 @@ class VideoPackagingEnvelope(BaseModel):
     handoff: dict[str, Any] = Field(default_factory=dict)
 
 
+class TopicResearchData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    researched: bool = False
+    research_dossier: dict[str, Any] = Field(default_factory=dict)
+    source_count: int = 0
+
+
+class TopicResearchEnvelope(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str | None = None
+    data: TopicResearchData = Field(default_factory=TopicResearchData)
+    summary: dict[str, Any] = Field(default_factory=dict)
+    handoff: dict[str, Any] = Field(default_factory=dict)
+
+
 class ScriptGenerationInput(BaseModel):
     video_packaging: VideoPackagingEnvelope
+    # Optional: present only for researched formats (deep_dive). Roundup omits it.
+    topic_research: TopicResearchEnvelope | None = None
 
 
 class DeliveryDirectionContract(BaseModel):

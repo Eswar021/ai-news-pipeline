@@ -92,6 +92,7 @@ an extension, not a new system):
 **Reused unchanged:** the `run(input)->dict` module contract, the runner +
 content stage, the config/profile system, provenance + content fingerprints, the
 derive flow, and the entire deep_dive script format. **Genuinely new:** one module
+
 + a search client + one profile YAML.
 
 ## The research dossier (module output)

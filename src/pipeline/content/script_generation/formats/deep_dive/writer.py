@@ -24,6 +24,7 @@ def generate_deep_dive_script(
     prompt_bundles: dict[str, dict[str, str]],
     llm_runtimes: dict[str, dict[str, Any]],
     llm_calls: list[dict[str, Any]],
+    research_brief: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     briefs, truth_indexes, packets = research_story_sources(
         stories=[story],
@@ -43,6 +44,7 @@ def generate_deep_dive_script(
         prompt_bundle=prompt_bundles["director"],
         llm_runtime=llm_runtimes["director"],
         llm_calls=llm_calls,
+        research_brief=research_brief,
     )
     section_plan = build_deep_dive_section_inputs(story, director, config)
 
@@ -100,6 +102,7 @@ def _direct_deep_dive(
     prompt_bundle: dict[str, str],
     llm_runtime: dict[str, Any],
     llm_calls: list[dict[str, Any]],
+    research_brief: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     min_angles = int(config.get("min_angle_sections", 3))
     max_angles = int(config.get("max_angle_sections", 6))
@@ -117,6 +120,11 @@ def _direct_deep_dive(
             "angle_id like 'angle_01', 'angle_02'. Order angles so they build one coherent explanation."
         ),
     }
+    # Web-research framing (present only for researched deep-dives): a structural aid
+    # for choosing/ordering angles — NOT a source. Every fact still grounds in the
+    # truth_index above; suggested_angles/summary/timeline are never cited directly.
+    if research_brief:
+        payload["research_brief"] = research_brief
     director = invoke_runtime_chain(
         module_name="deep_dive_director",
         output_model=DeepDiveDirectorOutput,

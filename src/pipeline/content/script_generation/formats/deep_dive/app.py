@@ -22,6 +22,7 @@ from .config import (
 )
 from .contract import ScriptGenerationRequest, ScriptGenerationResponse
 from .prompt_loader import load_prompt_bundle
+from .research_merge import merge_dossier_into_story
 from .writer import generate_deep_dive_script
 
 
@@ -51,6 +52,16 @@ def run(input_json: dict) -> dict:
         return _failed_response(run_id, generated_at, video_packet, config, "Upstream video_packaging result is not ready for script generation.", llm_calls)
 
     story = video_packet["stories"][0]
+
+    # Researched deep-dives fold the grounded dossier into the story as synthetic
+    # source records (so every dossier fact is citable through the same truth-index
+    # the writer already enforces); the dossier's framing becomes the director brief.
+    # Absent or un-researched topic_research → the story's own records, unchanged.
+    research_brief: dict[str, Any] = {}
+    topic_research = request.input.topic_research
+    if topic_research is not None and topic_research.data.researched:
+        story, research_brief = merge_dossier_into_story(story, topic_research.data.research_dossier or {})
+
     prompt_bundles = {
         role: load_prompt_bundle(module, config["prompt_version"])
         for role, module in _PROMPT_MODULES.items()
@@ -64,6 +75,7 @@ def run(input_json: dict) -> dict:
             prompt_bundles=prompt_bundles,
             llm_runtimes=llm_runtimes,
             llm_calls=llm_calls,
+            research_brief=research_brief,
         )
     except Exception as exc:
         return _failed_response(run_id, generated_at, video_packet, config, f"{type(exc).__name__}: {exc}", llm_calls)
