@@ -1,7 +1,41 @@
 # Current System Architecture
 
 Status: Canonical runtime reference
-Last updated: 2026-08-01
+Last updated: 2026-08-03
+
+## Pipeline at a glance
+
+Every video is produced by one resumable pipeline. It splits into a **shared
+corpus phase** (format-agnostic) and a **per-format production phase**, so one
+collection run can feed many videos.
+
+```mermaid
+flowchart TB
+  subgraph P1["Phase 1 — Shared corpus (format-agnostic)"]
+    direction LR
+    C["collect<br/><small>news_collection</small>"] --> EP["evidence_prep"] --> ET["editorial_triage"] --> SM["story_mapping"] --> ES["editorial_selection<br/><small>ranked slate</small>"]
+  end
+  subgraph P2["Phase 2 — Per-format production (per target_format)"]
+    direction LR
+    VP["video_packaging<br/><small>routes on target_format</small>"] --> SG["script_generation<br/><small>per-format roles + prompts</small>"] --> MD["metadata_creator<br/><small>format-aware</small>"] --> VO["voiceover<br/><small>Gemini / OpenAI TTS</small>"] --> VIS["visuals<br/><small>video_engine (HyperFrames)</small>"]
+  end
+  ES --> VP
+  AC["asset_collection<br/><small>real og:image manifest</small>"] -. "real source images (browser-frame)" .-> VIS
+  UI["run desk<br/><small>inspector /api + controller /control</small>"] -. "reads / launches" .-> RUN["runner + stages"]
+  RUN --- P1
+  RUN --- P2
+```
+
+**Derived runs** ("one corpus → many formats") are first-class: a `runner derive`
+subcommand (and a UI "Derive format" action) seeds a new run from an existing
+run's Phase-1 corpus and runs only Phase-2 for a different format.
+
+```mermaid
+flowchart LR
+  RUN1["daily_48h run<br/><small>Phase 1 done</small>"] -->|"derive"| DD["daily_deep_dive run<br/><small>Phase 2 only</small>"]
+  RUN1 -->|"derive"| SH["short run<br/><small>Phase 2 only (planned)</small>"]
+  RUN1 -->|"re-render"| RU["roundup video"]
+```
 
 ## Runtime
 
@@ -33,7 +67,14 @@ src/pipeline/
 The **visual layer is `video_engine/`** (Node/HyperFrames motion-graphics), a
 self-contained tool triggered only by `orchestration/stages/visuals.py`. Its
 input is the selected voiceover package + audio — no dependency on pipeline
-internals — so it stays portable to other projects.
+internals — so it stays portable to other projects. Inside it, an LLM
+**art-director** maps each spoken beat to components from a config-driven menu
+(`compositions/<family>/`), a resolver fetches assets (logos, images) and freezes
+real source-image URLs, then the build inlines timing + GSAP and renders. The
+visuals stage also builds a best-effort **asset manifest** (the real `og:image`
+per selected story, via `content/asset_collection`, hardened with retries) and a
+deterministic pass guarantees that real image appears as a `browser-frame` at its
+source URL — even if the art-director LLM fell back to text.
 
 The **run desk is `ui/`**: a React frontend, a read-only FastAPI inspector
 backend (`/api/*`), and a controller (`/control/*`) that launches the runner.
@@ -91,9 +132,12 @@ phase — the basis for multiple formats from one collection run:
   voiceover → visuals.
 
 One Phase-1 run can feed many Phase-2 productions (roundup long video + a
-deep-dive on one story + N shorts). "Derived runs" that reuse a parent's Phase-1
-output — and the persistence/DB layer that makes them reliable — are on the
-backlog.
+deep-dive on one story + N shorts). **Derived runs are implemented**: `runner derive --from-run <base> --profile <target>` (and the UI "Derive format" action)
+seed a new run from a base run's Phase-1 corpus and run only Phase-2 for a
+different format. Lineage is validated by manifest path (two profiles share a
+corpus when their shared-corpus stage YAMLs match); the shared corpus is
+`content_phases.SHARED_CORPUS_MODULES`. A persistence/DB layer to make derived
+runs more robust remains on the backlog.
 
 ## Formats
 
@@ -109,10 +153,13 @@ content/script_generation/formats/<format>/      # roles + prompts + assembler +
 - `roundup` — implemented: 5 stories, ~9 min, 16:9. Script roles: director,
   source_researcher, story_writer, story_reviewer, bookend_writer,
   bookend_reviewer → deterministic assembler.
-- `deep_dive` — reserved (`KNOWN_FUTURE_FORMATS`): one story/topic expanded into
-  multiple angle sections.
+- `deep_dive` — **implemented**: the slate's lead story expanded into 3–6 angle
+  sections. Roles: director, source_researcher, section_writer, section_reviewer,
+  bookend_writer, bookend_reviewer. Profile `daily_deep_dive` reuses the roundup
+  Phase-1 corpus (script_generation + metadata_creator route on format).
 - `short` — planned: one story, <60s, 9:16 vertical (needs the engine to become
-  resolution-aware — currently hardcoded 1920×1080 landscape).
+  resolution-aware — currently hardcoded 1920×1080 landscape — plus a shorts
+  script format + profile).
 
 Prompts are versioned + per-format + config-selected:
 `formats/<format>/prompts/v1/<role>/…`, loaded via `config["prompt_version"]`.
@@ -134,11 +181,12 @@ in config and visible in the summary. A **profile = domain × format**.
 
 LLMs make semantic judgments; code enforces stable guardrails. LLM: triage,
 story identity/value, slate selection/ordering, episode direction + beat writing
+
 + bounded repair + bookends, metadata, visual art-direction. Deterministic:
-collection/normalization, provenance + fingerprints, caps after semantic choices,
-section order + observed timing + alignment, Pydantic validation, asset
-resolution + render + assembly. Never gate prose with keyword lists or regexes.
-Review/revision loops have a config-driven hard maximum.
+  collection/normalization, provenance + fingerprints, caps after semantic choices,
+  section order + observed timing + alignment, Pydantic validation, asset
+  resolution + render + assembly. Never gate prose with keyword lists or regexes.
+  Review/revision loops have a config-driven hard maximum.
 
 ## Voiceover
 
