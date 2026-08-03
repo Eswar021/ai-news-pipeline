@@ -43,6 +43,57 @@ flowchart TB
   SG --> MD["metadata_creator → voiceover → visuals"]
 ```
 
+## How it extends the current pipeline (the concrete edits)
+
+Today the **content stage** runs ONE flat module chain for every format — format
+routing happens *inside* `video_packaging` and `script_generation`, not in the
+chain:
+
+```
+evidence_prep → editorial_triage → story_mapping → editorial_selection   ← Phase 1 (shared corpus)
+   → video_packaging → script_generation → metadata_creator             ← Phase 2 (per-format)
+```
+
+The extension inserts exactly **one module** into Phase 2:
+
+```
+… → video_packaging → topic_research → script_generation → metadata_creator
+                       ^^^^^^^^^^^^^^  NEW — runs for deep_dive; a no-op for roundup
+```
+
+The edits are small and follow patterns already in the codebase (this is why it's
+an extension, not a new system):
+
+1. **`orchestration/content_phases.py`** — `topic_research` is Phase-2 (it comes
+   *after* `SHARED_CORPUS_MODULES`), so the shared-corpus boundary is unchanged. A
+   derived deep_dive reuses the corpus and runs `topic_research` fresh on the topic.
+2. **`orchestration/stages/content.py`** —
+   - add `topic_research` to `MODULES`, right after `video_packaging`;
+   - `_module_function`: map `topic_research → content.topic_research.run`;
+   - `_build_input`: build its input from the `video_packaging` result, and extend
+     `script_generation`'s input to also carry the `topic_research` result (the
+     dossier). (Same shape as how `metadata_creator` already receives both
+     `script_generation` + `video_packaging`.)
+3. **new `content/topic_research/`** — `app.py` (frame → search → fetch →
+   synthesize), `contract.py` (dossier schema), `prompts/v1/{framer,synthesizer}/`,
+   `search_client.py` (Tavily/Exa). **Format-gated:** it reads `video_packaging`'s
+   `selected_format`; if the format doesn't need research (or config disables it),
+   it returns a pass-through — empty dossier, ready handoff — so roundup pays ~nothing.
+4. **config** — `profiles/daily_deep_dive/content/topic_research.yaml` (provider,
+   depth caps, model, reasoning_effort, prompt_version) registered in the
+   `daily_deep_dive` block of `workbench.yaml`. Roundup profiles simply don't enable it.
+5. **deep_dive `script_generation`** — its request contract gains an optional
+   `topic_research` input; the director + section writers use the dossier as their
+   `source_context` in place of / alongside the single story's records.
+6. **orchestration + UI (free)** — `topic_research` shows up automatically as a new
+   module artifact (`topic_research_result.json`) in `run_state` and the inspector,
+   resumable like any module. **No new stage, no runner change, no UI change.**
+
+**Reused unchanged:** the `run(input)->dict` module contract, the runner +
+content stage, the config/profile system, provenance + content fingerprints, the
+derive flow, and the entire deep_dive script format. **Genuinely new:** one module
++ a search client + one profile YAML.
+
 ## The research dossier (module output)
 
 `topic_research.run(input) -> dict` returns a structured, **grounded** dossier
