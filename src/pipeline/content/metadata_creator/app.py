@@ -43,12 +43,13 @@ class TitleOptionOutput(BaseModel):
     accuracy_risk: Literal["low", "medium", "high"]
     click_potential: Literal["low", "medium", "medium_high", "high"]
     why_it_works: str
-    angle_strategy: Literal[
-        "lead_story_roundup",
-        "multi_story_contrast",
-        "episode_question",
-        "concrete_list",
-    ]
+    angle_strategy: str = Field(
+        description=(
+            "A short label for the title's strategy — format-appropriate. Roundup titles use strategies "
+            "like lead_story_roundup, multi_story_contrast, episode_question, concrete_list; deep-dive "
+            "titles use strategies like core_tension, striking_detail, episode_question. Descriptive only."
+        )
+    )
     represented_story_ids: list[str] = Field(
         description="Exact selected story IDs materially represented by this title."
     )

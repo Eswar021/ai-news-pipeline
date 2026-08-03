@@ -276,3 +276,43 @@ def test_metadata_unrelated_bad_request_does_not_switch_provider() -> None:
         )
 
     assert fallback.called is False
+
+
+def test_deep_dive_angle_strategy_parses() -> None:
+    """Regression: a deep_dive run died at metadata_creator because the shared
+    TitleOptionOutput pinned angle_strategy to roundup-only literals, while the
+    deep_dive prompt (rightly) produces strategies like core_tension /
+    striking_detail. angle_strategy is a descriptive label, so the model must
+    accept any format's vocabulary — validation must not reject the deep-dive words."""
+    draft = MetadataDraftOutput.model_validate(
+        {
+            "title_options": [
+                {
+                    "title": "Astra's $2,000 Math Breakthrough: What's the Catch?",
+                    "accuracy_risk": "medium",
+                    "click_potential": "high",
+                    "why_it_works": "surprising low cost",
+                    "angle_strategy": "core_tension",  # deep-dive strategy — was rejected before
+                    "represented_story_ids": ["story_astra"],
+                    "relationship_basis": "",
+                    "scope_and_state_check": "single-topic deep dive",
+                },
+                {
+                    "title": "Can AI Solve Decades-Old Math for Dinner Money?",
+                    "accuracy_risk": "medium",
+                    "click_potential": "high",
+                    "why_it_works": "juxtaposition",
+                    "angle_strategy": "striking_detail",
+                    "represented_story_ids": ["story_astra"],
+                    "relationship_basis": "",
+                    "scope_and_state_check": "single-topic",
+                },
+            ],
+            "thumbnail_text_options": ["$2,000?"],
+            "thumbnail_concepts": [],
+            "chapter_titles": [{"section_id": "intro", "title": "The claim"}],
+            "description_intro": "A look at Astra's math claims.",
+            "tags": ["ai"],
+        }
+    )
+    assert [opt.angle_strategy for opt in draft.title_options] == ["core_tension", "striking_detail"]
