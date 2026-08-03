@@ -1044,6 +1044,7 @@ function PublishKit({ detail }: { detail: RunDetail }) {
     .map((chapter: Json) => `${formatDuration(chapter.start_seconds ?? chapter.start ?? 0)} ${chapter.label || chapter.title || chapter.name || ""}`.trim())
     .join("\n");
   const thumbs: Json[] = meta.thumbnail_concepts || [];
+  const thumbTexts: string[] = meta.thumbnail_text_options || [];
   return (
     <section className="publishKit">
       <div className="sectionHeading"><span className="sectionLabel">Publish kit</span><small>Everything for upload — media plus copy-paste metadata</small></div>
@@ -1069,14 +1070,19 @@ function PublishKit({ detail }: { detail: RunDetail }) {
           })}
         </div>
       )}
+      {thumbTexts.length > 0 && (
+        <CopyField label="Thumbnail text options" value={thumbTexts.join("  ·  ")} />
+      )}
       {thumbs.length > 0 && (
         <div className="thumbConcepts">
-          <span className="sectionLabel">Thumbnail concepts</span>
+          <span className="sectionLabel">Thumbnail concepts — briefs to generate the image (we don't render the image itself)</span>
           <div className="thumbConceptGrid">
             {thumbs.map((thumb: Json, index: number) => (
               <div key={index} className="thumbConcept">
-                <strong>{thumb.headline || thumb.text || thumb.overlay_text || thumb.concept || `Concept ${index + 1}`}</strong>
-                <p>{thumb.description || thumb.visual || thumb.visual_description || thumb.rationale || ""}</p>
+                <strong>{thumb.concept_name || thumb.text_overlay || `Concept ${index + 1}`}</strong>
+                {thumb.text_overlay && <span className="thumbOverlay">Overlay: {thumb.text_overlay}</span>}
+                <p>{thumb.visual_hook || thumb.composition || ""}</p>
+                {thumb.generation_prompt && <CopyField label="Image prompt" value={String(thumb.generation_prompt)} multiline />}
               </div>
             ))}
           </div>

@@ -28,6 +28,18 @@ import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+// GSAP drives every scene timeline. Inline the vendored local copy so a render
+// never depends on the network — a CDN miss loads null, gsap.timeline() throws,
+// and the episode falls back to a static, text-only video. Falls back to the CDN
+// tag only if the local copy is missing (run `npm install` in video_engine).
+const gsapTag = (() => {
+  try {
+    return `<script>${readFileSync(resolve(here, "../node_modules/gsap/dist/gsap.min.js"), "utf8")}</script>`;
+  } catch {
+    return `<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>`;
+  }
+})();
 const projectRoot = resolve(here, "..");
 const contentArg = process.argv[2] || "content/typography-demo.yaml";
 
@@ -228,7 +240,7 @@ const html = `<!doctype html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080" />
-    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    ${gsapTag}
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #06090e; }
