@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from src.pipeline.content.asset_collection import build_asset_manifest
 from ..io import load_json, write_json
 from ..logging import configure_stage_logging
 from ..state import RunStateStore
@@ -117,6 +118,7 @@ def _run_stage(
         raise FileNotFoundError(f"Visual engine entrypoint not found: {entrypoint}")
 
     visuals_dir = run_dir / "visuals"
+    manifest_path = _write_asset_manifest(run_dir, visuals_dir, logger)
     command = [
         options.node_bin,
         str(entrypoint),
@@ -125,6 +127,8 @@ def _run_stage(
         "--out-dir", str(visuals_dir),
         "--tag", str(run_id),
     ]
+    if manifest_path is not None:
+        command += ["--asset-manifest", str(manifest_path)]
     if options.deterministic:
         command.append("--deterministic")
     if options.units is not None:
@@ -159,6 +163,40 @@ def _run_stage(
         },
         "handoff": {"episode_rendered": episode_rendered},
     }
+
+
+def _write_asset_manifest(run_dir: Path, visuals_dir: Path, logger) -> Path | None:
+    """Collect real source images (og:image) for the selected stories and write an
+    asset manifest for the engine. Best-effort: any failure returns None and the
+    render proceeds exactly as before (engine stays decoupled — no manifest, no
+    change in behavior)."""
+    packet_path = run_dir / "video_packaging" / "video_packaging_result.json"
+    if not packet_path.exists():
+        return None
+    try:
+        packet_result = load_json(packet_path)
+        stories = (
+            ((packet_result.get("data") or {}).get("video_packet") or {}).get("stories") or []
+        )
+        if not stories:
+            return None
+        manifest = build_asset_manifest(stories)
+        image_count = sum(len(story.get("images", [])) for story in manifest.get("stories", []))
+        if image_count == 0:
+            logger.logger.info("VISUALS asset manifest: no source images resolved; skipping")
+            return None
+        manifest_path = visuals_dir / "asset_manifest.json"
+        write_json(manifest_path, manifest)
+        logger.logger.info(
+            "VISUALS asset manifest: %d image(s) across %d story(ies) → %s",
+            image_count,
+            len(manifest.get("stories", [])),
+            manifest_path,
+        )
+        return manifest_path
+    except Exception as exc:  # best-effort; never block the render
+        logger.logger.warning("VISUALS asset manifest skipped: %s: %s", type(exc).__name__, exc)
+        return None
 
 
 def _channel_name(project_root: Path, run_context: dict[str, Any]) -> str:

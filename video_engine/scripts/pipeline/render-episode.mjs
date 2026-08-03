@@ -86,6 +86,9 @@ if (has("--deterministic")) {
   if (opt("--units")) llmArgs.push("--units", opt("--units"));
   if (opt("--channel-name")) llmArgs.push("--channel-name", opt("--channel-name"));
   if (opt("--channel-handle")) llmArgs.push("--channel-handle", opt("--channel-handle"));
+  // Optional real source imagery: the pipeline's asset manifest (og:image per
+  // selected story). Absent → the engine plans exactly as before (decoupled).
+  if (opt("--asset-manifest")) llmArgs.push("--asset-manifest", resolve(process.cwd(), opt("--asset-manifest")));
   sh("node", llmArgs);
 }
 

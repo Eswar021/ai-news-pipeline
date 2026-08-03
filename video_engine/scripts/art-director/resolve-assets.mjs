@@ -62,9 +62,14 @@ function resolveAsset(type, value) {
   if (cache.has(key)) return cache.get(key);
   let path = "";
   try {
+    // A real source-image URL (from the pipeline's asset manifest) is FROZEN
+    // exactly via --from; a plain description is a stock search via --intent.
+    const isUrl = /^https?:\/\//i.test(v);
     const muArgs = type === "logo"
       ? ["--type", "logo", "--entity", v, "--intent", `${v} logo`, "--project", ".", "--json"]
-      : ["--type", "image", "--intent", v, "--project", ".", "--json"];
+      : isUrl
+        ? ["--type", "image", "--from", v, "--project", ".", "--json"]
+        : ["--type", "image", "--intent", v, "--project", ".", "--json"];
     const out = execFileSync("node", [MEDIA_USE, ...muArgs],
       { cwd: projectRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], env: MEDIA_ENV });
     const j = JSON.parse(out);

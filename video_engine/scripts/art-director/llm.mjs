@@ -79,6 +79,38 @@ function loadApiKey() {
 const clean = (s) => String(s || "").replace(/\s+/g, " ").trim();
 const firstSentence = (t) => clean(t).split(/(?<=[.!?])\s+/)[0] || clean(t);
 
+// ---------- source imagery (optional pipeline asset manifest) ----------
+// Real og:image per selected story. We GUARANTEE each story unit shows its real
+// source image at least once — even when the LLM plan for that unit fails and
+// falls back to text — so episodes are never wall-to-wall text cards. The image
+// component's query is set to the exact URL; resolve-assets freezes it via --from.
+const SINGLE_QUERY_IMG = new Set(["photo", "image-reveal", "spotlight", "parallax"]);
+const normTitle = (s) => clean(s).toLowerCase();
+const imageByTitle = new Map();
+const assetManifestArg = opt("--asset-manifest");
+if (assetManifestArg) {
+  try {
+    const mf = JSON.parse(readFileSync(resolve(process.cwd(), assetManifestArg), "utf8"));
+    for (const story of mf.stories || []) {
+      const url = (story.images || [])[0] && story.images[0].image_url;
+      if (url && story.story_title) imageByTitle.set(normTitle(story.story_title), url);
+    }
+    if (imageByTitle.size) console.error(`  asset manifest: ${imageByTitle.size} story image(s)`);
+  } catch (e) { console.error(`  asset manifest ignored: ${e.message}`); }
+}
+
+function ensureRealSourceImage(unitScenes, imageUrl) {
+  const existing = unitScenes.find((s) => SINGLE_QUERY_IMG.has(s.component) && s.params);
+  if (existing) { existing.params.query = imageUrl; return; }
+  if (!unitScenes.length) return;
+  // Keep the opening hook scene if we can; convert the longest of the rest into
+  // a real-image reveal (same duration + transition, so audio sync is preserved).
+  const pool = unitScenes.length > 1 ? unitScenes.slice(1) : unitScenes;
+  const target = pool.reduce((a, b) => ((b.duration || 0) > (a.duration || 0) ? b : a), pool[0]);
+  target.component = "image-reveal";
+  target.params = { query: imageUrl };
+}
+
 // ---------- flatten package into units + beats ----------
 const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
 const allUnits = Array.isArray(pkg.audio_units) ? pkg.audio_units : [];
@@ -235,7 +267,12 @@ for (let i = 0; i < chosen.length; i++) {
   }
   if (!shots) { process.stderr.write(`FAILED, using fallback\n`); shots = []; if (err) console.error("  last error:", err.message); }
   else process.stderr.write(`ok (${shots.length} shots)\n`);
-  allScenes.push(...scenesForUnit(unit, shots, i === 0 && startUnit === 0));
+  const unitScenes = scenesForUnit(unit, shots, i === 0 && startUnit === 0);
+  if (unit.isStory) {
+    const img = imageByTitle.get(normTitle(unit.story_title));
+    if (img) ensureRealSourceImage(unitScenes, img);
+  }
+  allScenes.push(...unitScenes);
 }
 
 if (dryRun) process.exit(0);
