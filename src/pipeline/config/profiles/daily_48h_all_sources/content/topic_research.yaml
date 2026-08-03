@@ -1,0 +1,6 @@
+# Roundup does not research — topic_research passes through instantly (research is
+# gated to the formats in enabled_formats). Present so the content stage resolves a
+# config for every module uniformly across profiles.
+enabled: true
+enabled_formats: [deep_dive]
+prompt_version: v1

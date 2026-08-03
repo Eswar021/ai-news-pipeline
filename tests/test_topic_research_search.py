@@ -43,7 +43,8 @@ def test_tavily_search_parses_and_drops_empty_results() -> None:
     assert results[0]["title"] == "Primary source" and results[0]["score"] == 0.9
 
 
-def test_missing_key_raises() -> None:
+def test_missing_key_raises(monkeypatch) -> None:
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)  # the suite loads .env
     with pytest.raises(SearchError, match="TAVILY_API_KEY"):
         tavily_search("q", api_key="", http_post=_fake_post())
 

@@ -1,0 +1,1 @@
+Frame the web research for this topic. Read the title, one-sentence summary, primary entity, and the records we already have, then return focused, searchable questions that push BEYOND those records — covering distinct facets (mechanism, numbers, primary source, history, skeptics, impact). Stay within max_questions.

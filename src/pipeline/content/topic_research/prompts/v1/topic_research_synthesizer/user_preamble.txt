@@ -1,0 +1,1 @@
+Synthesize a grounded, fully-cited research dossier from these sources for this topic. Every claim, quote, number, timeline entry, and counterpoint must carry the exact source_url it came from — invent nothing that is not in the sources. Preserve measured-vs-claimed and current-vs-planned distinctions; note any conflicts between sources.

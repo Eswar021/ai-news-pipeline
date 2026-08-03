@@ -38,6 +38,7 @@ MODULES = [
     "story_mapping",
     "editorial_selection",
     "video_packaging",
+    "topic_research",  # deep_dive: web-research the topic; a no-op pass-through for roundup
     "script_generation",
     "metadata_creator",
 ]
@@ -314,11 +315,20 @@ def _build_input(
             "config": deepcopy(module_config),
             "input": {"editorial_selection": results["editorial_selection"]},
         }
-    if module == "script_generation":
+    if module == "topic_research":
         return {
             "run": run,
             "config": deepcopy(module_config),
             "input": {"video_packaging": results["video_packaging"]},
+        }
+    if module == "script_generation":
+        return {
+            "run": run,
+            "config": deepcopy(module_config),
+            "input": {
+                "video_packaging": results["video_packaging"],
+                "topic_research": results["topic_research"],
+            },
         }
     if module == "metadata_creator":
         config = deepcopy(module_config)
@@ -403,6 +413,10 @@ def _module_function(module: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
         from src.pipeline.content.editorial_selection import run
     elif module == "video_packaging":
         from src.pipeline.content.video_packaging import run
+    elif module == "topic_research":
+        # deep_dive: web-research the topic into a grounded dossier; pass-through
+        # for formats that don't research (roundup).
+        from src.pipeline.content.topic_research import run
     elif module == "script_generation":
         # Format-agnostic entrypoint: routes to the roundup/deep_dive/... writer
         # based on the format the upstream video_packaging packet selected.

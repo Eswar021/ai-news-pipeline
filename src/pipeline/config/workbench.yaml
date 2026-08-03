@@ -17,6 +17,7 @@ profiles:
         story_mapping: profiles/daily_48h_all_sources/content/story_mapping.yaml
         editorial_selection: profiles/daily_48h_all_sources/content/editorial_selection.yaml
         video_packaging: profiles/daily_48h_all_sources/content/video_packaging.yaml
+        topic_research: profiles/daily_48h_all_sources/content/topic_research.yaml
         script_generation: profiles/daily_48h_all_sources/content/script_generation.yaml
         metadata_creator: profiles/daily_48h_all_sources/content/metadata_creator.yaml
       voiceover:
@@ -38,6 +39,7 @@ profiles:
         story_mapping: profiles/daily_48h_all_sources/content/story_mapping.yaml
         editorial_selection: profiles/daily_48h_all_sources/content/editorial_selection.yaml
         video_packaging: profiles/daily_deep_dive/content/video_packaging.yaml
+        topic_research: profiles/daily_deep_dive/content/topic_research.yaml
         script_generation: profiles/daily_deep_dive/content/script_generation.yaml
         metadata_creator: profiles/daily_48h_all_sources/content/metadata_creator.yaml
       voiceover:

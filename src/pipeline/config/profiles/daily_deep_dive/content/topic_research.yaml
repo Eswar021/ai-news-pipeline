@@ -1,0 +1,43 @@
+# Researched deep-dive: web-research the selected topic, then synthesize a
+# grounded, fully-cited dossier the writer uses instead of one article's records.
+enabled: true
+enabled_formats: [deep_dive]
+prompt_version: v1
+
+# Default LLM (used for any role without its own override).
+provider: openai
+model: gpt-4o
+temperature: 0.3
+structured_output: { method: json_schema, strict: true }
+provider_options: { request_timeout_seconds: 300 }
+llm_retry: { enabled: true, max_attempts: 3, max_structured_output_attempts: 2, initial_delay_seconds: 1.0, max_delay_seconds: 20.0 }
+
+llm_roles:
+  framer:            # lightweight: turn the topic into distinct searchable questions
+    provider: openai
+    model: gpt-4o
+    temperature: 0.4
+    structured_output: { method: json_schema, strict: true }
+    provider_options: { request_timeout_seconds: 180 }
+  synthesizer:       # heavy: distill many sources into a grounded, cited dossier
+    provider: deepseek
+    model: deepseek-v4-pro
+    temperature: 1.0
+    provider_options: { thinking: enabled, omit_temperature: true, reasoning_effort: max, request_timeout_seconds: 600 }
+    structured_output: { method: json_mode, strict: false }
+    llm_retry: { enabled: true, max_attempts: 2, max_structured_output_attempts: 2, initial_delay_seconds: 1.0, max_delay_seconds: 10.0 }
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.4
+      provider_options: { request_timeout_seconds: 300 }
+      structured_output: { method: json_schema, strict: true }
+
+# Web search (provider seam — swap to a self-hosted parser later without touching the app).
+search:
+  provider: tavily
+  max_questions: 6
+  max_results_per_question: 4
+  max_sources: 12
+  search_depth: advanced
+  request_timeout_seconds: 30
