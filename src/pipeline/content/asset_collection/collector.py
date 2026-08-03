@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html as _html
 import re
+import time
 from typing import Any, Callable
 from urllib.parse import urljoin
 
@@ -20,19 +21,26 @@ except Exception:  # pragma: no cover - requests is always present in the app en
 
 SCHEMA_VERSION = "asset_manifest_v1"
 
+# Browser-like headers reduce intermittent bot-challenge responses (the page
+# returns 200 but without the og:image meta) from sites like openai.com.
 DEFAULT_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    )
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
-# og:image / twitter:image, tolerating either attribute order and quote style.
+# og:image / twitter:image / link rel=image_src / itemprop, tolerating either
+# attribute order and quote style.
 _META_PATTERNS = [
     re.compile(r'<meta[^>]+(?:property|name)=["\']og:image(?::url|:secure_url)?["\'][^>]+content=["\']([^"\']+)["\']', re.I),
     re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name)=["\']og:image(?::url|:secure_url)?["\']', re.I),
     re.compile(r'<meta[^>]+(?:property|name)=["\']twitter:image(?::src)?["\'][^>]+content=["\']([^"\']+)["\']', re.I),
     re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name)=["\']twitter:image(?::src)?["\']', re.I),
+    re.compile(r'<link[^>]+rel=["\']image_src["\'][^>]+href=["\']([^"\']+)["\']', re.I),
+    re.compile(r'<meta[^>]+itemprop=["\']image["\'][^>]+content=["\']([^"\']+)["\']', re.I),
 ]
 
 
@@ -73,17 +81,37 @@ def _fetch_html(url: str, timeout_seconds: float, http_get: Callable[..., Any]) 
     return getattr(response, "text", "") or None
 
 
+def _resolve_record_image(
+    url: str, *, timeout_seconds: float, http_get: Callable[..., Any], max_attempts: int
+) -> str | None:
+    """Fetch a URL and extract its share image, retrying a few times. Sites like
+    openai.com intermittently return a 200 bot-challenge page WITHOUT the og:image
+    meta; a retry usually lands a good response, so this is the core reliability
+    fix for real source imagery."""
+    for attempt in range(max(1, max_attempts)):
+        html = _fetch_html(url, timeout_seconds, http_get)
+        if html:
+            image_url = extract_image_url(html, url)
+            if image_url:
+                return image_url
+        if attempt + 1 < max_attempts:
+            time.sleep(0.6 * (attempt + 1))
+    return None
+
+
 def build_asset_manifest(
     stories: list[dict[str, Any]],
     *,
     timeout_seconds: float = 8.0,
     max_images_per_story: int = 4,
+    max_attempts: int = 3,
     http_get: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     """Build an asset manifest of real source images for the selected stories.
 
     Best-effort: stories/records without a resolvable image are simply omitted.
-    ``http_get`` is injectable for tests; defaults to ``requests.get``."""
+    Each record fetch is retried (``max_attempts``) to ride out intermittent
+    bot-challenge responses. ``http_get`` is injectable for tests."""
     if http_get is None:
         if requests is None:
             return {"schema_version": SCHEMA_VERSION, "stories": []}
@@ -100,10 +128,9 @@ def build_asset_manifest(
             if not url or url in seen:
                 continue
             seen.add(url)
-            html = _fetch_html(url, timeout_seconds, http_get)
-            if not html:
-                continue
-            image_url = extract_image_url(html, url)
+            image_url = _resolve_record_image(
+                url, timeout_seconds=timeout_seconds, http_get=http_get, max_attempts=max_attempts
+            )
             if image_url:
                 images.append(
                     {

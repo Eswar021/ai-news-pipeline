@@ -92,23 +92,29 @@ if (assetManifestArg) {
   try {
     const mf = JSON.parse(readFileSync(resolve(process.cwd(), assetManifestArg), "utf8"));
     for (const story of mf.stories || []) {
-      const url = (story.images || [])[0] && story.images[0].image_url;
-      if (url && story.story_title) imageByTitle.set(normTitle(story.story_title), url);
+      const img = (story.images || [])[0];
+      if (img && img.image_url && story.story_title) {
+        imageByTitle.set(normTitle(story.story_title), { url: img.image_url, source: img.source_url || "" });
+      }
     }
     if (imageByTitle.size) console.error(`  asset manifest: ${imageByTitle.size} story image(s)`);
   } catch (e) { console.error(`  asset manifest ignored: ${e.message}`); }
 }
 
-function ensureRealSourceImage(unitScenes, imageUrl) {
-  const existing = unitScenes.find((s) => SINGLE_QUERY_IMG.has(s.component) && s.params);
-  if (existing) { existing.params.query = imageUrl; return; }
+function ensureRealSourceImage(unitScenes, img) {
+  // Present the REAL source image as a browser-frame (the article shown at its URL).
+  // browser-frame is intentionally NOT in the LLM menu, so it only ever carries a
+  // real source image — never a wrong stock lookup.
+  const bf = { query: img.url, url: img.source };
+  const existing = unitScenes.find((s) => (SINGLE_QUERY_IMG.has(s.component) || s.component === "browser-frame") && s.params);
+  if (existing) { existing.component = "browser-frame"; existing.params = bf; return; }
   if (!unitScenes.length) return;
-  // Keep the opening hook scene if we can; convert the longest of the rest into
-  // a real-image reveal (same duration + transition, so audio sync is preserved).
+  // Keep the opening hook scene if we can; convert the longest of the rest (same
+  // duration + transition, so audio sync is preserved).
   const pool = unitScenes.length > 1 ? unitScenes.slice(1) : unitScenes;
   const target = pool.reduce((a, b) => ((b.duration || 0) > (a.duration || 0) ? b : a), pool[0]);
-  target.component = "image-reveal";
-  target.params = { query: imageUrl };
+  target.component = "browser-frame";
+  target.params = bf;
 }
 
 // ---------- flatten package into units + beats ----------

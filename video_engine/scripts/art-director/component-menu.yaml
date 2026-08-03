@@ -5,13 +5,14 @@
 # BRAND logos (entity-intro, logo-vs-logo, logo-reveal, logo-wall) — name the entity,
 # the resolver fetches the official logo. REAL PHOTOS (photo, image-reveal, spotlight) —
 # describe the image, the resolver fetches it. SOURCE proof (headline-highlight,
-# quote-from-source, citation-chip, browser-frame, chat-exchange) — ground claims in a
-# real publication, page, or model output. browser-frame shows the actual source page /
-# product / tweet; chat-exchange shows an actual AI prompt→response.
+# quote-from-source, citation-chip, chat-exchange) — ground claims in a real publication
+# or model output. (The real story source image is auto-added as a browser-frame by the
+# pipeline — you do not request it.)
 
 rules:
-  - SHOW, don't tell. Reach FIRST for a component that shows something real — browser-frame (the actual page/product/tweet), chat-exchange (a real AI prompt→response), a logo/photo, a source/quote/headline, or a diagram/chart when the beat gives steps or numbers. Plain text cards (title-card, kinetic-sentence) are the FALLBACK when there is genuinely nothing to show — never the default.
+  - SHOW, don't tell. Reach FIRST for a component that shows something real — chat-exchange (a real AI prompt→response), a logo, a source/quote/headline, a data/diagram component when the beat gives numbers or steps, or a concrete photo. Plain text cards (title-card, kinetic-sentence) are the FALLBACK when there is genuinely nothing to show — never the default.
   - Never use more than TWO plain text cards (title-card / kinetic-sentence) in a row; break up a run of them with something visual. Aim for a majority of shots across a story to be non-text-card.
+  - Photos (photo, image-reveal, spotlight, parallax) are ONLY for a CONCRETE, real, nameable subject the beat is literally about — a specific person ("Sam Altman on stage"), real hardware ("an NVIDIA H100 GPU"), a real place, a physical object. NEVER for abstract concepts — no "AI brain", "glowing neural network", "digital knowledge", "data flowing", "futuristic hologram". Generic concept stock looks like slop; for an abstract idea use a diagram, stat, chart, quote, or chat-exchange instead. If you cannot name a concrete real subject, do not use a photo.
   - Choose the component whose SHAPE fits the beat's job — vary it; never use the same one for many beats in a row.
   - Author CONCISE on-screen copy. Rewrite the narration into short phrases — never paste a full sentence. A title is a few words; a stat value is the number itself.
   - A long beat (>~10s) should usually be 2-3 short shots that establish → develop → pay off ONE idea, not one static card. Give each shot a `weight` (relative time share within the beat).
@@ -62,7 +63,6 @@ components:
   social-post: { params: [author, handle, text, meta], use: "A stylized social-media post card. author/handle = poster; text = the post; meta = date/platform." }
   document-excerpt: { params: [docLabel, excerpt, highlight], use: "A document/filing excerpt with a highlighted phrase. docLabel = doc name; highlight = a substring of excerpt." }
   multi-source-montage: { params: [title, sources], use: "Several outlets covering the same story, stacked. sources = array of {source, headline} (2-4)." }
-  browser-frame: { params: [query, url, caption], use: "Show the ACTUAL source page/product as a screenshot inside a browser window. query = the image to show (a real source-image URL is frozen exactly; a description is fetched); url = the address bar (e.g. openai.com/index/...); caption optional. Best for 'here is the actual announcement/product/tweet' beats." }
   chat-exchange: { params: [prompt, response, model], use: "An AI chat exchange: a user prompt bubble, then a model response bubble. prompt = what the user asked (short); response = what the model said (short, verbatim or faithful); model = the model name (e.g. GPT-5, Claude, Gemini). Best for showing what an AI actually did/said — jailbreaks, capabilities, refusals, funny outputs." }
 
   # --- Real media (real stock/news photos — you DESCRIBE the image; the resolver fetches it) ---

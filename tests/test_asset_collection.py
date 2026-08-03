@@ -61,7 +61,7 @@ def test_build_manifest_collects_images_and_omits_the_imageless() -> None:
         "https://b.com/y": _Resp(text=NO_IMAGE),
         "https://c.com/z": RuntimeError("network down"),
     }
-    manifest = build_asset_manifest(stories, http_get=_fake_get(pages))
+    manifest = build_asset_manifest(stories, http_get=_fake_get(pages), max_attempts=1)
     assert manifest["schema_version"] == "asset_manifest_v1"
     # s1 keeps its one real image; s2 (fetch error) is dropped entirely, no raise.
     assert [s["story_id"] for s in manifest["stories"]] == ["s1"]
@@ -90,5 +90,19 @@ def test_build_manifest_skips_non_html_and_bad_status() -> None:
         "https://a.com/pdf": _Resp(ctype="application/pdf", text=OG),  # not html → skip
         "https://a.com/404": _Resp(status=404, text=OG),
     }
-    manifest = build_asset_manifest(stories, http_get=_fake_get(pages))
+    manifest = build_asset_manifest(stories, http_get=_fake_get(pages), max_attempts=1)
     assert manifest["stories"] == []
+
+
+def test_retry_rides_out_a_transient_bad_response() -> None:
+    # First fetch is a 200 bot-challenge with no og:image; the retry lands a good one.
+    calls = {"n": 0}
+
+    def flaky_get(url: str, **_kwargs):
+        calls["n"] += 1
+        return _Resp(text=NO_IMAGE) if calls["n"] == 1 else _Resp(text=OG)
+
+    stories = [{"story_id": "s", "story_title": "S", "records": [{"record_key": "r", "url": "https://a.com/x"}]}]
+    manifest = build_asset_manifest(stories, http_get=flaky_get, max_attempts=3)
+    assert manifest["stories"][0]["images"][0]["image_url"] == "https://cdn.example.com/hero.jpg"
+    assert calls["n"] == 2  # succeeded on the second attempt
