@@ -29,16 +29,20 @@ import yaml from "js-yaml";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-// GSAP drives every scene timeline. Inline the vendored local copy so a render
-// never depends on the network — a CDN miss loads null, gsap.timeline() throws,
-// and the episode falls back to a static, text-only video. Falls back to the CDN
-// tag only if the local copy is missing (run `npm install` in video_engine).
+// GSAP drives every scene timeline. Inline the committed vendor copy so a render
+// never depends on the network or on `npm install` — a CDN miss loads null,
+// gsap.timeline() throws, and the episode falls back to a static, text-only video.
+// vendor/gsap.min.js is committed (see vendor/README.md); node_modules is a
+// secondary source, and the CDN tag is only a last resort.
 const gsapTag = (() => {
-  try {
-    return `<script>${readFileSync(resolve(here, "../node_modules/gsap/dist/gsap.min.js"), "utf8")}</script>`;
-  } catch {
-    return `<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>`;
+  for (const rel of ["../vendor/gsap.min.js", "../node_modules/gsap/dist/gsap.min.js"]) {
+    try {
+      return `<script>${readFileSync(resolve(here, rel), "utf8")}</script>`;
+    } catch {
+      /* try the next source */
+    }
   }
+  return `<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>`;
 })();
 const projectRoot = resolve(here, "..");
 const contentArg = process.argv[2] || "content/typography-demo.yaml";
