@@ -287,6 +287,13 @@ components:
       - { cue: click, at: 0.25, volume: 0.3 } # page load
       - { cue: select, at: 0.8, volume: 0.28 } # load complete
 
+  chat-exchange:
+    family: source
+    sfx:
+      - { cue: swipe, at: 0.0, volume: 0.35 } # user prompt in
+      - { cue: tick, at: 0.9, volume: 0.18, repeat: 4, spread: 0.16 } # thinking dots
+      - { cue: notify-ding, at: 2.15, volume: 0.34 } # response lands
+
   quote-from-source:
     family: source
     sfx:

@@ -1,0 +1,81 @@
+<!doctype html>
+<html data-composition-variables='[
+  {"id":"prompt","type":"string","label":"User prompt","default":"Prove that P equals NP."},
+  {"id":"response","type":"string","label":"Model response","default":"I can’t prove that — but here is what is actually known, and where the hard part is."},
+  {"id":"model","type":"string","label":"Model label","default":"GPT-5"},
+  {"id":"promptLabel","type":"string","label":"User label","default":"You"}
+]'>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position:absolute; inset:0; overflow:hidden;
+          --bg:#0B0E14; --surface:#161C26; --user:#FF8A3D; --text:#E6EDF3; --text-dim:#8B94A3;
+          --border:rgba(230,237,243,0.12);
+          --fd:"Montserrat",-apple-system,system-ui,sans-serif; --fm:"JetBrains Mono",ui-monospace,monospace;
+          font-family:var(--fd); color:var(--text); background:transparent;
+        }
+        .bg { position:absolute; inset:0; background:radial-gradient(130% 100% at 50% 12%, #16202F 0%, var(--bg) 55%, #06090E 100%); }
+        .chat { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center;
+          gap:34px; padding:0 300px; }
+        .row { display:flex; will-change:transform,opacity; }
+        .row.user { justify-content:flex-end; }
+        .row.bot { justify-content:flex-start; }
+        .bubble { max-width:74%; border-radius:26px; padding:34px 40px; font-size:40px; line-height:1.34; font-weight:600; }
+        .bubble.user { background:var(--user); color:#0B0E14; border-bottom-right-radius:8px; }
+        .bubble.bot { background:var(--surface); border:1.5px solid var(--border); color:var(--text); border-bottom-left-radius:8px; }
+        .botwrap { display:flex; flex-direction:column; align-items:flex-start; gap:14px; max-width:80%; }
+        .chip { display:inline-flex; align-items:center; gap:12px; font-family:var(--fm); font-size:22px; letter-spacing:0.08em;
+          text-transform:uppercase; color:var(--text-dim); font-weight:700; }
+        .chip .dotmark { width:16px; height:16px; border-radius:50%; background:var(--accent,#3DD6D0); background:#3DD6D0; }
+        .typing { display:flex; gap:12px; padding:30px 34px; background:var(--surface); border:1.5px solid var(--border);
+          border-radius:26px; border-bottom-left-radius:8px; width:fit-content; will-change:transform,opacity; }
+        .typing .d { width:18px; height:18px; border-radius:50%; background:var(--text-dim); will-change:transform,opacity; }
+      </style>
+
+      <div id="root" data-composition-id="chat-exchange" data-width="1920" data-height="1080">
+        <div class="bg"></div>
+        <div class="chat">
+          <div class="row user"><div class="bubble user utext"></div></div>
+          <div class="row bot"><div class="botwrap">
+            <div class="chip"><span class="dotmark"></span><span class="mlabel"></span></div>
+            <div class="typing"><span class="d"></span><span class="d"></span><span class="d"></span></div>
+            <div class="bubble bot btext" style="opacity:0"></div>
+          </div></div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const R = document.querySelector('[data-composition-id="chat-exchange"]');
+          const HF = window.__hyperframes;
+          const V = (HF && HF.getVariables) ? HF.getVariables() : {};
+          const get = (k, d) => (V[k] !== undefined && V[k] !== null && V[k] !== "") ? V[k] : d;
+
+          R.querySelector(".utext").textContent = get("prompt", "");
+          R.querySelector(".btext").textContent = get("response", "");
+          R.querySelector(".mlabel").textContent = get("model", "GPT-5");
+
+          const typing = R.querySelector(".typing");
+          const bot = R.querySelector(".btext");
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+          // 1) user asks
+          tl.fromTo(R.querySelector(".row.user"), { opacity: 0, x: 46, scale: 0.97 }, { opacity: 1, x: 0, scale: 1, duration: 0.5, ease: "back.out(1.3)" }, 0);
+          tl.fromTo(R.querySelector(".chip"), { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 }, 0.55);
+          // 2) model "thinks" — finite pulsing dots
+          tl.fromTo(typing, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35 }, 0.7);
+          tl.fromTo(typing.querySelectorAll(".d"), { opacity: 0.35, y: 0 }, { opacity: 1, y: -8, duration: 0.32, ease: "sine.inOut", yoyo: true, repeat: 3, stagger: 0.12 }, 0.85);
+          // 3) response replaces the dots
+          tl.to(typing, { opacity: 0, y: -8, duration: 0.3 }, 2.05);
+          tl.fromTo(bot, { opacity: 0, y: 18, scale: 0.98 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power3.out" }, 2.15);
+          // sustained gentle drift so a long-held scene keeps breathing
+          tl.fromTo(R.querySelector(".chat"), { y: 8 }, { y: -8, duration: 12, ease: "sine.inOut" }, 0);
+          window.__timelines["chat-exchange"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>
