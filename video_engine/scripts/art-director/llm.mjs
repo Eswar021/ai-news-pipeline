@@ -47,6 +47,14 @@ const menu = yaml.load(readFileSync(resolve(here, "component-menu.yaml"), "utf8"
 const validComponents = new Set(Object.keys(menu.components || {}));
 const validTransitions = new Set(menu.transitions || []);
 const componentParams = Object.fromEntries(Object.entries(menu.components || {}).map(([k, v]) => [k, v.params || []]));
+
+// Format-awareness: a deep-dive is ONE topic explained across sequential angle
+// segments, so a numbered "story N of M" divider is nonsense — section-marker is
+// roundup-only (roundup also gets one deterministically per story, below). Deleting
+// it here removes it from both the shown menu and the accepted set.
+const FORMAT = (opt("--format") || "").toLowerCase();
+const isDeepDive = FORMAT === "deep_dive";
+if (isDeepDive) validComponents.delete("section-marker");
 // optional single-line text params: if the LLM omits one, pass "" so the component
 // HIDES it (with key-present-wins get()) instead of showing a stale default.
 const BLANKABLE = new Set(["subtitle", "kicker", "caption", "eyebrow", "sublabel", "author", "role", "secondary", "center", "title", "label", "tagline"]);
@@ -101,20 +109,66 @@ if (assetManifestArg) {
   } catch (e) { console.error(`  asset manifest ignored: ${e.message}`); }
 }
 
+const BROWSER_FRAME_MAX = 7; // a STATIC source screenshot must not hold longer than this
+const DIVIDER_SECONDS = 2.8; // fixed length of an injected numbered story divider
+
 function ensureRealSourceImage(unitScenes, img) {
   // Present the REAL source image as a browser-frame (the article shown at its URL).
   // browser-frame is intentionally NOT in the LLM menu, so it only ever carries a
   // real source image — never a wrong stock lookup.
   const bf = { query: img.url, url: img.source };
-  const existing = unitScenes.find((s) => (SINGLE_QUERY_IMG.has(s.component) || s.component === "browser-frame") && s.params);
-  if (existing) { existing.component = "browser-frame"; existing.params = bf; return; }
   if (!unitScenes.length) return;
-  // Keep the opening hook scene if we can; convert the longest of the rest (same
-  // duration + transition, so audio sync is preserved).
-  const pool = unitScenes.length > 1 ? unitScenes.slice(1) : unitScenes;
-  const target = pool.reduce((a, b) => ((b.duration || 0) > (a.duration || 0) ? b : a), pool[0]);
+  // Prefer converting an existing single-image scene; else the longest after the hook.
+  let idx = unitScenes.findIndex((s) => (SINGLE_QUERY_IMG.has(s.component) || s.component === "browser-frame") && s.params);
+  if (idx < 0) {
+    const pool = unitScenes.length > 1 ? unitScenes.slice(1) : unitScenes;
+    const target = pool.reduce((a, b) => ((b.duration || 0) > (a.duration || 0) ? b : a), pool[0]);
+    idx = unitScenes.indexOf(target);
+  }
+  const target = unitScenes[idx];
+  const original = { component: target.component, params: target.params };
   target.component = "browser-frame";
   target.params = bf;
+  // Cap the static hold: show the real image for BROWSER_FRAME_MAX, then cut back to the
+  // scene's original visual for the remainder (keeps the unit's audio sync exact). This
+  // is why real images used to freeze for 15-22s — the inject took the LONGEST scene.
+  if ((target.duration || 0) > BROWSER_FRAME_MAX + 1.5 && original.component !== "browser-frame") {
+    const rest = Number(((target.duration || 0) - BROWSER_FRAME_MAX).toFixed(2));
+    target.duration = BROWSER_FRAME_MAX;
+    unitScenes.splice(idx + 1, 0, { component: original.component, duration: rest, transition: "crossfade", params: original.params });
+  }
+}
+
+function shortLabel(title) {
+  const words = clean(title).split(" ").slice(0, 5).join(" ");
+  return words.length > 40 ? words.slice(0, 38).trimEnd() + "…" : words;
+}
+
+function ensureStoryDivider(unitScenes, unit, total) {
+  // ROUNDUP only: GUARANTEE each story opens with a numbered "N of M" divider instead of
+  // leaving it to per-unit LLM whim (which fired for only 1 of 5 stories last run).
+  if (!unitScenes.length) return;
+  const num = { index: unit.storyNo, total };
+  const existingIdx = unitScenes.findIndex((s) => s.component === "section-marker");
+  if (existingIdx >= 0) {
+    // The LLM already made one — keep its authored label, fix the numbering, open with it.
+    const sm = unitScenes[existingIdx];
+    sm.params = { ...sm.params, ...num };
+    if (existingIdx > 0) { unitScenes.splice(existingIdx, 1); unitScenes.unshift(sm); }
+    return;
+  }
+  const params = { ...num, label: shortLabel(unit.story_title), sublabel: "" };
+  const first = unitScenes[0];
+  if ((first.duration || 0) > DIVIDER_SECONDS + 1.2) {
+    // Prepend a short divider, taking its time from the first scene so the unit's total
+    // duration (audio sync) is unchanged; it inherits the story-entry transition.
+    unitScenes.unshift({ component: "section-marker", duration: DIVIDER_SECONDS, transition: first.transition || "dip", params });
+    first.duration = Number(((first.duration || 0) - DIVIDER_SECONDS).toFixed(2));
+    first.transition = "crossfade";
+  } else {
+    first.component = "section-marker";
+    first.params = params;
+  }
 }
 
 // ---------- flatten package into units + beats ----------
@@ -148,17 +202,22 @@ const durOf = (beat) => {
 
 // ---------- prompt building ----------
 function menuText() {
-  const lines = Object.entries(menu.components).map(([name, v]) => `- ${name}(${(v.params || []).join(", ")}) — ${v.use}`);
+  const lines = Object.entries(menu.components).filter(([name]) => validComponents.has(name)).map(([name, v]) => `- ${name}(${(v.params || []).join(", ")}) — ${v.use}`);
   const rules = (menu.rules || []).map((r) => `- ${r}`).join("\n");
   const tg = (menu.transition_guidance || []).map((r) => `- ${r}`).join("\n");
   return { list: lines.join("\n"), rules, tg };
 }
 function systemPrompt() {
   const m = menuText();
+  const formatNote = isDeepDive
+    ? "FORMAT: single-topic DEEP-DIVE — the whole video explains ONE story in depth across sequential angle segments. Never number segments ('N of M') and never use a story divider; move between segments with chapter-like transitions (dip / push). Lean HARD on diagrams, sequences, timelines, and data to explain the mechanism — plain text cards are a last resort here."
+    : "FORMAT: multi-story ROUNDUP — several distinct stories in sequence. OPEN each new story with a section-marker as its FIRST shot, giving it a punchy 2-4 word label (the '1 of N' numbering is added for you — you just supply a great label). Then tell the story with visual shots.";
   return `You are the ART DIRECTOR for a fast, editorial AI-news explainer video.
 Theme: clean near-black, one amber + one cyan accent, bold sans + mono labels — a modern, fast tech-explainer look.
 You turn each spoken beat into a sequence of on-screen SHOTS using ONLY the component menu.
 You do NOT write narration and you do NOT compute timing — you choose components and author concise on-screen copy.
+
+${formatNote}
 
 RULES:
 ${m.rules}
@@ -177,9 +236,11 @@ OUTPUT — return ONLY a JSON object, no prose, no markdown fences:
 - Only use data/diagram components when the beat's own text gives real numbers/steps; never invent values.`;
 }
 function userPrompt(unit) {
-  const head = unit.isStory
-    ? `STORY ${unit.storyNo} of ${storyCount}: "${unit.story_title}"`
-    : `SECTION: ${unit.section_type}`;
+  const head = !unit.isStory
+    ? `SECTION: ${unit.section_type}`
+    : isDeepDive
+      ? `DEEP-DIVE SEGMENT ${unit.storyNo}: one angle of the single topic "${unit.story_title}". This is ONE continuous explainer — do NOT open with a story divider or number this segment.`
+      : `STORY ${unit.storyNo} of ${storyCount}: "${unit.story_title}"`;
   const beats = unit.beats.map((b) => {
     const secs = durOf(b);
     return `[${b.beat_id}] role=${b.beat_type}/${b.beat_function} seconds=${secs}\n  emphasis: ${b.emphasis.join(" | ") || "(none)"}\n  text: "${b.text}"`;
@@ -260,6 +321,7 @@ const audioOpt = opt("--audio");
 const audioRel = relative(projectRoot, audioOpt ? resolve(process.cwd(), audioOpt) : resolve(dirname(pkgPath), "full_voiceover.wav"));
 
 const sys = systemPrompt();
+if (dryRun) console.log(`\n===== SYSTEM PROMPT (format=${FORMAT || "default"}) =====\n${sys}`);
 const allScenes = [];
 for (let i = 0; i < chosen.length; i++) {
   const unit = chosen[i];
@@ -277,6 +339,8 @@ for (let i = 0; i < chosen.length; i++) {
   if (unit.isStory) {
     const img = imageByTitle.get(normTitle(unit.story_title));
     if (img) ensureRealSourceImage(unitScenes, img);
+    // Roundup: guarantee the numbered story divider. Deep-dive: one topic, no dividers.
+    if (!isDeepDive) ensureStoryDivider(unitScenes, unit, storyCount);
   }
   allScenes.push(...unitScenes);
 }

@@ -129,6 +129,11 @@ def _run_stage(
     ]
     if manifest_path is not None:
         command += ["--asset-manifest", str(manifest_path)]
+    selected_format = _selected_format(run_dir)
+    if selected_format:
+        # The engine is format-aware: roundup gets numbered story dividers; a
+        # deep-dive is one continuous topic (no "story N of M" numbering).
+        command += ["--format", selected_format]
     if options.deterministic:
         command.append("--deterministic")
     if options.units is not None:
@@ -163,6 +168,18 @@ def _run_stage(
         },
         "handoff": {"episode_rendered": episode_rendered},
     }
+
+
+def _selected_format(run_dir: Path) -> str:
+    """The run's format (roundup / deep_dive) from the video-packaging result, so the
+    engine can plan format-appropriately. Best-effort — absent → the engine defaults."""
+    packet_path = run_dir / "video_packaging" / "video_packaging_result.json"
+    if not packet_path.exists():
+        return ""
+    try:
+        return str((load_json(packet_path).get("data") or {}).get("selected_format") or "")
+    except Exception:  # noqa: BLE001 — never let a read failure break the render
+        return ""
 
 
 def _write_asset_manifest(run_dir: Path, visuals_dir: Path, logger) -> Path | None:
