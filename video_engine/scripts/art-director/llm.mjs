@@ -109,6 +109,35 @@ if (assetManifestArg) {
   } catch (e) { console.error(`  asset manifest ignored: ${e.message}`); }
 }
 
+// ---------- research facts (optional; deep-dive only) ----------
+// The dossier's SHOWABLE structured facts (timeline, numbers, quotes, sources) so the
+// art-director can build real timeline / stat / quote / montage visuals FROM THE RESEARCH
+// — not only from what the narration happens to restate. Grounded: use ONLY these, never
+// invent. Absent (roundup, or a run without research) → planning is unchanged.
+let researchPack = null;
+const researchArg = opt("--research");
+if (researchArg) {
+  try {
+    researchPack = JSON.parse(readFileSync(resolve(process.cwd(), researchArg), "utf8"));
+    const c = (k) => (researchPack[k] || []).length;
+    console.error(`  research pack: ${c("timeline")} timeline, ${c("numbers")} numbers, ${c("quotes")} quotes, ${c("sources")} sources`);
+  } catch (e) { console.error(`  research pack ignored: ${e.message}`); }
+}
+function researchFactsBlock() {
+  if (!researchPack) return "";
+  const parts = [];
+  const tl = (researchPack.timeline || []).filter((e) => e && e.event);
+  if (tl.length) parts.push("TIMELINE (→ a `timeline`, events:[{date,label}], label ≤4 words):\n" + tl.map((e) => `  - ${e.date || "—"} — ${e.event}`).join("\n"));
+  const nums = (researchPack.numbers || []).filter((n) => n && n.value);
+  if (nums.length) parts.push("NUMBERS (each → a `stat-punch`: value + short caption):\n" + nums.map((n) => `  - ${n.value} — ${n.context || ""}`).join("\n"));
+  const qs = (researchPack.quotes || []).filter((q) => q && q.text);
+  if (qs.length) parts.push("QUOTES (each → a `quote-from-source`: quote/meta/source):\n" + qs.map((q) => `  - "${q.text}" — ${q.speaker || "?"}${q.source ? ` (${q.source})` : ""}`).join("\n"));
+  const src = (researchPack.sources || []).filter((s) => s && s.title);
+  if (src.length) parts.push("SOURCES (build ONE `multi-source-montage`, sources:[{source,headline}]):\n" + src.map((s) => `  - ${s.source || "?"}: ${s.title}`).join("\n"));
+  if (!parts.length) return "";
+  return `\nRESEARCH FACTS — real, independently sourced. Reach for these to build grounded timeline / stat-punch / quote-from-source / multi-source-montage shots WHERE ONE FITS A BEAT, even if the narration doesn't restate the exact number. Use ONLY these facts; never invent values, dates, or quotes.\n\n${parts.join("\n\n")}\n`;
+}
+
 const BROWSER_FRAME_MAX = 7; // a STATIC source screenshot must not hold longer than this
 const DIVIDER_SECONDS = 2.8; // fixed length of an injected numbered story divider
 
@@ -227,7 +256,7 @@ ${m.list}
 
 TRANSITIONS you may request into a shot: ${[...validTransitions].join(", ")}
 ${m.tg}
-
+${isDeepDive ? researchFactsBlock() : ""}
 OUTPUT — return ONLY a JSON object, no prose, no markdown fences:
 {"shots":[{"beat_id":"<one of the beat ids given>","component":"<menu name>","params":{...only that component's params...},"weight":<1-${cfg.max_shots_per_beat || 3}>,"transition":"<optional, into this shot>"}]}
 - Cover EVERY given beat_id at least once, in beat order.

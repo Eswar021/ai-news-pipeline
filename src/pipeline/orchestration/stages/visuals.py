@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import subprocess
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict
 
@@ -134,6 +135,11 @@ def _run_stage(
         # The engine is format-aware: roundup gets numbered story dividers; a
         # deep-dive is one continuous topic (no "story N of M" numbering).
         command += ["--format", selected_format]
+    research_path = _write_research_pack(run_dir, visuals_dir, selected_format, logger)
+    if research_path is not None:
+        # Researched deep-dive: hand the art-director the dossier's showable facts
+        # so it builds real timeline / stat / quote visuals from the research.
+        command += ["--research", str(research_path)]
     if options.deterministic:
         command.append("--deterministic")
     if options.units is not None:
@@ -180,6 +186,55 @@ def _selected_format(run_dir: Path) -> str:
         return str((load_json(packet_path).get("data") or {}).get("selected_format") or "")
     except Exception:  # noqa: BLE001 — never let a read failure break the render
         return ""
+
+
+def _domain(url: str) -> str:
+    """Bare hostname (no www) — a clean short source label for the art-director."""
+    try:
+        net = urlparse(str(url)).netloc.lower()
+        return net[4:] if net.startswith("www.") else net
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _write_research_pack(run_dir: Path, visuals_dir: Path, selected_format: str, logger) -> Path | None:
+    """For a RESEARCHED deep-dive, hand the art-director the dossier's SHOWABLE facts
+    (timeline, numbers, quotes, sources) so it can build real timeline / stat / quote /
+    montage visuals from the research — not only from what the narration restates.
+    Deep-dive + researched only; best-effort (any failure → None → engine unchanged)."""
+    if selected_format != "deep_dive":
+        return None
+    res_path = run_dir / "topic_research" / "topic_research_result.json"
+    if not res_path.exists():
+        return None
+    try:
+        data = load_json(res_path).get("data") or {}
+        if not data.get("researched"):
+            return None
+        doss = data.get("research_dossier") or {}
+        pack = {
+            "timeline": [{"date": e.get("date", ""), "event": e.get("event", "")}
+                         for e in (doss.get("timeline") or [])[:8] if e.get("event")],
+            "numbers": [{"value": n.get("value", ""), "context": n.get("context", "")}
+                        for n in (doss.get("numbers") or [])[:8] if n.get("value")],
+            "quotes": [{"text": q.get("text", ""), "speaker": q.get("speaker", ""), "source": _domain(q.get("source_url", ""))}
+                       for q in (doss.get("quotes") or [])[:5] if q.get("text")],
+            "sources": [{"source": _domain(s.get("url", "")), "title": s.get("title", "")}
+                        for s in (doss.get("sources") or [])[:6] if s.get("url")],
+        }
+        if not any(pack.values()):
+            return None
+        visuals_dir.mkdir(parents=True, exist_ok=True)
+        out = visuals_dir / "research_pack.json"
+        write_json(out, pack)
+        logger.logger.info(
+            "VISUALS research pack: %d timeline, %d numbers, %d quotes, %d sources",
+            len(pack["timeline"]), len(pack["numbers"]), len(pack["quotes"]), len(pack["sources"]),
+        )
+        return out
+    except Exception as exc:  # noqa: BLE001 — research is an enhancement, never break the render
+        logger.logger.warning("VISUALS research pack skipped: %s", exc)
+        return None
 
 
 def _write_asset_manifest(run_dir: Path, visuals_dir: Path, logger) -> Path | None:

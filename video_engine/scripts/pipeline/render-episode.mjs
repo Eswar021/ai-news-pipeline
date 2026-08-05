@@ -92,6 +92,9 @@ if (has("--deterministic")) {
   // Optional real source imagery: the pipeline's asset manifest (og:image per
   // selected story). Absent → the engine plans exactly as before (decoupled).
   if (opt("--asset-manifest")) llmArgs.push("--asset-manifest", resolve(process.cwd(), opt("--asset-manifest")));
+  // Optional research pack (deep-dive dossier facts) so the art-director can build real
+  // timeline / stat / quote visuals from the research. Absent → planned as before.
+  if (opt("--research")) llmArgs.push("--research", resolve(process.cwd(), opt("--research")));
   sh("node", llmArgs);
 }
 
