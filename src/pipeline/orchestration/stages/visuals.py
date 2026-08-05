@@ -238,10 +238,29 @@ def _write_research_pack(run_dir: Path, visuals_dir: Path, selected_format: str,
 
 
 def _write_asset_manifest(run_dir: Path, visuals_dir: Path, logger) -> Path | None:
-    """Collect real source images (og:image) for the selected stories and write an
-    asset manifest for the engine. Best-effort: any failure returns None and the
-    render proceeds exactly as before (engine stays decoupled — no manifest, no
-    change in behavior)."""
+    """Make the engine's asset manifest. Prefer the pool the content stage's
+    asset_collection module already fetched (no re-fetch at render time); fall back
+    to fetching here for older runs or a decoupled engine. Best-effort throughout:
+    any failure returns None and the render proceeds unchanged."""
+    pool_path = run_dir / "asset_collection" / "asset_collection_result.json"
+    if pool_path.exists():
+        try:
+            manifest = ((load_json(pool_path).get("data") or {}).get("asset_manifest")) or {}
+            image_count = sum(len(story.get("images", [])) for story in manifest.get("stories", []))
+            if image_count:
+                visuals_dir.mkdir(parents=True, exist_ok=True)
+                manifest_path = visuals_dir / "asset_manifest.json"
+                write_json(manifest_path, manifest)
+                logger.logger.info(
+                    "VISUALS asset manifest: %d image(s) from the content-stage pool → %s",
+                    image_count, manifest_path,
+                )
+                return manifest_path
+            logger.logger.info("VISUALS asset pool present but empty; skipping")
+            return None
+        except Exception as exc:  # noqa: BLE001 — fall through to the render-time fetch
+            logger.logger.warning("VISUALS persisted asset pool unreadable (%s); fetching instead", exc)
+
     packet_path = run_dir / "video_packaging" / "video_packaging_result.json"
     if not packet_path.exists():
         return None

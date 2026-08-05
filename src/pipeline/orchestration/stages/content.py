@@ -38,6 +38,7 @@ MODULES = [
     "story_mapping",
     "editorial_selection",
     "video_packaging",
+    "asset_collection",  # fetch this format's real source assets once; persisted for visuals
     "topic_research",  # deep_dive: web-research the topic; a no-op pass-through for roundup
     "script_generation",
     "metadata_creator",
@@ -315,6 +316,12 @@ def _build_input(
             "config": deepcopy(module_config),
             "input": {"editorial_selection": results["editorial_selection"]},
         }
+    if module == "asset_collection":
+        return {
+            "run": run,
+            "config": deepcopy(module_config),
+            "input": {"video_packaging": results["video_packaging"]},
+        }
     if module == "topic_research":
         return {
             "run": run,
@@ -413,6 +420,9 @@ def _module_function(module: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
         from src.pipeline.content.editorial_selection import run
     elif module == "video_packaging":
         from src.pipeline.content.video_packaging import run
+    elif module == "asset_collection":
+        # Fetch the packet stories' real source images once; visuals reads the pool.
+        from src.pipeline.content.asset_collection import run
     elif module == "topic_research":
         # deep_dive: web-research the topic into a grounded dossier; pass-through
         # for formats that don't research (roundup).

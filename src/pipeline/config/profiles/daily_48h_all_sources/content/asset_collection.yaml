@@ -1,0 +1,8 @@
+# asset_collection — fetch this production's real source images ONCE (og:image /
+# twitter:image per selected story), right after packaging, and persist the pool so
+# the visuals stage reads it instead of re-fetching at render time. Best-effort:
+# any failure degrades to an empty pool and the run continues. Shared by both formats.
+enabled: true
+timeout_seconds: 8.0        # per-page fetch timeout
+max_images_per_story: 4     # size of the per-story asset pool the art-director can draw from
+max_attempts: 3             # retries per page, to ride out intermittent bot-challenge responses

@@ -106,3 +106,55 @@ def test_retry_rides_out_a_transient_bad_response() -> None:
     manifest = build_asset_manifest(stories, http_get=flaky_get, max_attempts=3)
     assert manifest["stories"][0]["images"][0]["image_url"] == "https://cdn.example.com/hero.jpg"
     assert calls["n"] == 2  # succeeded on the second attempt
+
+
+# --- module run(): the content-stage wrapper (best-effort, non-blocking) ---
+from src.pipeline.content import asset_collection as _mod
+from src.pipeline.content.asset_collection import run as _run
+
+
+def _packet(stories):
+    return {"run": {"run_id": "r1"}, "config": {"enabled": True},
+            "input": {"video_packaging": {"data": {"video_packet": {"stories": stories}}}}}
+
+
+def test_run_no_stories_is_ok_and_nonblocking() -> None:
+    r = _run(_packet([]))
+    assert r["status"] == "ok"
+    assert r["data"]["image_count"] == 0
+    assert r["handoff"]["ready_for_topic_research"] is True
+
+
+def test_run_disabled_skips_fetch() -> None:
+    r = _run({"run": {"run_id": "r"}, "config": {"enabled": False},
+              "input": {"video_packaging": {"data": {"video_packet": {"stories": [{"story_id": "s", "records": [{"url": "http://x"}]}]}}}}})
+    assert r["status"] == "ok" and r["data"]["image_count"] == 0
+    assert r["summary"]["reason"] == "asset_collection disabled"
+
+
+def test_run_builds_pool_from_packet(monkeypatch) -> None:
+    captured = {}
+
+    def fake_build(stories, **kwargs):
+        captured["stories"] = stories
+        captured["kwargs"] = kwargs
+        return {"schema_version": "asset_manifest_v1",
+                "stories": [{"story_id": "s1", "story_title": "T", "images": [{"image_url": "http://i/1.jpg"}, {"image_url": "http://i/2.jpg"}]}]}
+
+    monkeypatch.setattr(_mod.app, "build_asset_manifest", fake_build)
+    r = _run(_packet([{"story_id": "s1", "records": [{"url": "http://a"}]}]))
+    assert r["status"] == "ok"
+    assert r["data"]["image_count"] == 2 and r["data"]["story_count"] == 1
+    assert r["data"]["asset_manifest"]["stories"][0]["story_id"] == "s1"
+    assert captured["kwargs"]["max_images_per_story"] == 4  # config default flowed through
+
+
+def test_run_degrades_to_empty_on_error(monkeypatch) -> None:
+    def boom(*_a, **_k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(_mod.app, "build_asset_manifest", boom)
+    r = _run(_packet([{"story_id": "s1", "records": [{"url": "http://a"}]}]))
+    assert r["status"] == "ok"  # never fails the run
+    assert r["data"]["image_count"] == 0
+    assert "degraded to empty" in r["summary"]["reason"]
