@@ -174,7 +174,7 @@
     <div class="metarow">
       <span>as of <b>2026-08-05</b></span>
       <span>stages <b>4</b></span>
-      <span>modules <b>14</b></span>
+      <span>modules <b>15</b></span>
       <span>LLM call-sites <b>7</b></span>
       <span>formats <b class="mono">roundup · deep_dive</b></span>
     </div>
@@ -255,6 +255,12 @@
             <div><h3>Video Packaging</h3><div class="modid">video_packaging</div></div></div>
           <p>Routes on target format and packs the selected stories into a format-specific brief.</p>
           <div class="chips"><span class="chip">pure code</span><span class="chip">format router</span></div>
+        </div>
+        <div class="card api">
+          <div class="card-top"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="1.5"/><circle cx="8.5" cy="9" r="1.6"/><path d="M4 15l4.5-4.5 3 3 3-3L20 15"/><path d="M12 21v-4M9.5 19.5L12 21l2.5-1.5"/></svg></div>
+            <div><h3>Asset Collection</h3><div class="modid">asset_collection</div></div></div>
+          <p>Fetches each selected story's real source images once (og:image pool) and persists them, so the art-director draws from a pool and visuals never re-fetches at render time.</p>
+          <div class="chips"><span class="chip">og:image pool</span><span class="chip">best-effort</span></div>
         </div>
         <div class="card llm">
           <span class="badge">deep_dive only</span>
@@ -385,12 +391,13 @@
     <div class="row phase1"><div class="n">05</div><div class="actor a-llm"><b>OpenAI</b></div><div class="msg"><div class="m1">Editorial selection → shared corpus ready</div><div class="m2">Pick ~5 stories + roles · <span class="call">gpt-4o-mini · gpt-4o</span></div></div></div>
 
     <div class="row"><div class="n">06</div><div class="actor a-orc"><b>Orchestrator</b></div><div class="msg"><div class="m1">Video packaging</div><div class="m2">Route on <span class="mono">deep_dive</span>, pack the brief — deterministic</div></div></div>
-    <div class="row"><div class="n">07</div><div class="actor a-ext"><b>Tavily + LLM</b></div><div class="msg"><div class="m1">Topic research</div><div class="m2">Frame <span class="call">gpt-4o</span> → search <span class="call" style="color:var(--api)">Tavily</span> → synthesize dossier <span class="call">deepseek-v4-pro</span></div></div></div>
-    <div class="row"><div class="n">08</div><div class="actor a-llm"><b>OpenAI + DeepSeek</b></div><div class="msg"><div class="m1">Script generation</div><div class="m2">Direct <span class="call">gpt-4o</span> → parallel write + review <span class="call">deepseek-v4-pro</span> until grounded</div></div></div>
-    <div class="row"><div class="n">09</div><div class="actor a-llm"><b>DeepSeek</b></div><div class="msg"><div class="m1">Metadata creator</div><div class="m2">Titles · thumbnails · chapters · tags · <span class="call">deepseek-v4-pro</span></div></div></div>
-    <div class="row"><div class="n">10</div><div class="actor a-llm"><b>Gemini</b></div><div class="msg"><div class="m1">Voiceover</div><div class="m2">Parallel TTS chunks · <span class="call" style="color:var(--llm)">gemini-3.1-flash-tts · Puck</span></div></div></div>
-    <div class="row"><div class="n">11</div><div class="actor a-eng"><b>video_engine</b></div><div class="msg"><div class="m1">Art direction</div><div class="m2">Beats → components, format-aware + research pack · <span class="call">deepseek-v4-pro</span></div></div></div>
-    <div class="row"><div class="n">12</div><div class="actor a-eng"><b>video_engine</b></div><div class="msg"><div class="m1">Resolve assets → build → render</div><div class="m2">media-use freezes logos/images · GSAP timing · <span class="mono" style="color:var(--good)">episode.mp4</span></div></div></div>
+    <div class="row"><div class="n">07</div><div class="actor a-ext"><b>Source sites</b></div><div class="msg"><div class="m1">Asset collection</div><div class="m2">Fetch the selected stories' og:image pool once · persisted for visuals · best-effort</div></div></div>
+    <div class="row"><div class="n">08</div><div class="actor a-ext"><b>Tavily + LLM</b></div><div class="msg"><div class="m1">Topic research</div><div class="m2">Frame <span class="call">gpt-4o</span> → search <span class="call" style="color:var(--api)">Tavily</span> → synthesize dossier <span class="call">deepseek-v4-pro</span></div></div></div>
+    <div class="row"><div class="n">09</div><div class="actor a-llm"><b>OpenAI + DeepSeek</b></div><div class="msg"><div class="m1">Script generation</div><div class="m2">Direct <span class="call">gpt-4o</span> → parallel write + review <span class="call">deepseek-v4-pro</span> until grounded</div></div></div>
+    <div class="row"><div class="n">10</div><div class="actor a-llm"><b>DeepSeek</b></div><div class="msg"><div class="m1">Metadata creator</div><div class="m2">Titles · thumbnails · chapters · tags · <span class="call">deepseek-v4-pro</span></div></div></div>
+    <div class="row"><div class="n">11</div><div class="actor a-llm"><b>Gemini</b></div><div class="msg"><div class="m1">Voiceover</div><div class="m2">Parallel TTS chunks · <span class="call" style="color:var(--llm)">gemini-3.1-flash-tts · Puck</span></div></div></div>
+    <div class="row"><div class="n">12</div><div class="actor a-eng"><b>video_engine</b></div><div class="msg"><div class="m1">Art direction</div><div class="m2">Beats → components, format-aware + research pack + asset pool · <span class="call">deepseek-v4-pro</span></div></div></div>
+    <div class="row"><div class="n">13</div><div class="actor a-eng"><b>video_engine</b></div><div class="msg"><div class="m1">Resolve assets → build → render</div><div class="m2">media-use freezes logos/images · GSAP timing · <span class="mono" style="color:var(--good)">episode.mp4</span></div></div></div>
   </div>
 
   <div class="foot">
