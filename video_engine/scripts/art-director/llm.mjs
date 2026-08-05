@@ -127,7 +127,7 @@ function researchFactsBlock() {
   if (!researchPack) return "";
   const parts = [];
   const tl = (researchPack.timeline || []).filter((e) => e && e.event);
-  if (tl.length) parts.push("TIMELINE (→ a `timeline`, events:[{date,label}], label ≤4 words):\n" + tl.map((e) => `  - ${e.date || "—"} — ${e.event}`).join("\n"));
+  if (tl.length) parts.push("TIMELINE — when ANY beat recounts how things unfolded (a sequence, dates, 'over N days', 'first… then…'), you MUST render it as a `timeline` from these events (events:[{date,label}], label ≤4 words), never as plain text:\n" + tl.map((e) => `  - ${e.date || "—"} — ${e.event}`).join("\n"));
   const nums = (researchPack.numbers || []).filter((n) => n && n.value);
   if (nums.length) parts.push("NUMBERS (each → a `stat-punch`: value + short caption):\n" + nums.map((n) => `  - ${n.value} — ${n.context || ""}`).join("\n"));
   const qs = (researchPack.quotes || []).filter((q) => q && q.text);
@@ -136,6 +136,36 @@ function researchFactsBlock() {
   if (src.length) parts.push("SOURCES (build ONE `multi-source-montage`, sources:[{source,headline}]):\n" + src.map((s) => `  - ${s.source || "?"}: ${s.title}`).join("\n"));
   if (!parts.length) return "";
   return `\nRESEARCH FACTS — real, independently sourced. Reach for these to build grounded timeline / stat-punch / quote-from-source / multi-source-montage shots WHERE ONE FITS A BEAT, even if the narration doesn't restate the exact number. Use ONLY these facts; never invent values, dates, or quotes.\n\n${parts.join("\n\n")}\n`;
+}
+
+// Deep-dive deterministic polish (only when a research pack is present). The prompt asks
+// for these; this is the floor when the LLM doesn't comply. Content-safe — it only ever
+// touches fallback text cards and duplicate stats, never a purposeful visual.
+function applyResearchPolish(scenes) {
+  if (!researchPack || scenes.length < 3) return;
+  // 1. Guarantee the chronology shows as a timeline: if the LLM placed none, upgrade the
+  //    longest FILLER text card (never the opening hook or closing scene) to the timeline.
+  const events = (researchPack.timeline || []).filter((e) => e && e.event);
+  if (events.length >= 4 && !scenes.some((s) => s.component === "timeline")) {
+    const target = scenes.slice(1, -1)
+      .filter((s) => s.component === "kinetic-sentence" || s.component === "title-card")
+      .sort((a, b) => (b.duration || 0) - (a.duration || 0))[0];
+    if (target) {
+      target.component = "timeline";
+      target.params = { title: "How it unfolded", events: events.slice(0, 6).map((e) => ({ date: clean(e.date).slice(0, 24), label: shortLabel(e.event, 4) })) };
+    }
+  }
+  // 2. Never repeat a stat value across the episode — swap a duplicate for an unused
+  //    research number (keeps the punchy stat-punch, adds a distinct fact).
+  const norm = (v) => clean(v).toLowerCase().replace(/[^a-z0-9.%]/g, "");
+  const seen = new Set();
+  for (const s of scenes) {
+    if (s.component !== "stat-punch" || !s.params || !s.params.value) continue;
+    const key = norm(s.params.value);
+    if (!seen.has(key)) { seen.add(key); continue; }
+    const alt = (researchPack.numbers || []).find((n) => n && n.value && !seen.has(norm(n.value)));
+    if (alt) { s.params = { eyebrow: s.params.eyebrow || "", value: alt.value, caption: shortLabel(alt.context, 6) }; seen.add(norm(alt.value)); }
+  }
 }
 
 const BROWSER_FRAME_MAX = 7; // a STATIC source screenshot must not hold longer than this
@@ -168,9 +198,13 @@ function ensureRealSourceImage(unitScenes, img) {
   }
 }
 
-function shortLabel(title) {
-  const words = clean(title).split(" ").slice(0, 5).join(" ");
-  return words.length > 40 ? words.slice(0, 38).trimEnd() + "…" : words;
+const TRAIL_STOP = new Set(["to", "and", "of", "the", "by", "a", "an", "in", "on", "for", "with", "at", "as", "or", "from", "its", "their", "into"]);
+function shortLabel(title, maxWords = 5) {
+  const words = clean(title).split(" ").slice(0, maxWords);
+  // Don't let a truncated label dangle on a function word ("… detects and").
+  while (words.length > 1 && TRAIL_STOP.has(words[words.length - 1].toLowerCase())) words.pop();
+  const out = words.join(" ");
+  return out.length > 40 ? out.slice(0, 38).trimEnd() + "…" : out;
 }
 
 function ensureStoryDivider(unitScenes, unit, total) {
@@ -373,6 +407,8 @@ for (let i = 0; i < chosen.length; i++) {
   }
   allScenes.push(...unitScenes);
 }
+
+applyResearchPolish(allScenes); // deep-dive floor: guarantee the timeline, de-dup stats
 
 if (dryRun) process.exit(0);
 
