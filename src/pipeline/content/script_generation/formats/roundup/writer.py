@@ -399,6 +399,7 @@ def write_bookends(
         "task": "Write the episode intro, story connectors, title-card copy, and conclusion after story bodies are fixed.",
         "script_style": script_cfg["script_style"],
         "channel_voice": script_cfg["channel_voice"],
+        "channel_brand": script_cfg.get("channel_brand", {}),
         "episode_direction": director,
         "intro_writing_guidance": intro_plan.get("writing_guidance", {}),
         "closing_writing_guidance": closing_plan.get("writing_guidance", {}),

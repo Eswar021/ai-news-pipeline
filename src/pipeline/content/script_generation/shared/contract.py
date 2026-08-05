@@ -140,6 +140,21 @@ class ChannelVoiceConfig(BaseModel):
         return value.strip()
 
 
+class ChannelBrandConfig(BaseModel):
+    """Optional channel branding + call-to-action woven into the bookends. Disabled (the
+    default) means the intro & closing carry no brand line at all — change the copy or
+    drop it entirely here, no code edits. Placement is retention-aware: the CTA never
+    lands in the cold open (asking to subscribe before the hook pays off costs viewers)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    host_identity: str = ""      # e.g. "an AI-generated host, created by Eswar"
+    value_prop: str = ""         # e.g. "daily AI roundups & deep-dives on the news moving the market"
+    cta: str = ""                # e.g. "subscribe to stay ahead of where AI is headed"
+    cta_placement: Literal["outro", "intro_soft", "none"] = "outro"
+
+
 class StorytellingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -367,6 +382,7 @@ class BaseScriptConfig(BaseModel):
     llm_retry: LLMRetryConfig = Field(default_factory=LLMRetryConfig)
     script_style: ScriptStyle
     channel_voice: ChannelVoiceConfig = Field(default_factory=ChannelVoiceConfig)
+    channel_brand: ChannelBrandConfig = Field(default_factory=ChannelBrandConfig)
     storytelling: StorytellingConfig = Field(default_factory=StorytellingConfig)
     source_context: SourceContextConfig = Field(default_factory=SourceContextConfig)
     source_policy: SourcePolicy

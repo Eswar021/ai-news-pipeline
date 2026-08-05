@@ -51,7 +51,7 @@ components:
   logo-vs-logo: { params: [leftEntity, rightEntity, label], use: "Two real companies head-to-head: their official logos + a short label. Use for competition / X-vs-Y beats." }
   logo-reveal: { params: [entity], use: "A big, dramatic single-company logo sting (logo + name). Use for a punchy company reveal moment." }
   logo-wall: { params: [title, entities], use: "A grid of several company logos. entities = array of real company names (3-6). Use for 'the players' / who's-involved beats." }
-  episode-open: { params: [kicker, title, subtitle], use: "The EPISODE intro bumper. Use ONLY as the first shot of the intro. kicker = show name; title = the episode promise." }
+  episode-open: { params: [kicker, title, subtitle], use: "The EPISODE intro bumper. Use ONLY as the first shot of the intro, and keep it BRIEF (~4-5s) — the hook must land fast, never a long held card. kicker = show name; title = the episode promise." }
   outro: { params: [title, subtitle, handle], use: "The closing end-card. Use ONLY as the last shot of the closing. title = sign-off; subtitle = CTA; handle = channel @." }
   watermark: { params: [text, corner], use: "A small persistent channel bug (transparent overlay). text = @handle; corner = tr|br|tl|bl. Layer over content." }
   attribution: { params: [label, entity], use: "A sponsor/partner credit card with the entity's logo. label = 'In partnership with' etc; entity = real company name." }

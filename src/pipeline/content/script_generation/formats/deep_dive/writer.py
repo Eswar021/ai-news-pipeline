@@ -281,6 +281,7 @@ def _write_bookends(
             for segment in angle_segments
         ],
         "script_style": config["script_style"],
+        "channel_brand": config.get("channel_brand", {}),
         "writing_guidance": {"intro": guidance.get("intro", {}), "closing": guidance.get("closing", {})},
         "rules": [
             "The intro must not merely list the angles; it should hook on the topic's most striking detail.",

@@ -138,6 +138,20 @@ function researchFactsBlock() {
   return `\nRESEARCH FACTS — real, independently sourced. Reach for these to build grounded timeline / stat-punch / quote-from-source / multi-source-montage shots WHERE ONE FITS A BEAT, even if the narration doesn't restate the exact number. Use ONLY these facts; never invent values, dates, or quotes.\n\n${parts.join("\n\n")}\n`;
 }
 
+const EPISODE_OPEN_MAX = 5; // the intro bumper must hit fast — never a long frozen open
+function capEpisodeOpen(scenes) {
+  // The opening bumper used to hold ~12s on one card (the #1 retention killer). Cap it
+  // and continue the hook as a moving line so the first seconds keep moving.
+  const first = scenes[0];
+  if (!first || first.component !== "episode-open" || (first.duration || 0) <= EPISODE_OPEN_MAX + 1.5) return;
+  const p = first.params || {};
+  const cont = clean(p.subtitle || p.title || "").slice(0, 90);
+  const rest = Number(((first.duration || 0) - EPISODE_OPEN_MAX).toFixed(2));
+  first.duration = EPISODE_OPEN_MAX;
+  if (cont) scenes.splice(1, 0, { component: "kinetic-sentence", duration: rest, transition: "crossfade", params: { text: cont } });
+  else first.duration = Number((first.duration + rest).toFixed(2)); // nothing to cut to — leave it
+}
+
 // Deep-dive deterministic polish (only when a research pack is present). The prompt asks
 // for these; this is the floor when the LLM doesn't comply. Content-safe — it only ever
 // touches fallback text cards and duplicate stats, never a purposeful visual.
@@ -408,6 +422,7 @@ for (let i = 0; i < chosen.length; i++) {
   allScenes.push(...unitScenes);
 }
 
+capEpisodeOpen(allScenes);      // retention: the intro bumper hits fast, never a 12s freeze
 applyResearchPolish(allScenes); // deep-dive floor: guarantee the timeline, de-dup stats
 
 if (dryRun) process.exit(0);

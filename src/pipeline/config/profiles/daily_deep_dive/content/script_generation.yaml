@@ -188,6 +188,16 @@ channel_voice:
     - fucking
     - shit
     - bullshit
+# Channel branding + CTA woven into the bookends. Retention-aware: the CTA lands in
+# the outro, never the cold open. Change the copy here, or set enabled:false /
+# cta_placement:none to drop it entirely — no code edits.
+channel_brand:
+  enabled: true
+  host_identity: "an AI-generated host, created by Eswar"
+  value_prop: "daily AI roundups and deep-dives on the news moving the market"
+  cta: "subscribe to stay ahead of where AI is headed"
+  cta_placement: outro   # outro | intro_soft | none
+
 storytelling:
   require_story_engine: true
   require_viewer_payoff: true
