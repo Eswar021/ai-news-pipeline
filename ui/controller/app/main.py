@@ -11,8 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config_store import ConfigConflict, ConfigError, ConfigStore
 from .credits import CreditsReader
 from .job_manager import ConfirmationRequired, JobConflict, JobManager
-from .models import ConfigUpdate, JobCreate, ReviewNoteUpdate, RunPlan, SLUG_RE
+from .models import ConfigUpdate, JobCreate, PromptUpdate, ReviewNoteUpdate, RunPlan, SLUG_RE
 from .planner import PlanError, RunPlanner
+from .prompt_store import PromptStore
 from .storage import ControllerStore
 
 
@@ -47,6 +48,7 @@ def create_app(
         pipeline_python=planner.pipeline_python,
         validator=config_validator,
     )
+    prompts = PromptStore(root, store)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -70,6 +72,7 @@ def create_app(
     app.state.planner = planner
     app.state.manager = manager
     app.state.configs = configs
+    app.state.prompts = prompts
 
     @app.get("/control/health")
     def health() -> dict[str, Any]:
@@ -202,6 +205,55 @@ def create_app(
             return {"revisions": configs.revisions(path, limit)}
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Config file not found") from exc
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/control/prompt/files")
+    def prompt_files() -> dict[str, Any]:
+        return {"files": prompts.files()}
+
+    @app.get("/control/prompt/file")
+    def prompt_file(path: str = Query(...)) -> dict[str, Any]:
+        try:
+            return prompts.read(path)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Prompt file not found") from exc
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.put("/control/prompt/file")
+    def update_prompt(request: PromptUpdate) -> dict[str, Any]:
+        try:
+            active = store.active_job()
+            if active:
+                raise JobConflict(
+                    f"Prompt writes are locked while job {active['id']} is {active['status']}"
+                )
+            return prompts.update(
+                relative=request.path,
+                expected_sha256=request.expected_sha256,
+                text=request.text,
+                change_summary=request.change_summary,
+                confirm_write=request.confirm_write,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Prompt file not found") from exc
+        except ConfigConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except JobConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/control/prompt/revisions")
+    def prompt_revisions(
+        path: str | None = Query(None),
+        limit: int = Query(50, ge=1, le=200),
+    ) -> dict[str, Any]:
+        try:
+            return {"revisions": prompts.revisions(path, limit)}
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Prompt file not found") from exc
         except ConfigError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

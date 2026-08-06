@@ -5811,6 +5811,19 @@ video {
   overflow: auto;
 }
 
+.railGroupLabel {
+  padding: 12px 11px 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  position: sticky;
+  top: 0;
+  background: var(--panel, var(--paper));
+  z-index: 1;
+}
+
 .configFileRail button {
   width: 100%;
   display: block;

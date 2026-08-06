@@ -839,12 +839,19 @@ export function ConfigStudio({ activeJob }: { activeJob: ControllerJob | null })
   const [notice, setNotice] = useState("");
   const [revisions, setRevisions] = useState<Json[]>([]);
   const dirty = Boolean(opened && text !== opened.text);
+  // A file is a prompt (.txt) or a config (.yaml); each has its own endpoints.
+  const apiBase = (path: string) => ((path || "").toLowerCase().endsWith(".txt") ? "/control/prompt" : "/control/config");
+  const isPrompt = selected.toLowerCase().endsWith(".txt");
 
   const loadFiles = async () => {
     try {
-      const data = await controlFetch<{ files: Json[] }>("/control/config/files");
-      setFiles(data.files || []);
-      setSelected((current) => current || data.files?.[0]?.path || "");
+      const [cfg, prompts] = await Promise.all([
+        controlFetch<{ files: Json[] }>("/control/config/files"),
+        controlFetch<{ files: Json[] }>("/control/prompt/files").catch(() => ({ files: [] as Json[] })),
+      ]);
+      const configFiles = (cfg.files || []).map((file) => ({ ...file, kind: "config" }));
+      setFiles([...configFiles, ...(prompts.files || [])]);
+      setSelected((current) => current || configFiles[0]?.path || "");
     } catch (nextError) {
       setError(message(nextError));
     }
@@ -854,7 +861,7 @@ export function ConfigStudio({ activeJob }: { activeJob: ControllerJob | null })
     if (!selected) return;
     setError("");
     setNotice("");
-    controlFetch(`/control/config/file?path=${encodeURIComponent(selected)}`)
+    controlFetch(`${apiBase(selected)}/file?path=${encodeURIComponent(selected)}`)
       .then((value: Json) => {
         setOpened(value);
         setText(value.text || "");
@@ -862,13 +869,13 @@ export function ConfigStudio({ activeJob }: { activeJob: ControllerJob | null })
         setConfirmed(false);
       })
       .catch((nextError) => setError(message(nextError)));
-    controlFetch(`/control/config/revisions?path=${encodeURIComponent(selected)}&limit=12`)
+    controlFetch(`${apiBase(selected)}/revisions?path=${encodeURIComponent(selected)}&limit=12`)
       .then((value: Json) => setRevisions(value.revisions || []))
       .catch(() => setRevisions([]));
   }, [selected]);
 
   const choose = (path: string) => {
-    if (dirty && !window.confirm("Discard the unsaved YAML changes?")) return;
+    if (dirty && !window.confirm("Discard the unsaved changes?")) return;
     setSelected(path);
   };
   const save = async () => {
@@ -877,7 +884,7 @@ export function ConfigStudio({ activeJob }: { activeJob: ControllerJob | null })
     setError("");
     setNotice("");
     try {
-      const saved = await controlFetch("/control/config/file", {
+      const saved = await controlFetch(`${apiBase(opened.path)}/file`, {
         method: "PUT",
         body: JSON.stringify({
           path: opened.path,
@@ -891,9 +898,9 @@ export function ConfigStudio({ activeJob }: { activeJob: ControllerJob | null })
       setText(saved.text);
       setSummary("");
       setConfirmed(false);
-      setNotice(`Saved and validated revision ${saved.revision_id}.`);
+      setNotice(isPrompt ? `Saved prompt revision ${saved.revision_id}.` : `Saved and validated revision ${saved.revision_id}.`);
       await loadFiles();
-      const history = await controlFetch(`/control/config/revisions?path=${encodeURIComponent(selected)}&limit=12`);
+      const history = await controlFetch(`${apiBase(selected)}/revisions?path=${encodeURIComponent(selected)}&limit=12`);
       setRevisions(history.revisions || []);
     } catch (nextError) {
       setError(message(nextError));
@@ -904,25 +911,36 @@ export function ConfigStudio({ activeJob }: { activeJob: ControllerJob | null })
   const visible = files.filter((file) => file.path.toLowerCase().includes(query.toLowerCase()));
   return (
     <div className="controlPage configStudioPage">
-      <ControlHeading eyebrow="Authoring control" title="Config studio" summary="Edit an existing authoring YAML file with conflict detection, credential rejection, and complete profile composition validation." icon={<Code2 size={20} />} />
-      {activeJob && <div className="configRunLock"><ShieldCheck size={16} /><span>Config writes are locked while {activeJob.run_id} is {activeJob.status}.</span></div>}
+      <ControlHeading eyebrow="Authoring control" title="Config &amp; prompt studio" summary="Edit an authoring YAML config or a prompt file — with conflict detection, credential rejection, revision history, and (for YAML) full profile-composition validation." icon={<Code2 size={20} />} />
+      {activeJob && <div className="configRunLock"><ShieldCheck size={16} /><span>Config &amp; prompt writes are locked while {activeJob.run_id} is {activeJob.status}.</span></div>}
       <div className="configStudio">
         <aside className="configFileRail">
-          <label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find YAML" /></label>
+          <label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find config or prompt" /></label>
           <span>{visible.length} files</span>
-          <div>{visible.map((file) => <button key={file.path} className={selected === file.path ? "active" : ""} onClick={() => choose(file.path)}><strong>{file.path.split("/").at(-1)}</strong><small>{file.path}</small></button>)}</div>
+          <div>
+            {[["config", "Config (YAML)"], ["prompt", "Prompts"]].map(([kind, label]) => {
+              const group = visible.filter((file) => (String(file.path).toLowerCase().endsWith(".txt") ? "prompt" : "config") === kind);
+              if (!group.length) return null;
+              return (
+                <div key={kind} className="railGroup">
+                  <div className="railGroupLabel">{label}</div>
+                  {group.map((file) => <button key={file.path} className={selected === file.path ? "active" : ""} onClick={() => choose(file.path)}><strong>{file.name || file.path.split("/").at(-1)}</strong><small>{file.path}</small></button>)}
+                </div>
+              );
+            })}
+          </div>
         </aside>
         <section className="configEditorPane">
-          <header><div><span>Current authoring YAML</span><strong>{selected}</strong></div><div><button title="Reload file" disabled={!dirty} onClick={() => { setText(opened?.text || ""); setConfirmed(false); }}><RotateCcw size={15} /></button><button className="saveConfigButton" disabled={!dirty || !confirmed || summary.trim().length < 3 || saving || Boolean(activeJob)} onClick={save}>{saving ? <Loader2 size={15} className="spin" /> : <Save size={15} />} Save</button></div></header>
+          <header><div><span>{isPrompt ? "Current prompt" : "Current authoring YAML"}</span><strong>{selected}</strong></div><div><button title="Reload file" disabled={!dirty} onClick={() => { setText(opened?.text || ""); setConfirmed(false); }}><RotateCcw size={15} /></button><button className="saveConfigButton" disabled={!dirty || !confirmed || summary.trim().length < 3 || saving || Boolean(activeJob)} onClick={save}>{saving ? <Loader2 size={15} className="spin" /> : <Save size={15} />} Save</button></div></header>
           {error && <ControlError text={error} />}
       {notice && <div className="controlNotice" role="status"><Check size={15} />{notice}</div>}
-          {!opened ? <ControlLoading label="Opening YAML" /> : (
+          {!opened ? <ControlLoading label={isPrompt ? "Opening prompt" : "Opening YAML"} /> : (
             <>
               <textarea className="yamlEditor" spellCheck={false} value={text} onChange={(event) => { setText(event.target.value); setConfirmed(false); setNotice(""); }} aria-label={`Edit ${selected}`} />
               <footer><span>{text.split("\n").length} lines / {new Blob([text]).size.toLocaleString()} bytes</span><span>{dirty ? "Unsaved changes" : "No local changes"}</span></footer>
               <div className="configCommit">
-                <label><span>Change summary</span><input value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="Why this authoring change is needed" maxLength={300} /></label>
-                <ControlCheck checked={confirmed} onChange={setConfirmed} label="I reviewed this YAML and want to update the current authoring configuration." />
+                <label><span>Change summary</span><input value={summary} onChange={(event) => setSummary(event.target.value)} placeholder={isPrompt ? "Why this prompt change is needed" : "Why this authoring change is needed"} maxLength={300} /></label>
+                <ControlCheck checked={confirmed} onChange={setConfirmed} label={isPrompt ? "I reviewed this prompt and want to update it (it takes effect on the next run)." : "I reviewed this YAML and want to update the current authoring configuration."} />
               </div>
             </>
           )}

@@ -109,6 +109,40 @@ class ConfigUpdate(BaseModel):
         return normalized
 
 
+class PromptUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    expected_sha256: str
+    text: str = Field(max_length=200_000)
+    change_summary: str = Field(min_length=3, max_length=300)
+    confirm_write: bool = False
+
+    @field_validator("path")
+    @classmethod
+    def path_must_be_relative_prompt(cls, value: str) -> str:
+        normalized = value.strip().replace("\\", "/")
+        parts = normalized.split("/")
+        if (
+            not normalized
+            or normalized.startswith("/")
+            or "\x00" in normalized
+            or ".." in parts
+            or "prompts" not in parts
+            or not normalized.lower().endswith(".txt")
+        ):
+            raise ValueError("path must name an existing prompt .txt beneath a prompts/ dir")
+        return normalized
+
+    @field_validator("expected_sha256")
+    @classmethod
+    def hash_must_be_hex(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not re.fullmatch(r"[a-f0-9]{64}", normalized):
+            raise ValueError("expected_sha256 must be a SHA-256 digest")
+        return normalized
+
+
 class ReviewNoteUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -589,3 +589,59 @@ def test_review_notes_are_ui_owned_and_run_scoped(tmp_path: Path) -> None:
 
         missing = client.get("/control/notes/run_missing")
         assert missing.status_code == 404
+
+
+# --- prompt editing (PromptStore + /control/prompt/*) ---
+def _add_prompt(root: Path, text: str = "Write a punchy cold-open hook.\n") -> str:
+    rel = "script_generation/prompts/v1/demo_writer/system.txt"
+    write(root / "src" / "pipeline" / "content" / rel, text)
+    return rel
+
+
+def test_prompt_files_lists_and_reads(tmp_path: Path) -> None:
+    root = make_project(tmp_path)
+    rel = _add_prompt(root)
+    client = client_for(root)
+    files = client.get("/control/prompt/files").json()["files"]
+    row = next(f for f in files if f["path"] == rel)
+    assert row["kind"] == "prompt" and row["group"] == "script_generation"
+    assert row["name"] == "demo_writer/system.txt"
+    got = client.get("/control/prompt/file", params={"path": rel}).json()
+    assert got["text"].startswith("Write a punchy") and len(got["sha256"]) == 64
+
+
+def test_prompt_update_then_conflict(tmp_path: Path) -> None:
+    root = make_project(tmp_path)
+    rel = _add_prompt(root)
+    client = client_for(root)
+    opened = client.get("/control/prompt/file", params={"path": rel}).json()
+    ok = client.put("/control/prompt/file", json={
+        "path": rel, "expected_sha256": opened["sha256"], "text": "A sharper hook.\n",
+        "change_summary": "tighten the hook", "confirm_write": True})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["text"] == "A sharper hook.\n" and ok.json()["revision_id"]
+    assert (root / "src" / "pipeline" / "content" / rel).read_text() == "A sharper hook.\n"
+    stale = client.put("/control/prompt/file", json={
+        "path": rel, "expected_sha256": opened["sha256"], "text": "x\n",
+        "change_summary": "again", "confirm_write": True})
+    assert stale.status_code == 409  # sha moved
+
+
+def test_prompt_rejects_empty_secret_and_escape(tmp_path: Path) -> None:
+    root = make_project(tmp_path)
+    rel = _add_prompt(root)
+    client = client_for(root)
+    sha = client.get("/control/prompt/file", params={"path": rel}).json()["sha256"]
+    empty = client.put("/control/prompt/file", json={
+        "path": rel, "expected_sha256": sha, "text": "   ", "change_summary": "blank", "confirm_write": True})
+    assert empty.status_code == 400
+    leak = client.put("/control/prompt/file", json={
+        "path": rel, "expected_sha256": sha, "text": "use key sk-ABCDEFGHIJKLMNOPQRSTUVWX now\n",
+        "change_summary": "leak", "confirm_write": True})
+    assert leak.status_code == 400
+    escape = client.put("/control/prompt/file", json={
+        "path": "../../etc/shadow.txt", "expected_sha256": sha, "text": "x\n",
+        "change_summary": "escape", "confirm_write": True})
+    assert escape.status_code == 422  # rejected by the model validator
+    not_prompt = client.get("/control/prompt/file", params={"path": "profiles/fixture/profile.yaml"})
+    assert not_prompt.status_code == 400
