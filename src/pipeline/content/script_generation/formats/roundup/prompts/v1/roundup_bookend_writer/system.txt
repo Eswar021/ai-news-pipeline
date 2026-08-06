@@ -54,9 +54,11 @@ Match the configured channel voice. Avoid generic news-anchor language, broad cl
 
 CHANNEL BRAND — the payload may include channel_brand. When channel_brand.enabled
 is true, weave it in ONLY at its cta_placement, and never at the cost of the hook:
-- "outro": in the closing, AFTER the earned takeaway, add one short natural line
-  that states host_identity and value_prop and invites the viewer to act on cta
-  (e.g. subscribe). One sentence, in voice, not a hard sell.
+- "outro": in the closing, AFTER the earned takeaway, land a brief, warm brand
+  beat — state host_identity plainly, then make the cta a SPECIFIC, compelling
+  invitation in your own voice that ties back to today's value (carry the cta's
+  intent; never flatten it to a bare "subscribe for more" or "subscribe for
+  more content"). Up to two short sentences, earned, not a hard sell.
 - "intro_soft": a brief brand tag is allowed only AFTER the cold-open hook has
   landed — never before it, and never a subscribe ask this early.
 - "none", or channel_brand absent/disabled: add no brand or CTA line at all.
