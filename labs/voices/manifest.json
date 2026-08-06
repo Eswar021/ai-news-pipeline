@@ -1,0 +1,70 @@
+{
+  "line": "A tool built to stop fraud just became the fraud, and nobody caught it for a year. That's the strangest thing in AI this week, and the one that should worry you most.",
+  "instructions": "Energetic, curious tech-explainer host with a skeptical eyebrow. Confident and warm, a little wry. Punch the hook, stay conversational, never a television-news cadence.",
+  "voices": [
+    {
+      "id": "openai_cedar",
+      "provider": "openai",
+      "model": "gpt-4o-mini-tts",
+      "voice": "cedar",
+      "file": "openai_cedar.wav",
+      "note": "current default"
+    },
+    {
+      "id": "openai_marin",
+      "provider": "openai",
+      "model": "gpt-4o-mini-tts",
+      "voice": "marin",
+      "file": "openai_marin.wav",
+      "note": ""
+    },
+    {
+      "id": "openai_coral",
+      "provider": "openai",
+      "model": "gpt-4o-mini-tts",
+      "voice": "coral",
+      "file": "openai_coral.wav",
+      "note": ""
+    },
+    {
+      "id": "openai_ash",
+      "provider": "openai",
+      "model": "gpt-4o-mini-tts",
+      "voice": "ash",
+      "file": "openai_ash.wav",
+      "note": ""
+    },
+    {
+      "id": "openai_ballad",
+      "provider": "openai",
+      "model": "gpt-4o-mini-tts",
+      "voice": "ballad",
+      "file": "openai_ballad.wav",
+      "note": ""
+    },
+    {
+      "id": "openai_sage",
+      "provider": "openai",
+      "model": "gpt-4o-mini-tts",
+      "voice": "sage",
+      "file": "openai_sage.wav",
+      "note": ""
+    },
+    {
+      "id": "openai_verse",
+      "provider": "openai",
+      "model": "gpt-4o-mini-tts",
+      "voice": "verse",
+      "file": "openai_verse.wav",
+      "note": ""
+    },
+    {
+      "id": "openai_onyx",
+      "provider": "openai",
+      "model": "gpt-4o-mini-tts",
+      "voice": "onyx",
+      "file": "openai_onyx.wav",
+      "note": ""
+    }
+  ]
+}

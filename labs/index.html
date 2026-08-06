@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Labs — Samples</title>
+<style>
+  :root{ --bg:#0d1117; --surface:#161c26; --border:rgba(255,255,255,.1); --ink:#e9edf3; --muted:#98a2b3; --accent:#f4b350; --good:#59c98b; --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:ui-monospace,"SF Mono",Menlo,monospace;}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5}
+  .wrap{max-width:900px;margin:0 auto;padding:48px 24px 80px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+  h1{font-size:34px;font-weight:750;letter-spacing:-.02em;margin:12px 0 0}
+  .lede{color:var(--muted);max-width:60ch;margin:14px 0 0}
+  .line{margin:26px 0 10px;padding:16px 18px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 12px 12px 0;font-size:15px}
+  .line b{color:var(--muted);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:6px}
+  h2{font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:40px 0 14px;font-weight:640}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px}
+  .card .name{font-family:var(--mono);font-size:15px;font-weight:600}
+  .card .meta{font-size:12px;color:var(--muted);margin:2px 0 12px}
+  .card audio{width:100%}
+  .tag{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--good);border:1px solid color-mix(in srgb,var(--good) 45%,transparent);border-radius:999px;padding:2px 8px;margin-left:8px}
+  .soon{color:var(--muted);font-size:14px;border:1px dashed var(--border);border-radius:12px;padding:18px}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">The AI Dungeon · Labs</div>
+  <h1>Sample lab</h1>
+  <p class="lede">A gallery of samples to judge and tune by — voices to pick the production narration, and (soon) a snapshot of every visual component. Open this locally to preview; the plan is to surface it inside the Run Desk UI too.</p>
+
+  <div class="line"><b>The line every voice reads</b>“A tool built to stop fraud just became the fraud, and nobody caught it for a year. That's the strangest thing in AI this week, and the one that should worry you most.”</div>
+
+  <h2>Voices — OpenAI gpt-4o-mini-tts</h2>
+  <div class="grid" id="voices"></div>
+
+  <h2>Visual components</h2>
+  <div class="soon">Coming next — a snapshot of each of the 51 components (chat-exchange, stat-punch, timeline, before-after…) so you can eyeball and give feedback. Ask me to generate them.</div>
+
+  <footer>Regenerate voices: <code>.venv-voiceover/bin/python labs/generate_voice_samples.py</code></footer>
+</div>
+<script>
+  // Kept in sync with labs/voices/manifest.json (inlined so file:// needs no fetch).
+  const VOICES = [
+    { voice: "cedar", note: "current default" }, { voice: "marin" }, { voice: "coral" },
+    { voice: "ash" }, { voice: "ballad" }, { voice: "sage" }, { voice: "verse" }, { voice: "onyx" },
+  ];
+  const grid = document.getElementById("voices");
+  for (const v of VOICES) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `<div class="name">${v.voice}${v.note ? `<span class="tag">${v.note}</span>` : ""}</div>`
+      + `<div class="meta">gpt-4o-mini-tts</div>`
+      + `<audio controls preload="none" src="voices/openai_${v.voice}.wav"></audio>`;
+    grid.appendChild(card);
+  }
+</script>
+</body>
+</html>

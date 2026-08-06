@@ -88,3 +88,8 @@ logs/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Labs sample media (regeneratable via labs/generate_voice_samples.py)
+labs/**/*.wav
+labs/**/*.mp4
+labs/**/*.png
