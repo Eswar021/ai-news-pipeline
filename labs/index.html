@@ -32,6 +32,10 @@
 
   <div class="line"><b>The line every voice reads</b>“A tool built to stop fraud just became the fraud, and nobody caught it for a year. That's the strangest thing in AI this week, and the one that should worry you most.”</div>
 
+  <h2>Diagnostic — which setting sounds rough?</h2>
+  <p style="color:var(--muted);margin:-6px 0 14px;font-size:14px">Same line, changing one thing at a time. Play these and tell me which are clean vs. rough — that pinpoints whether it's the speed setting, the style instructions, or the model itself.</p>
+  <div class="grid" id="experiments"></div>
+
   <h2>Voices — OpenAI gpt-4o-mini-tts</h2>
   <div class="grid" id="voices"></div>
 
@@ -46,6 +50,24 @@
     { voice: "cedar", note: "current default" }, { voice: "marin" }, { voice: "coral" },
     { voice: "ash" }, { voice: "ballad" }, { voice: "sage" }, { voice: "verse" }, { voice: "onyx" },
   ];
+  const EXPERIMENTS = [
+    { file: "exp_mini_cedar_s100_plain", label: "gpt-4o-mini-tts · cedar", sub: "speed 1.0 · no instructions (baseline)" },
+    { file: "exp_mini_cedar_s108_plain", label: "gpt-4o-mini-tts · cedar", sub: "speed 1.08 — the current production setting" },
+    { file: "exp_mini_cedar_s100_instr", label: "gpt-4o-mini-tts · cedar", sub: "speed 1.0 + style instructions" },
+    { file: "exp_hd_nova", label: "tts-1-hd · nova", sub: "the HD quality model" },
+    { file: "exp_hd_shimmer", label: "tts-1-hd · shimmer", sub: "the HD quality model" },
+    { file: "exp_tts1_alloy", label: "tts-1 · alloy", sub: "the fast model" },
+  ];
+  const expGrid = document.getElementById("experiments");
+  for (const e of EXPERIMENTS) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `<div class="name" style="font-size:13px">${e.label}</div>`
+      + `<div class="meta">${e.sub}</div>`
+      + `<audio controls preload="none" src="voices/${e.file}.mp3?t=${Date.now()}"></audio>`;
+    expGrid.appendChild(card);
+  }
+
   const grid = document.getElementById("voices");
   for (const v of VOICES) {
     const card = document.createElement("div");
