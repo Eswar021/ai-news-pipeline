@@ -91,5 +91,6 @@ dmypy.json
 
 # Labs sample media (regeneratable via labs/generate_voice_samples.py)
 labs/**/*.wav
+labs/**/*.mp3
 labs/**/*.mp4
 labs/**/*.png

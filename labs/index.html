@@ -52,7 +52,7 @@
     card.className = "card";
     card.innerHTML = `<div class="name">${v.voice}${v.note ? `<span class="tag">${v.note}</span>` : ""}</div>`
       + `<div class="meta">gpt-4o-mini-tts</div>`
-      + `<audio controls preload="none" src="voices/openai_${v.voice}.wav"></audio>`;
+      + `<audio controls preload="none" src="voices/openai_${v.voice}.mp3?t=${Date.now()}"></audio>`;
     grid.appendChild(card);
   }
 </script>

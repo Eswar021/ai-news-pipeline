@@ -10,6 +10,8 @@ voice or a provider error is skipped, not fatal.
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -59,10 +61,17 @@ def main() -> None:
                 max_input_chars=2000,
                 sample_rate_hz=24000,
             )
+            # Also emit an MP3 for the browser preview (universal playback, small).
+            if shutil.which("ffmpeg"):
+                subprocess.run(
+                    ["ffmpeg", "-v", "error", "-y", "-i", str(OUT / f"{chunk_id}.wav"),
+                     "-codec:a", "libmp3lame", "-q:a", "3", str(OUT / f"{chunk_id}.mp3")],
+                    check=False,
+                )
             print(f"  ok  openai/{voice}")
             manifest.append({
                 "id": chunk_id, "provider": "openai", "model": "gpt-4o-mini-tts",
-                "voice": voice, "file": f"{chunk_id}.wav",
+                "voice": voice, "file": f"{chunk_id}.wav", "preview": f"{chunk_id}.mp3",
                 "note": "current default" if voice == "cedar" else "",
             })
         except Exception as exc:  # noqa: BLE001 — one bad voice never stops the lab
