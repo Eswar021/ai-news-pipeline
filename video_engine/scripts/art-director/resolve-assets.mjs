@@ -110,5 +110,29 @@ for (const sc of scenes) {
   for (const ly of layers) { if (RESOLVE[ly.component]) { resolveLayer(ly); count++; } }
 }
 
+// Safety net: an image-primary component with NO resolved image renders blank. Never
+// ship a blank slide — fall back to a text card built from its caption/label/query.
+// (A miss usually means media-use image resolution is unavailable, e.g. heygen not
+// authenticated; real-URL browser-frames are unaffected and keep their image.)
+const IMG_PRIMARY = { photo: "src", parallax: "src", "image-reveal": "src", spotlight: "src", "image-compare": "afterSrc", "image-grid": "srcs", pip: "mainSrc" };
+const cleanTxt = (s) => String(s || "").replace(/\s+/g, " ").trim();
+let recovered = 0;
+for (const sc of scenes) {
+  if (Array.isArray(sc.layers)) continue; // layered scenes carry their own base content
+  const key = IMG_PRIMARY[sc.component];
+  if (!key || !sc.params) continue;
+  const has = key === "srcs"
+    ? (Array.isArray(sc.params.srcs) && sc.params.srcs.some(Boolean))
+    : !!sc.params[key];
+  if (has) continue;
+  const p = sc.params;
+  const text = cleanTxt(p.caption || p.afterLabel || p.beforeLabel || (p.query || p.afterQuery || p.mainQuery || "").split(",")[0]).slice(0, 110);
+  sc.component = "kinetic-sentence";
+  sc.params = { text };
+  recovered++;
+  process.stderr.write(`  unresolved image → text fallback ("${text.slice(0, 40)}")\n`);
+}
+if (recovered) console.log(`Recovered ${recovered} unresolved image scene(s) as text (no blank slides).`);
+
 writeFileSync(outPath, `# Asset-resolved from ${relative(projectRoot, inPath)} — ${count} asset scene(s), ${cache.size} unique lookups.\n` + yaml.dump(doc, { lineWidth: 100 }));
 console.log(`Resolved ${count} asset scene(s), ${cache.size} lookups → ${relative(projectRoot, outPath)}`);
