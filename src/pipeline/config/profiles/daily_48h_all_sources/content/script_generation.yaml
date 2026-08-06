@@ -8,28 +8,32 @@ structured_output:
 provider_options:
   request_timeout_seconds: 300
 llm_roles:
-  # Planning/structuring roles on DeepSeek (non-reasoning, json_mode) + gpt-4o-mini
-  # fallback — cheaper than gpt-4o; the creative writers below keep reasoning on.
+  # Planning/structuring roles on gpt-4o-mini: it is BOTH cheaper than deepseek-v4-pro
+  # ($0.15/$0.60 vs $0.44/$0.87) AND more reliable at the strict structural constraints
+  # here (per-story truth-ID segregation, deterministic story order) — DeepSeek
+  # non-reasoning mixed truth IDs across stories and failed the director validator.
+  # json_schema strict guarantees shape; gpt-4o escalation fallback covers a rare miss.
+  # The creative writers below stay on DeepSeek reasoning for writing quality.
   director:
-    provider: deepseek
-    model: deepseek-v4-pro
+    provider: openai
+    model: gpt-4o-mini
     temperature: 0.4
     provider_options: { request_timeout_seconds: 300 }
-    structured_output: { method: json_mode, strict: false }
+    structured_output: { method: json_schema, strict: true }
     content_filter_fallback:
       provider: openai
-      model: gpt-4o-mini
+      model: gpt-4o
       temperature: 0.4
       structured_output: { method: json_schema, strict: true }
   source_researcher:
-    provider: deepseek
-    model: deepseek-v4-pro
+    provider: openai
+    model: gpt-4o-mini
     temperature: 0.4
     provider_options: { request_timeout_seconds: 300 }
-    structured_output: { method: json_mode, strict: false }
+    structured_output: { method: json_schema, strict: true }
     content_filter_fallback:
       provider: openai
-      model: gpt-4o-mini
+      model: gpt-4o
       temperature: 0.4
       structured_output: { method: json_schema, strict: true }
   story_writer:

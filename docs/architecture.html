@@ -347,7 +347,7 @@
   <div class="section-h">
     <div class="eyebrow">Where the intelligence &amp; the spend live</div>
     <h2>Every LLM call-site, its model, and the cheaper option</h2>
-    <p>The map above shows <em>where</em> the models are; this is the spend. Prices per 1M tokens (input / output), Aug&nbsp;2026. <b>The gpt-4o → DeepSeek switch is done</b> — every planning/clustering role now runs DeepSeek (non-reasoning, function-calling), cutting gpt-4o spend from <b>~$3.56 → ~$0.6/episode (≈83%)</b>. All Python modules build LLMs through one shared client (<span class="mono">src/pipeline/llm</span>).</p>
+    <p>The map above shows <em>where</em> the models are; this is the spend. Prices per 1M tokens (input / output), Aug&nbsp;2026. <b>The gpt-4o cost cut is done</b> — the heavy clustering/selection roles moved to DeepSeek (non-reasoning, function-calling), and the strict <em>structural</em> planners (script-gen director + source-researcher, research framer) moved to <b>gpt-4o-mini</b> — which is cheaper than DeepSeek <em>and</em> more reliable at per-story constraints (DeepSeek non-reasoning mixed truth IDs across stories). Together this cut gpt-4o spend from <b>~$3.56 → ~$0.6/episode (≈83%)</b>. All Python modules build LLMs through one shared client (<span class="mono">src/pipeline/llm</span>); structural validation now runs inside the retry/fallback loop, so a single bad LLM output retries and falls back instead of killing a run.</p>
   </div>
   <div class="tablewrap">
     <table>
@@ -355,8 +355,8 @@
       <tbody>
         <tr><td>story_mapping <span class="role">· full-record adjudication (the whale)</span></td><td class="mono">deepseek-v4-pro</td><td class="cost">$0.44 / $0.87</td><td><span class="tier lo">switched</span></td><td class="swap"><b>Done</b> — ~1M in tok/run, was $2.82 on gpt-4o. No fallback → validate on a run.</td></tr>
         <tr><td>editorial_selection <span class="role">· slate review + duplicate audit</span></td><td class="mono">deepseek-v4-pro</td><td class="cost">$0.44 / $0.87</td><td><span class="tier lo">switched</span></td><td class="swap"><b>Done</b> — function-calling structured output. No fallback → validate.</td></tr>
-        <tr><td>script_generation <span class="role">· director + source-researcher</span></td><td class="mono">deepseek-v4-pro</td><td class="cost">$0.44 / $0.87</td><td><span class="tier lo">switched</span></td><td class="swap"><b>Done</b> — non-reasoning + gpt-4o-mini fallback.</td></tr>
-        <tr><td>topic_research <span class="role">· framer</span></td><td class="mono">deepseek-v4-pro</td><td class="cost">$0.44 / $0.87</td><td><span class="tier lo">switched</span></td><td class="swap"><b>Done</b> — json_mode + gpt-4o-mini fallback.</td></tr>
+        <tr><td>script_generation <span class="role">· director + source-researcher</span></td><td class="mono">gpt-4o-mini</td><td class="cost">$0.15 / $0.60</td><td><span class="tier lo">switched</span></td><td class="swap"><b>Done</b> — <em>cheaper</em> than DeepSeek AND reliable at strict per-story truth-ID/order constraints (DeepSeek non-reasoning mixed IDs across stories → validator fail). json_schema strict; gpt-4o escalation fallback. Validation now runs inside the retry/fallback loop.</td></tr>
+        <tr><td>topic_research <span class="role">· framer</span></td><td class="mono">gpt-4o-mini</td><td class="cost">$0.15 / $0.60</td><td><span class="tier lo">switched</span></td><td class="swap"><b>Done</b> — json_schema strict + gpt-4o fallback (same structural rationale).</td></tr>
         <tr><td>metadata_creator <span class="role">· fallback only</span></td><td class="mono">gpt-4o</td><td class="cost">$2.50 / $10.00</td><td><span class="tier mid">rare</span></td><td class="swap">Only fires on a DeepSeek miss → leave, or <b class="mono">gpt-4o-mini</b>.</td></tr>
         <tr><td>editorial_triage / story_mapping / editorial_selection</td><td class="mono">gpt-4o-mini</td><td class="cost">$0.15 / $0.60</td><td><span class="tier lo">cheap</span></td><td class="swap">Already the cheapest tier. Leave as-is.</td></tr>
         <tr><td>script writers/reviewers · topic synth · metadata · art-director</td><td class="mono">deepseek-v4-pro</td><td class="cost">$0.44 / $0.87</td><td><span class="tier lo">cheap</span></td><td class="swap">Cheap reasoning workhorse; cache-hit input ≈ free. Keep.</td></tr>
@@ -366,7 +366,7 @@
     </table>
   </div>
   <p style="color:var(--muted);font-size:13px;margin-top:14px;max-width:74ch">
-    <b style="color:var(--ink)">Bottom line:</b> every gpt-4o role now runs DeepSeek — LLM spend dropped <b style="color:var(--ink)">~$3.56 → ~$0.6/episode (≈83%, ~$90/mo)</b>, most of it from the story_mapping whale. <span class="mono">story_mapping</span> and <span class="mono">editorial_selection</span> have <b style="color:var(--ink)">no model fallback</b>, so a fresh-corpus validation run is the gate before fully trusting the new clustering/selection quality. Voice stays on Gemini; gpt-4o-mini remains the cheap fallback on the runtime-wrapped roles.
+    <b style="color:var(--ink)">Bottom line:</b> no viewer-facing role still runs gpt-4o as its primary — heavy roles on DeepSeek, structural planners on gpt-4o-mini — LLM spend dropped <b style="color:var(--ink)">~$3.56 → ~$0.6/episode (≈83%, ~$90/mo)</b>, most of it from the story_mapping whale. <span class="mono">story_mapping</span> and <span class="mono">editorial_selection</span> have <b style="color:var(--ink)">no model fallback</b>, so a fresh-corpus validation run is the gate before fully trusting the new clustering/selection quality. Voice stays on Gemini; gpt-4o-mini remains the cheap fallback on the runtime-wrapped roles.
   </p>
 
   <!-- SEQUENCE -->

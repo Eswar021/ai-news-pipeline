@@ -113,6 +113,11 @@ def direct_episode(
         "story_context_packets": context_packets,
         "section_guidance": _compact_section_plan(section_plan),
     }
+    required_ids = [story_id(story) for story in _ordered_stories(video_packet)]
+    truth_by_story = {
+        clean_text(packet.get("story_id")): set(truth_item_map(packet.get("story_truth_index") or {}))
+        for packet in context_packets
+    }
     response = invoke_runtime_chain(
         module_name="roundup_director",
         output_model=EpisodeDirectorOutput,
@@ -131,9 +136,24 @@ def direct_episode(
             "source_context_mode": "complete_records_plus_semantic_brief",
         },
         llm_calls=llm_calls,
+        # Run the structural checks INSIDE the retry/fallback loop: a director that
+        # mixes up per-story truth IDs (a common DeepSeek slip on the multi-story
+        # task) gets retried, then routed to the fallback model — instead of a hard
+        # ValueError that discards the whole run.
+        output_validator=lambda model: _validate_director_output(
+            model, required_ids=required_ids, truth_by_story=truth_by_story
+        ),
     )
+    return response.model_dump(mode="json")
+
+
+def _validate_director_output(
+    response,
+    *,
+    required_ids: list[str],
+    truth_by_story: dict[str, set[str]],
+) -> None:
     raw = response.model_dump(mode="json")
-    required_ids = [story_id(story) for story in _ordered_stories(video_packet)]
     if raw["ordered_story_ids"] != required_ids:
         raise ValueError(
             "roundup_director must preserve the deterministic video packet story order: "
@@ -142,10 +162,6 @@ def direct_episode(
     brief_ids = [clean_text(item.get("story_id")) for item in raw["story_briefs"]]
     if brief_ids != required_ids:
         raise ValueError(f"roundup_director returned invalid story briefs: {brief_ids} != {required_ids}")
-    truth_by_story = {
-        clean_text(packet.get("story_id")): set(truth_item_map(packet.get("story_truth_index") or {}))
-        for packet in context_packets
-    }
     for brief in raw["story_briefs"]:
         sid = clean_text(brief.get("story_id"))
         available = truth_by_story.get(sid, set())
@@ -154,7 +170,6 @@ def direct_episode(
         unknown = sorted((required_truth | optional_truth) - available)
         if unknown:
             raise ValueError(f"roundup_director used unknown truth IDs for {sid}: {unknown}")
-    return raw
 
 
 def write_story_segments(

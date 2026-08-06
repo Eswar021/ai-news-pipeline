@@ -14,14 +14,17 @@ llm_retry: { enabled: true, max_attempts: 3, max_structured_output_attempts: 2, 
 
 llm_roles:
   framer:            # lightweight: turn the topic into distinct searchable questions
-    provider: deepseek
-    model: deepseek-v4-pro
+    # gpt-4o-mini: cheaper than deepseek-v4-pro and reliable for this structural
+    # framing task (same rationale as the script-gen director/researcher). The
+    # heavy synthesizer below stays on DeepSeek reasoning for cited-dossier quality.
+    provider: openai
+    model: gpt-4o-mini
     temperature: 0.4
-    structured_output: { method: json_mode, strict: false }
+    structured_output: { method: json_schema, strict: true }
     provider_options: { request_timeout_seconds: 180 }
     content_filter_fallback:
       provider: openai
-      model: gpt-4o-mini
+      model: gpt-4o
       temperature: 0.4
       structured_output: { method: json_schema, strict: true }
       provider_options: { request_timeout_seconds: 180 }

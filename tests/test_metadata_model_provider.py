@@ -109,10 +109,15 @@ def test_production_routes_deepseek_to_viewer_facing_creative_roles() -> None:
         {**profile["metadata_creator"], "channel": profile["channel"]}
     )
 
-    # Planning roles moved to DeepSeek (non-reasoning) for cost; gpt-4o-mini is the fallback.
-    assert routes["source_researcher"]["provider"] == "deepseek"
-    assert routes["director"]["provider"] == "deepseek"
-    assert routes["director"]["content_filter_fallback"]["model"] == "gpt-4o-mini"
+    # Structural planning roles run gpt-4o-mini: cheaper than deepseek-v4-pro AND more
+    # reliable at the strict per-story constraints (DeepSeek non-reasoning mixed truth
+    # IDs across stories). gpt-4o is the escalation fallback. Creative writers stay on
+    # DeepSeek reasoning.
+    assert routes["source_researcher"]["provider"] == "openai"
+    assert routes["source_researcher"]["model"] == "gpt-4o-mini"
+    assert routes["director"]["provider"] == "openai"
+    assert routes["director"]["model"] == "gpt-4o-mini"
+    assert routes["director"]["content_filter_fallback"]["model"] == "gpt-4o"
     assert routes["story_writer"]["provider"] == "deepseek"
     assert routes["story_writer"]["model"] == "deepseek-v4-pro"
     assert routes["story_reviewer"]["model"] == "deepseek-v4-pro"

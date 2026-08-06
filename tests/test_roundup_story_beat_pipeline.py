@@ -699,6 +699,134 @@ def test_deepseek_garbled_body_parse_400_falls_back_instead_of_failing_run() -> 
     assert calls[1]["metadata"]["fallback_from_provider"] == "deepseek"
 
 
+def _director_brief(story_id: str, *, must_truth=(), opt_truth=()) -> dict:
+    return {
+        "story_id": story_id,
+        "story_engine": "practical_consequence",
+        "story_promise": "Explain the development.",
+        "hook_idea": "Open on the practical effect.",
+        "tension": "The result changes an existing workflow.",
+        "reveal_or_payoff": "The consequence is concrete.",
+        "viewer_stakes": "The viewer can understand what changes.",
+        "specific_detail_anchor": "One supplied source detail.",
+        "source_meaning_boundary": "Preserve the supplied source state.",
+        "source_meaning_boundaries": [],
+        "must_communicate_truth_ids": list(must_truth),
+        "optional_truth_ids": list(opt_truth),
+        "narrator_take": "The practical effect matters most.",
+        "explanation_goal": "Make the consequence easy to follow.",
+        "analogy_opportunities": [],
+        "humor_opportunities": [],
+        "humor_restraint_reason": None,
+        "transition_relationship": "Begin clearly.",
+        "avoid": [],
+    }
+
+
+def _director_output(briefs: list[dict]) -> "EpisodeDirectorOutput":
+    return EpisodeDirectorOutput.model_validate(
+        {
+            "episode_shape": "curated_roundup",
+            "episode_connection_reason": "The stories are intentionally independent.",
+            "episode_thesis": "A concise episode direction.",
+            "viewer_promise": "A useful viewer promise.",
+            "hook_strategy": "Open on the strongest consequence.",
+            "pacing_strategy": "Keep each story distinct.",
+            "ordered_story_ids": [b["story_id"] for b in briefs],
+            "story_briefs": briefs,
+        }
+    )
+
+
+def test_director_validator_rejects_cross_story_truth_ids() -> None:
+    # The exact failure that killed run_2026_08_06_223716: the director attributed
+    # story A's truth ID (truth_9bf0c3638d31) to stories B and C. Each brief may only
+    # cite its OWN story's truth index.
+    required_ids = ["story_a", "story_b"]
+    truth_by_story = {"story_a": {"truth_a1"}, "story_b": {"truth_b1"}}
+
+    ok = _director_output(
+        [
+            _director_brief("story_a", must_truth=["truth_a1"]),
+            _director_brief("story_b", opt_truth=["truth_b1"]),
+        ]
+    )
+    script_writer._validate_director_output(
+        ok, required_ids=required_ids, truth_by_story=truth_by_story
+    )  # no raise
+
+    contaminated = _director_output(
+        [
+            _director_brief("story_a", must_truth=["truth_a1"]),
+            _director_brief("story_b", opt_truth=["truth_a1"]),  # story A's id on story B
+        ]
+    )
+    with pytest.raises(ValueError, match="unknown truth IDs for story_b"):
+        script_writer._validate_director_output(
+            contaminated, required_ids=required_ids, truth_by_story=truth_by_story
+        )
+
+
+def test_output_validator_failure_retries_then_falls_back_instead_of_killing_run() -> None:
+    # A director whose output parses but fails the structural validator must not hard-
+    # fail the run: it exhausts the primary's structured retries, then routes to the
+    # configured fallback model (which gets it right) via _fallback_trigger.
+    def validator(model) -> None:
+        if model.episode_thesis == "BAD":
+            raise ValueError("roundup_director used unknown truth IDs for story_one: ['truth_x']")
+
+    class PrimaryLLM:
+        def with_structured_output(self, _model, **_kwargs):
+            def invoke(_prompt):
+                out = _director_output([_director_brief("story_one")])
+                out.episode_thesis = "BAD"
+                return {"raw": None, "parsed": out, "parsing_error": None}
+
+            return RunnableLambda(invoke)
+
+    class FallbackLLM:
+        def with_structured_output(self, _model, **_kwargs):
+            def invoke(_prompt):
+                return {"raw": None, "parsed": _director_output([_director_brief("story_one")]), "parsing_error": None}
+
+            return RunnableLambda(invoke)
+
+    calls: list[dict] = []
+    output = invocation.invoke_runtime_chain(
+        module_name="roundup_director",
+        output_model=EpisodeDirectorOutput,
+        llm_runtime={
+            "llm": PrimaryLLM(),
+            "config": {
+                "provider": "openai",
+                "model": "gpt-4o-mini",
+                "structured_output": {"method": "json_schema", "strict": True},
+                "llm_retry": {"enabled": True, "max_attempts": 1, "max_structured_output_attempts": 1},
+            },
+            "content_filter_fallback": {
+                "llm": FallbackLLM(),
+                "config": {
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "structured_output": {"method": "json_schema", "strict": True},
+                    "llm_retry": {"enabled": True, "max_attempts": 1},
+                },
+            },
+        },
+        prompt_bundle={"system": "System", "user_preamble": "User"},
+        task_payload="{}",
+        metadata={"story_id": "story_one"},
+        llm_calls=calls,
+        output_validator=validator,
+    )
+
+    assert output.episode_thesis == "A concise episode direction."
+    assert [call["provider"] for call in calls] == ["openai", "openai"]
+    assert calls[0]["metadata"]["parse_error"]  # primary logged the validator failure
+    assert calls[1]["metadata"]["route_attempt"] == "content_filter_fallback"
+    assert calls[1]["metadata"]["fallback_trigger"] == "structured_output"
+
+
 def test_video_packaging_does_not_reapply_semantic_duplicate_rules() -> None:
     stories = _json("video_packaging_result.json")["data"]["video_packet"]["stories"]
     duplicate = json.loads(json.dumps(stories[0]))

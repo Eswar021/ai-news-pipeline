@@ -125,6 +125,13 @@ def _direct_deep_dive(
     # truth_index above; suggested_angles/summary/timeline are never cited directly.
     if research_brief:
         payload["research_brief"] = research_brief
+    def _validate(model) -> None:
+        # Runs inside the retry/fallback loop: a director that plans the wrong
+        # number of angles gets retried, then falls back, instead of hard-failing.
+        count = len(model.model_dump(mode="json").get("angle_briefs", []))
+        if not min_angles <= count <= max_angles:
+            raise ValueError(f"deep-dive director planned {count} angles; expected {min_angles}..{max_angles}")
+
     director = invoke_runtime_chain(
         module_name="deep_dive_director",
         output_model=DeepDiveDirectorOutput,
@@ -133,10 +140,8 @@ def _direct_deep_dive(
         task_payload=json_dumps(payload),
         metadata={"story_id": story_id(story)},
         llm_calls=llm_calls,
+        output_validator=_validate,
     ).model_dump(mode="json")
-    count = len(director.get("angle_briefs", []))
-    if not min_angles <= count <= max_angles:
-        raise ValueError(f"deep-dive director planned {count} angles; expected {min_angles}..{max_angles}")
     return director
 
 

@@ -17,6 +17,15 @@ from .llm_logging import build_llm_call_log
 from .utils import json_dumps
 
 
+class StructuredOutputExhausted(ValueError):
+    """The primary route could not produce output that parses AND validates.
+
+    Raised after the structured-output retries are spent. Carried as its own type
+    so :func:`_fallback_trigger` can route it to the configured fallback model
+    instead of letting one bad structured output kill a long run.
+    """
+
+
 TASK_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system", "{system_prompt}"),
@@ -34,6 +43,7 @@ def invoke_runtime_chain(
     task_payload: str,
     metadata: dict[str, Any],
     llm_calls: list[dict[str, Any]],
+    output_validator=None,
 ):
     primary_config = llm_runtime["config"]
     fallback_runtime = llm_runtime.get("content_filter_fallback")
@@ -52,6 +62,7 @@ def invoke_runtime_chain(
             script_cfg=primary_config,
             metadata=primary_metadata,
             llm_calls=llm_calls,
+            output_validator=output_validator,
         )
     except Exception as exc:
         fallback_trigger = _fallback_trigger(exc)
@@ -74,6 +85,7 @@ def invoke_runtime_chain(
             "fallback_from_model": primary_config.get("model", ""),
         },
         llm_calls=llm_calls,
+        output_validator=output_validator,
     )
 
 
@@ -87,6 +99,7 @@ def _invoke_chain(
     script_cfg: dict[str, Any],
     metadata: dict[str, Any],
     llm_calls: list[dict[str, Any]],
+    output_validator=None,
 ):
     structured_config = dict(script_cfg.get("structured_output") or {})
     structured_options = _structured_output_options(structured_config)
@@ -183,6 +196,16 @@ def _invoke_chain(
             except PydanticValidationError as exc:
                 parsing_error = exc
 
+        # A caller's structural validator (e.g. the director's per-story truth-ID
+        # segregation) runs INSIDE the retry loop, so a model that mixes up IDs
+        # gets retried — and, on exhaustion, routed to the fallback model — rather
+        # than raising past all recovery and killing the run.
+        if parsing_error is None and parsed_model is not None and output_validator is not None:
+            try:
+                output_validator(parsed_model)
+            except Exception as exc:  # noqa: BLE001 — any validator failure is a structured failure
+                parsing_error = exc
+
         call_metadata = {
             **metadata,
             "attempt_count": attempt_count,
@@ -225,7 +248,9 @@ def _invoke_chain(
                 )
                 time.sleep(delay_seconds)
                 continue
-            error = ValueError(f"LLM structured output failed for {module_name}: {parse_error_text}")
+            error = StructuredOutputExhausted(
+                f"LLM structured output failed for {module_name}: {parse_error_text}"
+            )
             if isinstance(parsing_error, BaseException):
                 raise error from parsing_error
             raise error
@@ -331,6 +356,8 @@ def _fallback_trigger(exc: Exception) -> str | None:
         return "content_filter"
     if _is_transient_request_error(exc, status_code=_exception_status_code(exc)):
         return "provider_request_error"
+    if isinstance(exc, StructuredOutputExhausted):
+        return "structured_output"
     return None
 
 
