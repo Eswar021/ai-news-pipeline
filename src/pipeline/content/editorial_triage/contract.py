@@ -13,7 +13,7 @@ from .config import (
 
 
 TriageStatus = Literal["ok", "partial", "failed"]
-LLMProvider = Literal["openai", "gemini", "lmstudio"]
+from src.pipeline.llm import LLMProvider  # single source of truth for provider support
 TriageAction = Literal["advance", "reserve", "quarantine"]
 TriageMode = Literal["authoritative"]
 

@@ -13,13 +13,17 @@ callers that pass neither keep langchain's defaults — exactly how the lighter 
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 
 load_dotenv()
+
+# The single source of truth for supported providers — used by make_llm AND by every
+# module's config contract, so provider support can never drift between them again.
+LLMProvider = Literal["openai", "gemini", "lmstudio", "moonshot", "deepseek"]
 
 
 def make_llm(

@@ -31,6 +31,7 @@ from .config import (
     DEFAULT_STORY_LABEL_WORKER_COUNT,
 )
 from .utils import parse_datetime
+from src.pipeline.llm import LLMProvider
 
 
 StoryMappingStatus = Literal["ok", "failed"]
@@ -149,7 +150,7 @@ class ClusteringConfig(BaseModel):
 class PairFullRecordReviewConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    provider: Literal["openai", "gemini", "lmstudio"] = "openai"
+    provider: LLMProvider = "openai"
     model: str = "gpt-4o"
     base_url: str | None = None
     temperature: float = 0.0
@@ -175,7 +176,7 @@ class PairAdjudicationConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     enabled: bool = False
-    provider: Literal["openai", "gemini", "lmstudio"] = "openai"
+    provider: LLMProvider = "openai"
     model: str = "gpt-4o-mini"
     base_url: str | None = None
     prompt_version: str = "v1"
@@ -247,7 +248,7 @@ class EventIdentityConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     enabled: bool = False
-    provider: Literal["openai", "gemini", "lmstudio"] = "openai"
+    provider: LLMProvider = "openai"
     model: str = "gpt-4o-mini"
     base_url: str | None = None
     prompt_version: str = DEFAULT_EVENT_IDENTITY_PROMPT_VERSION
@@ -296,7 +297,7 @@ class ClusterReconciliationConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     enabled: bool = False
-    provider: Literal["openai", "gemini", "lmstudio"] = "openai"
+    provider: LLMProvider = "openai"
     model: str = "gpt-4o-mini"
     base_url: str | None = None
     prompt_version: str = DEFAULT_CLUSTER_RECONCILIATION_PROMPT_VERSION
@@ -364,7 +365,7 @@ class StoryLabelConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     model: str
-    provider: Literal["openai", "gemini", "lmstudio"] = "openai"
+    provider: LLMProvider = "openai"
     base_url: str | None = None
     prompt_version: str = DEFAULT_STORY_LABEL_PROMPT_VERSION
     worker_count: int = DEFAULT_STORY_LABEL_WORKER_COUNT

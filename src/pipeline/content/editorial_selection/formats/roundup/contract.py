@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from src.pipeline.llm import LLMProvider
+
 from .config import (
     DEFAULT_MAX_ATTEMPTS,
     DEFAULT_MAX_CALL_CONTEXT_CHARS,
@@ -55,7 +57,7 @@ class SlateReviewConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
-    provider: Literal["openai", "gemini", "lmstudio"] | None = None
+    provider: LLMProvider | None = None
     model: str | None = None
     base_url: str | None = None
     temperature: float | None = None
@@ -107,7 +109,7 @@ class RoundupEditorialSelectionConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     target_format: Literal["roundup"] = "roundup"
-    provider: Literal["openai", "gemini", "lmstudio"]
+    provider: LLMProvider
     model: str
     base_url: str | None = None
     prompt_version: str = "v1"
