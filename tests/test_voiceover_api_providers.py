@@ -53,8 +53,10 @@ def test_openai_provider_writes_ordered_wav_chunks(monkeypatch, tmp_path: Path) 
         def __exit__(self, *_args):
             return False
 
-        def stream_to_file(self, path: Path) -> None:
-            _write_test_wav(Path(path))
+        def read(self) -> bytes:
+            # OpenAI now returns raw PCM (response_format="pcm"); the provider wraps it
+            # into a correct-header wav itself (streamed wav headers were placeholder-length).
+            return b"\x00\x00" * 2400
 
     def create(**kwargs):
         calls.append(kwargs)
@@ -82,6 +84,7 @@ def test_openai_provider_writes_ordered_wav_chunks(monkeypatch, tmp_path: Path) 
     assert {call["input"] for call in calls} == {"First sentence.", "Second sentence."}
     assert all(call["voice"] == "cedar" for call in calls)
     assert all(call["instructions"] == "Conversational and clear." for call in calls)
+    assert all(call["response_format"] == "pcm" for call in calls)  # raw PCM, wrapped locally
 
 
 def test_gemini_provider_wraps_pcm_and_routes_voice(monkeypatch, tmp_path: Path) -> None:
