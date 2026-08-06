@@ -215,8 +215,13 @@ def _invoke_context(
     }
     rendered = PAIR_PROMPT.format(**prompt_inputs)
     structured_options: dict[str, Any] = {"include_raw": True}
-    if clean_text(config.get("provider")).casefold() == "openai":
+    provider = clean_text(config.get("provider")).casefold()
+    if provider == "openai":
         structured_options["strict"] = True
+    elif provider == "deepseek":
+        # DeepSeek rejects OpenAI's json_schema response_format ("response_format type
+        # is unavailable"); tool calling produces the same structured output.
+        structured_options["method"] = "function_calling"
     chain = PAIR_PROMPT | llm.with_structured_output(PairDecisionBatch, **structured_options)
     started = time.time()
     raw = None

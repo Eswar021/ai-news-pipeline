@@ -34,8 +34,11 @@ clustering:
     - broader_story_arc
     - uncertain
     full_record_review:
-      provider: openai
-      model: gpt-4o
+      # The whale: full-record pairwise confirmation burns ~1M input tokens/run. On
+      # DeepSeek (non-reasoning, function-calling structured output) this is ~6x cheaper
+      # than gpt-4o with equivalent quality; validate clustering on a fresh corpus.
+      provider: deepseek
+      model: deepseek-v4-pro
       temperature: 0.0
   cluster_reconciliation:
     enabled: true
