@@ -602,6 +602,103 @@ def test_content_filter_rejection_uses_explicit_provider_fallback() -> None:
     }
 
 
+def test_deepseek_garbled_body_parse_400_falls_back_instead_of_failing_run() -> None:
+    # DeepSeek intermittently returns this 400 for a request that is provably valid
+    # JSON (reproduced the exact call succeeding on retry). It must not kill the run:
+    # it is retryable, and on persistence routes to the configured fallback.
+    class BodyParseError(Exception):
+        status_code = 400
+
+    error_text = (
+        "Failed to parse the request body as JSON: "
+        "thinking.type: expected value at line 1 column 28152"
+    )
+    assert invocation._is_retryable_llm_error(
+        BodyParseError(error_text), status_code=400
+    )
+    assert invocation._fallback_trigger(BodyParseError(error_text)) == "provider_request_error"
+
+    class RejectingLLM:
+        def with_structured_output(self, _model, **_kwargs):
+            def invoke(_prompt):
+                raise BodyParseError(error_text)
+
+            return RunnableLambda(invoke)
+
+    class WorkingLLM:
+        def with_structured_output(self, model, **_kwargs):
+            def invoke(_prompt):
+                payload = {
+                    "episode_shape": "curated_roundup",
+                    "episode_connection_reason": "The stories are intentionally independent.",
+                    "episode_thesis": "A concise episode direction.",
+                    "viewer_promise": "A useful viewer promise.",
+                    "hook_strategy": "Open on the strongest consequence.",
+                    "pacing_strategy": "Keep each story distinct.",
+                    "ordered_story_ids": ["story_one"],
+                    "story_briefs": [
+                        {
+                            "story_id": "story_one",
+                            "story_engine": "practical_consequence",
+                            "story_promise": "Explain the development.",
+                            "hook_idea": "Open on the practical effect.",
+                            "tension": "The result changes an existing workflow.",
+                            "reveal_or_payoff": "The consequence is concrete.",
+                            "viewer_stakes": "The viewer can understand what changes.",
+                            "specific_detail_anchor": "One supplied source detail.",
+                            "source_meaning_boundary": "Preserve the supplied source state.",
+                            "source_meaning_boundaries": [],
+                            "must_communicate_truth_ids": [],
+                            "optional_truth_ids": [],
+                            "narrator_take": "The practical effect matters most.",
+                            "explanation_goal": "Make the consequence easy to follow.",
+                            "analogy_opportunities": [],
+                            "humor_opportunities": [],
+                            "humor_restraint_reason": None,
+                            "transition_relationship": "Begin clearly.",
+                            "avoid": [],
+                        }
+                    ],
+                }
+                return {"raw": None, "parsed": model.model_validate(payload), "parsing_error": None}
+
+            return RunnableLambda(invoke)
+
+    calls: list[dict] = []
+    output = invocation.invoke_runtime_chain(
+        module_name="roundup_director",
+        output_model=EpisodeDirectorOutput,
+        llm_runtime={
+            "llm": RejectingLLM(),
+            "config": {
+                "provider": "deepseek",
+                "model": "deepseek-v4-pro",
+                "structured_output": {"method": "json_mode", "strict": False},
+                "llm_retry": {"enabled": True, "max_attempts": 1},
+            },
+            "content_filter_fallback": {
+                "llm": WorkingLLM(),
+                "config": {
+                    "provider": "openai",
+                    "model": "gpt-4o-mini",
+                    "structured_output": {"method": "json_schema", "strict": True},
+                    "llm_retry": {"enabled": True, "max_attempts": 1},
+                },
+            },
+        },
+        prompt_bundle={"system": "System", "user_preamble": "User"},
+        task_payload="{}",
+        metadata={"story_id": "story_one"},
+        llm_calls=calls,
+    )
+
+    assert output.ordered_story_ids == ["story_one"]
+    assert [call["provider"] for call in calls] == ["deepseek", "openai"]
+    assert calls[1]["metadata"]["route_attempt"] == "content_filter_fallback"
+    assert calls[1]["metadata"]["fallback_trigger"] == "provider_request_error"
+    assert calls[1]["metadata"]["fallback_from_provider"] == "deepseek"
+
+
 def test_video_packaging_does_not_reapply_semantic_duplicate_rules() -> None:
     stories = _json("video_packaging_result.json")["data"]["video_packet"]["stories"]
     duplicate = json.loads(json.dumps(stories[0]))

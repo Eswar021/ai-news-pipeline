@@ -54,7 +54,8 @@ def invoke_runtime_chain(
             llm_calls=llm_calls,
         )
     except Exception as exc:
-        if fallback_runtime is None or not _is_content_filter_error(exc):
+        fallback_trigger = _fallback_trigger(exc)
+        if fallback_runtime is None or fallback_trigger is None:
             raise
 
     fallback_config = fallback_runtime["config"]
@@ -68,7 +69,7 @@ def invoke_runtime_chain(
         metadata={
             **metadata,
             "route_attempt": "content_filter_fallback",
-            "fallback_trigger": "content_filter",
+            "fallback_trigger": fallback_trigger,
             "fallback_from_provider": primary_config.get("provider", ""),
             "fallback_from_model": primary_config.get("model", ""),
         },
@@ -286,6 +287,8 @@ def _exception_status_code(exc: Exception) -> int | None:
 def _is_retryable_llm_error(exc: Exception, *, status_code: int | None) -> bool:
     if status_code in {429, 500, 502, 503, 504}:
         return True
+    if _is_transient_request_error(exc, status_code=status_code):
+        return True
     return type(exc).__name__ in {
         "APIConnectionError",
         "APITimeoutError",
@@ -295,11 +298,40 @@ def _is_retryable_llm_error(exc: Exception, *, status_code: int | None) -> bool:
     }
 
 
+def _is_transient_request_error(exc: Exception, *, status_code: int | None) -> bool:
+    """A 400 whose message claims the provider could not parse a well-formed body.
+
+    DeepSeek intermittently returns ``400 Failed to parse the request body as JSON``
+    for requests that are provably valid JSON — a server-side hiccup, not a real
+    client error (we reproduced the exact same request succeeding on retry). Treat
+    it as transient so the retry loop (and the fallback) can recover instead of
+    killing a run after ~17 minutes of upstream work.
+    """
+    if status_code != 400:
+        return False
+    text = str(exc).casefold()
+    return "parse the request body" in text or "request body as json" in text
+
+
 def _is_content_filter_error(exc: Exception) -> bool:
     status_code = _exception_status_code(exc)
     text = str(exc).casefold().replace("_", " ")
     markers = ("content filter", "high risk", "highrisk")
     return status_code in {400, 403} and any(marker in text for marker in markers)
+
+
+def _fallback_trigger(exc: Exception) -> str | None:
+    """Which fallback (if any) a primary-route failure should route to.
+
+    Both the content filter and a persistent transient body-parse 400 mean the
+    primary provider can't complete this call; the configured fallback (gpt-4o-mini)
+    finishes it rather than failing the run.
+    """
+    if _is_content_filter_error(exc):
+        return "content_filter"
+    if _is_transient_request_error(exc, status_code=_exception_status_code(exc)):
+        return "provider_request_error"
+    return None
 
 
 def _is_structured_output_error(exc: Exception) -> bool:
