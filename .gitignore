@@ -94,3 +94,4 @@ labs/**/*.wav
 labs/**/*.mp3
 labs/**/*.mp4
 labs/**/*.png
+labs/voices/samples.js

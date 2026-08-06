@@ -3,79 +3,66 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Labs — Samples</title>
+<title>Labs — Voice comparison</title>
 <style>
   :root{ --bg:#0d1117; --surface:#161c26; --border:rgba(255,255,255,.1); --ink:#e9edf3; --muted:#98a2b3; --accent:#f4b350; --good:#59c98b; --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:ui-monospace,"SF Mono",Menlo,monospace;}
   *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5}
-  .wrap{max-width:900px;margin:0 auto;padding:48px 24px 80px}
+  .wrap{max-width:1000px;margin:0 auto;padding:48px 24px 90px}
   .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
   h1{font-size:34px;font-weight:750;letter-spacing:-.02em;margin:12px 0 0}
-  .lede{color:var(--muted);max-width:60ch;margin:14px 0 0}
-  .line{margin:26px 0 10px;padding:16px 18px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 12px 12px 0;font-size:15px}
+  .lede{color:var(--muted);max-width:64ch;margin:14px 0 0}
+  .line{margin:26px 0 8px;padding:16px 18px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 12px 12px 0;font-size:15px}
   .line b{color:var(--muted);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:6px}
-  h2{font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:40px 0 14px;font-weight:640}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px}
+  .tip{margin:10px 0 0;padding:12px 16px;border:1px solid color-mix(in srgb,var(--good) 35%,transparent);background:color-mix(in srgb,var(--good) 10%,transparent);border-radius:12px;font-size:13.5px;color:var(--ink)}
+  h2{font-size:15px;letter-spacing:.06em;color:var(--ink);margin:42px 0 4px;font-weight:680}
+  .note{color:var(--muted);margin:0 0 14px;font-size:13.5px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:15px}
   .card .name{font-family:var(--mono);font-size:15px;font-weight:600}
-  .card .meta{font-size:12px;color:var(--muted);margin:2px 0 12px}
+  .card .setting{font-family:var(--mono);font-size:11px;color:var(--muted);margin:3px 0 11px;overflow-wrap:anywhere}
   .card audio{width:100%}
-  .tag{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--good);border:1px solid color-mix(in srgb,var(--good) 45%,transparent);border-radius:999px;padding:2px 8px;margin-left:8px}
   .soon{color:var(--muted);font-size:14px;border:1px dashed var(--border);border-radius:12px;padding:18px}
+  .empty{color:var(--muted);border:1px dashed var(--border);border-radius:12px;padding:22px;font-size:14px}
   footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:12px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="eyebrow">The AI Dungeon · Labs</div>
-  <h1>Sample lab</h1>
-  <p class="lede">A gallery of samples to judge and tune by — voices to pick the production narration, and (soon) a snapshot of every visual component. Open this locally to preview; the plan is to surface it inside the Run Desk UI too.</p>
+  <h1>Voice comparison</h1>
+  <p class="lede">Every OpenAI TTS model, its voices, and a speed sweep — the same line each time, labeled with the exact setting. Pick the one you like; the label tells you what to put in <span style="font-family:var(--mono)">voiceover.yaml</span>.</p>
 
   <div class="line"><b>The line every voice reads</b>“A tool built to stop fraud just became the fraud, and nobody caught it for a year. That's the strangest thing in AI this week, and the one that should worry you most.”</div>
+  <div class="tip"><b>What we found:</b> speed above 1.0 time-compresses the audio and adds a "tape warble" — speed 1.0 sounds clean on every model. The speed sweep below shows exactly where it starts to degrade.</div>
 
-  <h2>Diagnostic — which setting sounds rough?</h2>
-  <p style="color:var(--muted);margin:-6px 0 14px;font-size:14px">Same line, changing one thing at a time. Play these and tell me which are clean vs. rough — that pinpoints whether it's the speed setting, the style instructions, or the model itself.</p>
-  <div class="grid" id="experiments"></div>
-
-  <h2>Voices — OpenAI gpt-4o-mini-tts</h2>
-  <div class="grid" id="voices"></div>
+  <div id="sections"><div class="empty">Loading samples… if this stays empty, the generator is still running — reopen once it finishes.</div></div>
 
   <h2>Visual components</h2>
-  <div class="soon">Coming next — a snapshot of each of the 51 components (chat-exchange, stat-punch, timeline, before-after…) so you can eyeball and give feedback. Ask me to generate them.</div>
+  <p class="note">Coming next — a snapshot of each of the 51 components. Ask me to generate them.</p>
+  <div class="soon">Not built yet.</div>
 
   <footer>Regenerate voices: <code>.venv-voiceover/bin/python labs/generate_voice_samples.py</code></footer>
 </div>
+<script src="voices/samples.js"></script>
 <script>
-  // Kept in sync with labs/voices/manifest.json (inlined so file:// needs no fetch).
-  const VOICES = [
-    { voice: "cedar", note: "current default" }, { voice: "marin" }, { voice: "coral" },
-    { voice: "ash" }, { voice: "ballad" }, { voice: "sage" }, { voice: "verse" }, { voice: "onyx" },
-  ];
-  const EXPERIMENTS = [
-    { file: "exp_mini_cedar_s100_plain", label: "gpt-4o-mini-tts · cedar", sub: "speed 1.0 · no instructions (baseline)" },
-    { file: "exp_mini_cedar_s108_plain", label: "gpt-4o-mini-tts · cedar", sub: "speed 1.08 — the current production setting" },
-    { file: "exp_mini_cedar_s100_instr", label: "gpt-4o-mini-tts · cedar", sub: "speed 1.0 + style instructions" },
-    { file: "exp_hd_nova", label: "tts-1-hd · nova", sub: "the HD quality model" },
-    { file: "exp_hd_shimmer", label: "tts-1-hd · shimmer", sub: "the HD quality model" },
-    { file: "exp_tts1_alloy", label: "tts-1 · alloy", sub: "the fast model" },
-  ];
-  const expGrid = document.getElementById("experiments");
-  for (const e of EXPERIMENTS) {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `<div class="name" style="font-size:13px">${e.label}</div>`
-      + `<div class="meta">${e.sub}</div>`
-      + `<audio controls preload="none" src="voices/${e.file}.mp3?t=${Date.now()}"></audio>`;
-    expGrid.appendChild(card);
-  }
-
-  const grid = document.getElementById("voices");
-  for (const v of VOICES) {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `<div class="name">${v.voice}${v.note ? `<span class="tag">${v.note}</span>` : ""}</div>`
-      + `<div class="meta">gpt-4o-mini-tts</div>`
-      + `<audio controls preload="none" src="voices/openai_${v.voice}.mp3?t=${Date.now()}"></audio>`;
-    grid.appendChild(card);
+  const data = window.LAB_SAMPLES;
+  const root = document.getElementById("sections");
+  const bust = Date.now(); // force fresh audio every load (never a stale cache)
+  if (data && data.sections && data.sections.length) {
+    root.innerHTML = "";
+    for (const sec of data.sections) {
+      const h = document.createElement("h2"); h.textContent = sec.title; root.appendChild(h);
+      if (sec.note) { const p = document.createElement("p"); p.className = "note"; p.textContent = sec.note; root.appendChild(p); }
+      const grid = document.createElement("div"); grid.className = "grid";
+      for (const it of sec.items) {
+        const card = document.createElement("div"); card.className = "card";
+        card.innerHTML = `<div class="name">${it.label}</div>`
+          + `<div class="setting">${it.setting}</div>`
+          + `<audio controls preload="none" src="voices/${it.file}.mp3?t=${bust}"></audio>`;
+        grid.appendChild(card);
+      }
+      root.appendChild(grid);
+    }
   }
 </script>
 </body>

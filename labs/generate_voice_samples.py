@@ -1,86 +1,128 @@
-"""labs/voices — generate the same representative line in each candidate voice, so
-the production voice can be chosen by ear (and later previewed in the UI).
+"""labs/voices — a full voice comparison: every OpenAI TTS model, its voices, and a
+speed sweep, so the production voice + speed can be chosen by ear. Each sample is
+labeled with the exact setting to copy into voiceover.yaml.
 
-Run with the voiceover venv (it has the TTS SDKs):
+Run with the voiceover venv (it has the SDK):
     .venv-voiceover/bin/python labs/generate_voice_samples.py
 
-Writes labs/voices/<id>.wav + manifest.json. Best-effort per voice — an unsupported
-voice or a provider error is skipped, not fatal.
+Writes labs/voices/<id>.wav + .mp3 (preview) + samples.js (the gallery data the
+page reads). Best-effort per sample; a failure is skipped, not fatal.
+
+Key finding: speed > 1.0 time-compresses and adds a "tape warble" artifact — speed
+1.0 is clean. The speed sweep lets you judge how much speed-up (if any) is tolerable.
 """
 from __future__ import annotations
 
 import json
-import shutil
+import os
 import subprocess
-import sys
+import wave
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env", override=False)
+from openai import OpenAI  # noqa: E402
 
-from src.pipeline.voiceover.providers.openai_tts import synthesize_chunks_to_wav  # noqa: E402
-
-# A real channel-style line (hook + payoff) so each voice is judged on our content.
-SAMPLE_LINE = (
+LINE = (
     "A tool built to stop fraud just became the fraud, and nobody caught it for a year. "
     "That's the strangest thing in AI this week, and the one that should worry you most."
 )
-INSTRUCTIONS = (
-    "Energetic, curious tech-explainer host with a skeptical eyebrow. Confident and warm, "
-    "a little wry. Punch the hook, stay conversational, never a television-news cadence."
-)
-# Curated diverse set of gpt-4o-mini-tts voices (cedar is today's default).
-OPENAI_VOICES = ["cedar", "marin", "coral", "ash", "ballad", "sage", "verse", "onyx"]
-
 OUT = ROOT / "labs" / "voices"
+
+# Voice galleries, each at the clean speed (1.0), no style instructions — a fair
+# voice-to-voice comparison across models.
+GALLERIES = [
+    ("gpt-4o-mini-tts", "mini", "expressive & steerable (supports style instructions)",
+     ["cedar", "marin", "coral", "ash", "ballad", "sage", "verse", "onyx"]),
+    ("tts-1-hd", "hd", "the HD quality model",
+     ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]),
+    ("tts-1", "tts1", "the fast model (lower fidelity)",
+     ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]),
+]
+# Speed sweeps — one voice per model — to find the fastest speed that still sounds clean.
+SWEEPS = [
+    ("gpt-4o-mini-tts", "mini", "cedar", [1.0, 1.05, 1.1, 1.15, 1.25]),
+    ("tts-1-hd", "hd", "nova", [1.0, 1.1, 1.25]),
+]
+
+
+def _client() -> OpenAI:
+    key = os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY_A_C_C")
+    return OpenAI(api_key=key)
+
+
+def _synth(client: OpenAI, *, model: str, voice: str, speed: float, stem: str) -> bool:
+    kwargs: dict = {"model": model, "voice": voice, "input": LINE, "response_format": "pcm"}
+    if speed != 1.0:
+        kwargs["speed"] = speed
+    try:
+        pcm = client.audio.speech.create(**kwargs).content
+        wav = OUT / f"{stem}.wav"
+        with wave.open(str(wav), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(24000)
+            w.writeframes(pcm)
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-i", str(wav), "-codec:a", "libmp3lame",
+             "-q:a", "3", str(OUT / f"{stem}.mp3")],
+            check=False,
+        )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"  skip {stem}: {type(exc).__name__}: {str(exc)[:80]}")
+        return False
+
+
+def _slug(speed: float) -> str:
+    return f"s{int(round(speed * 100)):03d}"
 
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    manifest: list[dict] = []
-    for voice in OPENAI_VOICES:
-        chunk_id = f"openai_{voice}"
-        try:
-            synthesize_chunks_to_wav(
-                chunks=[{"chunk_id": chunk_id, "text": SAMPLE_LINE}],
-                output_dir=OUT,
-                model="gpt-4o-mini-tts",
-                voice=voice,
-                instructions=INSTRUCTIONS,
-                speed=1.08,
-                response_format="wav",
-                api_key_envs=["OPENAI_API_KEY", "OPENAI_API_KEY_A_C_C"],
-                request_timeout_seconds=60,
-                max_retries=2,
-                retry_initial_delay_seconds=1.0,
-                retry_max_delay_seconds=8.0,
-                worker_count=1,
-                max_input_chars=2000,
-                sample_rate_hz=24000,
-            )
-            # Also emit an MP3 for the browser preview (universal playback, small).
-            if shutil.which("ffmpeg"):
-                subprocess.run(
-                    ["ffmpeg", "-v", "error", "-y", "-i", str(OUT / f"{chunk_id}.wav"),
-                     "-codec:a", "libmp3lame", "-q:a", "3", str(OUT / f"{chunk_id}.mp3")],
-                    check=False,
-                )
-            print(f"  ok  openai/{voice}")
-            manifest.append({
-                "id": chunk_id, "provider": "openai", "model": "gpt-4o-mini-tts",
-                "voice": voice, "file": f"{chunk_id}.wav", "preview": f"{chunk_id}.mp3",
-                "note": "current default" if voice == "cedar" else "",
-            })
-        except Exception as exc:  # noqa: BLE001 — one bad voice never stops the lab
-            print(f"  skip openai/{voice}: {type(exc).__name__}: {str(exc)[:90]}")
-    (OUT / "manifest.json").write_text(
-        json.dumps({"line": SAMPLE_LINE, "instructions": INSTRUCTIONS, "voices": manifest}, indent=2),
+    client = _client()
+    sections: list[dict] = []
+
+    # Speed sweeps first (the headline finding).
+    for model, mslug, voice, speeds in SWEEPS:
+        items = []
+        for sp in speeds:
+            stem = f"{mslug}_{voice}_{_slug(sp)}"
+            if _synth(client, model=model, voice=voice, speed=sp, stem=stem):
+                items.append({
+                    "label": f"speed {sp:g}",
+                    "file": stem,
+                    "setting": f"model: {model} · voice: {voice} · speed: {sp:g}",
+                })
+                print(f"  ok   {stem}")
+        sections.append({
+            "title": f"Speed sweep — {model} / {voice}",
+            "note": "find the fastest speed that still sounds clean (>1.0 adds a tape warble)",
+            "items": items,
+        })
+
+    # Voice galleries at speed 1.0.
+    for model, mslug, note, voices in GALLERIES:
+        items = []
+        for voice in voices:
+            stem = f"{mslug}_{voice}_s100"
+            if (OUT / f"{stem}.mp3").exists() or _synth(client, model=model, voice=voice, speed=1.0, stem=stem):
+                items.append({
+                    "label": voice,
+                    "file": stem,
+                    "setting": f"model: {model} · voice: {voice} · speed: 1.0",
+                })
+                print(f"  ok   {stem}")
+        sections.append({"title": f"{model} voices — speed 1.0", "note": note, "items": items})
+
+    (OUT / "samples.js").write_text(
+        "window.LAB_SAMPLES = " + json.dumps({"line": LINE, "sections": sections}, indent=2) + ";\n",
         encoding="utf-8",
     )
-    print(f"wrote {len(manifest)} voice sample(s) + manifest → {OUT.relative_to(ROOT)}")
+    total = sum(len(s["items"]) for s in sections)
+    print(f"wrote {total} samples across {len(sections)} sections + samples.js → {OUT.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
