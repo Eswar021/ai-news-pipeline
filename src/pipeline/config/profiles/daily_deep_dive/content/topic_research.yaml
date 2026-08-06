@@ -14,11 +14,17 @@ llm_retry: { enabled: true, max_attempts: 3, max_structured_output_attempts: 2, 
 
 llm_roles:
   framer:            # lightweight: turn the topic into distinct searchable questions
-    provider: openai
-    model: gpt-4o
+    provider: deepseek
+    model: deepseek-v4-pro
     temperature: 0.4
-    structured_output: { method: json_schema, strict: true }
+    structured_output: { method: json_mode, strict: false }
     provider_options: { request_timeout_seconds: 180 }
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.4
+      structured_output: { method: json_schema, strict: true }
+      provider_options: { request_timeout_seconds: 180 }
   synthesizer:       # heavy: distill many sources into a grounded, cited dossier
     provider: deepseek
     model: deepseek-v4-pro

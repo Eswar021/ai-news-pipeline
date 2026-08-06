@@ -303,6 +303,15 @@ def run(input_json: dict) -> dict:
     return response.model_dump(mode="json")
 
 
+def _structured_opts(provider: str | None) -> dict[str, Any]:
+    """Structured-output options per provider. DeepSeek rejects OpenAI's json_schema
+    response_format, so it uses tool calling; OpenAI keeps its default (unchanged)."""
+    opts: dict[str, Any] = {"include_raw": True}
+    if (provider or "").casefold() == "deepseek":
+        opts["method"] = "function_calling"
+    return opts
+
+
 def _invoke_duplicate_auditor(
     *,
     stories: list[dict],
@@ -344,7 +353,7 @@ def _invoke_duplicate_auditor(
     rendered_prompt = TASK_PROMPT.format(**prompt_inputs)
     chain = TASK_PROMPT | llm.with_structured_output(
         RoundupDuplicateAudit,
-        include_raw=True,
+        **_structured_opts(review_config.get("effective_provider")),
     )
     raw = None
     parsed_dict = None
@@ -488,7 +497,7 @@ def _invoke_slate_reviewer(
     rendered_prompt = TASK_PROMPT.format(**prompt_inputs)
     chain = TASK_PROMPT | llm.with_structured_output(
         RoundupSlateReviewDraft,
-        include_raw=True,
+        **_structured_opts(review_config.get("effective_provider")),
     )
     raw = None
     parsed_dict = None

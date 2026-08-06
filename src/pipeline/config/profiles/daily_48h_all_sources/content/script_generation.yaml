@@ -8,6 +8,30 @@ structured_output:
 provider_options:
   request_timeout_seconds: 300
 llm_roles:
+  # Planning/structuring roles on DeepSeek (non-reasoning, json_mode) + gpt-4o-mini
+  # fallback — cheaper than gpt-4o; the creative writers below keep reasoning on.
+  director:
+    provider: deepseek
+    model: deepseek-v4-pro
+    temperature: 0.4
+    provider_options: { request_timeout_seconds: 300 }
+    structured_output: { method: json_mode, strict: false }
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.4
+      structured_output: { method: json_schema, strict: true }
+  source_researcher:
+    provider: deepseek
+    model: deepseek-v4-pro
+    temperature: 0.4
+    provider_options: { request_timeout_seconds: 300 }
+    structured_output: { method: json_mode, strict: false }
+    content_filter_fallback:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.4
+      structured_output: { method: json_schema, strict: true }
   story_writer:
     provider: deepseek
     model: deepseek-v4-pro

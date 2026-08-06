@@ -109,8 +109,10 @@ def test_production_routes_deepseek_to_viewer_facing_creative_roles() -> None:
         {**profile["metadata_creator"], "channel": profile["channel"]}
     )
 
-    assert routes["source_researcher"]["provider"] == "openai"
-    assert routes["director"]["provider"] == "openai"
+    # Planning roles moved to DeepSeek (non-reasoning) for cost; gpt-4o-mini is the fallback.
+    assert routes["source_researcher"]["provider"] == "deepseek"
+    assert routes["director"]["provider"] == "deepseek"
+    assert routes["director"]["content_filter_fallback"]["model"] == "gpt-4o-mini"
     assert routes["story_writer"]["provider"] == "deepseek"
     assert routes["story_writer"]["model"] == "deepseek-v4-pro"
     assert routes["story_reviewer"]["model"] == "deepseek-v4-pro"

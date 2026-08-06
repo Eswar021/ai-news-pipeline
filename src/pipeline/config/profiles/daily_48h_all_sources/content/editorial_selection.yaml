@@ -17,8 +17,10 @@ tokenizer_encoding: o200k_base
 max_attempts: 3
 slate_review:
   enabled: true
-  provider: openai
-  model: gpt-4o
+  # Slate review + duplicate audit on DeepSeek (non-reasoning, function-calling
+  # structured output) — ~6x cheaper than gpt-4o. No fallback here; validate on a run.
+  provider: deepseek
+  model: deepseek-v4-pro
   temperature: 0.0
   prompt_version: v1
   max_attempts: 3
