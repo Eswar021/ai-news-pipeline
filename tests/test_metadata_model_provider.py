@@ -19,7 +19,7 @@ from src.pipeline.content.metadata_creator.app import (
     _task_payload_for_structured_output,
 )
 from src.pipeline.content.metadata_creator.contract import LLMProvider, MetadataConfig
-from src.pipeline.content.metadata_creator.llm_client import make_llm
+from src.pipeline.llm import make_llm
 from src.pipeline.content.script_generation.formats.roundup.app import _resolved_llm_configs
 
 

@@ -7,7 +7,7 @@ from .cluster_reconciler import reconcile_components
 from .clusterer import cluster_records
 from .contract import StoryMappingRequest, StoryMappingResponse, StoryMappingStatus
 from .event_identity import attach_event_identities
-from .llm_client import make_llm
+from src.pipeline.llm import make_llm
 from .pair_adjudicator import adjudicate_candidate_pairs
 from .prompt_loader import load_system_prompt
 from .ranker import rank_stories

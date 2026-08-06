@@ -14,7 +14,7 @@ from .contract import (
     EditorialTriageResponse,
     TriageBatchOutput,
 )
-from .llm_client import make_llm
+from src.pipeline.llm import make_llm
 from .llm_logging import build_llm_call_log
 from .prompt_loader import load_prompt_bundle
 from .utils import build_record_context, clean_text, record_context_chars, record_key

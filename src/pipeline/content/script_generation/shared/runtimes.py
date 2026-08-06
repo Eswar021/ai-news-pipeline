@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .llm_client import make_llm
+from src.pipeline.llm import make_llm
 
 
 def resolved_llm_configs(config: dict[str, Any], roles: tuple[str, ...]) -> dict[str, dict[str, Any]]:

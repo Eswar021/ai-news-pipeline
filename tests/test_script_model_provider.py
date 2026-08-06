@@ -4,7 +4,7 @@ from pydantic import TypeAdapter
 
 from src.pipeline.content.script_generation.formats.roundup.app import _resolved_llm_configs
 from src.pipeline.content.script_generation.formats.roundup.contract import LLMProvider
-from src.pipeline.content.script_generation.shared.llm_client import make_llm
+from src.pipeline.llm import make_llm
 from src.pipeline.content.script_generation.shared.llm_logging import build_llm_call_log
 from src.pipeline.content.script_generation.formats.roundup.models import StoryReviewOutput
 from src.pipeline.content.script_generation.shared.invocation import (

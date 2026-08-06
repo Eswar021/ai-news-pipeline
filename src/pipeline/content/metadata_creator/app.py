@@ -20,7 +20,7 @@ from .config import (
     SUPPORTED_FORMATS,
 )
 from .contract import MetadataRequest, MetadataResponse
-from .llm_client import make_llm
+from src.pipeline.llm import make_llm
 from .llm_logging import build_llm_call_log
 from .prompt_loader import load_prompt_bundle
 from .utils import clean_tag, clean_text, clean_thumbnail_text, dedupe, format_timestamp, shorten_title, source_url_from_record

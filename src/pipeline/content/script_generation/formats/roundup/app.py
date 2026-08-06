@@ -19,7 +19,7 @@ from .config import (
     SUPPORTED_FORMAT,
 )
 from .contract import ScriptGenerationRequest, ScriptGenerationResponse
-from ...shared.llm_client import make_llm
+from src.pipeline.llm import make_llm
 from .prompt_loader import load_prompt_bundle
 from .sections import build_roundup_section_inputs
 from .writer import generate_roundup_script

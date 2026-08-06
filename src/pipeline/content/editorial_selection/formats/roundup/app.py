@@ -22,7 +22,7 @@ from .config import (
     SCREENING_PROMPT_MODULE,
     SLATE_REVIEW_PROMPT_MODULE,
 )
-from .llm_client import make_llm
+from src.pipeline.llm import make_llm
 from .llm_logging import build_llm_call_log
 from .prompt_loader import load_prompt_bundle
 from .utils import build_story_context, clean_text, story_context_chars, text_token_count
