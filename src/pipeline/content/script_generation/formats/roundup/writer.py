@@ -304,6 +304,11 @@ def _write_one_story(
             "source_record_keys": list(context_telemetry.get("record_keys", [])),
         },
         llm_calls=llm_calls,
+        # A segment that cites another story's truth IDs / source keys, or grounds in
+        # none, retries and falls back inside the loop instead of hard-failing the run.
+        output_validator=lambda model: validate_story_segment(
+            model.model_dump(mode="json"), story=story, truth_index=truth_index
+        ),
     )
     current = validate_story_segment(
         response.model_dump(mode="json"),
@@ -447,6 +452,8 @@ def write_bookends(
         task_payload=json_dumps(payload),
         metadata={"story_count": len(story_segments)},
         llm_calls=llm_calls,
+        # Connector-order / missing-beats violations retry and fall back in the loop.
+        output_validator=lambda model: _validate_bookends(model.model_dump(mode="json"), video_packet),
     )
     current = _validate_bookends(response.model_dump(mode="json"), video_packet)
     passes: list[dict[str, Any]] = []

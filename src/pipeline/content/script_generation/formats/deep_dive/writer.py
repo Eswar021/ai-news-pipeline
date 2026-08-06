@@ -226,6 +226,11 @@ def _write_one_angle(
         task_payload=json_dumps(payload),
         metadata={"story_id": story_id(story), "angle_id": angle_id},
         llm_calls=llm_calls,
+        # Retry + fall back inside the loop on a segment that mis-cites truth/source
+        # IDs, instead of hard-failing the run.
+        output_validator=lambda model: validate_story_segment(
+            model.model_dump(mode="json"), story=story, truth_index=truth_index
+        ),
     )
     segment = validate_story_segment(segment_model.model_dump(mode="json"), story=story, truth_index=truth_index)
     segment["angle_id"] = angle_id
