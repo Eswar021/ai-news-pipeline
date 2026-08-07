@@ -76,9 +76,14 @@ gemini:
   - GEMINI_API_KEY
   - GOOGLE_API_KEY
   request_timeout_seconds: 180
-  max_retries: 3
+  # 503 "high demand" is an explicitly TEMPORARY model overload, but the old 4
+  # attempts / ~19s window was too short to ride out a spike and killed the run.
+  # 7 attempts with a longer cap (~1+2+4+8+16+32 ≈ 63s of backoff) waits the spike
+  # out. Retry tuning only — it does not change the audio, so no voice A/B needed.
+  # (Daily-quota / billing errors still fail fast; they are non-retryable.)
+  max_retries: 6
   retry_initial_delay_seconds: 1.0
-  retry_max_delay_seconds: 8.0
+  retry_max_delay_seconds: 32.0
   worker_count: 1
   max_input_chars: 4000
 chatterbox:
