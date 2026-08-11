@@ -316,6 +316,36 @@ def test_metadata_applies_complete_llm_chapter_titles_by_exact_section_id() -> N
     ]
 
 
+def test_metadata_chapter_titles_self_heal_on_incomplete_or_unknown_sections() -> None:
+    # An LLM that omits a section, invents an unknown one, or duplicates must NOT
+    # hard-fail the final content module — titles are cosmetic polish over the
+    # deterministic defaults _build_chapters already set.
+    sections = [
+        {"section_id": "section_00_intro", "section_type": "intro"},
+        {"section_id": "section_01_story", "section_type": "story"},
+    ]
+    chapters = [
+        {"section_id": "section_00_intro", "timestamp": "0:00", "start_seconds": 0, "title": "Intro"},
+        {"section_id": "section_01_story", "timestamp": "0:20", "start_seconds": 20, "title": "Default story title"},
+    ]
+
+    resolved = _apply_generated_chapter_titles(
+        chapters=chapters,
+        sections=sections,
+        generated_titles=[
+            {"section_id": "section_00_intro", "title": "A stronger intro"},
+            {"section_id": "section_00_intro", "title": "duplicate — ignored"},
+            {"section_id": "section_99_ghost", "title": "unknown section — ignored"},
+            # section_01_story omitted entirely → keeps its default title
+        ],
+    )
+
+    assert [chapter["title"] for chapter in resolved] == [
+        "A stronger intro",
+        "Default story title",
+    ]
+
+
 def test_metadata_chapter_title_fallback_prefers_complete_title_card_subtitle() -> None:
     section = {
         "section_type": "story",

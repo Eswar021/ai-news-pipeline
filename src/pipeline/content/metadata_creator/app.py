@@ -769,24 +769,27 @@ def _apply_generated_chapter_titles(
     sections: list[dict[str, Any]],
     generated_titles: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    expected_ids = [clean_text(section.get("section_id", "")) for section in sections]
+    expected_ids = {clean_text(section.get("section_id", "")) for section in sections}
     title_by_section: dict[str, str] = {}
+    # Chapter titles are cosmetic polish over the deterministic default titles that
+    # _build_chapters already set. An LLM that omits, duplicates, or invents a
+    # section_id must NOT hard-fail the final content module and discard the whole run:
+    # take each valid generated title (first wins on duplicates), ignore unknown ids,
+    # and let every uncovered chapter keep its existing default title.
     for item in generated_titles:
         section_id = clean_text(item.get("section_id", ""))
         title = clean_text(item.get("title", ""))
-        if not section_id or not title:
-            raise ValueError("Metadata chapter titles require non-empty section_id and title values")
-        if section_id in title_by_section:
-            raise ValueError(f"Metadata returned duplicate chapter title for {section_id}")
-        title_by_section[section_id] = title
-
-    missing = [section_id for section_id in expected_ids if section_id not in title_by_section]
-    unknown = sorted(set(title_by_section) - set(expected_ids))
-    if missing or unknown:
-        raise ValueError(f"Metadata chapter section coverage mismatch; missing={missing}, unknown={unknown}")
+        if not section_id or not title or section_id not in expected_ids:
+            continue
+        title_by_section.setdefault(section_id, title)
 
     return [
-        {**chapter, "title": title_by_section[clean_text(chapter.get("section_id", ""))]}
+        {
+            **chapter,
+            "title": title_by_section.get(
+                clean_text(chapter.get("section_id", "")), chapter.get("title", "")
+            ),
+        }
         for chapter in chapters
     ]
 
