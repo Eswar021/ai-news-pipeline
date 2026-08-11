@@ -34,8 +34,17 @@ CONTENT_FIELDS = (
 )
 
 
-def build_record_context(record: dict[str, Any]) -> dict[str, Any]:
-    """Build a complete semantic packet without repeating equivalent content aliases."""
+def build_record_context(
+    record: dict[str, Any], *, max_chars: int | None = None
+) -> dict[str, Any]:
+    """Build a complete semantic packet without repeating equivalent content aliases.
+
+    When ``max_chars`` is given and the packet would exceed it (a rare, anomalously
+    huge scrape — e.g. a release page with its full changelog + comment thread), the
+    packet's content is truncated to fit and the provenance flags it, rather than
+    letting one giant record hard-fail the whole run. This bounds only the LLM's
+    triage context; the untouched record still flows downstream at full length.
+    """
 
     context = deepcopy(record)
     field_values = {
@@ -67,7 +76,56 @@ def build_record_context(record: dict[str, Any]) -> dict[str, Any]:
             field: len(value) for field, value in field_values.items()
         },
     }
+    if max_chars is not None:
+        _fit_context_to_budget(context, max_chars=max_chars)
     return context
+
+
+TRUNCATION_MARKER = " …[truncated for triage context budget]"
+
+
+def _fit_context_to_budget(context: dict[str, Any], *, max_chars: int) -> None:
+    """Shrink an over-budget context in place: drop the supplementary raw copy first,
+    then keep the largest head of ``semantic_content`` that still fits. Honestly
+    recorded in ``semantic_content_provenance`` so the truncation is never silent."""
+    if record_context_chars(context) <= max_chars:
+        return
+    provenance = context.get("semantic_content_provenance", {})
+
+    dropped_distinct = False
+    if context.get("distinct_raw_content"):
+        del context["distinct_raw_content"]
+        dropped_distinct = True
+        provenance["distinct_raw_content_included"] = False
+
+    content = context.get("semantic_content", "")
+    # Set the truncation-provenance keys BEFORE measuring, so the budget search sees
+    # the final structure (adding them afterwards would push the result back over).
+    # The count starts at its max width (len(content)); the real value can only be
+    # smaller, so the final context never exceeds what the search measured.
+    provenance["complete"] = False
+    provenance["truncated"] = True
+    provenance["distinct_raw_content_dropped"] = dropped_distinct
+    provenance["truncated_semantic_content_chars"] = len(content)
+    context["semantic_content_provenance"] = provenance
+
+    if record_context_chars(context) > max_chars:
+        # Largest prefix of semantic_content whose full serialized context fits.
+        low, high, best = 0, len(content), 0
+        while low <= high:
+            mid = (low + high) // 2
+            context["semantic_content"] = content[:mid] + (
+                TRUNCATION_MARKER if mid < len(content) else ""
+            )
+            if record_context_chars(context) <= max_chars:
+                best = mid
+                low = mid + 1
+            else:
+                high = mid - 1
+        context["semantic_content"] = content[:best] + (
+            TRUNCATION_MARKER if best < len(content) else ""
+        )
+        provenance["truncated_semantic_content_chars"] = best
 
 
 def record_context_chars(context: dict[str, Any]) -> int:

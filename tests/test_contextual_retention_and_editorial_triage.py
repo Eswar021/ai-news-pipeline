@@ -12,6 +12,7 @@ from src.pipeline.content.editorial_selection.formats.roundup.contract import (
     RoundupSlateDraft,
 )
 from src.pipeline.content.editorial_triage import app as triage_app
+from src.pipeline.content.editorial_triage import utils as triage_utils
 from src.pipeline.content.editorial_triage.contract import TriageBatchOutput
 from src.pipeline.content.evidence_prep import run as run_evidence_prep
 from src.pipeline.ingestion.news_collection import app as news_app
@@ -273,6 +274,42 @@ def test_evidence_removes_decoded_pdf_binary_before_editorial_triage() -> None:
     assert len(batches) == 1
     assert telemetry["records_truncated"] is False
     assert max(telemetry["record_context_chars"].values()) < 10_000
+
+
+def test_editorial_triage_truncates_an_oversized_record_instead_of_failing() -> None:
+    # A ~1.1M-char scrape (the real failure: a Hacker News OpenSSH release pulled with
+    # its whole changelog + comment thread) must not hard-fail the run. Its LLM context
+    # is truncated to the per-record budget and honestly flagged in provenance.
+    huge = "OpenSSH 10.5 released with these changes. " + ("changelog line. " * 70_000)
+    record = {"record_key": "record_huge", "title": "OpenSSH 10.5", "content": huge}
+
+    context = triage_utils.build_record_context(record, max_chars=300_000)
+    provenance = context["semantic_content_provenance"]
+    assert provenance["truncated"] is True
+    assert provenance["complete"] is False
+    assert triage_utils.record_context_chars(context) <= 300_000
+    assert context["semantic_content"].startswith("OpenSSH 10.5 released")
+
+    # The batch builder no longer raises; telemetry flags exactly which record was cut.
+    batches, telemetry = triage_app._complete_context_batches(
+        [record],
+        batch_size=10,
+        max_record_context_chars=300_000,
+        max_batch_context_chars=450_000,
+    )
+    assert len(batches) == 1
+    assert telemetry["records_truncated"] is True
+    assert telemetry["truncated_record_keys"] == ["record_huge"]
+    assert telemetry["record_context_chars"]["record_huge"] <= 300_000
+
+    # A normal record is left complete.
+    small = {"record_key": "record_small", "content": "A short AI-news item."}
+    assert (
+        triage_utils.build_record_context(small, max_chars=300_000)[
+            "semantic_content_provenance"
+        ]["truncated"]
+        is False
+    )
 
 
 def test_request_text_extracts_pdf_instead_of_decoding_response_bytes(monkeypatch) -> None:

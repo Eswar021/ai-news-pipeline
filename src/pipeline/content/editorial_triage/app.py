@@ -152,7 +152,10 @@ def _invoke_batch(
     llm,
     llm_calls: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    context_records = [build_record_context(record) for record in batch]
+    context_records = [
+        build_record_context(record, max_chars=int(config["max_record_context_chars"]))
+        for record in batch
+    ]
     payload = {
         "task": "Semantically triage each candidate for a future AI-news roundup.",
         "mode": config["mode"],
@@ -320,22 +323,23 @@ def _complete_context_batches(
     max_record_context_chars: int,
     max_batch_context_chars: int,
 ) -> tuple[list[list[dict[str, Any]]], dict[str, Any]]:
-    contexts = [(record, build_record_context(record)) for record in records]
+    # An anomalously huge record (e.g. a release page with its whole changelog +
+    # comment thread) is truncated to the per-record budget rather than hard-failing
+    # the run; the truncation is flagged in each context's provenance. Only the LLM's
+    # triage context is bounded — the full record still flows downstream.
+    contexts = [
+        (record, build_record_context(record, max_chars=max_record_context_chars))
+        for record in records
+    ]
     record_sizes = {
         context["record_key"]: record_context_chars(context)
         for _record, context in contexts
     }
-    oversized = [
-        (key, chars)
-        for key, chars in record_sizes.items()
-        if chars > max_record_context_chars
+    truncated_record_keys = [
+        context["record_key"]
+        for _record, context in contexts
+        if context.get("semantic_content_provenance", {}).get("truncated")
     ]
-    if oversized:
-        raise ValueError(
-            "Complete editorial-triage record context exceeds "
-            "config.max_record_context_chars; no source content was truncated. "
-            f"Oversized records: {oversized[:8]}"
-        )
 
     batches: list[list[dict[str, Any]]] = []
     current_records: list[dict[str, Any]] = []
@@ -361,7 +365,10 @@ def _complete_context_batches(
     batch_sizes = [
         len(
             json.dumps(
-                [build_record_context(record) for record in batch],
+                [
+                    build_record_context(record, max_chars=max_record_context_chars)
+                    for record in batch
+                ],
                 ensure_ascii=False,
                 separators=(",", ":"),
             )
@@ -375,7 +382,8 @@ def _complete_context_batches(
         )
     return batches, {
         "context_mode": "complete_normalized_records",
-        "records_truncated": False,
+        "records_truncated": bool(truncated_record_keys),
+        "truncated_record_keys": truncated_record_keys,
         "record_count": len(records),
         "record_context_chars": record_sizes,
         "batch_context_chars": batch_sizes,
@@ -401,7 +409,10 @@ def _context_metadata(
             json.dumps(context_records, ensure_ascii=False, separators=(",", ":"))
         ),
         "source_context_mode": "complete_normalized_records",
-        "records_truncated": False,
+        "records_truncated": any(
+            item.get("semantic_content_provenance", {}).get("truncated")
+            for item in context_records
+        ),
     }
 
 
