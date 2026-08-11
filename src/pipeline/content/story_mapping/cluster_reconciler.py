@@ -185,6 +185,7 @@ def _reconcile_component(
     ]
     last_error = ""
     previous_invalid_output: dict[str, Any] | None = None
+    last_normalized_output: dict[str, Any] | None = None
     for attempt in range(1, int(config["max_attempts"]) + 1):
         attempt_payload = deepcopy(payload)
         if last_error:
@@ -260,6 +261,8 @@ def _reconcile_component(
         except Exception as exc:
             last_error = clean_text(exc)
             previous_invalid_output = parsed_dict
+            if normalized_output is not None:
+                last_normalized_output = normalized_output
             llm_calls.append(
                 build_llm_call_log(
                     module_name="cluster_reconciliation",
@@ -311,10 +314,64 @@ def _reconcile_component(
                     for group in resolved_output["groups"]
                 ]
 
-    raise RuntimeError(
-        "Cluster reconciliation failed after bounded retries for "
-        f"{clean_text(component.get('component_id'))}: {last_error}"
+    # The model could not return a fully-covering partition within the retry budget
+    # (typically it keeps dropping one record even when told which one). Rather than
+    # kill a ~15-minute run over one stray record, complete the partition
+    # deterministically: keep the model's best-effort groups and add any missing
+    # record as its own standalone story. Logged so the repair is visible in telemetry.
+    completed = _complete_partition_deterministically(last_normalized_output, expected_keys)
+    llm_calls.append(
+        build_llm_call_log(
+            module_name="cluster_reconciliation",
+            provider=config["provider"],
+            model=config["model"],
+            rendered_prompt="",
+            raw_response=None,
+            parsed_output={"groups": [{"record_keys": list(group)} for group in completed]},
+            metadata={
+                "component_id": clean_text(component.get("component_id")),
+                "attempt": int(config["max_attempts"]),
+                "record_count": len(expected_keys),
+                "record_keys": expected_keys,
+                "deterministic_coverage_repair": True,
+                "unrecovered_validation_error": last_error,
+            },
+            duration_seconds=0.0,
+            parse_error=last_error,
+        )
     )
+    return completed
+
+
+def _complete_partition_deterministically(
+    partition: dict[str, Any] | None,
+    expected_keys: list[str],
+) -> list[list[str]]:
+    """Guarantee exactly-once coverage from the model's best-effort partition.
+
+    Keep the model's groups (first assignment wins for any conflict; unknown keys
+    dropped), then add every still-missing record as its own standalone group. This
+    always returns a valid partition of ``expected_keys`` — under-merging a stray
+    record is safe (editorial dedup runs downstream); crashing the run is not.
+    """
+    expected = list(dict.fromkeys(k for k in (clean_text(x) for x in expected_keys) if k))
+    expected_set = set(expected)
+    groups: list[list[str]] = []
+    assigned: set[str] = set()
+    for group in (partition or {}).get("groups") or []:
+        kept: list[str] = []
+        for value in group.get("record_keys") or []:
+            key = clean_text(value)
+            if key in expected_set and key not in assigned:
+                kept.append(key)
+                assigned.add(key)
+        if kept:
+            groups.append(kept)
+    for key in expected:  # deterministic order → stable, singleton per missing record
+        if key not in assigned:
+            groups.append([key])
+            assigned.add(key)
+    return groups
 
 
 def _resolve_conflicting_assignments(

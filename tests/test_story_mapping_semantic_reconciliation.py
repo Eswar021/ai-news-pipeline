@@ -259,6 +259,71 @@ def test_cluster_reconciler_reprompts_cross_group_duplicate_with_exact_error() -
     assert llm_calls[1]["metadata"]["structural_repair_feedback_included"] is False
 
 
+def test_cluster_reconciler_deterministically_covers_a_persistently_dropped_record() -> None:
+    # gpt-4o-mini kept returning a partition that omitted one record even after the
+    # missing-record feedback, which hard-failed a ~15-minute run. The reconciler must
+    # instead complete coverage deterministically: the dropped record becomes its own
+    # standalone group, and the repair is flagged in telemetry.
+    dropping = ComponentReconciliationOutput.model_validate(
+        {
+            "component_id": "component_fixture",
+            "groups": [
+                {
+                    "group_ref": "group_1",
+                    "record_keys": ["record_a"],  # record_b persistently omitted
+                    "relationship": "standalone_record",
+                    "canonical_event": "One release",
+                    "rationale": "Only record_a placed.",
+                }
+            ],
+        }
+    )
+
+    class FakeLLM:
+        def with_structured_output(self, _output_model, **_kwargs):
+            return RunnableLambda(
+                lambda _prompt: {"parsed": dropping, "raw": None, "parsing_error": None}
+            )
+
+    llm_calls: list[dict] = []
+    groups = reconcile_components(
+        [_reconciliation_component_fixture()],
+        config=_reconciliation_config_fixture(max_attempts=2),
+        llm=FakeLLM(),
+        system_prompt="Reconcile records.",
+        llm_calls=llm_calls,
+    )
+
+    assert groups == {"component_fixture": [["record_a"], ["record_b"]]}
+    repair = llm_calls[-1]["metadata"]
+    assert repair["deterministic_coverage_repair"] is True
+    assert "record_b" in repair["unrecovered_validation_error"]
+
+
+def test_complete_partition_deterministically_repairs_missing_unknown_and_conflicts() -> None:
+    from src.pipeline.content.story_mapping.cluster_reconciler import (
+        _complete_partition_deterministically,
+    )
+
+    partition = {
+        "groups": [
+            {"record_keys": ["record_a", "record_b"]},
+            {"record_keys": ["record_b", "record_x"]},  # record_b conflict, record_x unknown
+        ]
+    }
+    groups = _complete_partition_deterministically(
+        partition, ["record_a", "record_b", "record_c"]
+    )
+    # first assignment of record_b wins; record_x dropped; record_c added as a singleton
+    assert groups == [["record_a", "record_b"], ["record_c"]]
+
+    # No usable partition at all → every expected record becomes its own group.
+    assert _complete_partition_deterministically(None, ["record_a", "record_b"]) == [
+        ["record_a"],
+        ["record_b"],
+    ]
+
+
 def _reconciliation_component_fixture() -> dict:
     return {
         "component_id": "component_fixture",
